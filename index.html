@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FastGo Control</title>
+  <meta name="theme-color" content="#0b0f14" />
+  <style>
+    :root {
+      --bg:#0b0f14; --panel:#141b23; --panel2:#0e141b; --line:#26303b;
+      --text:#eef2f7; --muted:#91a0b1; --accent:#b8ff35; --danger:#ff6b6b;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:22px 5%; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(11,15,20,.96); backdrop-filter:blur(12px); z-index:10; }
+    .logo { font-size:25px; font-weight:900; letter-spacing:.3px; }
+    .logo b { color:var(--accent); }
+    main { max-width:1180px; margin:auto; padding:28px 5% 60px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; margin-bottom:18px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+    .item { padding:14px; background:var(--panel2); border:1px solid #202a34; border-radius:14px; }
+    input, button, select {
+      padding:12px 13px; border-radius:11px; border:1px solid #344252; background:#0e141b; color:white; font:inherit;
+    }
+    input { min-width:230px; }
+    button { cursor:pointer; background:var(--accent); color:#10150b; font-weight:800; border:none; }
+    button.secondary { background:#202a34; color:var(--text); border:1px solid #344252; }
+    button.danger { background:var(--danger); color:#fff; }
+    .muted { color:var(--muted); }
+    .pill { display:inline-block; padding:4px 8px; border-radius:99px; background:#26313c; font-size:12px; margin-top:6px; }
+    .hidden { display:none !important; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+    .kpi { background:var(--panel2); border-radius:14px; padding:14px; }
+    .kpi strong { display:block; font-size:26px; margin-top:4px; }
+    nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+    nav button.active { outline:2px solid var(--accent); }
+    .section { display:none; }
+    .section.active { display:block; }
+    .error { color:#ff9a9a; }
+    .success { color:#b8ff35; }
+    pre { white-space:pre-wrap; overflow:auto; }
+    @media (max-width:640px) {
+      header { align-items:flex-start; gap:12px; }
+      input { width:100%; min-width:0; }
+      .row > button { flex:1; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">FAST<b>GO</b> CONTROL</div>
+  <div id="who" class="muted">не авторизован</div>
+</header>
+
+<main>
+  <section id="login" class="card">
+    <h2>Вход владельца</h2>
+    <p class="muted">Войдите через Supabase Auth аккаунт FastGo.</p>
+    <div class="row">
+      <input id="email" type="email" placeholder="Email" autocomplete="username" />
+      <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+      <button id="loginBtn">Войти</button>
+    </div>
+    <p id="loginMsg"></p>
+  </section>
+
+  <section id="app" class="hidden">
+    <nav class="card">
+      <button data-tab="dashboard" class="active">Главная</button>
+      <button data-tab="bikes" class="secondary">Парк</button>
+      <button data-tab="service" class="secondary">Сервис</button>
+      <button data-tab="payments" class="secondary">Платежи</button>
+      <button data-tab="launch" class="secondary">Готовность</button>
+      <button id="logoutBtn" class="danger">Выйти</button>
+    </nav>
+
+    <section id="dashboard" class="section active">
+      <div class="card">
+        <h2>Обзор</h2>
+        <div id="kpis" class="kpis"></div>
+      </div>
+      <div class="card">
+        <h2>Требует внимания</h2>
+        <div id="alerts" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="bikes" class="section">
+      <div class="card">
+        <div class="row">
+          <h2 style="margin-right:auto">Парк</h2>
+          <button id="refreshBikes">Обновить</button>
+        </div>
+        <div id="bikesGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="service" class="section">
+      <div class="card">
+        <div class="row">
+          <h2 style="margin-right:auto">Сервис и ремонты</h2>
+          <button id="refreshService">Обновить</button>
+        </div>
+        <div id="serviceGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="payments" class="section">
+      <div class="card">
+        <h2>Ручные переводы</h2>
+        <p class="muted">Здесь отображаются заявки клиента «Я оплатил». Подтверждение эквайринга можно будет добавить позже.</p>
+        <div id="paymentsGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="launch" class="section">
+      <div class="card">
+        <h2>Launch checklist</h2>
+        <div id="launchGrid" class="grid"></div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<script>
+const SUPABASE_URL = "https://oqgpjfikjpcplnxueoki.supabase.co";
+const PUBLISHABLE_KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
+const API = SUPABASE_URL + '/functions/v1/fastgo-ui-api';
+let token = localStorage.getItem('fastgo_token') || '';
+
+const $ = id => document.getElementById(id);
+
+async function authFetch(path, options={}) {
+  const headers = Object.assign({}, options.headers || {}, {
+    'apikey': PUBLISHABLE_KEY,
+    'content-type': 'application/json'
+  });
+  if (token) headers['authorization'] = 'Bearer ' + token;
+  const r = await fetch(SUPABASE_URL + path, Object.assign({}, options, { headers }));
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!r.ok) throw new Error((data && (data.msg || data.error_description || data.message || data.error)) || 'Ошибка запроса');
+  return data;
+}
+
+async function signIn() {
+  $('loginMsg').textContent = '';
+  try {
+    const data = await authFetch('/auth/v1/token?grant_type=password', {
+      method:'POST',
+      body: JSON.stringify({ email:$('email').value.trim(), password:$('password').value })
+    });
+    token = data.access_token;
+    localStorage.setItem('fastgo_token', token);
+    showApp();
+    await loadAll();
+  } catch (e) {
+    $('loginMsg').className = 'error';
+    $('loginMsg').textContent = e.message;
+  }
+}
+
+async function call(action, params={}) {
+  const r = await fetch(API, {
+    method:'POST',
+    headers:{'content-type':'application/json','authorization':'Bearer '+token},
+    body:JSON.stringify({action,params})
+  });
+  const j = await r.json();
+  if (r.status === 401) {
+    logout();
+    throw new Error('Сессия истекла. Войдите снова.');
+  }
+  if (!r.ok) throw new Error(j.error || 'Ошибка API');
+  return j.data;
+}
+
+async function rest(path) {
+  return await authFetch('/rest/v1/' + path, { method:'GET', headers:{ 'Prefer':'count=exact' } });
+}
+
+function showApp() {
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('who').textContent = 'FastGo owner';
+}
+
+function logout() {
+  token = '';
+  localStorage.removeItem('fastgo_token');
+  location.reload();
+}
+
+function esc(v) {
+  return String(v ?? '—').replace(/[&<>"]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+}
+
+async function loadDashboard() {
+  try {
+    const bikes = await call('control_bikes');
+    const service = await call('service_board', {open_only:true});
+    const total = bikes.length;
+    const available = bikes.filter(x => String(x.commercial_status||x.operational_status||'').includes('available')).length;
+    const rented = bikes.filter(x => String(x.commercial_status||x.operational_status||'').includes('rented')).length;
+    const repairs = service.length;
+    $('kpis').innerHTML = [
+      ['Всего велосипедов', total],
+      ['Свободно', available],
+      ['В аренде', rented],
+      ['В ремонте', repairs]
+    ].map(x=>`<div class="kpi"><span class="muted">${x[0]}</span><strong>${x[1]}</strong></div>`).join('');
+    $('alerts').innerHTML = repairs
+      ? service.slice(0,8).map(x=>`<div class="item"><b>${esc(x.asset_code||'Сервис')}</b><p>${esc(x.status)}</p><span class="muted">${esc(x.complaint||x.diagnosis||'')}</span></div>`).join('')
+      : '<span class="muted">Сейчас нет открытых ремонтов.</span>';
+  } catch(e) {
+    $('kpis').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+}
+
+async function loadBikes() {
+  try {
+    const d = await call('control_bikes');
+    $('bikesGrid').innerHTML = d.map(x=>`
+      <div class="item">
+        <b>${esc(x.asset_code)}</b>
+        <div class="pill">${esc(x.commercial_status||x.operational_status||x.status)}</div>
+        <p class="muted">
+          модель: ${esc(x.model)}<br>
+          тех. статус: ${esc(x.technical_status)}<br>
+          пробег: ${esc(x.odometer_km)} км<br>
+          батарея: ${esc(x.battery_code)}
+        </p>
+      </div>`).join('') || '<span class="muted">Парк пуст.</span>';
+  } catch(e) {
+    $('bikesGrid').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+}
+
+async function loadService() {
+  try {
+    const d = await call('service_board', {open_only:true});
+    $('serviceGrid').innerHTML = d.map(x=>`
+      <div class="item">
+        <b>${esc(x.asset_code||'Заявка')}</b>
+        <div class="pill">${esc(x.status)}</div>
+        <p>${esc(x.complaint||'Без описания')}</p>
+        <span class="muted">Работа: ${esc(x.labor_cost)} ₽ · Детали: ${esc(x.parts_cost)} ₽</span>
+      </div>`).join('') || '<span class="muted">Открытых ремонтов нет.</span>';
+  } catch(e) {
+    $('serviceGrid').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+}
+
+async function loadPayments() {
+  try {
+    const d = await rest('manual_payment_claims?select=id,claimed_at,payer_name,note,status,review_note&order=claimed_at.desc&limit=50');
+    $('paymentsGrid').innerHTML = d.map(x=>`
+      <div class="item">
+        <b>${esc(x.payer_name||'Клиент')}</b>
+        <div class="pill">${esc(x.status)}</div>
+        <p>${esc(x.note||'Без комментария')}</p>
+        <span class="muted">${esc(new Date(x.claimed_at).toLocaleString('ru-RU'))}</span>
+      </div>`).join('') || '<span class="muted">Заявок на подтверждение оплаты пока нет.</span>';
+  } catch(e) {
+    $('paymentsGrid').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+}
+
+async function loadLaunch() {
+  try {
+    const d = await rest('launch_checklist?select=id,title,category,status,requires_owner_input,owner_input_hint&order=sort_order.asc');
+    $('launchGrid').innerHTML = d.map(x=>`
+      <div class="item">
+        <b>${esc(x.title)}</b>
+        <div class="pill">${esc(x.status)}</div>
+        <p class="muted">${esc(x.owner_input_hint||x.category)}</p>
+      </div>`).join('');
+  } catch(e) {
+    $('launchGrid').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+}
+
+async function loadAll() {
+  await Promise.allSettled([loadDashboard(), loadBikes(), loadService(), loadPayments(), loadLaunch()]);
+}
+
+document.querySelectorAll('nav button[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button[data-tab]').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    $(btn.dataset.tab).classList.add('active');
+  });
+});
+
+$('loginBtn').onclick = signIn;
+$('logoutBtn').onclick = logout;
+$('refreshBikes').onclick = loadBikes;
+$('refreshService').onclick = loadService;
+
+if (token) {
+  showApp();
+  loadAll();
+}
+</script>
+</body>
+</html>
