@@ -67,15 +67,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .hidden{display:none!important}
 .muted{color:var(--muted)}
 
-.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.68);display:flex;align-items:flex-end;justify-content:center;padding:16px;z-index:50}
-.sheet{width:min(560px,100%);background:#151c24;border:1px solid #33404d;border-radius:22px 22px 16px 16px;padding:20px;box-shadow:0 24px 80px rgba(0,0,0,.45)}
-.sheet h2{margin:4px 0 6px;font-size:25px}
-.sheet p{margin:0 0 16px}
-.channels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.channel{background:#202a34;color:#fff;border:1px solid #344252;font-size:17px}
-.channel.site{background:var(--accent);color:#10150b}
-.channel[disabled]{opacity:.42}
-.close{margin-top:10px;background:transparent;color:var(--muted);border:1px solid #344252}
 @media(min-width:760px){header{padding-top:54px}.logo{width:390px}main{padding-top:28px}.card{padding:28px}.backdrop{align-items:center}.sheet{border-radius:22px}}
 </style>
 </head>
@@ -91,20 +82,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <button id="rentBtn">Арендовать</button>
 </section>
 </main>
-
-<div id="sheet" class="backdrop hidden">
-  <div class="sheet">
-    <h2>Где продолжить аренду?</h2>
-    <p class="muted">Выберите удобный канал.</p>
-    <div class="channels">
-      <button id="tgBtn" class="channel" disabled>Telegram</button>
-      <button id="maxBtn" class="channel" disabled>MAX</button>
-      <button id="vkBtn" class="channel" disabled>VK</button>
-      <button id="siteBtn" class="channel site">Сайт</button>
-    </div>
-    <button id="closeBtn" class="close">Закрыть</button>
-  </div>
-</div>
 
 <script>
 const API='https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/fastgo-public-api';
@@ -156,13 +133,7 @@ async function load(){
     $("address").textContent="Не удалось загрузить данные точки.";
   }
 }
-
-function openSheet(){$("sheet").classList.remove("hidden")}
-function closeSheet(){$("sheet").classList.add("hidden")}
-$("rentBtn").onclick=openSheet;
-$("closeBtn").onclick=closeSheet;
-$("sheet").onclick=e=>{if(e.target===$("sheet")) closeSheet()};
-$("siteBtn").onclick=()=>location.href=CLIENT;
+\n$("rentBtn").onclick=()=>location.href=CLIENT;
 load();
 </script>
 </body>
