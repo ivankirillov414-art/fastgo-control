@@ -19,8 +19,8 @@ main{width:100%;max-width:720px;margin:auto;padding:18px 20px 56px}
 h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}
 .address{font-size:18px;margin:0 0 18px;color:var(--muted)}
 .tariffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:18px 0 20px}
-.tariff{position:relative;background:var(--panel2);border:1px solid #202b36;border-radius:14px;padding:15px;overflow:hidden}
-.tariff strong{display:block;font-size:22px;margin:7px 0 4px}
+.tariff{position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s;background:var(--panel2);border:1px solid #202b36;border-radius:14px;padding:15px;overflow:hidden}
+.tariff.selected{border-color:var(--accent)!important;box-shadow:0 0 0 2px rgba(184,255,53,.35),0 0 24px rgba(184,255,53,.12)!important;transform:translateY(-1px)}\n.tariff strong{display:block;font-size:22px;margin:7px 0 4px}
 .tariff.weekly{
   background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));
   border-color:#6b7480;
@@ -68,7 +68,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .muted{color:var(--muted)}
 
 @media(min-width:760px){header{padding-top:54px}.logo{width:390px}main{padding-top:28px}.card{padding:28px}.backdrop{align-items:center}.sheet{border-radius:22px}}
-</style>
+.tariff{cursor:pointer;transition:.15s}\n.tariff.selected{border-color:var(--accent)!important;box-shadow:0 0 0 2px rgba(184,255,53,.35),0 0 24px rgba(184,255,53,.12)!important;transform:translateY(-1px)}\n</style>
 </head>
 <body>
 <header><div class="logo"><img src="fastgo-logo.png" alt="FastGo"></div></header>
@@ -134,7 +134,7 @@ async function load(){
   }
 }
 
-$("rentBtn").onclick=()=>location.href=CLIENT;
+$("tariffs").addEventListener("click",e=>{const el=e.target.closest(".tariff");if(!el)return;document.querySelectorAll(".tariff").forEach(x=>x.classList.remove("selected"));el.classList.add("selected");window.selectedTariff=[...document.querySelectorAll(".tariff")].indexOf(el);});\n$("rentBtn").onclick=()=>{if(window.selectedTariff===undefined){alert("Выберите тариф");return;}location.href=CLIENT+"?tariff="+window.selectedTariff;};
 load();
 </script>
 </body>
