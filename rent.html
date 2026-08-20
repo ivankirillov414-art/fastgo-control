@@ -1,141 +1,20 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FastGo — аренда электровелосипедов</title>
 <style>
-:root{--bg:#0b0f14;--panel:#141b23;--panel2:#0e141b;--line:#293542;--text:#eef2f7;--muted:#96a3b4;--accent:#b8ff35;--danger:#ff8e8e}
-*{box-sizing:border-box}
-html,body{min-height:100%}
-body{margin:0;background:radial-gradient(circle at 50% 12%,rgba(184,255,53,.04),transparent 28%),var(--bg);color:var(--text);font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{display:flex;justify-content:center;padding:28px 20px 18px}
-.logo{width:min(320px,76vw)} .logo img{display:block;width:100%;height:auto}
-main{width:100%;max-width:720px;margin:auto;padding:18px 20px 56px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px}
-.hero{width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#101820,#1a252f);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin-bottom:20px}
-.hero img{width:100%;height:100%;object-fit:cover;display:block}
-.placeholder{color:var(--muted);font-weight:700;text-align:center;padding:24px}
-h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}
-.address{font-size:18px;margin:0 0 18px;color:var(--muted)}
-.tariffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:18px 0 20px}
-.tariff{position:relative;cursor:pointer;touch-action:manipulation;background:var(--panel2);border:1px solid #202b36;border-radius:14px;padding:15px;overflow:hidden}
-.tariff.selected{border-color:var(--accent)!important;box-shadow:0 0 0 2px rgba(184,255,53,.35),0 0 24px rgba(184,255,53,.12)!important;}\n.tariff strong{display:block;font-size:22px;margin:7px 0 4px}
-.tariff.weekly{
-  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));
-  border-color:#6b7480;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
-}
-.tariff.monthly{
-  border-color:var(--accent);
-  box-shadow:0 0 0 1px rgba(184,255,53,.22),0 0 24px rgba(184,255,53,.08);
-}
-.old-price{
-  display:inline-block;
-  margin-left:10px;
-  color:#d5d9df;
-  font-size:16px;
-  font-weight:800;
-  text-decoration-line:line-through;
-  text-decoration-color:#ff5454;
-  text-decoration-thickness:3px;
-}
-.badge{
-  position:absolute;
-  top:10px;
-  right:10px;
-  padding:5px 9px;
-  border-radius:999px;
-  font-size:11px;
-  font-weight:900;
-  letter-spacing:.03em;
-  text-transform:uppercase;
-}
-.badge.popular{background:#f1f3f5;color:#13181d}
-.badge.best{background:var(--accent);color:#10150b}
-.choice-note{
-  display:block;
-  margin-top:8px;
-  font-size:13px;
-  font-weight:800;
-}
-.choice-note.popular{color:#f2f4f7}
-.choice-note.best{color:var(--accent)}
-button{width:100%;min-height:58px;border:0;border-radius:12px;background:var(--accent);color:#10150b;font:inherit;font-weight:850;font-size:19px;cursor:pointer}
-button:disabled{opacity:.55;cursor:not-allowed}
-.notice{padding:15px;border-radius:13px;background:#2a1d1d;border:1px solid #603737;color:#ffc2c2;font-weight:750;margin:18px 0}
-.hidden{display:none!important}
-.muted{color:var(--muted)}
-
-@media(min-width:760px){header{padding-top:54px}.logo{width:390px}main{padding-top:28px}.card{padding:28px}.backdrop{align-items:center}.sheet{border-radius:22px}}
-</style>
-</head>
-<body>
-<header><div class="logo"><img src="fastgo-logo.png" alt="FastGo"></div></header>
-<main>
-<section class="card">
-  <div id="photo" class="hero"><img src="fastgo-point.jpg" alt="Точка выдачи FastGo"></div>
-  <h1>Аренда электровелосипедов</h1>
-  <p id="address" class="address">Загрузка адреса…</p>
-  <div id="tariffs" class="tariffs"></div>
-  <div id="noStock" class="notice hidden">Сейчас свободной техники нет.</div>
-  <button id="rentBtn" onclick="window.location.href='fastgo-client.html'">Арендовать</button>
-</section>
-</main>
-
+:root{--bg:#0b0f14;--panel:#141b23;--panel2:#0e141b;--line:#293542;--text:#eef2f7;--muted:#96a3b4;--accent:#b8ff35}
+*{box-sizing:border-box}html,body{min-height:100%}body{margin:0;background:radial-gradient(circle at 50% 12%,rgba(184,255,53,.04),transparent 28%),var(--bg);color:var(--text);font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header{display:flex;justify-content:center;padding:28px 20px 18px}.logo{width:min(320px,76vw)}.logo img{display:block;width:100%;height:auto}main{width:100%;max-width:720px;margin:auto;padding:18px 20px 56px}.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px}.hero{width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#101820;border:1px solid var(--line);margin-bottom:20px}.hero img{width:100%;height:100%;object-fit:cover;display:block}h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}.address{font-size:18px;margin:0 0 18px;color:var(--muted)}.tariffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:18px 0 20px}.tariff{position:relative;cursor:pointer;touch-action:manipulation;background:var(--panel2);border:1px solid #202b36;border-radius:14px;padding:15px;overflow:hidden;-webkit-tap-highlight-color:transparent}.tariff.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(184,255,53,.35),0 0 24px rgba(184,255,53,.12)}.tariff strong{display:block;font-size:22px;margin:7px 0 4px}.tariff.weekly{background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));border-color:#6b7480}.tariff.monthly{border-color:var(--accent)}.old-price{display:inline-block;margin-left:10px;color:#d5d9df;font-size:16px;font-weight:800;text-decoration:line-through;text-decoration-color:#ff5454;text-decoration-thickness:3px}.badge{position:absolute;top:10px;right:10px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;text-transform:uppercase}.badge.popular{background:#f1f3f5;color:#13181d}.badge.best{background:var(--accent);color:#10150b}.choice-note{display:block;margin-top:8px;font-size:13px;font-weight:800}.choice-note.best{color:var(--accent)}button{width:100%;min-height:58px;border:0;border-radius:12px;background:var(--accent);color:#10150b;font:inherit;font-weight:850;font-size:19px;cursor:pointer}.notice{padding:15px;border-radius:13px;background:#2a1d1d;border:1px solid #603737;color:#ffc2c2;font-weight:750;margin:18px 0}.hidden{display:none!important}.muted{color:var(--muted)}
+</style></head>
+<body><header><div class="logo"><img src="fastgo-logo.png" alt="FastGo"></div></header><main><section class="card"><div id="photo" class="hero"><img src="fastgo-point.jpg" alt="Точка выдачи FastGo"></div><h1>Аренда электровелосипедов</h1><p id="address" class="address">Загрузка адреса…</p><div id="tariffs" class="tariffs"></div><div id="noStock" class="notice hidden">Сейчас свободной техники нет.</div><button id="rentBtn" type="button">Арендовать</button></section></main>
 <script>
 const API='https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/fastgo-public-api';
-const CLIENT='https://ivankirillov414-art.github.io/fastgo-control/fastgo-client.html';
+const CLIENT='fastgo-client.html';
 const $=id=>document.getElementById(id);
-
-async function load(){
-  try{
-    const r=await fetch(API,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"landing",params:{}})});
-    const j=await r.json();
-    if(!r.ok) throw new Error(j.error||"Ошибка");
-    const d=j.data||{}, s=d.settings||{}, tariffs=d.tariffs||[];
-    if(s.pickup_photo_url){
-      $("photo").innerHTML=`<img src="${s.pickup_photo_url}" alt="Точка FastGo">`;
-    }
-    $("address").textContent=s.pickup_address||"Адрес пункта выдачи будет добавлен";
-    $("tariffs").innerHTML=tariffs.map(t=>{
-      const code=String(t.code||"").toUpperCase();
-      if(code==="WEEK"){
-        return `<div class="tariff weekly" data-tariff="WEEK">
-          <span class="badge popular">Популярный</span>
-          <span class="muted">${t.name||"Неделя"}</span>
-          <div><strong style="display:inline-block">${t.price??"3500"} ₽</strong><span class="old-price">3700 ₽</span></div>
-          <small class="muted">${t.description||"7 дней — 500 ₽/день"}</small>
-          <span class="choice-note popular">Чаще всего выбирают</span>
-        </div>`;
-      }
-      if(code==="MONTH"){
-        return `<div class="tariff monthly" data-tariff="MONTH">
-          <span class="badge best">Самый выгодный</span>
-          <span class="muted">${t.name||"Месяц"}</span>
-          <strong>${t.price??"12000"} ₽</strong>
-          <small class="muted">${t.description||"30 дней — 400 ₽/день"}</small>
-          <span class="choice-note best">Лучшая цена за день</span>
-        </div>`;
-      }
-      return `<div class="tariff" data-tariff="${code||t.id||'}">
-        <span class="muted">${t.name||"Тариф"}</span>
-        <strong>${t.price??"—"} ₽</strong>
-        <small class="muted">${t.description||"Минимальный срок аренды — 2 дня"}</small>
-      </div>`;
-    }).join("") || '<span class="muted">Тарифы скоро появятся.</span>';
-    if(Number(d.available_count||0)<=0){
-      $("noStock").classList.remove("hidden");
-      $("rentBtn").disabled=true;
-      $("rentBtn").textContent="Нет свободной техники";
-    }
-  }catch(e){
-    $("address").textContent="Не удалось загрузить данные точки.";
-  }
-}
-
-let selectedTariff=null;\n$("tariffs").addEventListener("click",(e)=>{\n  const card=e.target.closest(".tariff");\n  if(!card)return;\n  document.querySelectorAll(".tariff").forEach(x=>x.classList.remove("selected"));\n  card.classList.add("selected");\n  selectedTariff=card.dataset.tariff||"";\n});\n$("rentBtn").onclick=()=>{\n  if(!selectedTariff){alert("Выберите тариф");return;}\n  location.href=CLIENT+"?tariff="+encodeURIComponent(selectedTariff);\n};
+let selectedTariff='';
+async function load(){try{const r=await fetch(API,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'landing',params:{}}),cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'Ошибка');const d=j.data||{},s=d.settings||{},tariffs=d.tariffs||[];if(s.pickup_photo_url)$('photo').innerHTML='<img src="'+s.pickup_photo_url+'" alt="Точка FastGo">';$('address').textContent=s.pickup_address||'Адрес пункта выдачи будет добавлен';$('tariffs').innerHTML=tariffs.map(t=>{const code=String(t.code||t.id||'').toUpperCase();if(code==='WEEK')return '<div class="tariff weekly" data-tariff="WEEK"><span class="badge popular">Популярный</span><span class="muted">'+(t.name||'Неделя')+'</span><div><strong style="display:inline-block">'+(t.price??3500)+' ₽</strong><span class="old-price">3700 ₽</span></div><small class="muted">'+(t.description||'7 дней — 500 ₽/день')+'</small><span class="choice-note">Чаще всего выбирают</span></div>';if(code==='MONTH')return '<div class="tariff monthly" data-tariff="MONTH"><span class="badge best">Самый выгодный</span><span class="muted">'+(t.name||'Месяц')+'</span><strong>'+(t.price??12000)+' ₽</strong><small class="muted">'+(t.description||'30 дней — 400 ₽/день')+'</small><span class="choice-note best">Лучшая цена за день</span></div>';return '<div class="tariff" data-tariff="'+code+'"><span class="muted">'+(t.name||'Тариф')+'</span><strong>'+(t.price??'—')+' ₽</strong><small class="muted">'+(t.description||'Минимальный срок аренды — 2 дня')+'</small></div>'}).join('')||'<span class="muted">Тарифы скоро появятся.</span>';if(Number(d.available_count||0)<=0){$('noStock').classList.remove('hidden');$('rentBtn').disabled=true;$('rentBtn').textContent='Нет свободной техники'}}catch(e){$('address').textContent='Не удалось загрузить данные точки.'}}
+$('tariffs').addEventListener('click',e=>{const card=e.target.closest('.tariff');if(!card)return;document.querySelectorAll('.tariff').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');selectedTariff=card.dataset.tariff||''});
+$('rentBtn').addEventListener('click',()=>{if(!selectedTariff){alert('Выберите тариф');return}location.href=CLIENT+'?tariff='+encodeURIComponent(selectedTariff)});
 load();
-</script>
-</body>
-</html>
+</script></body></html>
