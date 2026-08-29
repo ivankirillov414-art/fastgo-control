@@ -1,0 +1,1 @@
+{"name":"Personal RPG","short_name":"RPG","description":"Личная RPG-система: квесты, дейлики и прогресс","start_url":"./achievements.html","scope":"./","display":"standalone","background_color":"#030308","theme_color":"#12091d","orientation":"any","icons":[{"src":"./rpg-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
