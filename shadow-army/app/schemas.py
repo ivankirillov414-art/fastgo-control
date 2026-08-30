@@ -17,6 +17,16 @@ class MemoryCreate(BaseModel):
     valid_until: datetime | None = None
 
 
+class MemorySupersede(BaseModel):
+    statement: str = Field(min_length=1)
+    confidence: float = Field(default=1.0, ge=0, le=1)
+    source: str | None = Field(default=None, max_length=500)
+
+
+class MemoryConfirm(BaseModel):
+    evidence_id: str = Field(min_length=1, max_length=64)
+
+
 class MemoryView(BaseModel):
     id: str
     project_id: str | None
