@@ -1,6 +1,8 @@
 from fastapi import Depends, FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from .commander import CommanderService
 from .config import get_settings
 from .db import SessionLocal
 from .keeper import KeeperService
@@ -8,6 +10,12 @@ from .schemas import MemoryConfirm, MemoryCreate, MemorySupersede, MemoryView
 
 settings = get_settings()
 app = FastAPI(title="Shadow Army Core", version="0.1.0")
+
+
+class CommanderRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=10000)
+    project_id: str | None = None
+    use_ai: bool = True
 
 
 def get_db():
@@ -25,7 +33,15 @@ def health() -> dict[str, str]:
 
 @app.get("/army")
 def army() -> dict:
-    return {"status": "m1-keeper", "agents": [{"id": "commander", "name": "Командир", "rank": "E"}, {"id": "keeper", "name": "Хранитель", "rank": "E"}, {"id": "manager", "name": "Управляющий", "rank": "E"}]}
+    return {"status": "m3-commander", "ai_configured": bool(settings.ai_api_key), "agents": [{"id": "commander", "name": "Командир", "rank": "E"}, {"id": "keeper", "name": "Хранитель", "rank": "E"}, {"id": "manager", "name": "Управляющий", "rank": "E"}]}
+
+
+@app.post("/commander/request")
+def commander_request(payload: CommanderRequest, db: Session = Depends(get_db)):
+    try:
+        return CommanderService(db).handle(payload.text, project_id=payload.project_id, use_ai=payload.use_ai)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/memory", response_model=MemoryView, status_code=201)
