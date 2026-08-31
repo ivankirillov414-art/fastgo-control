@@ -33,6 +33,7 @@ jobs:
     env:
       APP_ENV: ci
       DATABASE_URL: postgresql+psycopg://shadow:shadow@localhost:5432/shadow_army
+      PYTHONPATH: ${{ github.workspace }}/shadow-army
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +49,7 @@ jobs:
       - name: Seed E-rank shadows
         run: python -m app.seed
       - name: Run tests
-        run: pytest -q
+        run: python -m pytest -q
       - name: Run PROJECT-001 end-to-end bootstrap
         run: python -m app.bootstrap_project | tee project-001-result.json
       - name: Verify API imports
