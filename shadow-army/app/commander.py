@@ -1,19 +1,21 @@
+import json
 import re
 
 from sqlalchemy.orm import Session
 
 from .keeper import KeeperService
 from .manager import ManagerService
+from .model_router import ModelRouter
 from .models import Event
 
 
 class CommanderService:
-    """Commander E: classifies intent and coordinates Keeper + Manager without external side effects."""
+    """Commander E: coordinates Keeper + Manager and can synthesize via AI without external side effects."""
     QUESTION_WORDS=("как","какой","какая","какие","почему","сколько","можно ли","что такое")
     PROJECT_WORDS=("проект","сделаем","создать","построить","разработать","запустить","хочу сделать")
 
     def __init__(self, db: Session):
-        self.db=db; self.keeper=KeeperService(db); self.manager=ManagerService(db)
+        self.db=db; self.keeper=KeeperService(db); self.manager=ManagerService(db); self.models=ModelRouter()
 
     def classify(self, text: str) -> str:
         value=text.strip().casefold()
@@ -21,7 +23,7 @@ class CommanderService:
         if value.endswith("?") or any(value.startswith(word) for word in self.QUESTION_WORDS): return "QUESTION"
         return "TASK"
 
-    def handle(self, text: str, project_id: str | None=None) -> dict:
+    def handle(self, text: str, project_id: str | None=None, use_ai: bool=True) -> dict:
         request_type=self.classify(text)
         subject=self._subject(text)
         context=self.keeper.context_pack(subject,project_id=project_id,limit=20)
@@ -32,7 +34,22 @@ class CommanderService:
         if project_id:
             try: result["project"]=self.manager.project_context(project_id)
             except ValueError: result["project_error"]="Project not found"
-        self.db.add(Event(actor="commander",action="REQUEST_CLASSIFIED",target=project_id,reason="Commander E orchestration",payload={"type":request_type,"subject":subject,"delegated_to":result["delegated_to"]}))
+
+        if use_ai and self.models.available:
+            system=("Ты Командир E Теневой армии. Отвечай по-русски, кратко и предметно. "
+                    "Используй только переданный контекст. Не утверждай, что внешнее действие выполнено, если этого нет в данных. "
+                    "Для проекта или задачи дай решение и один ближайший конкретный шаг. Если критически не хватает данных — задай один точный вопрос.")
+            ai_payload={"request_type":request_type,"user_request":text.strip(),"keeper_context":context,
+                        "manager_context":result.get("planning_context"),"project":result.get("project")}
+            ai=self.models.complete(system, json.dumps(ai_payload,ensure_ascii=False), capability="reasoning" if request_type=="PROJECT" else "standard")
+            result["answer"]=ai.text
+            result["ai"]={"provider":ai.provider,"model":ai.model}
+            result["confidence"]=0.85
+        else:
+            result["answer"]="AI provider is not configured; orchestration data prepared."
+            result["ai"]=None
+
+        self.db.add(Event(actor="commander",action="REQUEST_CLASSIFIED",target=project_id,reason="Commander E orchestration",payload={"type":request_type,"subject":subject,"delegated_to":result["delegated_to"],"ai_used":bool(result["ai"])}))
         self.db.commit()
         return result
 
