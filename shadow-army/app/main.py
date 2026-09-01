@@ -7,6 +7,7 @@ from .config import get_settings
 from .db import SessionLocal
 from .keeper import KeeperService
 from .schemas import MemoryConfirm, MemoryCreate, MemorySupersede, MemoryView
+from .telegram import TelegramBot
 
 settings = get_settings()
 app = FastAPI(title="Shadow Army Core", version="0.1.0")
@@ -33,7 +34,7 @@ def health() -> dict[str, str]:
 
 @app.get("/army")
 def army() -> dict:
-    return {"status": "m3-commander", "ai_configured": bool(settings.ai_api_key), "agents": [{"id": "commander", "name": "Командир", "rank": "E"}, {"id": "keeper", "name": "Хранитель", "rank": "E"}, {"id": "manager", "name": "Управляющий", "rank": "E"}]}
+    return {"status": "m5-telegram", "ai_configured": bool(settings.ai_api_key), "telegram_configured": bool(settings.telegram_bot_token), "agents": [{"id": "commander", "name": "Командир", "rank": "E"}, {"id": "keeper", "name": "Хранитель", "rank": "E"}, {"id": "manager", "name": "Управляющий", "rank": "E"}]}
 
 
 @app.post("/commander/request")
@@ -42,6 +43,15 @@ def commander_request(payload: CommanderRequest, db: Session = Depends(get_db)):
         return CommanderService(db).handle(payload.text, project_id=payload.project_id, use_ai=payload.use_ai)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/telegram/webhook")
+def telegram_webhook(update: dict, db: Session = Depends(get_db)):
+    bot = TelegramBot(db)
+    outgoing = bot.handle_update(update)
+    if outgoing:
+        bot.send(outgoing["chat_id"], outgoing["text"])
+    return {"ok": True}
 
 
 @app.post("/memory", response_model=MemoryView, status_code=201)
