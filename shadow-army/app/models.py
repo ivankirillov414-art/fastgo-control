@@ -50,7 +50,7 @@ class Stage(Base, TimestampMixin):
 
 class Quest(Base, TimestampMixin):
     __tablename__="quests"
-    id: Mapped[str]=mapped_column(String(64), primary_key=True, default=uid); stage_id: Mapped[str]=mapped_column(ForeignKey("stages.id"), index=True); title: Mapped[str]=mapped_column(String(240)); result: Mapped[str]=mapped_column(Text); success_criteria: Mapped[str]=mapped_column(Text); verification_mode: Mapped[VerificationMode]=mapped_column(Enum(VerificationMode), default=VerificationMode.USER); status: Mapped[WorkStatus]=mapped_column(Enum(WorkStatus), default=WorkStatus.PLANNED); priority: Mapped[int]=mapped_column(default=50)
+    id: Mapped[str]=mapped_column(String(64), primary_key=True, default=uid); stage_id: Mapped[str]=mapped_column(ForeignKey("stages.id"), index=True); title: Mapped[str]=mapped_column(String(240)); result: Mapped[str]=mapped_column(Text); success_criteria: Mapped[str]=mapped_column(Text); verification_mode: Mapped[VerificationMode]=mapped_column(Enum(VerificationMode), default=VerificationMode.USER); status: Mapped[WorkStatus]=mapped_column(Enum(WorkStatus), default=WorkStatus.PLANNED); priority: Mapped[int]=mapped_column(default=50); deadline: Mapped[datetime | None]=mapped_column(DateTime(timezone=True), nullable=True); estimate_minutes: Mapped[int | None]=mapped_column(nullable=True); reward_money: Mapped[float]=mapped_column(Float, default=0); reward_xp: Mapped[int]=mapped_column(default=0); business_value: Mapped[int]=mapped_column(default=0); skill_value: Mapped[int]=mapped_column(default=0); unblock_value: Mapped[int]=mapped_column(default=0); expiry_policy: Mapped[str]=mapped_column(String(32), default="replan")
 
 class Task(Base, TimestampMixin):
     __tablename__="tasks"
