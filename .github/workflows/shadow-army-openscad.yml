@@ -1,0 +1,35 @@
+name: Shadow Army OpenSCAD Build
+
+on:
+  push:
+    branches: [shadow-army-v0.1]
+    paths:
+      - 'shadow-army/artifacts/**/*.scad'
+      - '.github/workflows/shadow-army-openscad.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-third-hand:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenSCAD
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openscad
+      - name: Compile SCAD to STL
+        run: |
+          mkdir -p build/third-hand
+          openscad -o build/third-hand/third_hand_v1.stl shadow-army/artifacts/third-hand/third_hand_v1.scad
+      - name: Validate STL artifact
+        run: |
+          test -s build/third-hand/third_hand_v1.stl
+          bytes=$(wc -c < build/third-hand/third_hand_v1.stl)
+          echo "STL bytes: $bytes"
+          test "$bytes" -gt 1000
+      - name: Upload validated STL
+        uses: actions/upload-artifact@v4
+        with:
+          name: third-hand-v1-stl
+          path: build/third-hand/third_hand_v1.stl
+          if-no-files-found: error
