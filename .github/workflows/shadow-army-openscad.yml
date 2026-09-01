@@ -4,7 +4,7 @@ on:
   push:
     branches: [shadow-army-v0.1]
     paths:
-      - 'shadow-army/artifacts/**/*.scad'
+      - 'shadow-army/artifacts/third-hand/**'
       - '.github/workflows/shadow-army-openscad.yml'
   workflow_dispatch:
 
@@ -13,23 +13,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install OpenSCAD
+      - name: Install OpenSCAD and mesh tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y openscad
+          sudo apt-get install -y openscad python3-pip
+          pip3 install --break-system-packages trimesh networkx
       - name: Compile SCAD to STL
         run: |
           mkdir -p build/third-hand
-          openscad -o build/third-hand/third_hand_v1.stl shadow-army/artifacts/third-hand/third_hand_v1.scad
-      - name: Validate STL artifact
+          openscad -o build/third-hand/third_hand_v2.stl shadow-army/artifacts/third-hand/third_hand_v1.scad
+      - name: Technical geometry validation
         run: |
-          test -s build/third-hand/third_hand_v1.stl
-          bytes=$(wc -c < build/third-hand/third_hand_v1.stl)
-          echo "STL bytes: $bytes"
-          test "$bytes" -gt 1000
+          python3 - <<'PY'
+          import trimesh
+          p='build/third-hand/third_hand_v2.stl'
+          m=trimesh.load(p, force='mesh')
+          if m.is_empty:
+              raise SystemExit('FAIL: empty STL')
+          ext=m.bounds[1]-m.bounds[0]
+          print('bounds_mm=', ext.tolist())
+          if ext[0] > 150.01 or ext[1] > 150.01:
+              raise SystemExit(f'FAIL: print plate exceeds 150x150: {ext}')
+          parts=m.split(only_watertight=False)
+          print('connected_components=', len(parts))
+          # base + post + 2 arms + 2 jaws
+          if len(parts) != 6:
+              raise SystemExit(f'FAIL: expected 6 separated printable components, got {len(parts)}')
+          if not m.is_watertight:
+              raise SystemExit('FAIL: mesh is not watertight')
+          print('watertight=', m.is_watertight)
+          print('triangles=', len(m.faces))
+          PY
+      - name: Validate source constraints
+        run: |
+          grep -q 'pivot_d=5.3' shadow-army/artifacts/third-hand/third_hand_v1.scad
+          grep -q 'mount_d=4.5' shadow-army/artifacts/third-hand/third_hand_v1.scad
+          grep -q 'arm 2' shadow-army/artifacts/third-hand/third_hand_v1.scad
+          grep -q 'jaw 2' shadow-army/artifacts/third-hand/third_hand_v1.scad
       - name: Upload validated STL
         uses: actions/upload-artifact@v4
         with:
-          name: third-hand-v1-stl
-          path: build/third-hand/third_hand_v1.stl
+          name: third-hand-v2-stl
+          path: build/third-hand/third_hand_v2.stl
           if-no-files-found: error
