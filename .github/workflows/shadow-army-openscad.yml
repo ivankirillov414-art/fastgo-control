@@ -28,28 +28,23 @@ jobs:
           import trimesh
           p='build/third-hand/third_hand_v2.stl'
           m=trimesh.load(p, force='mesh')
-          if m.is_empty:
-              raise SystemExit('FAIL: empty STL')
+          if m.is_empty: raise SystemExit('FAIL: empty STL')
           ext=m.bounds[1]-m.bounds[0]
           print('bounds_mm=', ext.tolist())
-          if ext[0] > 150.01 or ext[1] > 150.01:
-              raise SystemExit(f'FAIL: print plate exceeds 150x150: {ext}')
+          if ext[0] > 150.01 or ext[1] > 150.01: raise SystemExit(f'FAIL: print plate exceeds 150x150: {ext}')
           parts=m.split(only_watertight=False)
           print('connected_components=', len(parts))
-          # base + post + 2 arms + 2 jaws
-          if len(parts) != 6:
-              raise SystemExit(f'FAIL: expected 6 separated printable components, got {len(parts)}')
-          if not m.is_watertight:
-              raise SystemExit('FAIL: mesh is not watertight')
+          if len(parts) != 6: raise SystemExit(f'FAIL: expected 6 separated printable components, got {len(parts)}')
+          if not m.is_watertight: raise SystemExit('FAIL: mesh is not watertight')
           print('watertight=', m.is_watertight)
           print('triangles=', len(m.faces))
           PY
       - name: Validate source constraints
         run: |
-          grep -q 'pivot_d=5.3' shadow-army/artifacts/third-hand/third_hand_v1.scad
-          grep -q 'mount_d=4.5' shadow-army/artifacts/third-hand/third_hand_v1.scad
-          grep -q 'arm 2' shadow-army/artifacts/third-hand/third_hand_v1.scad
-          grep -q 'jaw 2' shadow-army/artifacts/third-hand/third_hand_v1.scad
+          grep -Eq 'pivot_d[[:space:]]*=[[:space:]]*5\.3' shadow-army/artifacts/third-hand/third_hand_v1.scad
+          grep -Eq 'mount_d[[:space:]]*=[[:space:]]*4\.5' shadow-army/artifacts/third-hand/third_hand_v1.scad
+          test "$(grep -o 'arm();' shadow-army/artifacts/third-hand/third_hand_v1.scad | wc -l)" -eq 2
+          test "$(grep -o 'jaw();' shadow-army/artifacts/third-hand/third_hand_v1.scad | wc -l)" -eq 2
       - name: Upload validated STL
         uses: actions/upload-artifact@v4
         with:
