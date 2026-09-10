@@ -1,1 +1,30 @@
-<!doctype html><html lang="ru" class="awBoot" style="background:#000"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#000000"><meta name="color-scheme" content="dark"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="ARISE"><link rel="manifest" href="./manifest.webmanifest?v=3"><link rel="apple-touch-icon" sizes="180x180" href="./ARISE-app-icon-180.png?v=2"><title>ARISE</title><style>:root{color-scheme:dark}html,body{margin:0;min-height:100%;background:#000!important;color:#fff;font-family:system-ui,-apple-system,sans-serif}html.awBoot body{visibility:hidden!important}.load{position:fixed;inset:0;background:#000;z-index:99998}.ariseBrand{display:none}</style></head><body><div class="load"></div><script>(async()=>{try{const u='https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/6c69565/achievements.html';let h=await(await fetch(u,{cache:'no-store'})).text();if(!h||!h.includes('PERSONAL RPG'))throw new Error('base');h=h.replace(/<html([^>]*)>/i,'<html$1 class="awBoot" style="background:#000;color-scheme:dark">').replace(/<head>/i,'<head><meta name="theme-color" content="#000"><meta name="color-scheme" content="dark"><style>:root,html{background:#000!important;color-scheme:dark}body{background-color:#08070c!important}html.awBoot body>*{visibility:hidden!important}html.awBoot #ariseAwakening,html.awBoot #ariseAwakening *{visibility:visible!important}</style>').replace(/<title>.*?<\/title>/i,'<title>ARISE</title>').replace(/PERSONAL RPG/g,'ARISE').replace('</body>','<script src="./arise-theme.js?v=10"><\/script><script src="./proof-runtime.js?v=77df44d"><\/script><script src="./dailies-runtime.js?v=deadline13"><\/script><script src="./languages-runtime.js?v=tree3"><\/script><script src="./skilltree-runtime.js?v=all1"><\/script><script src="./pwa-runtime.js?v=nobell11"><\/script><script src="./awakening-runtime.js?v=plates10"><\/script></body>');document.open();document.write(h);document.close()}catch(e){document.documentElement.classList.remove('awBoot');document.body.innerHTML='<div style="min-height:100vh;background:#000"></div>'}})();</script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08070c">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="ARISE — личные навыки, ежедневные квесты и подтверждённый прогресс.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ARISE">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./ARISE-app-icon-180.png">
+  <link rel="icon" href="./rpg-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./arise/app.css?v=20260910">
+  <title>ARISE — личная система</title>
+</head>
+<body>
+  <a class="skip" href="#content">К содержимому</a>
+  <div class="shell">
+    <header class="header"><a href="#character" class="brand">ARISE<small>PERSONAL SYSTEM</small></a><div class="head-progress" id="head-progress"><b>Уровень 1</b><span>Синхронизация…</span></div><button class="icon-button" id="settings-button" aria-label="Настройки">⚙</button></header>
+    <div class="connection" id="connection" role="status">Подключение к системе…</div>
+    <main id="content" tabindex="-1"><section class="empty"><h1>ARISE</h1><p>Загружаем твои навыки и задания.</p></section></main>
+    <nav class="bottom" aria-label="Основные разделы"><a href="#character" data-view="character"><span aria-hidden="true">✦</span>Персонаж</a><a href="#skills" data-view="skills"><span aria-hidden="true">◈</span>Навыки</a><a href="#quests" data-view="quests"><span aria-hidden="true">✓</span>Квесты</a><a href="#world" data-view="world"><span aria-hidden="true">⌁</span>Мир</a></nav>
+  </div>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title"></h2><button class="icon-button" id="close-modal" aria-label="Закрыть">×</button></div><div id="modal-body"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="empty">Для работы ARISE включи JavaScript в настройках браузера. Твой прогресс остаётся на сервере.</p></noscript>
+  <script type="module" src="./arise/app.mjs?v=20260910"></script>
+</body>
+</html>
