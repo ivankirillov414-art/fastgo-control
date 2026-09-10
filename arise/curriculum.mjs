@@ -353,5 +353,24 @@ const english=[
  ['III · PRACTICE','♛ FINAL BOSS · Презентация проекта','B',250,'Самостоятельное общение о реальном проекте.','Подготовь презентацию проекта на английском: описание на 150 слов, иллюстрации и трёхминутную запись выступления.']
 ];
 export const ENGLISH=english.map((x,i)=>({id:37+i,track:'english',chapter:x[0],title:x[1],rank:x[2],xp:x[3],description:x[4],mission:x[5],url:'https://learnenglish.britishcouncil.org/free-resources'}));
-export const QUESTS=[...FUSION,...ENGLISH];
-export const TRACKS={fusion:{name:'3D DESIGN · FUSION',description:'Урок → реальная деталь → доказательство → следующий уровень.',levelMax:20},english:{name:'ENGLISH · АНГЛИЙСКИЙ',description:'Чтение, письмо, разговор и технический английский.',levelMax:15}};
+export const PHYSICAL_BRANCHES=[
+ {id:'strength',name:'Сила',exercise:'Отжимания',mode:'reps',goals:[5,8,10,12,15,18],description:'Полный цикл сгибания и разгибания рук. Камера сбоку, всё тело в кадре.'},
+ {id:'endurance',name:'Выносливость',exercise:'Приседания',mode:'reps',goals:[10,15,20,25,30,40],description:'Сгибание и разгибание коленей с возвращением в исходное положение. Камера сбоку.'},
+ {id:'stability',name:'Стойкость',exercise:'Подъёмы корпуса',mode:'reps',goals:[8,12,15,20,25,30],description:'Подъём корпуса из положения лёжа и возвращение назад. Камера сбоку, таз и плечи видны.'},
+ {id:'will',name:'Выдержка',exercise:'Планка',mode:'hold',goals:[20,30,45,60,75,90],description:'Удержание положения. Таймер приостанавливается, когда камера теряет тело или линия корпуса нарушается.'}
+];
+export const RANKS=['E','D','C','B','A','S'];
+// Thresholds come from the six existing gates in hunter/app.js. No new loads added.
+// Mapping those checkpoints to E–S is a new implementation decision, not a recovered chat quote.
+export const PHYSICAL=PHYSICAL_BRANCHES.flatMap((b,branch)=>b.goals.map((goal,i)=>({
+ id:52+branch*6+i,track:b.id,chapter:'Врата · '+RANKS[i],title:b.exercise+' · '+RANKS[i]+'-RANK',rank:RANKS[i],xp:25+i*5,
+ kind:'physical',goal,mode:b.mode,description:b.description,
+ mission:`Пройди проверку камерой: ${goal} ${b.mode==='hold'?'секунд удержания':'полных повторений'}. Видео остаётся на устройстве. Это игровой ориентир, не персональная программа тренировок.`,
+ url:null
+})));
+export const QUESTS=[...FUSION,...ENGLISH,...PHYSICAL];
+export const TRACKS={
+ fusion:{name:'3D DESIGN · FUSION',short:'Fusion',group:'skills',description:'Урок → реальная деталь → доказательство → следующий уровень.',levelMax:20},
+ english:{name:'ENGLISH · АНГЛИЙСКИЙ',short:'Английский',group:'skills',description:'Чтение, письмо, разговор и технический английский.',levelMax:15},
+ ...Object.fromEntries(PHYSICAL_BRANCHES.map(b=>[b.id,{name:b.name,short:b.name,group:'physical',description:b.exercise+' · камера на устройстве · ранги E–S',levelMax:6}]))
+};

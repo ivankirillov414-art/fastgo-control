@@ -4,15 +4,23 @@ import {readFile} from 'node:fs/promises';
 import {QUESTS,FUSION,ENGLISH} from '../arise/curriculum.mjs';
 import {getDevice,DEVICE_KEY,levelFor,cleanProgress,available,escapeHTML,validateFile,request} from '../arise/core.mjs';
 import {stlDimensions,geometryMatches,aggregateQuest,bytesBase64,localClock,evaluateFile} from '../supabase/arise-functions/_shared/evidence.mjs';
-import {createHandler} from '../supabase/arise-functions/_shared/server.mjs';
+import {createHandler as rawHandler} from '../supabase/arise-functions/_shared/server.mjs';
 
+const USER={id:'a1111111-1111-4111-8111-111111111111',email:'fixture@example.com',email_confirmed_at:'2026-09-10T00:00:00Z',is_anonymous:false};
+const createHandler=(action,opts={})=>rawHandler(action,{...opts,fetcher:async(input,init)=>{
+ const url=new URL(input);
+ if(url.pathname==='/auth/v1/user')return Response.json(USER);
+ if(url.pathname==='/rest/v1/rpc/arise_account_device')return Response.json(KEY);
+ if(!opts.fetcher)throw Error('unexpected database request '+url.pathname);
+ return opts.fetcher(input,init);
+}});
 const KEY='test-device-0123456789';
 const env={get:name=>({SUPABASE_URL:'https://database.example',SUPABASE_SERVICE_ROLE_KEY:'test-server-key'})[name]};
 const storage=initial=>{const m=new Map(Object.entries(initial));return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)};};
 test('canonical identity is preserved across sessions',()=>{const s=storage({[DEVICE_KEY]:KEY});assert.equal(getDevice(s,()=>{throw Error('must not generate');}),KEY);});
 test('legacy device key migrates without replacing it',()=>{const s=storage({personal_rpg_device_id:KEY});assert.equal(getDevice(s),KEY);assert.equal(s.getItem(DEVICE_KEY),KEY);});
 test('new devices have their own generated identity, never a shared fallback',()=>{const s=storage({});assert.equal(getDevice(s,()=>KEY),KEY);});
-test('curriculum has stable Fusion ids and noncolliding English ids',()=>{assert.equal(FUSION.length,37);assert.equal(ENGLISH.length,15);assert.deepEqual(QUESTS.map(x=>x.id),Array.from({length:52},(_,i)=>i));assert.equal(FUSION[2].xp,60);});
+test('curriculum has stable Fusion ids and noncolliding English ids',()=>{assert.equal(FUSION.length,37);assert.equal(ENGLISH.length,15);assert.deepEqual(QUESTS.map(x=>x.id),Array.from({length:76},(_,i)=>i));assert.equal(FUSION[2].xp,60);});
 test('level curve preserves 500 + 250 progression and caps at 150',()=>{assert.equal(levelFor(0).level,1);assert.equal(levelFor(500).level,2);assert.equal(levelFor(1249).level,2);assert.equal(levelFor(1250).level,3);assert.equal(levelFor(1e12).level,150);assert.equal(levelFor(-3).remaining,0);});
 test('English unlocks independently, future nodes stay locked',()=>{assert.equal(available(ENGLISH[0],QUESTS,[]),true);assert.equal(available(ENGLISH[1],QUESTS,[0,1]),false);assert.equal(available(ENGLISH[1],QUESTS,[37]),true);assert.equal(available(FUSION[3],QUESTS,[2]),false);});
 test('server progress is validated and duplicate quest ids are removed',()=>{assert.deepEqual(cleanProgress({xp:90,completed_quests:[0,0,1,-1,'1']}),{xp:90,completed_quests:[0,1],updated_at:null});assert.throws(()=>cleanProgress({xp:'bad',completed_quests:[]}));});
@@ -32,9 +40,9 @@ test('deadline uses Orenburg time, not browser timezone',()=>{assert.equal(local
 test('unsupported AI proof remains pending, never falsely accepted',async()=>{const f=new File(['hello'],'report.txt',{type:'text/plain'});const result=await evaluateFile(f,{id:37,title:'English',mission:'speak'},env);assert.equal(result.check_status,'pending');});
 test('AI outage preserves pending evidence',async()=>{const f=new File(['not-real-image'],'proof.png',{type:'image/png'});const result=await evaluateFile(f,{id:0,title:'CAD',mission:'show CAD'},{get:k=>k==='GEMINI_API_KEY'?'test':null},async()=>new Response('unavailable',{status:503}));assert.equal(result.check_status,'pending');});
 test('server rejects missing device without querying data',async()=>{const handler=createHandler('rpg-progress',{env,fetcher:()=>{throw Error('must not fetch');}});const result=await handler(new Request('https://example/rpg-progress'));assert.equal(result.status,401);});
-test('server denies unverified daily completion',async()=>{const handler=createHandler('rpg-dailies',{env,fetcher:()=>{throw Error('must not fetch');}});const result=await handler(new Request('https://example/rpg-dailies',{method:'POST',headers:{'x-device-id':KEY,'content-type':'application/json'},body:'{"action":"complete","id":1}'}));assert.equal(result.status,403);assert.equal((await result.json()).error,'verification_required');});
-test('server rejects missing or out-of-range quest identifiers',async()=>{for(const query of ['', '?quest_index=999','?quest_index=-1','?quest_index=']){const handler=createHandler('quest-evidence-bundle',{env});const result=await handler(new Request('https://example/quest-evidence-bundle'+query,{headers:{'x-device-id':KEY}}));assert.equal(result.status,400);}});
-test('server scopes evidence history to the requesting device and excludes file paths',async()=>{const handler=createHandler('quest-status',{env,fetcher:async(url,options)=>{assert.equal(url.searchParams.get('device_id'),'eq.'+KEY);assert.equal(url.searchParams.get('select').includes('file_path'),false);assert.equal(options.headers.Authorization,'Bearer test-server-key');return Response.json([]);}});const response=await handler(new Request('https://example/quest-status',{headers:{'x-device-id':KEY}}));assert.equal(response.status,200);assert.deepEqual((await response.json()).items,[]);});
+test('server denies unverified daily completion',async()=>{const handler=createHandler('rpg-dailies',{env,fetcher:()=>{throw Error('must not fetch');}});const result=await handler(new Request('https://example/rpg-dailies',{method:'POST',headers:{Authorization:'Bearer test-session','x-device-id':KEY,'content-type':'application/json'},body:'{"action":"complete","id":1}'}));assert.equal(result.status,403);assert.equal((await result.json()).error,'verification_required');});
+test('server rejects missing or out-of-range quest identifiers',async()=>{for(const query of ['', '?quest_index=999','?quest_index=-1','?quest_index=']){const handler=createHandler('quest-evidence-bundle',{env});const result=await handler(new Request('https://example/quest-evidence-bundle'+query,{headers:{Authorization:'Bearer test-session','x-device-id':KEY}}));assert.equal(result.status,400);}});
+test('server scopes evidence history to the requesting device and excludes file paths',async()=>{const handler=createHandler('quest-status',{env,fetcher:async(url,options)=>{assert.equal(url.searchParams.get('device_id'),'eq.'+KEY);assert.equal(url.searchParams.get('select').includes('file_path'),false);assert.equal(options.headers.Authorization,'Bearer test-server-key');return Response.json([]);}});const response=await handler(new Request('https://example/quest-status',{headers:{Authorization:'Bearer test-session','x-device-id':KEY}}));assert.equal(response.status,200);assert.deepEqual((await response.json()).items,[]);});
 test('all local frontend assets exist and runtime page has no remote document.write',async()=>{const html=await readFile(new URL('../achievements.html',import.meta.url),'utf8');assert.equal(html.includes('document.write'),false);assert.equal(html.includes('raw.githubusercontent'),false);for(const match of html.matchAll(/(?:href|src)="(\.\/[^"?#]+)(?:\?[^"#]*)?"/g))await readFile(new URL('../'+match[1],import.meta.url));});
 test('shared service worker intercepts ARISE assets only',async()=>{const sw=await readFile(new URL('../sw.js',import.meta.url),'utf8');assert.ok(sw.includes('!paths.has(url.pathname)'));assert.ok(sw.includes("req.method!=='GET'"));assert.equal(sw.includes('personal_rpg_device_id'),false);});
 test('release SQL preserves rows and blocks old anonymous access',async()=>{const sql=await readFile(new URL('../supabase/arise-release.sql',import.meta.url),'utf8');assert.equal(/\b(?:delete\s+from|truncate|drop\s+table)\b/i.test(sql),false);assert.ok(sql.includes('drop policy if exists "personal rpg evidence read"'));assert.ok(sql.includes('security invoker'));const rewards=sql.match(/rewards integer\[\] := array\[([^\]]+)\]/)[1].split(',').map(Number);assert.deepEqual(rewards,QUESTS.map(x=>x.xp));});
@@ -43,7 +51,7 @@ function uploadRequest(id, kind='quest') {
   const body=new FormData();
   body.append('file',new File(['test fixture'],'proof.png',{type:'image/png'}));
   body.append(kind==='quest'?'quest_index':'daily_id',String(id));
-  return new Request('https://example/submit',{method:'POST',headers:{'x-device-id':KEY},body});
+  return new Request('https://example/submit',{method:'POST',headers:{Authorization:'Bearer test-session','x-device-id':KEY},body});
 }
 
 test('locked quest upload cannot write files or records',async()=>{
@@ -103,7 +111,7 @@ test('new daily reward cannot be chosen by an untrusted client',async()=>{
     assert.equal(Object.hasOwn(body,'xp'),false); assert.equal(Object.hasOwn(body,'p_xp'),false);
     return Response.json({id:1,xp:35});
   }});
-  const result=await handler(new Request('https://example/dailies',{method:'POST',headers:{'x-device-id':KEY,'content-type':'application/json'},body:JSON.stringify({action:'add',title:'Model',details:'A finished model',source_type:'project',xp:999999})}));
+  const result=await handler(new Request('https://example/dailies',{method:'POST',headers:{Authorization:'Bearer test-session','x-device-id':KEY,'content-type':'application/json'},body:JSON.stringify({action:'add',title:'Model',details:'A finished model',source_type:'project',xp:999999})}));
   assert.equal(result.status,200); assert.equal((await result.json()).xp,35);
 });
 

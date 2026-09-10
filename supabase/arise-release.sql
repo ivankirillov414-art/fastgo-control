@@ -21,7 +21,7 @@ returns public.rpg_progress language plpgsql security invoker set search_path = 
 as $body$
 declare
   q integer[]; quest_xp integer; dxp integer;
-  rewards integer[] := array[40,50,60,80,90,180,100,120,130,140,150,160,180,350,220,230,250,260,280,300,550,320,350,280,350,380,400,420,450,750,300,400,550,650,500,900,2000,30,40,50,60,60,60,80,90,90,100,160,100,120,140,250];
+  rewards integer[] := array[40,50,60,80,90,180,100,120,130,140,150,160,180,350,220,230,250,260,280,300,550,320,350,280,350,380,400,420,450,750,300,400,550,650,500,900,2000,30,40,50,60,60,60,80,90,90,100,160,100,120,140,250,25,30,35,40,45,50,25,30,35,40,45,50,25,30,35,40,45,50,25,30,35,40,45,50];
   result public.rpg_progress;
 begin
   if p_device_id !~ '^[a-zA-Z0-9_-]{16,80}$' then raise exception 'invalid_device'; end if;
@@ -90,7 +90,7 @@ returns public.quest_evidence language plpgsql security invoker set search_path=
 as $body$
 declare result public.quest_evidence;
 begin
-  if p_device_id !~ '^[a-zA-Z0-9_-]{16,80}$' or p_index not between 0 and 51
+  if p_device_id !~ '^[a-zA-Z0-9_-]{16,80}$' or p_index not between 0 and 75
     or p_status not in ('pending','accepted','rejected') then raise exception 'invalid_quest'; end if;
   perform pg_advisory_xact_lock(hashtextextended('arise:'||p_device_id,0));
   select * into result from public.quest_evidence where device_id=p_device_id and quest_index=p_index for update;
