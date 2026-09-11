@@ -1,0 +1,14 @@
+name = "fastgo-workshop-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-11"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SUPABASE_URL = "https://oqgpjfikjpcplnxueoki.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji"
+
+[[r2_buckets]]
+binding = "FASTGO_FILES"
+bucket_name = "fastgo-private-files"
+
+# DATABASE_URL and FILE_TOKEN_SECRET are runtime secrets and are never committed.
