@@ -1,5 +1,6 @@
 import {authenticatedUser} from './identity.mjs';
 import {QUESTS} from '../../../arise/curriculum.mjs';
+import {SKILL_IDS,BOSS_QUESTS,BRANCH_MAP,branchStatus,taskFor,SKILLS} from '../../../arise/development-tree.mjs';
 import {aggregateQuest,evaluateFile,localClock,validateUpload} from './evidence.mjs';
 
 const H={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,x-device-id,authorization,apikey','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
@@ -20,6 +21,58 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   if(!devicePattern.test(device))throw Error('database_error');
   const sync=()=>db.rpc('sync_rpg_progress_from_evidence',{p_device_id:device});
 
+  if(action==='development-tree'){
+   if(req.method!=='GET')return json({error:'method_not_allowed'},405);
+   const [progress,projects,evidence,bosses,history]=await Promise.all([
+    db.rest('arise_skill_progress',{user_id:'eq.'+user.id,select:'skill_id,level,xp,active,updated_at'}),
+    db.rest('arise_projects',{user_id:'eq.'+user.id,select:'id,title,description,status,created_at,updated_at',order:'updated_at.desc'}),
+    db.rest('arise_skill_evidence',{user_id:'eq.'+user.id,select:'id,skill_id,target_level,project_id,status,review_note,created_at,reviewed_at',order:'created_at.desc',limit:200}),
+    db.rest('arise_boss_progress',{user_id:'eq.'+user.id,select:'boss_id,status,project_id,skill_ids,evidence_text,review_note,updated_at'}),
+    db.rest('arise_progress_log',{user_id:'eq.'+user.id,select:'event_type,reference_id,xp,payload,created_at',order:'created_at.desc',limit:100})
+   ]);
+   const projectIds=projects.map(x=>x.id),links=projectIds.length?await db.rest('arise_project_skills',{project_id:`in.(${projectIds.join(',')})`,select:'project_id,skill_id'}):[];
+   return json({progress,projects:projects.map(x=>({...x,skills:links.filter(y=>y.project_id===x.id).map(y=>y.skill_id)})),evidence,bosses,history});
+  }
+  if(action==='skill-active'){
+   if(req.method!=='POST')return json({error:'method_not_allowed'},405);
+   const body=await req.json(),skill=String(body.skill_id||'');if(!SKILL_IDS.has(skill))return json({error:'invalid_skill'},400);
+   const active=body.active===true,current=await db.rest('arise_skill_progress',{user_id:'eq.'+user.id,skill_id:'eq.'+skill,select:'level,xp,active'});
+   if(active){const rows=await db.rest('arise_skill_progress',{user_id:'eq.'+user.id,select:'skill_id,level,active'}),map=Object.fromEntries(rows.map(x=>[x.skill_id,x])),definition=SKILLS.find(x=>x.id===skill);if(branchStatus(BRANCH_MAP[definition.branch],map)==='locked')return json({error:'skill_locked'},409);if(rows.filter(x=>x.active).length>=12&&!current[0]?.active)return json({error:'active_limit'},409);}
+   const row={user_id:user.id,skill_id:skill,level:current[0]?.level||0,xp:current[0]?.xp||0,active,updated_at:now().toISOString()};
+   await db.rest('arise_skill_progress',{on_conflict:'user_id,skill_id'},'POST',row,'resolution=merge-duplicates,return=minimal');return json(row);
+  }
+  if(action==='skill-evidence'){
+   if(req.method!=='POST')return json({error:'method_not_allowed'},405);
+   const body=await req.json(),skillId=String(body.skill_id||''),skill=SKILLS.find(x=>x.id===skillId),text=String(body.evidence_text||'').trim(),urlText=String(body.evidence_url||'').trim();
+   if(!skill||text.length<20||text.length>2000)return json({error:'invalid_evidence'},400);
+   if(urlText&&!/^https:\/\//i.test(urlText))return json({error:'invalid_evidence_url'},400);
+   const progress=(await db.rest('arise_skill_progress',{user_id:'eq.'+user.id,skill_id:'eq.'+skillId,select:'level,active'}))[0]||{level:0,active:false};
+   if(!progress.active||progress.level>=5)return json({error:'skill_not_active'},409);
+   const target=progress.level+1,pending=await db.rest('arise_skill_evidence',{user_id:'eq.'+user.id,skill_id:'eq.'+skillId,target_level:'eq.'+target,status:'eq.pending',select:'id'});
+   if(pending.length)return json({error:'evidence_pending'},409);
+   let projectId=null;if(body.project_id){const projects=await db.rest('arise_projects',{id:'eq.'+body.project_id,user_id:'eq.'+user.id,select:'id'});if(!projects.length)return json({error:'invalid_project'},400);projectId=projects[0].id;}
+   const row={user_id:user.id,skill_id:skillId,target_level:target,practical_task:taskFor(skill,target),project_id:projectId,evidence_text:text,evidence_url:urlText||null};
+   const created=await db.rest('arise_skill_evidence',{},'POST',row);return json(created[0],201);
+  }
+  if(action==='projects'){
+   if(req.method==='GET')return json({items:await db.rest('arise_projects',{user_id:'eq.'+user.id,select:'id,title,description,status,created_at,updated_at',order:'updated_at.desc'})});
+   const body=await req.json(),title=String(body.title||'').trim(),description=String(body.description||'').trim(),skills=[...new Set(Array.isArray(body.skills)?body.skills.map(String):[])];
+   if(title.length<2||title.length>160||description.length>2000||skills.length>12||skills.some(x=>!SKILL_IDS.has(x)))return json({error:'invalid_project'},400);
+   const created=await db.rest('arise_projects',{},'POST',{user_id:user.id,title,description,status:'active'}),project=created[0];
+   if(skills.length)await db.rest('arise_project_skills',{},'POST',skills.map(skill_id=>({project_id:project.id,skill_id})));
+   return json({...project,skills},201);
+  }
+  if(action==='boss-quest'){
+   if(req.method!=='POST')return json({error:'method_not_allowed'},405);
+   const body=await req.json(),boss=BOSS_QUESTS.find(x=>x.id===body.boss_id);if(!boss)return json({error:'invalid_boss'},400);
+   const actionName=String(body.action||'start'),current=(await db.rest('arise_boss_progress',{user_id:'eq.'+user.id,boss_id:'eq.'+boss.id,select:'status'}))[0];
+   if(current?.status==='accepted')return json({error:'already_completed'},409);
+   let projectId=null;if(body.project_id){const projects=await db.rest('arise_projects',{id:'eq.'+body.project_id,user_id:'eq.'+user.id,select:'id'});if(!projects.length)return json({error:'invalid_project'},400);projectId=projects[0].id;}
+   const evidence=String(body.evidence_text||'').trim(),skillIds=[...new Set(Array.isArray(body.skill_ids)?body.skill_ids.map(String):[])],validSkills=skillIds.every(id=>{const skill=SKILLS.find(x=>x.id===id);return skill&&boss.branches.includes(skill.branch);});if(actionName==='submit'&&(evidence.length<30||evidence.length>3000||skillIds.length<2||skillIds.length>12||!validSkills))return json({error:'invalid_evidence'},400);
+   if(!['start','submit'].includes(actionName))return json({error:'invalid_action'},400);
+   const row={user_id:user.id,boss_id:boss.id,title:boss.title,xp:boss.xp,status:actionName==='submit'?'pending':'active',project_id:projectId,skill_ids:actionName==='submit'?skillIds:[],evidence_text:actionName==='submit'?evidence:null,updated_at:now().toISOString()};
+   await db.rest('arise_boss_progress',{on_conflict:'user_id,boss_id'},'POST',row,'resolution=merge-duplicates,return=minimal');return json(row);
+  }
   if(action==='migration'){
    if(req.method==='GET')return json({items:await db.rest('arise_migration_requests',{user_id:'eq.'+user.id,select:'id,status,created_at,reviewed_at',order:'created_at.desc'})});
    const body=await req.json(),legacy=String(body.legacy_device_id||'');
@@ -81,5 +134,5 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   if(questMode){await db.rest('quest_evidence_parts',{},'POST',{...metadata,quest_index:id,evidence_type:extension,...evaluated});const parts=await db.rest('quest_evidence_parts',{device_id:'eq.'+device,quest_index:'eq.'+id,select:'check_status,check_note,evidence_type',order:'created_at.asc'});const result=aggregateQuest(id,parts,existing);const record=await db.rpc('arise_record_quest',{p_device_id:device,p_index:id,p_title:quest.title,p_path:path,p_name:metadata.file_name,p_mime:metadata.mime_type,p_size:file.size,p_status:result.status,p_note:result.review_note});return json({...record,part_status:evaluated.check_status,part_note:evaluated.check_note,progress:await sync()});}
   // Submission began before the deadline. A slow verifier must not invalidate it later.
   const evidence=await db.rpc('arise_record_daily',{p_device_id:device,p_daily_id:id,p_date:clock.date,p_path:path,p_name:metadata.file_name,p_mime:metadata.mime_type,p_size:file.size,p_status:evaluated.check_status,p_note:evaluated.check_note});return json({status:evidence.status,note:evidence.review_note,progress:await sync()});
- }catch(error){const message=String(error?.message||error),allowed=['auth_required','auth_unavailable','email_verification_required','file_required','file_too_large','unsupported_file','invalid_quest','daily_expired','daily_not_active','server_not_configured','database_error','upload_failed'];return json({error:allowed.includes(message)?message:'request_failed'},message==='auth_required'?401:message==='email_verification_required'?403:message==='auth_unavailable'?503:message==='file_too_large'?413:message==='database_error'||message==='server_not_configured'?503:400);}
+ }catch(error){const message=String(error?.message||error),allowed=['invalid_skill','skill_locked','active_limit','invalid_evidence','invalid_evidence_url','skill_not_active','evidence_pending','invalid_project','invalid_boss','auth_required','auth_unavailable','email_verification_required','file_required','file_too_large','unsupported_file','invalid_quest','daily_expired','daily_not_active','server_not_configured','database_error','upload_failed'];return json({error:allowed.includes(message)?message:'request_failed'},message==='skill_locked'||message==='active_limit'||message==='skill_not_active'||message==='evidence_pending'||message==='already_completed'?409:message==='auth_required'?401:message==='email_verification_required'?403:message==='auth_unavailable'?503:message==='file_too_large'?413:message==='database_error'||message==='server_not_configured'?503:400);}
 };}
