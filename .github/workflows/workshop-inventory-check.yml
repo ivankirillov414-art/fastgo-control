@@ -1,0 +1,26 @@
+name: Workshop inventory check
+
+on:
+  push:
+    branches:
+      - main
+      - codex/workshop-barcode-sales
+  pull_request:
+    paths:
+      - 'workshop/**'
+      - 'workshop.html'
+      - 'supabase/functions/fastgo-workshop-api/**'
+      - 'supabase/workshop-inventory-barcode.sql'
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check inventory UI JavaScript syntax
+        run: node --check workshop/inventory-ui.js
+      - name: Verify expected inventory hooks
+        run: |
+          grep -q "part_by_barcode" supabase/functions/fastgo-workshop-api/index.ts
+          grep -q "workshop_sale" supabase/workshop-inventory-barcode.sql
+          grep -q "inventory-ui.js" workshop.html
