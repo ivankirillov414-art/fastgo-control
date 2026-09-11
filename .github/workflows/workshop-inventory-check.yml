@@ -21,9 +21,11 @@ jobs:
         run: |
           node --check workshop/inventory-ui.js
           node --check workshop/inventory-import.js
+          node --check workshop/inventory-launcher.js
       - name: Verify expected inventory hooks
         run: |
           grep -q "part_by_barcode" supabase/functions/fastgo-workshop-api/index.ts
           grep -q "workshop_sale" supabase/workshop-inventory-barcode.sql
           grep -q "inventory-ui.js" workshop.html
           grep -q "inventory-import.js" workshop.html
+          grep -q "inventory-launcher.js" workshop.html
