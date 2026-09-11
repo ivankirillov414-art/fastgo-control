@@ -17,10 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check inventory UI JavaScript syntax
-        run: node --check workshop/inventory-ui.js
+      - name: Check inventory JavaScript syntax
+        run: |
+          node --check workshop/inventory-ui.js
+          node --check workshop/inventory-import.js
       - name: Verify expected inventory hooks
         run: |
           grep -q "part_by_barcode" supabase/functions/fastgo-workshop-api/index.ts
           grep -q "workshop_sale" supabase/workshop-inventory-barcode.sql
           grep -q "inventory-ui.js" workshop.html
+          grep -q "inventory-import.js" workshop.html
