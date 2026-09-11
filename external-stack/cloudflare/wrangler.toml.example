@@ -1,0 +1,16 @@
+name = "fastgo-workshop-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-11"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "YOUR_PUBLISHABLE_KEY"
+
+[[r2_buckets]]
+binding = "FASTGO_FILES"
+bucket_name = "fastgo-private-files"
+
+# Set these with `wrangler secret put`:
+# DATABASE_URL
+# FILE_TOKEN_SECRET
