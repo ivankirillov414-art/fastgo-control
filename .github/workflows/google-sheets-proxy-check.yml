@@ -1,0 +1,27 @@
+name: Google Sheets proxy check
+
+on:
+  push:
+    branches:
+      - codex/fastgo-google-sheets
+    paths:
+      - 'supabase/functions/fastgo-workshop-api/index.ts'
+      - 'google-apps-script/**'
+      - '.github/workflows/google-sheets-proxy-check.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/fastgo-workshop-api/index.ts'
+      - 'google-apps-script/**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check Supabase proxy
+        run: deno check supabase/functions/fastgo-workshop-api/index.ts
+      - name: Validate Apps Script manifest
+        run: python -m json.tool google-apps-script/appsscript.json >/dev/null
