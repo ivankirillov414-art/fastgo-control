@@ -1,0 +1,37 @@
+name: FastGo external stack check
+
+on:
+  push:
+    branches:
+      - codex/fastgo-external-neon-r2
+  pull_request:
+    paths:
+      - 'external-stack/**'
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: external-stack/cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: external-stack/cloudflare/package.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run check
+
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify production schema includes required domains
+        run: |
+          grep -q "create table if not exists service_repairs" external-stack/neon/schema.sql
+          grep -q "create table if not exists storage_intakes" external-stack/neon/schema.sql
+          grep -q "create table if not exists parts" external-stack/neon/schema.sql
+          grep -q "create table if not exists workshop_sales" external-stack/neon/schema.sql
+          grep -q "create or replace function workshop_sale" external-stack/neon/schema.sql
