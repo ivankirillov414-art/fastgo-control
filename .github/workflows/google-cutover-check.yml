@@ -1,8 +1,8 @@
 name: Google workshop regression
 on:
   push:
-    branches: [main, codex/google-cutover-live]
-    paths: ['workshop/**','workshop.html','supabase/functions/fastgo-*/**','tests/google-cutover.test.mjs','.github/workflows/google-cutover-check.yml']
+    branches: [main, codex/google-cutover-live, codex/workshop-reliability]
+    paths: ['vendor/**','google-apps-script/**','tests/**','workshop/**','workshop.html','supabase/functions/fastgo-*/**','tests/google-cutover.test.mjs','.github/workflows/google-cutover-check.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,7 +20,8 @@ jobs:
           node --check < supabase/functions/fastgo-workshop-api/index.ts
           node --check < supabase/functions/fastgo-storage-api/index.ts
           node --check < supabase/functions/fastgo-service-api/index.ts
-          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs
+          for f in google-apps-script/*.gs; do node --check < "$f"; done
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/barcode.test.mjs
       - name: Live public health and authentication boundaries
         run: |
           python - <<'PY'

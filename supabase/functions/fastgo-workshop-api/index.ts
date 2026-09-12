@@ -2,7 +2,7 @@
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'google-cutover-2026-09-12';
+const RELEASE = 'workshop-reliability-2026-09-12';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'google-sheets','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -43,10 +43,10 @@ function googleClient(c,actor){
 function recordDates(r){if(!r)return r;for(const k of ['starts_on','planned_return_date','promised_date'])if(typeof r[k]==='string')r[k]=r[k].slice(0,10);return r;}
 function required(p,fields){for(const f of fields)if(!text(p[f]))fail('Заполните поле '+f);}
 function lines(items){if(!Array.isArray(items)||items.length>200)fail('Неверный список работ / запчастей');return items.map(x=>{required(x,['name']);return {...x,name:text(x.name,200),quantity:integer(x.quantity,'количество',1,1000),price:numeric(x.price,'цену')};});}
-const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','signed_url','get_url','health']);
-const writeActions=new Set(['part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents']);
+const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
+const writeActions=new Set(['part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','sales','stock','sale','payment','extend','contact','legacy']);
-const administrationActions=new Set(['part_save','catalog_save','legal_save']);
+const administrationActions=new Set(['part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
 const terminal=new Set(['issued','returned','cancelled']);
 async function legacyPhotos(kind,id){
   if(!uuid(id))return [];const t=kind==='storage'?'storage_intakes':'service_repairs';
@@ -80,8 +80,40 @@ async function main(req){
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
     const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role},g=googleClient(c,actor);
     if(action==='health')return out({data:{...await g('health'),release:RELEASE}});
+    if(action==='stock')integer(p.quantity,'количество');
+    let reliable=false;
+    if(writeActions.has(action)){
+      const health=await g('health');reliable=health.capabilities?.atomic_writes===true;
+      if(['part_photo_upload','part_photo_primary'].includes(action)&&!health.capabilities?.private_product_photos)fail('Приватные фотографии станут доступны после обновления Google API',503);
+      if(reliable){
+        if(!uuid(p.request_id))fail('Неверный код операции');
+        const clean={...p};delete clean.request_id;delete clean.__request_fingerprint;
+        const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+        const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(stable({action,params:clean})));
+        p.__request_fingerprint=[...new Uint8Array(bytes)].map(n=>n.toString(16).padStart(2,'0')).join('');
+        const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});
+        if(old?.status==='committed')return out({data:old.result});
+      }
+    }
+    if(['part_photo_url','part_photos'].includes(action)){if(p.part_id&&!uuid(p.part_id))fail('Неверный товар');return out({data:await g(action,p)});}
+    if(action==='part_photo_upload'){
+      if(!uuid(p.part_id)||!['image/jpeg','image/png','image/webp'].includes(p.content_type))fail('Выберите товар и изображение');
+      let bytes;try{bytes=atob(String(p.content_base64||''));}catch{fail('Повреждённый файл');}if(!bytes.length||bytes.length>5*1024*1024)fail('Максимум 5 МБ',413);
+    }
+    if(action==='part_photo_primary'){if(!uuid(p.part_id)||!text(p.photo_id))fail('Выберите фотографию товара');}
+    if(action==='migrate_legacy_file'){
+      if(!reliable||!uuid(p.object_id))fail('Сначала обновите Google API',503);
+      const list=await g('migration_manifest'),entry=list.find(x=>x.object_id===p.object_id);if(!entry)fail('Файл не найден',404);if(entry.migrated)return out({data:entry});
+      if(!/^storage\/[a-f0-9-]{36}\/[^/]+$/.test(entry.path)||entry.path.includes('..')&&!/\/\d+\.\.jpg$/.test(entry.path))fail('Недопустимый путь',400);
+      const response=await fetch(BASE+'/storage/v1/object/authenticated/rental-private-docs/'+entry.path.split('/').map(encodeURIComponent).join('/'),{headers:{apikey:KEY,Authorization:'Bearer '+KEY},signal:AbortSignal.timeout(30000)});
+      if(!response.ok)fail('Не удалось прочитать исходный файл',502);const bytes=new Uint8Array(await response.arrayBuffer());if(bytes.length!==Number(entry.size)||bytes.length>10*1024*1024)fail('Размер исходника не совпадает',409);
+      const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      return out({data:await g('migrate_legacy_file',{object_id:p.object_id,request_id:p.request_id,__request_fingerprint:p.__request_fingerprint,content_type:response.headers.get('content-type')||'image/jpeg',content_base64:btoa(binary),sha256:hash})});
+    }
+
+
     if(action==='catalog'){
-      const [d,staff]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name')]);d.staff=staff||[];d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
+      const [d,staff]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name')]);d.staff=staff||[];d.capabilities=(await g('health')).capabilities||{};d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
     }
     if(action==='part_by_barcode'){required(p,['barcode']);const d=await g(action,{barcode:text(p.barcode,100)});if(d.active===false)fail('Товар отключён',404);return out({data:d});}
     if(action==='overview'&&!manager(me)){
@@ -91,12 +123,12 @@ async function main(req){
     if(p.qr_token&&!p.id){if(!uuid(p.qr_token))fail('Неверный QR');const t=p.kind==='storage'?'storage_intakes':'service_repairs';const r=await db(t,'qr_token=eq.'+encodeURIComponent(p.qr_token)+'&select=id');if(!r?.[0])fail('QR не найден',404);p.id=r[0].id;}
     if(action==='get'){
       const d=await g('get',p);d.record=recordDates(d.record);if(!manager(me))d.payments=[];
-      const old=await legacyPhotos(p.kind,p.id);d.record.fault_photo_paths=[...(d.record.fault_photo_paths||[]),...old.filter(x=>x.slot==='photos').map(x=>x.path)];d.record.signed_document_paths=[...(d.record.signed_document_paths||[]),...old.filter(x=>x.slot==='signed').map(x=>x.path)];d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
+      const old=d.migrated_legacy_paths? (await legacyPhotos(p.kind,p.id)).filter(x=>!d.migrated_legacy_paths.includes(x.path)):await legacyPhotos(p.kind,p.id);d.record.fault_photo_paths=[...(d.record.fault_photo_paths||[]),...old.filter(x=>x.slot==='photos').map(x=>x.path)];d.record.signed_document_paths=[...(d.record.signed_document_paths||[]),...old.filter(x=>x.slot==='signed').map(x=>x.path)];d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
     }
     if(action==='signed_url'||action==='get_url'){
       await g('get',{kind:p.kind,id:p.id});
       if(String(p.path||'').startsWith('storage/')||String(p.path||'').startsWith('workshop/')){
-        const old=await legacyPhotos(p.kind,p.id);if(!old.some(x=>x.path===p.path))fail('Файл не относится к карточке',403);
+        const old=await legacyPhotos(p.kind,p.id);if(old.some(x=>x.path===p.path&&x.slot==='signed')&&!manager(me))fail('Нет доступа к подписанным документам',403);if(!old.some(x=>x.path===p.path))fail('Файл не относится к карточке',403);
         const signed=await rest('/storage/v1/object/sign/rental-private-docs/'+String(p.path).split('/').map(encodeURIComponent).join('/'),'POST',{expiresIn:300});return out({data:{url:BASE+'/storage/v1'+signed.signedURL}});
       }
       return out({data:await g('signed_url',p)});
@@ -155,7 +187,7 @@ async function main(req){
         if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(p.content_type))fail('Поддерживаются JPG, PNG, WebP, PDF');
         let bytes;try{bytes=atob(String(p.content_base64||''));}catch{fail('Повреждённый файл');}if(!bytes.length||bytes.length>10*1024*1024)fail('Максимум 10 МБ',413);
         const slot=p.slot==='signed'?'signed':'photos';if(slot==='signed'&&!manager(me))fail('Нет доступа к подписанным документам',403);
-        const uploaded=await g('upload',p);await g('documents',{kind:p.kind,id:p.id,paths:[uploaded.path],slot});return out({data:uploaded});
+        const uploaded=await g('upload',p);if(!reliable)await g('documents',{kind:p.kind,id:p.id,paths:[uploaded.path],slot});return out({data:uploaded});
       }
       if(action==='documents'){
         if(!['photos','signed'].includes(p.slot)||!Array.isArray(p.paths)||p.paths.length>30)fail('Неверный список файлов');if(p.slot==='signed'&&!manager(me))fail('Нет доступа',403);
