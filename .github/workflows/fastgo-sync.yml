@@ -1,54 +1,42 @@
 name: FastGo Auto Sync
-
 on:
   workflow_dispatch:
   schedule:
     - cron: "*/5 * * * *"
-
 permissions:
   contents: write
-
 jobs:
   sync:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout FastGo
         uses: actions/checkout@v4
-
-      - name: Get FastGo release
+      - name: Get FastGo release (workshop maintained directly in Git)
         run: |
           python - <<'PY'
-          import json
-          import urllib.request
+          import json, urllib.request
           from pathlib import Path
-
-          url = "https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/fastgo-release-feed"
-
-          with urllib.request.urlopen(url) as response:
-              manifest = json.load(response)
-
-          for item in manifest.get("files", []):
-              path = Path(item["path"])
-              operation = item.get("operation", "put")
-
-              if operation == "delete":
-                  if path.exists():
-                      path.unlink()
+          url='https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/fastgo-release-feed'
+          with urllib.request.urlopen(url, timeout=30) as r:
+              manifest=json.load(r)
+          protected={'workshop.html','workshop.css','.github/workflows/fastgo-sync.yml'}
+          prefixes=('workshop/','supabase/functions/fastgo-workshop-api/','supabase/functions/fastgo-storage-api/','supabase/functions/fastgo-service-api/')
+          for item in manifest.get('files',[]):
+              path=Path(item['path']); name=path.as_posix()
+              if path.is_absolute() or '..' in path.parts: raise ValueError('Unsafe release path')
+              if name in protected or name.startswith(prefixes):
+                  print('Preserved Google workshop source:',name); continue
+              if item.get('operation','put')=='delete':
+                  if path.exists(): path.unlink()
                   continue
-
-              path.parent.mkdir(parents=True, exist_ok=True)
-              path.write_text(item.get("content", ""), encoding="utf-8")
+              path.parent.mkdir(parents=True,exist_ok=True)
+              path.write_text(item.get('content',''),encoding='utf-8')
           PY
-
       - name: Commit FastGo changes
         run: |
-          git config user.name "FastGo Deploy"
-          git config user.email "fastgo-deploy@users.noreply.github.com"
+          git config user.name 'FastGo Deploy'
+          git config user.email 'fastgo-deploy@users.noreply.github.com'
           git add -A
-          if git diff --cached --quiet; then
-            echo "No FastGo changes"
-            exit 0
-          fi
-          git commit -m "FastGo automated update"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'FastGo automated update (preserve Google workshop)'
           git push
