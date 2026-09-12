@@ -38,9 +38,18 @@ The prepared source is now saved in the existing FastGo API Apps Script project:
 the existing `Код.gs`, new `Reliability.gs`, and the manifest. Editor readback
 matched the prepared source. The original code differed from the reference only
 by blank lines. The manifest preserves the existing web app execution identity
-and audience. `installReliability` is awaiting Google authorization; it has not
-completed, and the live web app deployment has not been changed.
-Completing authorization/installation and updating the existing deployment remain
+and audience. The additional outbound-request scope has now been granted.
+The current repository Google source (including barcode/model validation and
+formula-stable backup verification) is saved and was verified by full editor
+readback. The current regression suite passed 66 tests.
+A separate wildcard test run also included the old `workshop-api.test.mjs`
+fixture, which still mocks the former direct-Supabase backend and lacks the
+gateway's text-decoder globals. That legacy fixture fails and is not part of
+the current Google regression workflow; it still needs migration or retirement.
+`installReliability` now reports HTTP 403 because Google Sheets API is disabled
+in the associated Cloud project. Installation has not completed, and the live
+web app deployment has not been changed. Enabling Sheets API, completing
+installation and updating the existing deployment remain
 required for atomic writes, product photographs and photo migration. The app
 gates these features by server capabilities. The 20 originals have not yet been
 copied by this task; 4 are unlinked to orders. Real employee login, real camera,

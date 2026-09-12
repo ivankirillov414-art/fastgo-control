@@ -198,7 +198,7 @@ function installReliability(){
     if(!props.getProperty('FASTGO_JOURNAL_FOLDER')){const root=DriveApp.getFolderById(String(setting_('backups_folder_id')));assertPrivate_(root);const folder=root.createFolder('Журнал операций FastGo');assertPrivate_(folder);props.setProperty('FASTGO_JOURNAL_FOLDER',folder.getId());}
     // Verify Sheets API permission before enabling writes.
     const r=UrlFetchApp.fetch('https://sheets.googleapis.com/v4/spreadsheets/'+FASTGO_SPREADSHEET_ID+'?fields=spreadsheetId',{headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},muteHttpExceptions:true});
-    if(r.getResponseCode()!==200)throw Error('Нужен доступ к Google Sheets API');
+    if(r.getResponseCode()!==200){let apiError={};try{apiError=JSON.parse(r.getContentText()).error||{};}catch(ignored){}throw Error('Google Sheets API: HTTP '+r.getResponseCode()+' '+String(apiError.status||'')+' '+String(apiError.message||'').slice(0,650));}
     props.setProperty('FASTGO_RELIABILITY_READY',RELIABLE_VERSION);
   }finally{lock.releaseLock();}
   installDailyBackupTrigger();const backup=dailyBackup(),restore=verifyBackupRestore();return {release:RELIABLE_VERSION,backup,restore};
