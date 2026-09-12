@@ -2,7 +2,7 @@
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-reliability-2026-09-12';
+const RELEASE = 'workshop-autonomous-2026-09-13';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'google-sheets','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -37,7 +37,9 @@ function googleClient(c,actor){
     let r;try{r=await fetch(c.sheets_api_url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({secret:c.sheets_api_secret,action,params:safeText(params),actor}),redirect:'follow',signal:AbortSignal.timeout(65000)});}catch{fail('Google не ответил. Обновите карточку перед повторением операции.',504);}
     const raw=await r.text();let j;try{j=JSON.parse(raw);}catch{fail('Google вернул не данные. Проверьте доступ Apps Script к таблице.',502);}
     if(!r.ok)fail('Google временно недоступен',502);
-    if(j?.error){const code=Number(j.status);fail(String(j.error).replaceAll(c.sheets_api_secret,'[скрыто]'),code>=400&&code<600?code:400);}return j?.data;
+    if(j?.error){const code=Number(j.status);fail(String(j.error).replaceAll(c.sheets_api_secret,'[скрыто]'),code>=400&&code<600?code:400);}
+    if(!j||Array.isArray(j)||!Object.prototype.hasOwnProperty.call(j,'data')||j.data===null)fail('Google не подтвердил результат операции. Ответ проверки доступности не является результатом записи. Сверьте карточку перед повторением.',502);
+    return j.data;
   };
 }
 function recordDates(r){if(!r)return r;for(const k of ['starts_on','planned_return_date','promised_date'])if(typeof r[k]==='string')r[k]=r[k].slice(0,10);return r;}
@@ -55,7 +57,7 @@ async function legacyPhotos(kind,id){
 }
 async function main(req){
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
-  if(req.method==='GET')return out({ok:true,service:'fastgo-workshop-api',backend:'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required'});
+  if(req.method==='GET')return out({ok:true,service:'fastgo-workshop-api',backend:'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required',upstream_checked:false});
   if(req.method!=='POST')return out({error:'Разрешён только POST'},405);
   try{
     const authorization=req.headers.get('authorization')||'';if(!/^Bearer [^\s]+$/i.test(authorization))fail('Войдите в приложение',401);
@@ -113,7 +115,7 @@ async function main(req){
 
 
     if(action==='catalog'){
-      const [d,staff]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name')]);d.staff=staff||[];d.capabilities=(await g('health')).capabilities||{};d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
+      const [d,staff]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name')]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=(await g('health')).capabilities||{};d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
     }
     if(action==='part_by_barcode'){required(p,['barcode']);const d=await g(action,{barcode:text(p.barcode,100)});if(d.active===false)fail('Товар отключён',404);return out({data:d});}
     if(action==='overview'&&!manager(me)){
@@ -182,6 +184,7 @@ async function main(req){
         if(!uuid(p.request_id))fail('Неверный код оплаты');p.amount=numeric(p.amount,'сумму',-1e9);if(!p.amount)fail('Нулевая оплата');
         if(!['cash','card','transfer'].includes(p.method))fail('Неверный способ оплаты');if(p.amount<0&&(!admin(me)||!text(p.note)))fail('Возврат доступен администратору с указанием причины',403);
       }
+      if(action==='contact'&&p.phone!==undefined&&!/^\+7\d{10}$/.test(String(p.phone)))fail('Введите полный телефон: +7 и 10 цифр');
       if(action==='extend'){p.months=integer(p.months,'месяцы',1,12);required(p,['note']);}
       if(action==='upload'){
         if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(p.content_type))fail('Поддерживаются JPG, PNG, WebP, PDF');

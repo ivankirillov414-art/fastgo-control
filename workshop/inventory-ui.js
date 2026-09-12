@@ -1,4 +1,5 @@
 import {api,esc,money,csvDownload} from './core.js';
+import {loadLibrary as loadScript} from './library-loader.js';
 
 const ZXING_URL=new URL('../vendor/zxing-browser-0.2.1.min.js',import.meta.url).href;
 const BARCODE_URL=new URL('../vendor/jsbarcode-3.12.3.min.js',import.meta.url).href;
@@ -14,12 +15,7 @@ function restoreSale(){if(!me||cart.size)return;try{const d=JSON.parse(localStor
 
 const $=id=>document.getElementById(id);
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-const loadScript=(src,globalName)=>new Promise((resolve,reject)=>{
-  if(window[globalName])return resolve(window[globalName]);
-  const old=[...document.scripts].find(s=>s.src===src);
-  if(old){old.addEventListener('load',()=>resolve(window[globalName]),{once:true});old.addEventListener('error',reject,{once:true});return;}
-  const s=document.createElement('script');s.src=src;s.defer=true;s.onload=()=>resolve(window[globalName]);s.onerror=()=>reject(new Error('Не удалось загрузить модуль сканера'));document.head.appendChild(s);
-});
+
 
 async function getCatalog(force=false){
   if(force||!catalogCache)catalogCache=await api('catalog');
@@ -55,6 +51,7 @@ async function scanCode(title='Сканировать штрих-код'){
     $('manual-barcode').onsubmit=e=>{e.preventDefault();const v=$('manual-code').value.trim();if(v)finish(v);};
     try{
       await loadScript(ZXING_URL,'ZXingBrowser');
+      if(done)return;
       const reader=new ZXingBrowser.BrowserMultiFormatReader();
       controls=await reader.decodeFromConstraints({audio:false,video:{facingMode:{ideal:'environment'}}},$('inventory-video'),(result)=>{
         if(result?.getText)finish(result.getText());
@@ -68,6 +65,7 @@ async function scanCode(title='Сканировать штрих-код'){
 
 async function partByCode(code){
   if(!code)return null;
+  if(String(code).trim().toUpperCase().startsWith('FGC-')){const e=new Error('Это штрих-код категории. Для прихода или продажи выберите конкретную модель с кодом FGP.');e.status=400;throw e;}
   return api('part_by_barcode',{barcode:String(code).trim()});
 }
 
@@ -102,7 +100,7 @@ function exportInventory(){
 async function receiveByBarcode(){
   const code=await scanCode('Приёмка товара по штрих-коду');if(!code)return;
   let part;try{part=await partByCode(code);}catch(e){
-    if(me&&['owner','admin'].includes(me.role)&&confirm('Такого товара ещё нет. Создать новую позицию?'))return newPartForm(code);
+    if(e.status===404&&!String(code).startsWith('FGC-')&&me&&['owner','admin'].includes(me.role)&&confirm('Такого товара ещё нет. Создать новую позицию?'))return newPartForm(code);
     return notice(e.message,'bad');
   }
   const d=showDialog('Поступление на склад',`<div class="inv-product"><b>${esc(part.name)}</b><small>${esc(part.model||part.sku||part.barcode)}</small><strong>Сейчас: ${part.quantity} ${esc(part.unit||'шт')}</strong></div><form id="receipt-form"><label>Количество<input name="quantity" type="number" min="1" step="1" value="1" required></label><label>Основание / поставщик<input name="note" value="Приёмка по штрих-коду" required></label></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="receipt-save">Принять</button>`);

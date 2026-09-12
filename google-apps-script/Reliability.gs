@@ -211,7 +211,7 @@ function installDailyBackupTrigger(){
   ScriptApp.newTrigger('dailyBackup').timeBased().everyDays(1).atHour(3).inTimezone('Asia/Yekaterinburg').create();
   current.forEach(t=>ScriptApp.deleteTrigger(t));props.setProperty('FASTGO_BACKUP_SCHEDULE','03:00 Asia/Yekaterinburg');return backupStatus_();
 }
-function workbookDigest_(book){return digest_(JSON.stringify(book.getSheets().map(s=>({name:s.getName(),values:s.getDataRange().getValues(),formulas:s.getDataRange().getFormulas()}))));}
+function workbookDigest_(book){return digest_(JSON.stringify(book.getSheets().map(s=>{const range=s.getDataRange(),values=range.getValues(),formulas=range.getFormulas();return {name:s.getName(),cells:values.map((row,i)=>row.map((value,j)=>formulas[i]?.[j]?{formula:formulas[i][j]}:{value:value instanceof Date?value.toISOString():value}))};})));}
 function dailyBackup(){
   const lock=LockService.getScriptLock();lock.waitLock(25000);const props=PropertiesService.getScriptProperties();
   try{

@@ -103,12 +103,37 @@ function catalog_(){
   return {services:rows_(SHEETS.services).filter(r=>r['Работа']).map(mapService_).filter(x=>x.active),parts:rows_(SHEETS.products).filter(r=>r.product_id).map(mapProduct_),staff:rows_(SHEETS.staff).filter(r=>r.employee_id).map(mapStaff_),categories:rows_(SHEETS.categories).filter(r=>r['Категория (ключ)']).map(r=>({id:r['Категория (ключ)'],name:r['Категория (ключ)'],label:r['Понятное название'],barcode:r['Штрих-код категории'],primary_photo_path:r['Основное фото']||''}))};
 }
 function partByBarcode_(p){ const c=String(p.barcode||'').trim().toUpperCase(); const x=rows_(SHEETS.products).filter(r=>r.product_id).map(mapProduct_).find(x=>String(x.barcode).toUpperCase()===c||String(x.sku).toUpperCase()===c); if(!x) throw httpError_('Товар с таким штрих-кодом не найден',404); return x; }
+function barcodeNext_(sheet,column,key,prefix,width){
+  const values=rows_(sheet).map(r=>String(r[column]||'')), used=new Set(values);
+  const maximum=values.filter(v=>v.indexOf(prefix)===0&&/^\d+$/.test(v.slice(prefix.length))).reduce((n,v)=>Math.max(n,Number(v.slice(prefix.length))),0);
+  let n=Math.max(1,Math.floor(Number(setting_(key))||1),maximum+1);
+  while(used.has(prefix+pad_(n,width)))n++;
+  if(n>=Math.pow(10,width))throw httpError_('Закончился диапазон штрих-кодов',409);
+  setSetting_(key,n+1);return prefix+pad_(n,width);
+}
+function categoryEnsure_(value){
+  const name=String(value||'').trim().slice(0,100),norm=v=>String(v||'').trim().toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ');
+  if(!name)throw httpError_('Укажите категорию',400);
+  const matches=rows_(SHEETS.categories).filter(r=>norm(r['Категория (ключ)'])===norm(name)||norm(r['Понятное название'])===norm(name));
+  if(matches.length>1)throw httpError_('В справочнике дубли категорий',409);
+  if(matches.length){const row=matches[0];if(!row['Штрих-код категории'])patchRow_(SHEETS.categories,row.__row,{'Штрих-код категории':barcodeNext_(SHEETS.categories,'Штрих-код категории','next_category_seq','FGC-',6)});return String(row['Категория (ключ)']);}
+  append_(SHEETS.categories,{'Категория (ключ)':name,'Понятное название':name,'Штрих-код категории':barcodeNext_(SHEETS.categories,'Штрих-код категории','next_category_seq','FGC-',6),'Основное фото':'','Примечание':''});return name;
+}
 function partSave_(p){
-  let r=p.id?find_(SHEETS.products,'product_id',p.id):null; const now=now_();
-  if(!String(p.name||'').trim()) throw httpError_('Укажите название',400);
-  if(r){ patchRow_(SHEETS.products,r.__row,{'Категория':String(p.category||''),'Модель / название':String(p.name).trim(),'Модель':String(p.model||''),'Артикул / SKU':String(p.sku||''),'Ед.':String(p.unit||'шт'),'Цена закупки, ₽':num_(p.unit_cost),'Цена продажи, ₽':num_(p.retail_price),'Активен':p.active!==false,updated_at:now}); return mapProduct_(find_(SHEETS.products,'product_id',p.id)); }
-  const n=nextSeq_('next_product_seq'), id=uid_(), barcode='FGP-'+pad_(n,8);
-  append_(SHEETS.products,{'Категория':String(p.category||''),'Модель / название':String(p.name).trim(),'Модель':String(p.model||''),'Артикул / SKU':String(p.sku||''),'Штрих-код':barcode,'Ед.':String(p.unit||'шт'),'Цена закупки, ₽':num_(p.unit_cost),'Цена продажи, ₽':num_(p.retail_price),'Приход, шт.':0,'Сумма прихода, ₽':0,'Фото / примечание':'',product_id:id,'Остаток, шт.':0,'Активен':true,'Фото URL':'',updated_at:now});
+  const r=p.id?find_(SHEETS.products,'product_id',p.id):null,now=now_(),name=String(p.name||'').trim().slice(0,200),sku=String(p.sku===undefined?r&&r['Артикул / SKU']||'':p.sku).trim().slice(0,100);
+  if(p.id&&!r)throw httpError_('Товар не найден; новая позиция не создана',404);
+  if(!name)throw httpError_('Укажите название',400);
+  const price=(v,old)=>{const n=Number(v===undefined?old||0:v);if(v===null||typeof v==='boolean'||!Number.isFinite(n)||n<0||n>1e9)throw httpError_('Проверьте цену товара',400);return n;};
+  const cost=price(p.unit_cost,r&&r['Цена закупки, ₽']),retail=price(p.retail_price,r&&r['Цена продажи, ₽']);
+  const norm=v=>String(v||'').trim().toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ');
+  const category=categoryEnsure_(p.category===undefined?r&&r['Категория']:p.category),model=String(p.model===undefined?r&&r['Модель']||'':p.model).trim().slice(0,120);
+  const others=rows_(SHEETS.products).filter(x=>x.product_id&&x.product_id!==p.id);
+  if(sku&&others.some(x=>norm(x['Артикул / SKU'])===norm(sku)))throw httpError_('Артикул уже принадлежит другому товару',409);
+  if(others.some(x=>norm(x['Категория'])===norm(category)&&norm(x['Модель'])===norm(model)&&norm(x['Модель / название'])===norm(name)))throw httpError_('Эта модель уже есть на складе. Выберите существующую позицию',409);
+  const value={'Категория':category,'Модель / название':name,'Модель':model,'Артикул / SKU':sku,'Ед.':String(p.unit||r&&r['Ед.']||'шт').trim().slice(0,20),'Цена закупки, ₽':cost,'Цена продажи, ₽':retail,'Активен':p.active===undefined?(r?r['Активен']!==false:true):p.active!==false,updated_at:now};
+  if(r){patchRow_(SHEETS.products,r.__row,value);return mapProduct_(find_(SHEETS.products,'product_id',p.id));}
+  const id=uid_(),barcode=barcodeNext_(SHEETS.products,'Штрих-код','next_product_seq','FGP-',8);
+  append_(SHEETS.products,{...value,'Штрих-код':barcode,'Приход, шт.':0,'Сумма прихода, ₽':0,'Фото / примечание':'',product_id:id,'Остаток, шт.':0,'Фото URL':''});
   return mapProduct_(find_(SHEETS.products,'product_id',id));
 }
 function stockHistory_(p){ if(!p.part_id) throw httpError_('Не указана запчасть',400); return rows_(SHEETS.movements).filter(r=>String(r.product_id)===String(p.part_id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,100).map(r=>({id:r.movement_id,part_id:r.product_id,movement_type:({'Приход':'receipt','Расход':'issue','Продажа':'issue','Возврат':'return','Корректировка':'adjustment'})[r['Тип']]||r['Тип'],quantity:num_(r['Количество']),note:r['Комментарий'],created_at:r['Дата']})); }
