@@ -15,7 +15,7 @@ for p in migration.glob('inventory-*'):
     shutil.copy2(p,root/'workshop'/p.name)
 change('workshop/core.js','AbortSignal.timeout(40000)','AbortSignal.timeout(120000)')
 change('workshop/orders.js',"{kind,id,content_type:q.file.type", "{kind,id,slot,content_type:q.file.type")
-change('workshop/orders.js',"await api('documents',{kind,id,slot,paths:[q.path]});q.attached=true;", "q.attached=true; // The Google gateway attaches the private file in the upload operation.")
+change('workshop/orders.js',"await api('documents',{kind,id,slot,paths:[q.path]});q.attached=true;", "q.attached=true; /* Attached by the Google gateway. */")
 change('workshop/app.js','Мастерская / ${esc(nav.find', 'Google Sheets · Мастерская / ${esc(nav.find')
 # Notify auxiliary modules on explicit logout as well as token expiry.
 change('workshop/core.js',"localStorage.removeItem('fastgo_token');}","localStorage.removeItem('fastgo_token');window.dispatchEvent(new Event('workshop-session-cleared'));}")
