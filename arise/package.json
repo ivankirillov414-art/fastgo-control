@@ -1,0 +1,13 @@
+{
+  "name": "arise-browser-modules",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild sdk-entry.mjs --bundle --minify --format=esm --platform=browser --outfile=vendor/auth-sdk.mjs && esbuild pose-entry.mjs --bundle --minify --format=esm --platform=browser --outfile=vendor/pose-sdk.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.116.0",
+    "@mediapipe/tasks-vision": "1.0.1"
+  },
+  "devDependencies": { "esbuild": "0.28.2" }
+}
