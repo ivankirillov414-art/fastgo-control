@@ -1,0 +1,38 @@
+name: Finalize Google UI session guard
+on:
+  push:
+    branches: [codex/google-cutover-live]
+    paths: [.github/workflows/google-ui-finalize.yml]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/google-cutover-live
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply narrow session guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('workshop/inventory-ui.js')
+          t=p.read_text();old='async function enhance(){\n  if(enhancing)return;';new="async function enhance(){\n  if(!document.querySelector('.shell'))return;\n  if(enhancing)return;"
+          assert old in t or new in t
+          p.write_text(t.replace(old,new))
+          PY
+          for f in workshop/*.js; do node --check "$f"; done
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs
+      - name: Commit on review branch
+        run: |
+          git config user.name 'FastGo release'
+          git config user.email 'fastgo-deploy@users.noreply.github.com'
+          git add workshop/inventory-ui.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'Guard inventory initialization until a staff session is rendered'
+            git push origin HEAD:codex/google-cutover-live
+          fi
+          git rev-parse HEAD
