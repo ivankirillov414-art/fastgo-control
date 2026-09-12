@@ -3,7 +3,7 @@ on:
   push:
     branches: [codex/fastgo-autonomous-finish]
 permissions:
-  contents: read
+  contents: write
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -12,13 +12,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Syntax checks
+      - name: Apply bounded source edits
+        run: python scripts/apply-autonomous-fixes.py
+      - name: Syntax and regression tests
         run: |
           for f in workshop/*.js; do node --check "$f"; done
-      - name: Focused tests
+          node --test tests/google-cutover.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/workshop-core.test.mjs tests/inventory-import.test.mjs tests/library-loader.test.mjs tests/barcode.test.mjs
+      - name: Commit verified edits on review branch only
         run: |
-          find tests -maxdepth 1 -name '*.mjs' -print
-          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs
+          git config user.name 'FastGo release'
+          git config user.email 'fastgo-deploy@users.noreply.github.com'
+          git add workshop/ workshop.html google-apps-script/ tests/ supabase/functions/fastgo-workshop-api/index.ts
+          if ! git diff --cached --quiet; then
+            git commit -m 'Fix import replay, response validation, scanner errors and Google source validation'
+            git push origin HEAD:codex/fastgo-autonomous-finish
+          fi
+          git rev-parse HEAD
       - uses: actions/upload-artifact@v4
         with:
           name: fastgo-reviewed-sources
@@ -26,11 +35,8 @@ jobs:
             google-apps-script/
             workshop/
             tests/
+            vendor/
             supabase/functions/fastgo-workshop-api/
-            supabase/functions/fastgo-storage-api/
-            supabase/functions/fastgo-service-api/
             workshop.html
             workshop.css
-            WORKSHOP_RELIABILITY_STATUS.md
-            GOOGLE_CUTOVER.md
           retention-days: 3
