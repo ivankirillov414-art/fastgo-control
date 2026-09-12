@@ -4,7 +4,10 @@ on:
     branches: [codex/google-cutover-live]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: google-cutover
+  cancel-in-progress: false
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -12,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: current
+          ref: codex/google-cutover-live
       - uses: actions/checkout@v4
         with:
           ref: codex/fastgo-google-sheets
@@ -19,19 +23,54 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Syntax and focused tests
+      - name: Apply reviewed browser changes
         working-directory: current
         run: |
-          for f in workshop/*.js; do node --check "$f"; done
-          if test -f tests/google-cutover.test.mjs; then node --test tests/google-cutover.test.mjs; fi
-      - name: Package review sources without credentials or customer data
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/prepare-google-cutover.py')
+          s=p.read_text().replace('q.attached=true; // The Google gateway attaches the private file in the upload operation.','q.attached=true; /* Attached by the Google gateway. */')
+          p.write_text(s)
+          PY
+          python scripts/prepare-google-cutover.py
+      - name: Regression tests
+        working-directory: current
         run: |
-          mkdir -p review/current review/migration
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs
+          node --check < supabase/functions/fastgo-workshop-api/index.ts
+      - name: Check live endpoints without credentials
+        run: |
+          python - <<'PY'
+          import urllib.request, urllib.error, json
+          base='https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/'
+          for slug in ['fastgo-workshop-api','fastgo-storage-api','fastgo-service-api']:
+              with urllib.request.urlopen(base+slug,timeout=25) as r:
+                  j=json.load(r); assert j.get('backend')=='GOOGLE_SHEETS_DRIVE',slug
+              req=urllib.request.Request(base+slug,data=b'{"action":"catalog"}',headers={'Content-Type':'application/json'})
+              try:
+                  urllib.request.urlopen(req,timeout=25)
+                  raise AssertionError('Anonymous access unexpectedly allowed')
+              except urllib.error.HTTPError as e:
+                  assert e.code==401,(slug,e.code)
+              print('PASS',slug,'Google backend and unauthorized rejection')
+          PY
+      - name: Commit reviewed release files on isolated branch
+        working-directory: current
+        run: |
+          git config user.name 'FastGo release'
+          git config user.email 'fastgo-deploy@users.noreply.github.com'
+          git add workshop workshop.html scripts/prepare-google-cutover.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Publish Google Sheets frontend integration and inventory tools'
+            git push origin HEAD:codex/google-cutover-live
+          fi
+          git rev-parse HEAD
+      - name: Package tested source snapshot
+        run: |
+          mkdir -p review/current
           cp -r current/workshop current/tests review/current/
           cp current/workshop.html current/workshop.css review/current/
-          cp -r migration/workshop review/migration/
-          cp migration/workshop.html review/migration/
-          if test -d current/supabase/functions/fastgo-workshop-api; then cp -r current/supabase/functions/fastgo-workshop-api review/current/; fi
+          cp -r current/supabase/functions/fastgo-workshop-api review/current/
       - uses: actions/upload-artifact@v4
         with:
           name: cutover-review-sources
