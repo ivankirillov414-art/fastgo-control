@@ -1,0 +1,36 @@
+name: FastGo autonomous validation
+on:
+  push:
+    branches: [codex/fastgo-autonomous-finish]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          for f in workshop/*.js; do node --check "$f"; done
+      - name: Focused tests
+        run: |
+          find tests -maxdepth 1 -name '*.mjs' -print
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fastgo-reviewed-sources
+          path: |
+            google-apps-script/
+            workshop/
+            tests/
+            supabase/functions/fastgo-workshop-api/
+            supabase/functions/fastgo-storage-api/
+            supabase/functions/fastgo-service-api/
+            workshop.html
+            workshop.css
+            WORKSHOP_RELIABILITY_STATUS.md
+            GOOGLE_CUTOVER.md
+          retention-days: 3
