@@ -1,0 +1,39 @@
+name: Google cutover checks
+on:
+  push:
+    branches: [codex/google-cutover-live]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: current
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/fastgo-google-sheets
+          path: migration
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and focused tests
+        working-directory: current
+        run: |
+          for f in workshop/*.js; do node --check "$f"; done
+          if test -f tests/google-cutover.test.mjs; then node --test tests/google-cutover.test.mjs; fi
+      - name: Package review sources without credentials or customer data
+        run: |
+          mkdir -p review/current review/migration
+          cp -r current/workshop current/tests review/current/
+          cp current/workshop.html current/workshop.css review/current/
+          cp -r migration/workshop review/migration/
+          cp migration/workshop.html review/migration/
+          if test -d current/supabase/functions/fastgo-workshop-api; then cp -r current/supabase/functions/fastgo-workshop-api review/current/; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cutover-review-sources
+          path: review
+          retention-days: 2
