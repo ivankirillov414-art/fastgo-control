@@ -2,7 +2,7 @@ name: Google workshop regression
 on:
   push:
     branches: [main, codex/google-cutover-live, codex/workshop-reliability]
-    paths: ['vendor/**','google-apps-script/**','tests/**','workshop/**','workshop.html','supabase/functions/fastgo-*/**','tests/google-cutover.test.mjs','.github/workflows/google-cutover-check.yml']
+    paths: ['vendor/**','google-apps-script/**','tests/**','workshop/**','workshop.html','supabase/functions/fastgo-*/**','.github/workflows/google-cutover-check.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,20 +21,23 @@ jobs:
           node --check < supabase/functions/fastgo-storage-api/index.ts
           node --check < supabase/functions/fastgo-service-api/index.ts
           for f in google-apps-script/*.gs; do node --check < "$f"; done
-          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/barcode.test.mjs
-      - name: Live public health and authentication boundaries
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/barcode.test.mjs tests/inventory-import.test.mjs tests/library-loader.test.mjs
+      - name: Live public endpoint and authentication boundaries
         run: |
           python - <<'PY'
           import urllib.request,urllib.error,json
           base='https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/'
           for slug in ['fastgo-workshop-api','fastgo-storage-api','fastgo-service-api']:
               with urllib.request.urlopen(base+slug,timeout=25) as r:
-                  assert json.load(r).get('backend')=='GOOGLE_SHEETS_DRIVE'
+                  health=json.load(r)
+                  assert health.get('backend')=='GOOGLE_SHEETS_DRIVE'
+                  assert health.get('release')=='workshop-autonomous-2026-09-13'
+                  assert health.get('upstream_checked') is False
               req=urllib.request.Request(base+slug,data=b'{"action":"catalog"}',headers={'Content-Type':'application/json'})
               try:
                   urllib.request.urlopen(req,timeout=25)
                   raise AssertionError('Anonymous request must fail')
               except urllib.error.HTTPError as e:
                   assert e.code==401
-              print('PASS',slug,'Google backend; anonymous data access denied')
+              print('PASS',slug,'release available; anonymous data access denied; upstream business flow not tested')
           PY
