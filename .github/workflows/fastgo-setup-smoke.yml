@@ -1,0 +1,63 @@
+name: FastGo setup smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - connect-google.html
+      - .github/workflows/fastgo-setup-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check published form and API without real credentials
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request, urllib.error
+          origin = 'https://ivankirillov414-art.github.io'
+          page = origin + '/fastgo-control/connect-google.html'
+          api = 'https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/fastgo-sheets-setup'
+          def read(url, method='GET', data=None, headers=None):
+              req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as r:
+                      return r.status, r.headers, r.read()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.headers, e.read()
+          published = False
+          for attempt in range(24):
+              try:
+                  status, headers, body = read(page + '?check=' + str(int(time.time())))
+                  published = status == 200 and 'text/html' in headers.get('Content-Type','') and b'id="secret"' in body and b'location.hash' in body
+                  if published:
+                      print('PASS: live form is HTTP 200 text/html with password field and fragment-token handling')
+                      break
+                  print('Waiting for Pages publication:', status)
+              except Exception as e:
+                  print('Waiting for Pages:', type(e).__name__)
+              time.sleep(8)
+          assert published, 'Published HTML form not ready'
+          status, headers, body = read(api + '?health=1')
+          assert status == 200 and json.loads(body).get('version') == 2
+          print('PASS: setup API v2 is active')
+          status, headers, body = read(api, method='OPTIONS', headers={'Origin': origin, 'Access-Control-Request-Method':'POST', 'Access-Control-Request-Headers':'content-type'})
+          assert status == 204 and headers.get('Access-Control-Allow-Origin') == origin
+          assert 'POST' in headers.get('Access-Control-Allow-Methods','')
+          print('PASS: browser CORS preflight')
+          status, headers, body = read(api, method='POST', data=json.dumps({'token':'invalid','secret':'not-a-real-key'}).encode(), headers={'Origin':origin, 'Content-Type':'application/json'})
+          assert status == 403 and json.loads(body).get('ok') is False
+          assert b'not-a-real-key' not in body
+          print('PASS: invalid token rejected; submitted value not echoed')
+          google = 'https://script.google.com/macros/s/AKfycbwy0p0FZZpmJxis2NH2i3ryjSqbbSwh0CpXY7jbPd_eek4d-lrM9D-rTQbQ1tu3aC9N/exec'
+          try:
+              status, headers, body = read(google)
+              value = json.loads(body)
+              assert status == 200 and value.get('ok') is True
+              print('PASS: deployed Google Apps Script public health response')
+          except Exception as e:
+              print('NOTICE: Google health response not verified:', type(e).__name__)
+          print('No valid setup token or real key was submitted. No business data was changed.')
+          PY
