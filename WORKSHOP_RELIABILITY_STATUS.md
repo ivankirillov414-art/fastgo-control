@@ -34,9 +34,13 @@ label scripts bundled locally; synchronous print-window opening.
 fault injection, retry after page reload, last-item sales, full repair lifecycle,
 role restrictions, photo access and migration checksums.
 
-The Google Apps Script project is not signed in in the available browser.
-The live Apps Script deployment has not been changed.
-Installing `google-apps-script/` and updating its existing deployment remains
+The prepared source is now saved in the existing FastGo API Apps Script project:
+the existing `Код.gs`, new `Reliability.gs`, and the manifest. Editor readback
+matched the prepared source. The original code differed from the reference only
+by blank lines. The manifest preserves the existing web app execution identity
+and audience. `installReliability` is awaiting Google authorization; it has not
+completed, and the live web app deployment has not been changed.
+Completing authorization/installation and updating the existing deployment remain
 required for atomic writes, product photographs and photo migration. The app
 gates these features by server capabilities. The 20 originals have not yet been
 copied by this task; 4 are unlinked to orders. Real employee login, real camera,
