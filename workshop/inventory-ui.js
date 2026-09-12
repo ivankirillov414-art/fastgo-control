@@ -164,6 +164,7 @@ async function showSalesHistory(){
 }
 
 async function enhance(){
+  if(!document.querySelector('.shell'))return;
   if(enhancing)return;enhancing=true;
   try{
     if(!me){try{me=await api('me');}catch{return;}}
