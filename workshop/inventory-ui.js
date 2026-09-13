@@ -1,5 +1,6 @@
 import {api,esc,money,csvDownload} from './core.js';
 import {loadLibrary as loadScript} from './library-loader.js';
+import {loadProductIntake,startProductIntake,continueProductIntake} from './product-intake.js';
 
 const ZXING_URL=new URL('../vendor/zxing-browser-0.2.1.min.js',import.meta.url).href;
 const BARCODE_URL=new URL('../vendor/jsbarcode-3.12.3.min.js',import.meta.url).href;
@@ -108,11 +109,11 @@ async function receiveByBarcode(){
   $('receipt-save').onclick=async()=>{const f=new FormData($('receipt-form'));const q=Number(f.get('quantity'));if(!Number.isInteger(q)||q<1)return notice('Укажите количество','bad');try{$('receipt-save').disabled=true;await api('stock',{part_id:part.id,movement_type:'receipt',quantity:q,note:String(f.get('note')||'Приёмка по штрих-коду'),request_id:receiptId});catalogCache=null;closeDialog();notice(`Принято: ${part.name} +${q}`);setTimeout(()=>location.hash.startsWith('#stock')&&location.reload(),250);}catch(e){notice(e.message,'bad');$('receipt-save').disabled=false;}};
 }
 
-async function uploadPartPhoto(part,file,categoryPrimary){
+async function uploadPartPhoto(part,file,categoryPrimary,requestId){
   if(!file)return;
   if(file.size>5*1024*1024)throw new Error('Фото должно быть не больше 5 МБ');
   const base64=await fileToBase64(file);
-  await api('part_photo_upload',{part_id:part.id,content_type:file.type,content_base64:base64,primary_for_category:categoryPrimary});
+  await api('part_photo_upload',{part_id:part.id,content_type:file.type,content_base64:base64,primary_for_category:categoryPrimary,...(requestId?{request_id:requestId}:{})});
 }
 
 async function photoDialog(part){
@@ -133,11 +134,16 @@ async function maintenanceDialog(){
   const c=await getCatalog(true);
   if(!c.capabilities?.atomic_writes)throw new Error('Для проверки копий и переноса файлов сначала обновите Google API.');
   const [status,files]=await Promise.all([api('backup_status'),api('migration_manifest')]);
-  const remaining=files.filter(x=>!x.migrated);
-  showDialog('Резервные копии и старые файлы',`<p>Ежедневное расписание: ${status.trigger_count===1?'установлено':'требует настройки'}.</p><p>Последняя проверенная копия: ${esc(status.last_success||'нет подтверждения')}.</p><p>Проверка восстановления: ${esc(status.restore_verified_at||'не выполнена')}.</p>${status.last_error?`<p class="error">${esc(status.last_error)}</p>`:''}<p>Перенесено файлов: ${files.length-remaining.length} из ${files.length}. Без связи с приёмкой: ${files.filter(x=>!x.record_id).length}.</p><p id="migration-progress" aria-live="polite"></p>`,`<button class="btn ghost" data-inv-close>Закрыть</button>${remaining.length?'<button class="btn" id="migrate-files">Перенести и проверить файлы</button>':''}`);
+  let remaining=files.filter(x=>!x.migrated);
+  showDialog('Резервные копии и старые файлы',`<p>Ежедневное расписание: ${status.trigger_count===1?'установлено':'требует настройки'}.</p><p>Последняя проверенная копия: ${esc(status.last_success||'нет подтверждения')}.</p><p>Проверка восстановления: ${esc(status.restore_verified_at||'не выполнена')}.</p>${status.last_error?`<p class="error">${esc(status.last_error)}</p>`:''}<p id="migration-summary">Перенесено файлов: ${files.length-remaining.length} из ${files.length}. Без связи с приёмкой: ${files.filter(x=>!x.record_id).length}.</p><p id="migration-progress" aria-live="polite"></p>`,`<button class="btn ghost" data-inv-close>Закрыть</button>${remaining.length?'<button class="btn" id="migrate-files">Перенести и проверить файлы</button>':''}`);
   if(remaining.length)$('migrate-files').onclick=async()=>{
-    const button=$('migrate-files'),progress=$('migration-progress');button.disabled=true;
-    try{for(let i=0;i<remaining.length;i++){progress.textContent=`Перенос ${i+1} из ${remaining.length}…`;await api('migrate_legacy_file',{object_id:remaining[i].object_id});}progress.textContent='Файлы скопированы и проверены по контрольным суммам. Исходники сохранены.';button.remove();}catch(e){progress.textContent=e.message;button.disabled=false;}
+    const button=$('migrate-files'),progress=$('migration-progress'),summary=$('migration-summary');button.disabled=true;const updateCount=()=>{summary.textContent=`Перенесено файлов: ${files.length-remaining.length} из ${files.length}. Без связи с приёмкой: ${files.filter(x=>!x.record_id).length}.`;};
+    try{
+      progress.textContent='Сверяем уже перенесённые файлы…';
+      remaining=(await api('migration_manifest')).filter(x=>!x.migrated);updateCount();
+      while(remaining.length){progress.textContent=`Проверено ${files.length-remaining.length} из ${files.length}. Переносим следующий файл…`;await api('migrate_legacy_file',{object_id:remaining[0].object_id});remaining.shift();updateCount();}
+      progress.textContent=`Все ${files.length} файлов скопированы и проверены по контрольным суммам. Исходники сохранены.`;button.remove();
+    }catch(e){progress.textContent=e.message+' При повторе сначала проверим уже сохранённые файлы.';button.disabled=false;}
   };
 }
 
@@ -146,18 +152,24 @@ async function newPartForm(prefill=''){
   const options=categories.map(x=>`<option value="${esc(x)}"></option>`).join('');
   const d=showDialog('Новая товарная позиция',`<form id="new-part-form" class="inv-form"><label>Категория<input name="category" list="part-categories" required placeholder="Подшипники"><datalist id="part-categories">${options}</datalist></label><label>Наименование<input name="name" required placeholder="Подшипник рулевой 2008 2RS"></label><label>Модель / размер<input name="model" placeholder="2008 2RS"></label><label>Артикул / SKU<input name="sku" value="${esc(prefill&&!String(prefill).startsWith('FGP-')?prefill:'')}"></label><div class="inv-grid"><label>Закупка, ₽<input name="unit_cost" type="number" min="0" step="0.01" value="0"></label><label>Продажа, ₽<input name="retail_price" type="number" min="0" step="0.01" value="0" required></label><label>Количество<input name="initial_quantity" type="number" min="0" step="1" value="0"></label><label>Ед.<input name="unit" value="шт"></label></div>${photoReady?'<p class="muted">Фотографии доступны только сотрудникам мастерской.</p>':'<p class="muted">Загрузка фото станет доступна после обновления сервера.</p>'}<label>Основное фото<input name="photo" ${photoReady?'':'disabled'} type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="inv-check"><input name="category_primary" ${photoReady?'':'disabled'} type="checkbox"> Сделать это фото основным и для категории</label><p class="muted">Штрих-код FastGo будет присвоен автоматически после сохранения.</p></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="new-part-save">Создать и принять</button>`);
   const progress=document.createElement('p');progress.className='muted';progress.setAttribute('role','status');progress.setAttribute('aria-live','polite');d.querySelector('.inv-body').appendChild(progress);
-  let savedPart=null,stockReceived=false;const initialReceiptId=crypto.randomUUID();
+  const form=$('new-part-form'),button=$('new-part-save'),actor=me.profile_id;
+  const restore=()=>{const state=loadProductIntake(localStorage,actor);if(!state)return null;for(const [name,value] of Object.entries({...state.product,initial_quantity:state.quantity})){const field=form.elements.namedItem(name);if(field){field.value=value;field.disabled=true;}}form.elements.category_primary.checked=!!state.photo?.primary;form.elements.category_primary.disabled=true;button.textContent='Продолжить приёмку';return state;};
+  const unfinished=restore();if(unfinished)progress.textContent='Есть незавершённая приёмка. Продолжим с сохранённого шага.'+(unfinished.photo&&!unfinished.photoSaved?' Выберите то же фото ещё раз.':'');
   $('new-part-save').onclick=async()=>{
-    const form=$('new-part-form'),f=new FormData(form);const initial=Number(f.get('initial_quantity')||0);if(!form.reportValidity())return;if(!Number.isInteger(initial)||initial<0)return notice('Количество должно быть целым','bad');
+    if(button.disabled)return;
+    if(!form.reportValidity())return;
     try{
-      $('new-part-save').disabled=true;
-      progress.textContent=savedPart?'Товар уже создан. Продолжаем приёмку…':'Сохраняем товар…';
-      const part=savedPart||(savedPart=await api('part_save',{name:f.get('name'),category:f.get('category'),model:f.get('model'),sku:f.get('sku'),unit_cost:Number(f.get('unit_cost')||0),retail_price:Number(f.get('retail_price')||0),unit:f.get('unit')||'шт'}));
-      if(initial>0&&!stockReceived){progress.textContent='Товар создан. Записываем приход…';await api('stock',{part_id:part.id,movement_type:'receipt',quantity:initial,note:'Первичная ручная приёмка',request_id:initialReceiptId});stockReceived=true;}
-      const file=f.get('photo');if(file?.size){progress.textContent='Сохраняем приватное фото…';await uploadPartPhoto(part,file,f.get('category_primary')==='on');}
-      catalogCache=null;closeDialog();notice(`Товар создан: ${part.barcode}`);
-      if(confirm(`Штрих-код ${part.barcode} создан. Напечатать этикетку?`))await printPartLabel(part);
-    }catch(e){progress.textContent=(stockReceived?'Приход сохранён. ':savedPart?'Товар создан. ':'')+e.message+' Данные формы сохранены; повторное нажатие продолжит операцию.';notice(e.message,'bad');$('new-part-save').disabled=false;}
+      button.disabled=true;const f=new FormData(form),file=form.elements.photo.files[0];let photo=null;
+      if(file?.size){if(file.size>5*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Выберите JPG, PNG или WebP не больше 5 МБ.');const hash=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());photo={sha256:[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join(''),type:file.type,primary:form.elements.category_primary.checked};}
+      let state=loadProductIntake(localStorage,actor);
+      if(!state)state=startProductIntake(localStorage,actor,{product:{name:f.get('name'),category:f.get('category'),model:f.get('model'),sku:f.get('sku'),unit_cost:Number(f.get('unit_cost')||0),retail_price:Number(f.get('retail_price')||0),unit:f.get('unit')||'шт'},quantity:Number(f.get('initial_quantity')||0),photo});
+      restore();
+      if(state.photo&&!state.photoSaved&&(!photo||photo.sha256!==state.photo.sha256||photo.type!==state.photo.type))throw new Error('Для продолжения выберите то же фото. Товар и приход не будут созданы повторно.');
+      const part=await continueProductIntake(localStorage,actor,{api,onProgress:text=>{progress.textContent=text;},uploadPhoto:(part,metadata,id)=>uploadPartPhoto(part,file,metadata.primary,id)});
+      catalogCache=null;
+      showDialog('Приёмка завершена',`<p>${esc(part.name)}</p><p>Штрих-код: <strong>${esc(part.barcode)}</strong></p><p>Товар, приход и выбранное фото сохранены.</p>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="new-part-print">Напечатать этикетку</button>`);
+      $('new-part-print').onclick=()=>printPartLabel(part).catch(e=>notice(e.message,'bad'));
+    }catch(e){progress.textContent=e.message;notice(e.message,'bad');try{if(!loadProductIntake(localStorage,actor)){for(const field of form.elements)field.disabled=false;if(!photoReady){form.elements.photo.disabled=true;form.elements.category_primary.disabled=true;}button.textContent='Создать и принять';}}catch{} }finally{button.disabled=false;}
   };
 }
 
@@ -211,7 +223,7 @@ async function enhance(){
       const head=document.querySelector('.workspace .pagehead');
       if(head&&!head.querySelector('[data-inv-tools]')){
         const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button><button class="btn ghost" data-history>Продажи</button>${['owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
-        head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm());box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
+        head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm().catch(e=>notice(e.message,'bad')));box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
       }
       const table=document.querySelector('.workspace table.records');
       if(table&&!table.dataset.barcodeEnhanced){

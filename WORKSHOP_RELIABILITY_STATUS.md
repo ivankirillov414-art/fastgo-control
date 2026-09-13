@@ -116,3 +116,26 @@ The product creation dialog now keeps visible progress for product creation,
 receipt and private photo upload, and retains errors inside the dialog instead
 of relying only on a brief toast. JavaScript syntax and whitespace checks pass;
 this UI feedback change still needs browser verification after recovery.
+
+## Follow-up: persistent product intake recovery
+
+Product creation now checkpoints its immutable product fields, initial receipt
+quantity, three operation IDs and photo hash per employee before the first
+write. It resumes after modal close or page reload, including a lost response
+or browser-storage failure after the server has committed a step. Image bytes
+are not stored. A pending upload requires reselecting the same photo. Confirmed
+initial validation failures allow correcting the draft. A completed checkpoint
+left by cleanup failure cannot issue another receipt.
+
+Nine focused failure/reload tests pass. The full current regression suite is
+83 tests. The new intake completion screen uses an application dialog with a
+print button instead of a blocking native confirm. Migration retry first reads
+the current manifest, then skips files already verified on Google.
+
+Live verification remains blocked by the cloud browser's repeated CDP refresh
+timeouts; no additional migration, repair update, payment or sale is claimed.
+The previously verified test product receipt is
+`c225d4f1-7ad4-4003-8d88-3045fa1d64c8`, its creation request is
+`64476ef9-c9c5-446a-ba77-5ca941a7e9ab`, and photo upload request is
+`40997908-231c-49c4-aeea-e5fbb18020dd`. All three appear in the Google operation
+ledger.
