@@ -34,14 +34,36 @@ async function config(){
 }
 function googleClient(c,actor){
   return async(action,params={})=>{
-    let r;try{r=await fetch(c.sheets_api_url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({secret:c.sheets_api_secret,action,params:safeText(params),actor}),redirect:'follow',signal:AbortSignal.timeout(65000)});}catch{fail('Google не ответил. Обновите карточку перед повторением операции.',504);}
+    const signal=AbortSignal.timeout(65000);
+    const attempts=readActions.has(action)||action==='operation_retry'?3:1;
+    let r,stage='script';
+    for(let attempt=0;attempt<attempts;attempt++){
+      try{
+        stage='script';const endpoint=new URL(c.sheets_api_url);endpoint.searchParams.set('fg_response',crypto.randomUUID());
+        r=await fetch(endpoint.href,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8','Cache-Control':'no-store'},body:JSON.stringify({secret:c.sheets_api_secret,action,params:safeText(params),actor}),redirect:'manual',signal});
+        for(let redirects=0;[301,302,303,307,308].includes(r.status);redirects++){
+          if(redirects>=3)fail('Google повторяет перенаправление ответа',502);
+          const location=r.headers.get('location');let target;
+          try{target=new URL(location||'');}catch{fail('Google не передал адрес ответа',502);}
+          // ContentService uses a one-time response URL. Fetch it with a new
+          // credential-free GET, and never forward the API secret elsewhere.
+          if(![302,303].includes(r.status)||target.protocol!=='https:'||target.hostname!=='script.googleusercontent.com'||target.username||target.password||target.port)fail('Неожиданное перенаправление Google API',502);
+          await r.body?.cancel();
+          stage='content';r=await fetch(target.href,{method:'GET',headers:{'Cache-Control':'no-store'},redirect:'manual',signal});
+        }
+      }catch(e){if(e.status)throw e;const reason=signal.aborted?'timeout':/redirect/i.test(String(e.message))?'redirect':'network';fail('Google не ответил. Обновите карточку перед повторением операции. Код: '+stage+'/'+reason+'/'+action,504);}
+      // A stale one-time response can be fetched again only by making a new
+      // read request. Never replay a business write at this transport layer.
+      if(![404,429,502,503,504].includes(r.status)||attempt===attempts-1)break;
+      await r.body?.cancel();
+    }
     const raw=await r.text();let j;try{j=JSON.parse(raw);}catch{
       // Fixed classifications only: never expose response bodies, redirect
       // query strings, access tokens or the shared secret in diagnostics.
       const kind=/Moved Temporarily|The document has moved/i.test(raw)?'redirect':/accounts\.google\.com|Sign in with Google/i.test(raw)?'sign_in':/Too Many Requests|quota|rate limit/i.test(raw)?'rate_limit':/Sorry, unable to open|Page Not Found/i.test(raw)?'not_found':/<html|<!doctype html/i.test(raw)?'html':'invalid_json';
       const host=new URL(r.url||c.sheets_api_url).hostname;
       const source=host==='script.googleusercontent.com'?'content':host==='script.google.com'?'script':host==='accounts.google.com'?'login':'other';
-      fail('Google вернул не данные. Проверьте доступ Apps Script к таблице. Код: '+source+'/'+kind+'/'+r.status,502);
+      fail('Google вернул не данные. Проверьте доступ Apps Script к таблице. Код: '+source+'/'+kind+'/'+r.status+'/'+action,502);
     }
     if(!r.ok)fail('Google временно недоступен',502);
     if(j?.error){const code=Number(j.status);fail(String(j.error).replaceAll(c.sheets_api_secret,'[скрыто]'),code>=400&&code<600?code:400);}

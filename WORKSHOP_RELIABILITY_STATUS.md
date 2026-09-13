@@ -3,13 +3,14 @@
 ## Applied to production during this task
 
 The workshop interface is published through GitHub Pages, and
-`fastgo-workshop-api` version 8 is active with release
+`fastgo-workshop-api` version 12 is active with release
 `workshop-autonomous-2026-09-13`. The storage and service proxies return this
 release too. Unauthenticated catalogue requests remain rejected with HTTP 401.
 The published employee sign-in screen renders successfully; no application
 console errors were observed. A real owner sign-in with the FastGo account succeeded on 2026-09-13.
 The home view and inventory loaded real Google data. Some subsequent reads
-intermittently return a non-JSON Google response; version 8 adds fixed response
+intermittently return a non-JSON Google response; version 12 adds bounded, credential-free ContentService redirects and retries
+for reads only, with fixed response
 classifications without exposing bodies, tokens, secrets or redirect URLs.
 Business mutations and the full employee lifecycle remain unverified.
 
@@ -44,7 +45,8 @@ by blank lines. The manifest preserves the existing web app execution identity
 and audience. The additional outbound-request scope has now been granted.
 The current repository Google source (including barcode/model validation and
 formula-stable backup verification) is saved and was verified by full editor
-readback. The current regression suite passed 66 tests.
+readback. The current regression suite passed 70 tests, including response redirects,
+read retries, write non-replay and diagnostic redaction.
 A separate wildcard test run also included the old `workshop-api.test.mjs`
 fixture, which still mocks the former direct-Supabase backend and lacks the
 gateway's text-decoder globals. That legacy fixture fails and is not part of

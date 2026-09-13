@@ -209,7 +209,7 @@ async function enhance(){
       const head=document.querySelector('.workspace .pagehead');
       if(head&&!head.querySelector('[data-inv-tools]')){
         const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button><button class="btn ghost" data-history>Продажи</button>${['owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
-        head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm());box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=()=>maintenanceDialog().catch(e=>notice(e.message,'bad'));
+        head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm());box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
       }
       const table=document.querySelector('.workspace table.records');
       if(table&&!table.dataset.barcodeEnhanced){
@@ -218,7 +218,7 @@ async function enhance(){
         table.querySelectorAll('tbody tr').forEach(tr=>{const name=tr.querySelector('td b')?.textContent||'';const id=tr.querySelector('[data-editpart]')?.dataset.editpart||tr.querySelector('[data-stock]')?.dataset.stock;const p=c.parts.find(x=>x.id===id)||map.get(name);if(!p)return;if(c.capabilities?.private_product_photos){const button=document.createElement('button');button.className='btn ghost small';button.textContent='Фото';button.onclick=()=>photoDialog(p).catch(e=>notice(e.message,'bad'));tr.lastElementChild.appendChild(button);}const small=tr.querySelector('td small');if(small)small.innerHTML=`${esc(p.sku||'Без артикула')} · <b>${esc(p.barcode)}</b>`;tr.addEventListener('dblclick',()=>printPartLabel(p).catch(e=>notice(e.message,'bad')));});
       }
     }
-  }finally{enhancing=false;}
+  }catch(e){notice(e.message,'bad');}finally{enhancing=false;}
 }
 
 const observer=new MutationObserver(()=>{clearTimeout(window.__fastgoInvTimer);window.__fastgoInvTimer=setTimeout(enhance,60);});
