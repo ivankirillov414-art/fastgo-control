@@ -75,6 +75,19 @@ function googleClient(c,actor){
     return j.data;
   };
 }
+// Capabilities contain no business records or identity. Writes always check
+// health directly; only catalogue presentation reuses this short-lived result.
+const catalogueHealth=new Map();
+async function catalogueCapabilities(c,g){
+  const key=c.sheets_api_url+'\n'+c.sheets_api_secret;
+  let entry=catalogueHealth.get(key);
+  if(entry&&entry.until>Date.now())return entry.promise;
+  entry={until:Date.now()+60000,promise:null};
+  entry.promise=g('health').then(d=>d.capabilities||{}).catch(e=>{if(catalogueHealth.get(key)===entry)catalogueHealth.delete(key);throw e;});
+  catalogueHealth.set(key,entry);
+  if(catalogueHealth.size>4)catalogueHealth.delete(catalogueHealth.keys().next().value);
+  return entry.promise;
+}
 function recordDates(r){if(!r)return r;for(const k of ['starts_on','planned_return_date','promised_date'])if(typeof r[k]==='string')r[k]=r[k].slice(0,10);return r;}
 function required(p,fields){for(const f of fields)if(!text(p[f]))fail('Заполните поле '+f);}
 function lines(items){if(!Array.isArray(items)||items.length>200)fail('Неверный список работ / запчастей');return items.map(x=>{required(x,['name']);return {...x,name:text(x.name,200),quantity:integer(x.quantity,'количество',1,1000),price:numeric(x.price,'цену')};});}
@@ -90,7 +103,7 @@ async function legacyPhotos(kind,id){
 }
 async function main(req){
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
-  if(req.method==='GET')return out({ok:true,service:'fastgo-workshop-api',backend:'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required',upstream_checked:false});
+  if(req.method==='GET')return out({ok:true,service:'fastgo-workshop-api',backend:'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required',upstream_checked:false,optimization:'shared-reads-2026-09-13'});
   if(req.method!=='POST')return out({error:'Разрешён только POST'},405);
   try{
     const authorization=req.headers.get('authorization')||'';if(!/^Bearer [^\s]+$/i.test(authorization))fail('Войдите в приложение',401);
@@ -148,7 +161,7 @@ async function main(req){
 
 
     if(action==='catalog'){
-      const [d,staff]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name')]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=(await g('health')).capabilities||{};d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
+      const [d,staff,capabilities]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name'),catalogueCapabilities(c,g)]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=capabilities;d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
     }
     if(action==='part_by_barcode'){required(p,['barcode']);const d=await g(action,{barcode:text(p.barcode,100)});if(d.active===false)fail('Товар отключён',404);return out({data:d});}
     if(action==='overview'&&!manager(me)){

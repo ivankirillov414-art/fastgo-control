@@ -54,3 +54,12 @@ test('ContentService can redirect a response again without forwarding credential
 test('redirect response cleanup cannot delay retrieving the Google result',async()=>{const s=setup({googleResponse:()=>new Response(new ReadableStream({cancel:()=>new Promise(()=>{})}),{status:302,headers:{location:'https://script.googleusercontent.com/macros/echo?result=cleanup-test'}}),contentResponse:()=>Response.json({data:{parts:[],categories:[],services:[],capabilities:{}}})});const result=await Promise.race([s.go({action:'catalog'}),new Promise((_,reject)=>setTimeout(()=>reject(Error('redirect cleanup blocked response')),500))]);assert.equal(result.status,200);});
 
 test('Google response may return to this deployment by GET, never to another deployment',async()=>{for(const safe of [true,false]){let hop=0;const s=setup({googleResponse:()=>new Response(null,{status:302,headers:{location:'https://script.googleusercontent.com/macros/echo?result=return'}}),contentResponse:(url,o)=>{assert.equal(o.method,'GET');assert.equal(o.body,undefined);if(url.startsWith('https://script.googleusercontent.com'))return new Response(null,{status:302,headers:{location:'https://script.google.com/macros/s/'+(safe?'TEST':'OTHER')+'/exec?response=return'}});hop++;return Response.json({data:{parts:[],categories:[],services:[],capabilities:{}}});}});assert.equal((await s.go({action:'catalog'})).status,safe?200:502);assert.equal(hop,safe?2:0);}});
+
+test('catalogue reuses capabilities only, never business data or write health checks',async()=>{
+ const s=setup({google:b=>b.action==='health'?{capabilities:{private_product_photos:true}}:{parts:[],services:[],categories:[]}});
+ for(let i=0;i<2;i++)assert.equal((await s.go({action:'catalog'})).status,200);
+ const actions=()=>s.calls.filter(c=>c.url.startsWith('https://script.google.com')).map(c=>JSON.parse(c.o.body).action);
+ assert.equal(actions().filter(x=>x==='health').length,1);assert.equal(actions().filter(x=>x==='catalog').length,2);
+ await s.go({action:'stock',params:{part_id:pid,request_id:rid,quantity:1,movement_type:'receipt',note:'test'}});
+ assert.equal(actions().filter(x=>x==='health').length,2);
+});

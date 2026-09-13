@@ -21,7 +21,7 @@ jobs:
           node --check < supabase/functions/fastgo-storage-api/index.ts
           node --check < supabase/functions/fastgo-service-api/index.ts
           for f in google-apps-script/*.gs; do node --check < "$f"; done
-          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/product-intake.test.mjs tests/barcode.test.mjs tests/inventory-import.test.mjs tests/library-loader.test.mjs
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/product-intake.test.mjs tests/barcode.test.mjs tests/inventory-import.test.mjs tests/library-loader.test.mjs tests/read-cache.test.mjs
       - name: Live public endpoint and authentication boundaries
         run: |
           python - <<'PY'

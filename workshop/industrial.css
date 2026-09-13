@@ -105,3 +105,5 @@
   .stat{min-height:109px;padding:13px 12px}.stat strong{margin-top:8px}.panelhead{gap:10px;flex-wrap:wrap}.panelhead h2{font-size:18px}
  }
 }
+
+@media screen and (max-width:760px){.topbar{gap:8px}.topbar .refresh-data{margin-left:auto;min-height:36px;font-size:11px;padding:7px 10px}.topbar>span:not(.crumb){display:none}}

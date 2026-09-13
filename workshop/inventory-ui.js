@@ -19,8 +19,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
 
 async function getCatalog(force=false){
-  if(force||!catalogCache)catalogCache=await api('catalog');
-  return catalogCache;
+  return api('catalog',{}, {fresh:force});
 }
 function ownDialog(){
   let d=$('inventory-dialog');

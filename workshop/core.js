@@ -1,7 +1,16 @@
-import {mutations,operation} from './pending.js';
+import {createReadCache} from './read-cache.js';
+import {mutations,operation,canonical} from './pending.js';
 export const BASE='https://oqgpjfikjpcplnxueoki.supabase.co';
 const KEY='sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji',STORE='fastgo_workshop_session';
 let session=null,refreshing=null;
+const reads=createReadCache();
+const cachedReads=new Set(['me','catalog','list','overview','customers','finance','legacy','legal','sales','stock_history']);
+export function invalidateReads(){reads.clear();}
+function changed(){reads.clear();window.dispatchEvent(new Event('workshop-data-changed'));try{localStorage.setItem('fastgo_workshop_data_changed',String(Date.now())+Math.random());}catch{}}
+if(typeof window!=='undefined'){
+ window.addEventListener('storage',e=>{if(e.key==='fastgo_workshop_data_changed'){reads.clear();window.dispatchEvent(new Event('workshop-data-changed'));}});
+ window.addEventListener('focus',invalidateReads);
+}
 try{session=JSON.parse(localStorage.getItem(STORE)||'null');if(!session&&localStorage.getItem('fastgo_token'))session={access_token:localStorage.getItem('fastgo_token')};}catch{}
 export const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const money=v=>Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';
@@ -20,19 +29,26 @@ export function sessionAvailable(){return !!session?.access_token;}
 async function request(path,body,token){let r;try{r=await fetch(BASE+path,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});}catch(e){throw new Error(e.name==='TimeoutError'?'Сервер не ответил. Проверьте подключение и повторите попытку.':'Нет соединения с сервером. Проверьте интернет и повторите попытку.');}let j;try{j=await r.json();}catch{throw new Error('Сервер вернул неполный ответ. Повторите попытку.');}if(!r.ok){const msg=j.error_description||j.error||j.message||j.msg||'Ошибка запроса';const e=new Error(msg==='Invalid login credentials'?'Неверная почта или пароль':msg);e.status=r.status;throw e;}return j;}
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token,user_id:s.user?.id||session?.user_id,expires_at:s.expires_at||Math.floor(Date.now()/1000)+s.expires_in};localStorage.setItem(STORE,JSON.stringify(session));}
 async function refresh(){if(!session?.refresh_token)return false;if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(s=>{saveSession(s);return true;}).catch(e=>{if(e.status===400||e.status===401)clearSession();throw e;}).finally(()=>refreshing=null);return refreshing;}
-export async function signIn(email,password){saveSession(await request('/auth/v1/token?grant_type=password',{email,password}));}
-export function clearSession(){session=null;localStorage.removeItem(STORE);localStorage.removeItem('fastgo_token');window.dispatchEvent(new Event('workshop-session-cleared'));}
+export async function signIn(email,password){reads.clear();saveSession(await request('/auth/v1/token?grant_type=password',{email,password}));}
+export function clearSession(){reads.clear();session=null;localStorage.removeItem(STORE);localStorage.removeItem('fastgo_token');window.dispatchEvent(new Event('workshop-session-cleared'));}
 export async function signOut(){const token=session?.access_token;try{if(token)await request('/auth/v1/logout?scope=local',{},token);}catch{}finally{clearSession();}}
 async function apiRequest(action,params,retried=false){if(session?.expires_at && session.expires_at*1000<Date.now()+45000)await refresh();try{const response=await request('/functions/v1/fastgo-workshop-api',{action,params},session?.access_token);if(!response||!Object.prototype.hasOwnProperty.call(response,'data')||response.data===null){const e=new Error('Сервер не подтвердил результат. Не создавайте новую операцию; обновите карточку для сверки.');e.status=502;throw e;}return response.data;}catch(e){if(e.status===401&&!retried&&await refresh())return apiRequest(action,params,true);if(e.status===401){clearSession();window.dispatchEvent(new Event('workshop-auth-required'));}throw e;}}
 const inFlight=new Map();
-export async function api(action,params={}){
-  if(!mutations.has(action))return apiRequest(action,params);
+export async function api(action,params={},options={}){
+  if(!mutations.has(action)){
+    if(['member_update','staff_create','import_legacy'].includes(action)){const end=reads.beginWrite();try{return await apiRequest(action,params);}finally{end();changed();}}
+    if(session?.expires_at&&session.expires_at*1000<Date.now()+45000)await refresh();
+    const actor=session?.user_id||session?.access_token||'anonymous';
+    try{return await reads.read(canonical({actor,action,params}),()=>apiRequest(action,params),{fresh:options.fresh,retain:cachedReads.has(action)});}
+    catch(e){if(e.status===401||e.status===403)reads.clear();throw e;}
+  }
   if(!session?.access_token)throw new Error('Войдите в приложение');
   let actor=session.user_id;
   if(!actor){try{actor=JSON.parse(atob(session.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub;}catch{throw new Error('Войдите в приложение снова');}}
   const op=await operation(localStorage,actor,action,params);
   if(inFlight.has(op.key))return inFlight.get(op.key);
-  const promise=apiRequest(action,op.params).then(data=>{op.finish();return data}).catch(e=>{if([400,403,404,409,413,422].includes(e.status))op.finish();throw e}).finally(()=>inFlight.delete(op.key));
+  const end=reads.beginWrite();
+  const promise=apiRequest(action,op.params).then(data=>{op.finish();return data}).catch(e=>{if([400,403,404,409,413,422].includes(e.status))op.finish();throw e}).finally(()=>{inFlight.delete(op.key);end();changed();});
   inFlight.set(op.key,promise);return promise;
 }
 export function csvDownload(name,headers,rows){const cell=v=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};const text='\ufeff'+[headers,...rows].map(row=>row.map(cell).join(';')).join('\r\n');const url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
