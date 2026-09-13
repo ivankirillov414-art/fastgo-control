@@ -1,0 +1,15 @@
+export function createNativeEngine(snapshot,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
+ const sheets=structuredClone(snapshot),changes=new Map();
+ const SHEETS={settings:'Настройки',categories:'Категории',products:'Товары',clients:'Клиенты',intakes:'Приёмки',repairs:'Ремонты',storage:'Зимнее хранение',movements:'Движения склада',sales:'Продажи',saleItems:'Строки продаж',staff:'Сотрудники',services:'Прайс работ',legal:'Реквизиты',payments:'Оплаты',events:'События',files:'Файлы миграции'};
+ const PHOTO_SHEET='Фото товаров';
+ const Utilities={formatDate:(d,tz,format)=>{const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);return parts;}};
+ const uid_=uuid,now_=now;
+ const rows_=name=>{if(!sheets[name])throw httpError_('Не загружен справочник '+name,503);return sheets[name].rows;};
+ const headers_=name=>sheets[name].headers;
+ function patchRow_(name,row,obj){
+  const found=rows_(name).find(x=>x.__row===row);if(!found)throw httpError_('Запись не найдена',409);
+  const values={};for(const [k,v]of Object.entries(obj)){if(k==='__row'||v===undefined)continue;if(!headers_(name).includes(k))throw httpError_('Неизвестное поле '+k,503);values[k]=v;}
+  Object.assign(found,values);const key=name+':'+row,old=changes.get(key);changes.set(key,{sheet:name,row,values:{...(old?.values||{}),...values}});return found;
+ }
+ function append_(name,obj){const row=Math.max(1,...rows_(name).map(x=>x.__row))+1;rows_(name).push({...Object.fromEntries(headers_(name).map(k=>[k,''])),__row:row});return patchRow_(name,row,obj);}
+ function health_(){return {ok:true,backend:'POSTGRES_GOOGLE_MIRROR',capabilities:{atomic_writes:true,private_product_photos:true,background_google_sync:true}};}

@@ -1,9 +1,10 @@
-// FastGo Google Sheets cutover. Supabase holds auth/configuration only.
+import {nativeClient} from '../_shared/native-client.js';
+// FastGo storage adapter: Google during staging, Postgres after verified cutover.
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const RELEASE = 'workshop-autonomous-2026-09-13';
-const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'google-sheets','X-FastGo-Release':RELEASE};
+const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||''));
@@ -29,7 +30,7 @@ async function readBody(req){
   if(!input||Array.isArray(input)||typeof input!=='object')fail('Некорректный запрос');return input;
 }
 async function config(){
-  const rows=await db('workshop_backend_config','id=eq.1&select=sheets_api_url,sheets_api_secret');const c=rows?.[0];
+  const rows=await db('workshop_backend_config','id=eq.1&select=sheets_api_url,sheets_api_secret,storage_mode');const c=rows?.[0];
   if(!c?.sheets_api_secret||!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(c.sheets_api_url||''))fail('Google-база не подключена',503);return c;
 }
 function googleClient(c,actor){
@@ -103,7 +104,7 @@ async function legacyPhotos(kind,id){
 }
 async function main(req){
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
-  if(req.method==='GET')return out({ok:true,service:'fastgo-workshop-api',backend:'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required',upstream_checked:false,optimization:'shared-reads-2026-09-13'});
+  if(req.method==='GET'){try{const c=await config();return out({ok:true,service:'fastgo-workshop-api',backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required',upstream_checked:false,optimization:'shared-reads-2026-09-13'});}catch{return out({error:'Конфигурация временно недоступна'},503);}}
   if(req.method!=='POST')return out({error:'Разрешён только POST'},405);
   try{
     const authorization=req.headers.get('authorization')||'';if(!/^Bearer [^\s]+$/i.test(authorization))fail('Войдите в приложение',401);
@@ -112,7 +113,7 @@ async function main(req){
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     const input=await readBody(req),action=text(input.action,40);let p=input.params||{};if(Array.isArray(p)||typeof p!=='object')fail('Некорректные параметры');p={...p};
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
-    if(action==='me')return out({data:{...me,email:user.email,backend:'GOOGLE_SHEETS_DRIVE',release:RELEASE}});
+    if(action==='me'){const c=await config();return out({data:{...me,email:user.email,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(['member_update','staff_create'].includes(action)){
       if(!admin(me))fail('Нет права изменять сотрудников',403);
       if(action==='member_update'){
@@ -126,7 +127,13 @@ async function main(req){
     }
     if(!readActions.has(action)&&!writeActions.has(action))fail(action==='part_photo_upload'?'Загрузка фото товара пока отключена: текущий скрипт делает их публичными. Фото приёмок работают.':'Неизвестная операция',400);
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
-    const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role},g=googleClient(c,actor);
+    const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role};
+    if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
+    const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
+      async put(path,bytes,mime){const r=await fetch(BASE+'/storage/v1/object/fastgo-workshop-private/'+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':mime},body:bytes,signal:AbortSignal.timeout(30000)});if(!r.ok&&r.status!==409)fail('Не удалось сохранить файл',503);},
+      async sign(path){const r=await rest('/storage/v1/object/sign/fastgo-workshop-private/'+path.split('/').map(encodeURIComponent).join('/'),'POST',{expiresIn:300});return BASE+'/storage/v1'+r.signedURL;}
+    }}):remote;
+    const backend=c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE';
     if(action==='health')return out({data:{...await g('health'),release:RELEASE}});
     if(action==='stock')integer(p.quantity,'количество');
     let reliable=false;
@@ -161,7 +168,7 @@ async function main(req){
 
 
     if(action==='catalog'){
-      const [d,staff,capabilities]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name'),catalogueCapabilities(c,g)]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=capabilities;d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
+      const [d,staff,capabilities]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name'),catalogueCapabilities(c,g)]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=capabilities;d.backend=backend;return out({data:d});
     }
     if(action==='part_by_barcode'){required(p,['barcode']);const d=await g(action,{barcode:text(p.barcode,100)});if(d.active===false)fail('Товар отключён',404);return out({data:d});}
     if(action==='overview'&&!manager(me)){
@@ -171,7 +178,7 @@ async function main(req){
     if(p.qr_token&&!p.id){if(!uuid(p.qr_token))fail('Неверный QR');const t=p.kind==='storage'?'storage_intakes':'service_repairs';const r=await db(t,'qr_token=eq.'+encodeURIComponent(p.qr_token)+'&select=id');if(!r?.[0])fail('QR не найден',404);p.id=r[0].id;}
     if(action==='get'){
       const d=await g('get',p);d.record=recordDates(d.record);if(!manager(me))d.payments=[];
-      const old=d.migrated_legacy_paths? (await legacyPhotos(p.kind,p.id)).filter(x=>!d.migrated_legacy_paths.includes(x.path)):await legacyPhotos(p.kind,p.id);d.record.fault_photo_paths=[...(d.record.fault_photo_paths||[]),...old.filter(x=>x.slot==='photos').map(x=>x.path)];d.record.signed_document_paths=[...(d.record.signed_document_paths||[]),...old.filter(x=>x.slot==='signed').map(x=>x.path)];d.backend='GOOGLE_SHEETS_DRIVE';return out({data:d});
+      const old=d.migrated_legacy_paths? (await legacyPhotos(p.kind,p.id)).filter(x=>!d.migrated_legacy_paths.includes(x.path)):await legacyPhotos(p.kind,p.id);d.record.fault_photo_paths=[...(d.record.fault_photo_paths||[]),...old.filter(x=>x.slot==='photos').map(x=>x.path)];d.record.signed_document_paths=[...(d.record.signed_document_paths||[]),...old.filter(x=>x.slot==='signed').map(x=>x.path)];d.backend=backend;return out({data:d});
     }
     if(action==='signed_url'||action==='get_url'){
       await g('get',{kind:p.kind,id:p.id});
@@ -243,7 +250,7 @@ async function main(req){
         const allowed=[...(r.fault_photo_paths||[]),...(r.signed_document_paths||[])];if(p.paths.some(x=>!allowed.includes(x)))fail('Файл не загружен в эту карточку',403);
       }
     }
-    let data=await g(action,p);if(action==='list')data.items=data.items.map(recordDates);if(action==='get')recordDates(data.record);return out({data,backend:'GOOGLE_SHEETS_DRIVE'});
-  }catch(e){return out({error:e.status?e.message:'Сервис временно недоступен. Данные в Google не переключались на старую базу.'},e.status||503);}
+    let data=await g(action,p);if(action==='list')data.items=data.items.map(recordDates);if(action==='get')recordDates(data.record);return out({data,backend});
+  }catch(e){return out({error:e.status?e.message:'Сервис временно недоступен. Повторите эту же операцию.'},e.status||503);}
 }
 Deno.serve(main);

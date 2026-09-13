@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
-const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*native-client[^\n]+\n/, '');
 const uid='11111111-1111-4111-8111-111111111111',pid='22222222-2222-4222-8222-222222222222',rid='33333333-3333-4333-8333-333333333333';
 const secret='dummy-test-secret-not-an-actual-secret';
 function setup({role='owner',valid=true,active=true,connected=true,google,rawGoogle,googleResponse,contentResponse}={}){let handle;const calls=[];

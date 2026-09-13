@@ -2,7 +2,7 @@ name: Google workshop regression
 on:
   push:
     branches: [main, codex/google-cutover-live, codex/workshop-reliability]
-    paths: ['vendor/**','google-apps-script/**','tests/**','workshop/**','workshop.html','supabase/functions/fastgo-*/**','.github/workflows/google-cutover-check.yml']
+    paths: ['vendor/**','google-apps-script/**','tests/**','workshop/**','workshop.html','supabase/functions/fastgo-*/**','supabase/functions/_shared/**','scripts/build-native-engine.py','scripts/native-engine-*.txt','.github/workflows/google-cutover-check.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,11 +17,13 @@ jobs:
       - name: Syntax and regression
         run: |
           for f in workshop/*.js; do node --check "$f"; done
-          node --check < supabase/functions/fastgo-workshop-api/index.ts
+          node --input-type=module --check < supabase/functions/fastgo-workshop-api/index.ts
           node --check < supabase/functions/fastgo-storage-api/index.ts
           node --check < supabase/functions/fastgo-service-api/index.ts
+          for f in supabase/functions/_shared/*.js; do node --check "$f"; done
+          node --check < supabase/functions/fastgo-google-mirror/index.ts
           for f in google-apps-script/*.gs; do node --check < "$f"; done
-          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/product-intake.test.mjs tests/barcode.test.mjs tests/inventory-import.test.mjs tests/library-loader.test.mjs tests/read-cache.test.mjs
+          node --test tests/google-cutover.test.mjs tests/workshop-core.test.mjs tests/google-reliability.test.mjs tests/pending.test.mjs tests/product-intake.test.mjs tests/barcode.test.mjs tests/inventory-import.test.mjs tests/library-loader.test.mjs tests/read-cache.test.mjs tests/native-store.test.mjs
       - name: Live public endpoint and authentication boundaries
         run: |
           python - <<'PY'
@@ -30,7 +32,7 @@ jobs:
           for slug in ['fastgo-workshop-api','fastgo-storage-api','fastgo-service-api']:
               with urllib.request.urlopen(base+slug,timeout=25) as r:
                   health=json.load(r)
-                  assert health.get('backend')=='GOOGLE_SHEETS_DRIVE'
+                  assert health.get('backend') in ('GOOGLE_SHEETS_DRIVE','POSTGRES_GOOGLE_MIRROR')
                   assert health.get('release')=='workshop-autonomous-2026-09-13'
                   assert health.get('upstream_checked') is False
               req=urllib.request.Request(base+slug,data=b'{"action":"catalog"}',headers={'Content-Type':'application/json'})

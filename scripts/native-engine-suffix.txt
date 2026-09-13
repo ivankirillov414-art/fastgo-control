@@ -1,0 +1,19 @@
+ function documents_(p,actor){
+  const kind=p.kind==='storage'?'storage':'repair',rec=find_(kind==='storage'?SHEETS.storage:SHEETS.repairs,kind==='storage'?'storage_id':'repair_id',p.id);
+  if(!rec)throw httpError_('Заказ не найден',404);requireOrderAccess_(actor,kind,rec);
+  for(const path of p.paths||[]){if(rows_(SHEETS.files).some(r=>r.record_id===p.id&&r['Google Drive URL']===path))continue;
+   append_(SHEETS.files,{object_id:p.object_id||uid_(),'Исходный путь':p.file_name||'','Размер, байт':p.file_size||0,'Создан':now_(),'Google Drive URL':path,'Статус миграции':'Приватное хранилище','Тип':p.slot==='signed'?'Подписанный документ':'Фото','Связанная приёмка':rec['Номер']||rec['Номер ремонта'],'Примечание':'FastGo',updated_at:now_(),record_id:p.id,slot:p.slot||'photos'});
+  }addEvent_(kind,p.id,'documents',actor,{count:(p.paths||[]).length,slot:p.slot||'photos'});return {ok:true,paths:p.paths||[]};
+ }
+ function nativePhoto(p){
+  const product=find_(SHEETS.products,'product_id',p.part_id);if(!product)throw httpError_('Товар не найден',404);
+  append_(PHOTO_SHEET,{photo_id:p.photo_id,product_id:p.part_id,category:product['Категория'],path:p.path,created_at:now_(),sha256:p.sha256});return partPhotoPrimary_(p);
+ }
+ return {sheets,changes:()=>[...changes.values()],run(action,p,actor){
+  if(!actor.id||!['owner','admin','receiver','manager','mechanic'].includes(actor.role))throw httpError_('Нет доступа',403);
+  if(action==='native_photo'){requireAdmin_(actor);return nativePhoto(p);}
+  if(action==='native_document')return documents_(p,actor);
+  if(action==='native_file_migration'){requireAdmin_(actor);const r=find_(SHEETS.files,'object_id',p.object_id);if(!r)throw httpError_('Файл не найден',404);patchRow_(SHEETS.files,r.__row,{'Google Drive URL':p.path,'Статус миграции':'Приватное хранилище',updated_at:now_()});return {object_id:p.object_id,migrated:true,path:p.path};}
+  return routeUnlocked_(action,p,actor);
+ }};
+}
