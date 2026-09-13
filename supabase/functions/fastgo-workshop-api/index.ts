@@ -47,15 +47,19 @@ function googleClient(c,actor){
           try{target=new URL(location||'');}catch{fail('Google не передал адрес ответа',502);}
           // ContentService uses a one-time response URL. Fetch it with a new
           // credential-free GET, and never forward the API secret elsewhere.
-          if((redirects===0&&![302,303].includes(r.status))||target.protocol!=='https:'||target.hostname!=='script.googleusercontent.com'||target.username||target.password||target.port){const destination=target.hostname==='script.google.com'?'script':target.hostname==='accounts.google.com'?'login':target.hostname==='script.googleusercontent.com'?'content':'other';fail('Неожиданное перенаправление Google API. Код: '+stage+'/'+r.status+'/'+destination+'/'+action,502);}
-          await r.body?.cancel();
+          const sameEndpoint=target.hostname==='script.google.com'&&target.pathname===new URL(c.sheets_api_url).pathname;
+          const googleEcho=target.hostname==='script.google.com'&&target.pathname==='/macros/echo';
+          const allowedHost=target.hostname==='script.googleusercontent.com'||(redirects>0&&(sameEndpoint||googleEcho));
+          if((redirects===0&&![302,303].includes(r.status))||target.protocol!=='https:'||!allowedHost||target.username||target.password||target.port){const destination=target.hostname==='script.google.com'?'script':target.hostname==='accounts.google.com'?'login':target.hostname==='script.googleusercontent.com'?'content':'other';const path=sameEndpoint?'exec':googleEcho?'echo':'other';fail('Неожиданное перенаправление Google API. Код: '+stage+'/'+r.status+'/'+destination+'/'+path+'/'+action,502);}
+
+          r.body?.cancel().catch(()=>{});
           stage='content';r=await fetch(target.href,{method:'GET',headers:{'Cache-Control':'no-store'},redirect:'manual',signal});
         }
       }catch(e){if(e.status)throw e;const reason=signal.aborted?'timeout':/redirect/i.test(String(e.message))?'redirect':'network';fail('Google не ответил. Обновите карточку перед повторением операции. Код: '+stage+'/'+reason+'/'+action,504);}
       // A stale one-time response can be fetched again only by making a new
       // read request. Never replay a business write at this transport layer.
       if(![404,429,502,503,504].includes(r.status)||attempt===attempts-1)break;
-      await r.body?.cancel();
+      r.body?.cancel().catch(()=>{});
     }
     const raw=await r.text();let j;try{j=JSON.parse(raw);}catch{
       // Fixed classifications only: never expose response bodies, redirect

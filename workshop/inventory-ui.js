@@ -145,17 +145,19 @@ async function newPartForm(prefill=''){
   const c=await getCatalog();const photoReady=!!c.capabilities?.private_product_photos;const categories=[...new Set((c.categories||[]).map(x=>x.name).filter(Boolean))].sort();
   const options=categories.map(x=>`<option value="${esc(x)}"></option>`).join('');
   const d=showDialog('Новая товарная позиция',`<form id="new-part-form" class="inv-form"><label>Категория<input name="category" list="part-categories" required placeholder="Подшипники"><datalist id="part-categories">${options}</datalist></label><label>Наименование<input name="name" required placeholder="Подшипник рулевой 2008 2RS"></label><label>Модель / размер<input name="model" placeholder="2008 2RS"></label><label>Артикул / SKU<input name="sku" value="${esc(prefill&&!String(prefill).startsWith('FGP-')?prefill:'')}"></label><div class="inv-grid"><label>Закупка, ₽<input name="unit_cost" type="number" min="0" step="0.01" value="0"></label><label>Продажа, ₽<input name="retail_price" type="number" min="0" step="0.01" value="0" required></label><label>Количество<input name="initial_quantity" type="number" min="0" step="1" value="0"></label><label>Ед.<input name="unit" value="шт"></label></div>${photoReady?'<p class="muted">Фотографии доступны только сотрудникам мастерской.</p>':'<p class="muted">Загрузка фото станет доступна после обновления сервера.</p>'}<label>Основное фото<input name="photo" ${photoReady?'':'disabled'} type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="inv-check"><input name="category_primary" ${photoReady?'':'disabled'} type="checkbox"> Сделать это фото основным и для категории</label><p class="muted">Штрих-код FastGo будет присвоен автоматически после сохранения.</p></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="new-part-save">Создать и принять</button>`);
+  const progress=document.createElement('p');progress.className='muted';progress.setAttribute('role','status');progress.setAttribute('aria-live','polite');d.querySelector('.inv-body').appendChild(progress);
   let savedPart=null,stockReceived=false;const initialReceiptId=crypto.randomUUID();
   $('new-part-save').onclick=async()=>{
     const form=$('new-part-form'),f=new FormData(form);const initial=Number(f.get('initial_quantity')||0);if(!form.reportValidity())return;if(!Number.isInteger(initial)||initial<0)return notice('Количество должно быть целым','bad');
     try{
       $('new-part-save').disabled=true;
+      progress.textContent=savedPart?'Товар уже создан. Продолжаем приёмку…':'Сохраняем товар…';
       const part=savedPart||(savedPart=await api('part_save',{name:f.get('name'),category:f.get('category'),model:f.get('model'),sku:f.get('sku'),unit_cost:Number(f.get('unit_cost')||0),retail_price:Number(f.get('retail_price')||0),unit:f.get('unit')||'шт'}));
-      if(initial>0&&!stockReceived){await api('stock',{part_id:part.id,movement_type:'receipt',quantity:initial,note:'Первичная ручная приёмка',request_id:initialReceiptId});stockReceived=true;}
-      const file=f.get('photo');if(file?.size)await uploadPartPhoto(part,file,f.get('category_primary')==='on');
+      if(initial>0&&!stockReceived){progress.textContent='Товар создан. Записываем приход…';await api('stock',{part_id:part.id,movement_type:'receipt',quantity:initial,note:'Первичная ручная приёмка',request_id:initialReceiptId});stockReceived=true;}
+      const file=f.get('photo');if(file?.size){progress.textContent='Сохраняем приватное фото…';await uploadPartPhoto(part,file,f.get('category_primary')==='on');}
       catalogCache=null;closeDialog();notice(`Товар создан: ${part.barcode}`);
       if(confirm(`Штрих-код ${part.barcode} создан. Напечатать этикетку?`))await printPartLabel(part);
-    }catch(e){notice(e.message,'bad');$('new-part-save').disabled=false;}
+    }catch(e){progress.textContent=(stockReceived?'Приход сохранён. ':savedPart?'Товар создан. ':'')+e.message+' Данные формы сохранены; повторное нажатие продолжит операцию.';notice(e.message,'bad');$('new-part-save').disabled=false;}
   };
 }
 
