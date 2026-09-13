@@ -29,7 +29,8 @@ function operationStatus_(p,actor){
 }
 function reliableRoute_(action,p,actor){
   if(!actor.id||!['owner','admin','receiver','manager','mechanic'].includes(actor.role))throw httpError_('Нет доступа',403);
-  const lock=LockService.getScriptLock();lock.waitLock(25000);
+  const lock=LockService.getScriptLock();
+  try{lock.waitLock(25000);}catch(e){throw httpError_('База занята другой операцией. Повторите эту же операцию через несколько секунд.',503);}
   try{
     ROW_CACHE={};TX=null;
     if(action==='health')return health_();

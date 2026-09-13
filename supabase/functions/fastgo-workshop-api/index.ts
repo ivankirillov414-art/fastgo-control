@@ -47,7 +47,7 @@ function googleClient(c,actor){
           try{target=new URL(location||'');}catch{fail('Google не передал адрес ответа',502);}
           // ContentService uses a one-time response URL. Fetch it with a new
           // credential-free GET, and never forward the API secret elsewhere.
-          if(![302,303].includes(r.status)||target.protocol!=='https:'||target.hostname!=='script.googleusercontent.com'||target.username||target.password||target.port)fail('Неожиданное перенаправление Google API',502);
+          if((redirects===0&&![302,303].includes(r.status))||target.protocol!=='https:'||target.hostname!=='script.googleusercontent.com'||target.username||target.password||target.port){const destination=target.hostname==='script.google.com'?'script':target.hostname==='accounts.google.com'?'login':target.hostname==='script.googleusercontent.com'?'content':'other';fail('Неожиданное перенаправление Google API. Код: '+stage+'/'+r.status+'/'+destination+'/'+action,502);}
           await r.body?.cancel();
           stage='content';r=await fetch(target.href,{method:'GET',headers:{'Cache-Control':'no-store'},redirect:'manual',signal});
         }

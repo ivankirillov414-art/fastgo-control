@@ -20,7 +20,8 @@ function doPost(e) {
     const result = route_(action, p, actor);
     return json_({data:result});
   } catch (err) {
-    return json_({error:err && err.message ? err.message : 'Ошибка FastGo', status:Number(err && err.status) || 400});
+    const status=Number(err && err.status),known=status>=400&&status<600;
+    return json_({error:known?err.message:'Временный сбой Google. Повторите эту же операцию.',status:known?status:503});
   }
 }
 
@@ -90,7 +91,7 @@ function role_(a){ return String(a.role||''); }
 function requireManager_(a){ if(!['owner','admin','receiver','manager'].includes(role_(a))) throw httpError_('Нет доступа',403); }
 function requireAdmin_(a){ if(!['owner','admin'].includes(role_(a))) throw httpError_('Нет права изменять справочник',403); }
 function httpError_(m,s){ const e=new Error(m); e.status=s; return e; }
-function json_(obj){ return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
+function json_(obj){ return ContentService.createTextOutput(JSON.stringify({...obj,response_id:Utilities.getUuid()})).setMimeType(ContentService.MimeType.JSON); }
 
 
 function fullName_(p){ return [p.last_name,p.first_name,p.middle_name].filter(Boolean).join(' ').trim(); }
@@ -447,4 +448,3 @@ function contact_(p,actor){
   addEvent_(kind,p.id,'contact',actor,{});
   return kind==='storage'?mapStorage_(find_(SHEETS.storage,'storage_id',p.id)):mapRepair_(find_(SHEETS.repairs,'repair_id',p.id));
 }
-

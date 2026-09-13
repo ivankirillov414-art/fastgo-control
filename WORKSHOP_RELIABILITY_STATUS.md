@@ -3,13 +3,13 @@
 ## Applied to production during this task
 
 The workshop interface is published through GitHub Pages, and
-`fastgo-workshop-api` version 12 is active with release
+`fastgo-workshop-api` version 13 is active with release
 `workshop-autonomous-2026-09-13`. The storage and service proxies return this
 release too. Unauthenticated catalogue requests remain rejected with HTTP 401.
 The published employee sign-in screen renders successfully; no application
 console errors were observed. A real owner sign-in with the FastGo account succeeded on 2026-09-13.
 The home view and inventory loaded real Google data. Some subsequent reads
-intermittently return a non-JSON Google response; version 12 adds bounded, credential-free ContentService redirects and retries
+intermittently return a non-JSON Google response; version 13 adds bounded, credential-free ContentService redirects and retries
 for reads only, with fixed response
 classifications without exposing bodies, tokens, secrets or redirect URLs.
 Business mutations and the full employee lifecycle remain unverified.
@@ -45,7 +45,7 @@ by blank lines. The manifest preserves the existing web app execution identity
 and audience. The additional outbound-request scope has now been granted.
 The current repository Google source (including barcode/model validation and
 formula-stable backup verification) is saved and was verified by full editor
-readback. The current regression suite passed 70 tests, including response redirects,
+readback. The current regression suite passed 72 tests, including response redirects,
 read retries, write non-replay and diagnostic redaction.
 A separate wildcard test run also included the old `workshop-api.test.mjs`
 fixture, which still mocks the former direct-Supabase backend and lacks the
@@ -66,11 +66,21 @@ as binaries, in these workbook copies.
 The existing web app deployment was updated from version 1 to version 2 at
 05:42 UTC, preserving its URL, owner execution identity and audience. The
 deployment URL matches `workshop_backend_config.sheets_api_url`. This publishes
-the prepared atomic-write and private-photo implementation. The app still
+the prepared atomic-write and private-photo implementation. Versions 3 and 4
+subsequently preserve retry IDs on busy locks/unclassified Google failures
+(HTTP 503), and attach a fresh response ID to ContentService responses. Version
+4 is the current deployment; its source was verified by full editor readback.
+The app still
 gates these features by server capabilities; authenticated live verification
-remains necessary. The 20 originals have not yet been
-copied by this task; 4 are unlinked to orders. Real employee login, real camera,
-thermal printer and daily execution remain unverified.
+remains necessary. A real owner session confirmed backup status and started migration. At least
+3 of 20 objects have confirmed migrated manifest entries (migration is still
+in progress); 4 are unlinked to orders. A test intake with serial
+`FASTGO-QA-20260913` was created once as repair
+`a918df5b-3c16-40d9-8349-fc074d05d85f`, intake `FGI-0007`, request
+`d24c478b-5398-495a-9903-c52c1d74071c`. The UI disabled repeat submission while
+the request was pending. The full repair/payment/issue and stock/sale cycles
+remain in progress. Real camera, thermal printer and daily execution remain
+unverified.
 
 Supabase continues to provide authentication, roles, connection configuration
 and the retained old objects. It has not been removed.
