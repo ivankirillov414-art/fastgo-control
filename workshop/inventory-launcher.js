@@ -1,3 +1,4 @@
+import {icon} from './icons.js';
 import {api} from './core.js';
 let role=null;
 async function enhance(){
@@ -6,7 +7,9 @@ async function enhance(){
   if(!['owner','admin','receiver','manager'].includes(role))return;
   const sales=document.querySelector('[data-sales-nav]');
   let b=document.getElementById('inventory-sale-fab');
-  if(!b){b=document.createElement('button');b.id='inventory-sale-fab';b.type='button';b.innerHTML='<span aria-hidden="true">▦</span> Продажа';b.onclick=()=>document.querySelector('[data-sales-nav]')?.click();document.body.appendChild(b);}
+  if(!b){b=document.createElement('button');b.id='inventory-sale-fab';b.type='button';b.innerHTML=icon('sale')+' Продажа';b.onclick=()=>document.querySelector('[data-sales-nav]')?.click();document.body.appendChild(b);}
+  const target=document.getElementById('home-sale-slot')||document.getElementById('workspace');
+  if(target&&b.parentElement!==target)target.prepend(b);
   b.hidden=!sales;
 }
 const observer=new MutationObserver(()=>setTimeout(enhance,60));observer.observe(document.documentElement,{childList:true,subtree:true});
