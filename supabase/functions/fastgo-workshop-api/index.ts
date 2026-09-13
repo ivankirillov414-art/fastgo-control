@@ -35,7 +35,14 @@ async function config(){
 function googleClient(c,actor){
   return async(action,params={})=>{
     let r;try{r=await fetch(c.sheets_api_url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({secret:c.sheets_api_secret,action,params:safeText(params),actor}),redirect:'follow',signal:AbortSignal.timeout(65000)});}catch{fail('Google не ответил. Обновите карточку перед повторением операции.',504);}
-    const raw=await r.text();let j;try{j=JSON.parse(raw);}catch{fail('Google вернул не данные. Проверьте доступ Apps Script к таблице.',502);}
+    const raw=await r.text();let j;try{j=JSON.parse(raw);}catch{
+      // Fixed classifications only: never expose response bodies, redirect
+      // query strings, access tokens or the shared secret in diagnostics.
+      const kind=/Moved Temporarily|The document has moved/i.test(raw)?'redirect':/accounts\.google\.com|Sign in with Google/i.test(raw)?'sign_in':/Too Many Requests|quota|rate limit/i.test(raw)?'rate_limit':/Sorry, unable to open|Page Not Found/i.test(raw)?'not_found':/<html|<!doctype html/i.test(raw)?'html':'invalid_json';
+      const host=new URL(r.url||c.sheets_api_url).hostname;
+      const source=host==='script.googleusercontent.com'?'content':host==='script.google.com'?'script':host==='accounts.google.com'?'login':'other';
+      fail('Google вернул не данные. Проверьте доступ Apps Script к таблице. Код: '+source+'/'+kind+'/'+r.status,502);
+    }
     if(!r.ok)fail('Google временно недоступен',502);
     if(j?.error){const code=Number(j.status);fail(String(j.error).replaceAll(c.sheets_api_secret,'[скрыто]'),code>=400&&code<600?code:400);}
     if(!j||Array.isArray(j)||!Object.prototype.hasOwnProperty.call(j,'data')||j.data===null)fail('Google не подтвердил результат операции. Ответ проверки доступности не является результатом записи. Сверьте карточку перед повторением.',502);

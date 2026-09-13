@@ -3,12 +3,15 @@
 ## Applied to production during this task
 
 The workshop interface is published through GitHub Pages, and
-`fastgo-workshop-api` version 6 is active with release
-`workshop-reliability-2026-09-12`. The storage and service proxies return this
+`fastgo-workshop-api` version 8 is active with release
+`workshop-autonomous-2026-09-13`. The storage and service proxies return this
 release too. Unauthenticated catalogue requests remain rejected with HTTP 401.
 The published employee sign-in screen renders successfully; no application
-console errors were observed. This does not verify an authenticated employee
-session.
+console errors were observed. A real owner sign-in with the FastGo account succeeded on 2026-09-13.
+The home view and inventory loaded real Google data. Some subsequent reads
+intermittently return a non-JSON Google response; version 8 adds fixed response
+classifications without exposing bodies, tokens, secrets or redirect URLs.
+Business mutations and the full employee lifecycle remain unverified.
 
 Legacy inventory writes are blocked by statement triggers on `parts`,
 `stock_movements`, legacy receipt/sales headers and lines, and workshop sales
@@ -23,7 +26,7 @@ values/formulas match. Metadata confirms 18 tabs and both copies are unshared.
 This is a bounded restore check, not an authenticated application test or a
 claim that a daily trigger has executed.
 
-## Implementation awaiting Google activation
+## Google activation completed on 2026-09-13
 
 Atomic Google mutations and recovery fence; private product/model/category
 photos; verified migration handler for 20 old objects; daily backup trigger and
@@ -46,12 +49,24 @@ A separate wildcard test run also included the old `workshop-api.test.mjs`
 fixture, which still mocks the former direct-Supabase backend and lacks the
 gateway's text-decoder globals. That legacy fixture fails and is not part of
 the current Google regression workflow; it still needs migration or retirement.
-`installReliability` now reports HTTP 403 because Google Sheets API is disabled
-in the associated Cloud project. Installation has not completed, and the live
-web app deployment has not been changed. Enabling Sheets API, completing
-installation and updating the existing deployment remain
-required for atomic writes, product photographs and photo migration. The app
-gates these features by server capabilities. The 20 originals have not yet been
+Google Sheets API v4 was enabled in the existing project after the owner's
+explicit approval of the API terms. `installReliability` completed successfully
+on 2026-09-13 (05:38 UTC). The trigger list shows exactly one time-based
+`dailyBackup` trigger. The code configures it daily at hour 03 in
+Asia/Yekaterinburg; no scheduled execution has occurred yet.
+
+The installation verified a complete workbook digest for backup
+`1a5TxaydZxhzdRlKdowwAXRS-TPCFvq5xjnvC8ibPXZc` and restored it to the isolated copy
+`1fAelWKaS6e5tX-sYKRzUIaInOOqcBjgNrzH6v_dLSkQ`. Both have only the existing
+owner's permission and are not shared. Photos remain referenced, not duplicated
+as binaries, in these workbook copies.
+
+The existing web app deployment was updated from version 1 to version 2 at
+05:42 UTC, preserving its URL, owner execution identity and audience. The
+deployment URL matches `workshop_backend_config.sheets_api_url`. This publishes
+the prepared atomic-write and private-photo implementation. The app still
+gates these features by server capabilities; authenticated live verification
+remains necessary. The 20 originals have not yet been
 copied by this task; 4 are unlinked to orders. Real employee login, real camera,
 thermal printer and daily execution remain unverified.
 

@@ -9,6 +9,8 @@ No secret values are in source control. Preserve the existing script property
 1. Replace `Code.gs` and add `Reliability.gs` from this directory.
 2. Use `appsscript.json` from this directory. Its scopes are Sheets, Drive,
    outbound requests to the Sheets API and management of this script's triggers.
+   It also enables the Sheets v4 advanced service. The existing project is
+   [FastGo API](https://script.google.com/home/projects/1veLA4VEcDWNzsxlr51E4VdES-fpDy7dbiO12apikOIcKo7bKMm0KphPh/edit).
 3. Run `installReliability` once as the script owner. Grant the listed Google
    permissions. It checks API access, creates two journal/photo metadata tabs,
    installs one daily trigger for 03:00 Asia/Yekaterinburg, makes and verifies a
