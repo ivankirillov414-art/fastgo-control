@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: shadow_army
+      POSTGRES_USER: shadow
+      POSTGRES_PASSWORD: shadow
+    ports:
+      - "5432:5432"
+    volumes:
+      - shadow_army_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shadow -d shadow_army"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  shadow_army_pgdata:
