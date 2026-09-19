@@ -110,8 +110,21 @@ async function main(req){
     const authorization=req.headers.get('authorization')||'';if(!/^Bearer [^\s]+$/i.test(authorization))fail('Войдите в приложение',401);
     const u=await fetch(BASE+'/auth/v1/user',{headers:{apikey:KEY,Authorization:authorization},signal:AbortSignal.timeout(15000)});if(!u.ok)fail('Сессия истекла. Войдите снова',401);
     const user=await u.json();if(!uuid(user.id))fail('Неверная сессия',401);
-    const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     const input=await readBody(req),action=text(input.action,40);let p=input.params||{};if(Array.isArray(p)||typeof p!=='object')fail('Некорректные параметры');p={...p};
+    if(action==='request_access'){
+      if(!user.email_confirmed_at)fail('Подтвердите почту перед запросом доступа',403);
+      const query='profile_id=eq.'+encodeURIComponent(user.id)+'&select=profile_id,active';
+      let member=(await db('workshop_members',query))?.[0];
+      if(!member){
+        const name=text(user.user_metadata?.full_name||user.user_metadata?.name||user.email,200);
+        await db('profiles','','POST',{id:user.id,full_name:name,role:'customer'},{Prefer:'resolution=ignore-duplicates'});
+        // Fixed inactive role. Never accept role, active or identity from caller.
+        await db('workshop_members','','POST',{profile_id:user.id,name,role:'mechanic',active:false,tags:[]},{Prefer:'resolution=ignore-duplicates'});
+        member=(await db('workshop_members',query))?.[0];
+      }
+      return out({data:{active:member?.active===true}});
+    }
+    const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
     if(action==='me'){const c=await config();return out({data:{...me,email:user.email,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(['member_update','staff_create'].includes(action)){
