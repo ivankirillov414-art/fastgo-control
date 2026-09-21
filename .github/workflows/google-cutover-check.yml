@@ -27,13 +27,14 @@ jobs:
       - name: Live public endpoint and authentication boundaries
         run: |
           python - <<'PY'
-          import urllib.request,urllib.error,json
+          import urllib.request,urllib.error,json,re,pathlib
+          expected_release=re.search(r"const RELEASE = '([^']+)'",pathlib.Path('supabase/functions/fastgo-workshop-api/index.ts').read_text()).group(1)
           base='https://oqgpjfikjpcplnxueoki.supabase.co/functions/v1/'
           for slug in ['fastgo-workshop-api','fastgo-storage-api','fastgo-service-api']:
               with urllib.request.urlopen(base+slug,timeout=25) as r:
                   health=json.load(r)
                   assert health.get('backend') in ('GOOGLE_SHEETS_DRIVE','POSTGRES_GOOGLE_MIRROR')
-                  assert health.get('release')=='workshop-autonomous-2026-09-13'
+                  assert health.get('release')==expected_release
                   assert health.get('upstream_checked') is False
               req=urllib.request.Request(base+slug,data=b'{"action":"catalog"}',headers={'Content-Type':'application/json'})
               try:
