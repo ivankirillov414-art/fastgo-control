@@ -1,0 +1,28 @@
+name: Workshop browser layout
+on:
+  push:
+    branches: [main]
+    paths: ['workshop/**','workshop.html','workshop.css','scripts/check-workspace-browser.cjs','.github/workflows/workspace-browser.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix /tmp/fastgo-browser playwright@1.62.1
+      - run: /tmp/fastgo-browser/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
+      - run: NODE_PATH=/tmp/fastgo-browser/node_modules node scripts/check-workspace-browser.cjs ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workshop-${{ matrix.browser }}
+          path: browser-results/
