@@ -107,3 +107,21 @@
 }
 
 @media screen and (max-width:760px){.topbar{gap:8px}.topbar .refresh-data{margin-left:auto;min-height:36px;font-size:11px;padding:7px 10px}.topbar>span:not(.crumb){display:none}}
+
+/* Flexible workspace: keep navigation readable without horizontal scrolling. */
+@media screen {
+ .shell{grid-template-columns:clamp(240px,19vw,280px) minmax(0,1fr)}
+ .sidebar{min-width:0;overflow-x:hidden;overflow-y:auto;height:100vh;height:100dvh;scrollbar-width:none}
+ .sidebar::-webkit-scrollbar{width:0;height:0}
+ .sidebar>*{flex-shrink:0;min-width:0;max-width:100%}
+ .sidebar .nav a{white-space:normal;overflow-wrap:anywhere}
+ .sidebar .brand small{white-space:normal}
+ .workspace{max-width:none;width:100%}
+ .records{table-layout:fixed}
+ .records th,.records td{overflow-wrap:anywhere;white-space:normal}
+ .records .amount,.records .btn{white-space:normal}
+ .order-board{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));grid-auto-columns:auto;overflow:visible}
+ .board-controls{flex-wrap:wrap}
+ @media(max-height:800px) and (min-width:761px){.sidebar{padding-block:16px}.sidebar-note{display:none}.nav{margin-top:15px;gap:3px}.nav a{padding-block:8px;min-height:40px}.profile{padding-top:12px}}
+ @media(max-width:760px){.shell{display:block}.sidebar{display:none}.workspace{padding-top:22px}.records{table-layout:auto}.order-board{grid-template-columns:minmax(0,1fr)}}
+}

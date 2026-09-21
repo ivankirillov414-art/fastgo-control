@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-autonomous-2026-09-13';
+const RELEASE = 'workshop-workspace-2026-09-21';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -93,7 +93,7 @@ function recordDates(r){if(!r)return r;for(const k of ['starts_on','planned_retu
 function required(p,fields){for(const f of fields)if(!text(p[f]))fail('Заполните поле '+f);}
 function lines(items){if(!Array.isArray(items)||items.length>200)fail('Неверный список работ / запчастей');return items.map(x=>{required(x,['name']);return {...x,name:text(x.name,200),quantity:integer(x.quantity,'количество',1,1000),price:numeric(x.price,'цену')};});}
 const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
-const writeActions=new Set(['part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const writeActions=new Set(['storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','sales','stock','sale','payment','extend','contact','legacy']);
 const administrationActions=new Set(['part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
 const terminal=new Set(['issued','returned','cancelled']);
@@ -140,12 +140,15 @@ async function main(req){
     }
     if(!readActions.has(action)&&!writeActions.has(action))fail(action==='part_photo_upload'?'Загрузка фото товара пока отключена: текущий скрипт делает их публичными. Фото приёмок работают.':'Неизвестная операция',400);
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
+    if(['legal','legal_save'].includes(action)&&me.role!=='owner')fail('Реквизиты доступны только владельцу',403);
+    if(['storage_close','storage_delete'].includes(action)&&me.role!=='receiver')fail('Действие доступно только мастеру-приёмщику',403);
     const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
       async put(path,bytes,mime){const r=await fetch(BASE+'/storage/v1/object/fastgo-workshop-private/'+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':mime},body:bytes,signal:AbortSignal.timeout(30000)});if(!r.ok&&r.status!==409)fail('Не удалось сохранить файл',503);},
       async sign(path){const r=await rest('/storage/v1/object/sign/fastgo-workshop-private/'+path.split('/').map(encodeURIComponent).join('/'),'POST',{expiresIn:300});return BASE+'/storage/v1'+r.signedURL;}
     }}):remote;
+    if(['storage_close','storage_delete'].includes(action)&&c.storage_mode!=='postgres')fail('Обновление хранения ещё не установлено',503);
     const backend=c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE';
     if(action==='health')return out({data:{...await g('health'),release:RELEASE}});
     if(action==='stock')integer(p.quantity,'количество');
@@ -187,7 +190,7 @@ async function main(req){
     if(action==='overview'&&!manager(me)){
       const d=await g('list',{kind:'repair',status:'active',limit:100});const today=new Date().toISOString().slice(0,10);return out({data:{repairs:d.count,ready:d.items.filter(x=>x.status==='ready').length,overdue:d.items.filter(x=>x.promised_date&&x.promised_date<today&&x.status!=='ready').length,low_stock:0}});
     }
-    if(['get','update','contact','payment','extend','upload','documents','signed_url','get_url'].includes(action)&&!uuid(p.id)&&!p.qr_token)fail('Неверная ссылка на карточку');
+    if(['storage_close','storage_delete','get','update','contact','payment','extend','upload','documents','signed_url','get_url'].includes(action)&&!uuid(p.id)&&!p.qr_token)fail('Неверная ссылка на карточку');
     if(p.qr_token&&!p.id){if(!uuid(p.qr_token))fail('Неверный QR');const t=p.kind==='storage'?'storage_intakes':'service_repairs';const r=await db(t,'qr_token=eq.'+encodeURIComponent(p.qr_token)+'&select=id');if(!r?.[0])fail('QR не найден',404);p.id=r[0].id;}
     if(action==='get'){
       const d=await g('get',p);d.record=recordDates(d.record);if(!manager(me))d.payments=[];
@@ -217,7 +220,8 @@ async function main(req){
       required(p,['name']);const existing=p.id?(await g('catalog')).parts.find(x=>x.id===p.id):null;if(p.id&&!existing)fail('Товар не найден',404);
       p={...existing,...p};p.unit_cost=numeric(p.unit_cost??0,'закупочную цену');p.retail_price=numeric(p.retail_price??0,'розничную цену');p.name=text(p.name,200);p.category=text(p.category,100);p.model=text(p.model,120);p.sku=text(p.sku,100);
     }
-    if(action==='catalog_save'){if(!uuid(p.id))fail('Неверная услуга');required(p,['title']);p.labor_price=numeric(p.labor_price,'стоимость работы');}
+    if(action==='catalog_save'){if(!uuid(p.id))fail('Неверная услуга');required(p,['title']);p.category=text(p.category,100);p.labor_price=numeric(p.labor_price,'стоимость работы');}
+    if(['storage_close','storage_delete'].includes(action)){if(p.kind!=='storage')fail('Выберите хранение');required(p,['note']);if(!Number.isInteger(Number(p.revision)))fail('Нужна версия карточки');}
     if(action==='legal_save'){required(p,['legal_name']);}
     if(action==='create'){
       required(p,['last_name','first_name','phone','brand','model']);if(!/^\+7\d{10}$/.test(p.phone))fail('Введите полный телефон');if(!uuid(p.request_id))fail('Неверный код приёмки');
@@ -243,6 +247,7 @@ async function main(req){
           if(!['accepted','diagnostics','waiting_parts','repair','ready','issued','cancelled'].includes(p.status||r.status))fail('Неверный статус');
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');
+          if(p.status==='returned'&&p.status!==r.status&&me.role!=='receiver')fail('Закрыть хранение может только мастер-приёмщик',403);
           if(p.status==='returned'&&(r.status!=='ready_return'||Number(r.paid_amount)<Number(r.storage_amount)||(d.linked||[]).some(x=>!terminal.has(x.status))))fail('Для выдачи нужны готовность, оплата и завершение связанных ремонтов',409);
         }
       }

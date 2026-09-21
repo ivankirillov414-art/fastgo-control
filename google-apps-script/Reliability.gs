@@ -5,7 +5,7 @@ const OP_SHEET = 'Операции API';
 const PHOTO_SHEET = 'Фото товаров';
 const OP_HEADERS = ['request_id','actor_id','action','fingerprint','result','created_at'];
 const PHOTO_HEADERS = ['photo_id','product_id','category','path','created_at','sha256'];
-const MUTATIONS = new Set(['create','update','payment','documents','contact','extend','stock','sale','part_save','part_photo_upload','part_photo_primary','catalog_save','legal_save','upload','migrate_legacy_file']);
+const MUTATIONS = new Set(['storage_close','storage_delete','create','update','payment','documents','contact','extend','stock','sale','part_save','part_photo_upload','part_photo_primary','catalog_save','legal_save','upload','migrate_legacy_file']);
 let TX = null;
 
 function stable_(v){
@@ -122,6 +122,8 @@ function validateOrderUpdate_(p,actor){
   const before=normStatus_(r['Статус'],kind),status=p.status||before,closed=['issued','returned','cancelled'];
   if(closed.includes(before)&&!(role_(actor)==='owner'||role_(actor)==='admin')||closed.includes(before)&&(!String(p.reopen_reason||'').trim()||status!==(kind==='storage'?'stored':'accepted')))throw httpError_('Закрытый заказ может открыть администратор с причиной',409);
   if(kind==='storage'){
+    if(before==='deleted')throw httpError_('Приёмка удалена',409);
+    if(status==='returned'&&status!==before&&role_(actor)!=='receiver')throw httpError_('Закрыть хранение может только мастер-приёмщик',403);
     if(!['accepted','stored','ready_return','returned','cancelled'].includes(status))throw httpError_('Неверный статус',400);
     if(status==='returned'&&(before!=='ready_return'||num_(r['Оплачено'])<num_(r['Сумма'])||rows_(SHEETS.repairs).some(x=>x.storage_id===p.id&&!closed.includes(normStatus_(x['Статус'],'repair')))))throw httpError_('Для выдачи нужны готовность, полная оплата и завершённые ремонты',409);
     return;

@@ -1,5 +1,5 @@
 // Persist only hashes and operation identifiers; never customer details or photos.
-export const mutations=new Set(['create','update','contact','extend','payment','stock','sale','part_save','catalog_save','legal_save','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+export const mutations=new Set(['storage_close','storage_delete','create','update','contact','extend','payment','stock','sale','part_save','catalog_save','legal_save','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 export function canonical(value){if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';return JSON.stringify(value);}
 export async function operation(storage,actor,action,params){
   const body={...params};delete body.request_id;

@@ -1,5 +1,5 @@
 import {createNativeEngine} from './native-engine.js';
-const writes=new Set(['part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const writes=new Set(['storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 export function nativeClient({db,actor,google,storage}){
  let statePromise;

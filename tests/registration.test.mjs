@@ -47,8 +47,8 @@ test('signup stores immediate session but never stores passwords or authorizatio
  assert.deepEqual(await signUp(' Employee ',' a@example.test ','long-password-123'),{signedIn:true});
  assert.equal(sessionAvailable(),true);assert.deepEqual(sent.data,{full_name:'Employee'});assert.equal(sent.email,'a@example.test');assert.ok(!JSON.stringify([...values]).includes('long-password'));clearSession();
 });
-test('email confirmation response is not treated as an authenticated session',async()=>{
- globalThis.fetch=async()=>Response.json({id,identities:[]});assert.deepEqual(await signUp('Employee','a@example.test','long-password-123'),{signedIn:false});assert.equal(sessionAvailable(),false);
+test('email confirmation response is rejected because FastGo requires immediate sign-in',async()=>{
+ globalThis.fetch=async()=>Response.json({id,identities:[]});await assert.rejects(signUp('Employee','a@example.test','long-password-123'),/подтверждение почты/);assert.equal(sessionAvailable(),false);
 });
 test('weak passwords rejected before request and duplicate account errors translated',async()=>{
  globalThis.fetch=async()=>{throw new Error('Must not request')};await assert.rejects(signUp('Employee','a@example.test','short'),/12/);

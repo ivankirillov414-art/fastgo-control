@@ -52,6 +52,8 @@ function routeUnlocked_(action,p,actor){
     case 'payment': requireManager_(actor); return payment_(p,actor);
     case 'documents': return documents_(p,actor);
     case 'upload': return upload_(p,actor);
+    case 'storage_close': return finishStorage_(p,actor,false);
+    case 'storage_delete': return finishStorage_(p,actor,true);
     case 'extend': requireManager_(actor); return extend_(p,actor);
     case 'contact': return contact_(p,actor);
     case 'overview': return overview_();
@@ -60,8 +62,8 @@ function routeUnlocked_(action,p,actor){
     case 'legacy': return [];
     case 'import_legacy': throw httpError_('Старые заказы уже перенесены в рабочую базу',409);
     case 'catalog_save': requireAdmin_(actor); return catalogSave_(p);
-    case 'legal': return legal_();
-    case 'legal_save': requireAdmin_(actor); return legalSave_(p);
+    case 'legal': requireOwner_(actor); return legal_();
+    case 'legal_save': requireOwner_(actor); return legalSave_(p);
     default: throw httpError_('Операция не поддерживается: '+action,400);
   }
 }
@@ -89,6 +91,7 @@ function num_(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
 function bool_(v){ return v===true || String(v).toLowerCase()==='true' || String(v).toLowerCase()==='да'; }
 function role_(a){ return String(a.role||''); }
 function requireManager_(a){ if(!['owner','admin','receiver','manager'].includes(role_(a))) throw httpError_('Нет доступа',403); }
+function requireOwner_(a){if(role_(a)!=='owner')throw httpError_('Реквизиты доступны только владельцу',403);}
 function requireAdmin_(a){ if(!['owner','admin'].includes(role_(a))) throw httpError_('Нет права изменять справочник',403); }
 function httpError_(m,s){ const e=new Error(m); e.status=s; return e; }
 function json_(obj){ return ContentService.createTextOutput(JSON.stringify({...obj,response_id:Utilities.getUuid()})).setMimeType(ContentService.MimeType.JSON); }
@@ -188,7 +191,7 @@ function ymd_(v){
 }
 function overview_(){
   const repairs=rows_(SHEETS.repairs).filter(r=>r.repair_id).map(mapRepair_);
-  const storage=rows_(SHEETS.storage).filter(r=>r.storage_id).map(mapStorage_);
+  const storage=rows_(SHEETS.storage).filter(r=>r.storage_id&&r['Статус']!=='deleted').map(mapStorage_);
   const products=rows_(SHEETS.products).filter(r=>r.product_id&&r['Активен']!==false);
   const payments=rows_(SHEETS.payments).filter(r=>r.payment_id);
   const today=Utilities.formatDate(new Date(),'Asia/Yekaterinburg','yyyy-MM-dd');
@@ -211,7 +214,7 @@ function overview_(){
   };
 }
 function customers_(p){
-  const intakes=rows_(SHEETS.intakes).filter(r=>r.intake_id), repairs=rows_(SHEETS.repairs).filter(r=>r.repair_id), storage=rows_(SHEETS.storage).filter(r=>r.storage_id);
+  const intakes=rows_(SHEETS.intakes).filter(r=>r.intake_id), repairs=rows_(SHEETS.repairs).filter(r=>r.repair_id), storage=rows_(SHEETS.storage).filter(r=>r.storage_id&&r['Статус']!=='deleted');
   let items=rows_(SHEETS.clients).filter(r=>r.client_id).map(c=>{
     const ci=intakes.filter(i=>String(i.client_id)===String(c.client_id));
     const intakeIds=new Set(ci.map(i=>String(i.intake_id)));
@@ -239,7 +242,7 @@ function finance_(p){
   const total=mapped.reduce((s,x)=>s+x.amount,0), sum=m=>mapped.filter(x=>x.method===m).reduce((s,x)=>s+x.amount,0), offset=Math.max(0,Math.floor(num_(p.offset))), limit=100;
   return {items:mapped.slice(offset,offset+limit),count:mapped.length,offset,limit,total:total,cash:sum('cash'),card:sum('card'),transfer:sum('transfer')};
 }
-function catalogSave_(p){ const r=find_(SHEETS.services,'service_id',p.id); if(!r) throw httpError_('Услуга не найдена',404); patchRow_(SHEETS.services,r.__row,{'Работа':String(p.title||r['Работа']),'Работа, ₽':num_(p.labor_price),updated_at:now_()}); return mapService_(find_(SHEETS.services,'service_id',p.id)); }
+function catalogSave_(p){ const r=find_(SHEETS.services,'service_id',p.id); if(!r) throw httpError_('Услуга не найдена',404); patchRow_(SHEETS.services,r.__row,{'Работа':String(p.title||r['Работа']),'Категория':String(p.category||r['Категория']||''),'Работа, ₽':num_(p.labor_price),updated_at:now_()}); return mapService_(find_(SHEETS.services,'service_id',p.id)); }
 function legal_(){ return Object.fromEntries(rows_(SHEETS.legal).filter(r=>r['Ключ']).map(r=>[r['Ключ'],r['Значение']])); }
 function legalSave_(p){ const fields=['legal_name','full_name','inn','ogrnip','registration_address','bank_name','bik','correspondent_account','settlement_account','phone','email']; fields.forEach(k=>{ let r=find_(SHEETS.legal,'Ключ',k); if(r) patchRow_(SHEETS.legal,r.__row,{'Значение':String(p[k]||'')}); else append_(SHEETS.legal,{'Ключ':k,'Значение':String(p[k]||''),'Примечание':''}); }); return legal_(); }
 
@@ -259,7 +262,7 @@ function canEditOrder_(actor,kind,row){
   if(isManager_(actor)) return true;
   return role_(actor)==='mechanic' && kind==='repair' && String(row.master_id||'')===String(actor.id||'');
 }
-function requireOrderAccess_(actor,kind,row){ if(!canEditOrder_(actor,kind,row)) throw httpError_('Нет доступа к этой карточке',403); }
+function requireOrderAccess_(actor,kind,row){ if(row['Статус']==='deleted')throw httpError_('Приёмка удалена',409); if(!canEditOrder_(actor,kind,row)) throw httpError_('Нет доступа к этой карточке',403); }
 function normStatus_(v,kind){
   const repair={'Принят':'accepted','Принято':'accepted','Новая':'accepted','Диагностика':'diagnostics','На диагностике':'diagnostics','Ждём запчасти':'waiting_parts','Ожидает запчасть':'waiting_parts','В ремонте':'repair','В работе':'repair','Готов':'ready','Готово':'ready','Выдан':'issued','Отменён':'cancelled','Отменено':'cancelled'};
   const storage={'Принят':'accepted','Принято':'accepted','Новая':'accepted','На хранении':'stored','Продлено':'stored','К выдаче':'ready_return','Выдан':'returned','Возвращено':'returned','Отменён':'cancelled','Отменено':'cancelled'};
@@ -273,7 +276,7 @@ function humanStatus_(v,kind){
 function list_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair';
   if(role_(actor)==='mechanic'&&kind==='storage') throw httpError_('Нет доступа',403);
-  let items=kind==='storage'?rows_(SHEETS.storage).filter(r=>r.storage_id).map(mapStorage_):rows_(SHEETS.repairs).filter(r=>r.repair_id).map(mapRepair_);
+  let items=kind==='storage'?rows_(SHEETS.storage).filter(r=>r.storage_id&&r['Статус']!=='deleted').map(mapStorage_):rows_(SHEETS.repairs).filter(r=>r.repair_id).map(mapRepair_);
   if(role_(actor)==='mechanic') items=items.filter(x=>String(x.assigned_master_id||'')===String(actor.id||''));
   const search=String(p.search||'').toLowerCase().trim();
   if(search) items=items.filter(x=>JSON.stringify(x).toLowerCase().includes(search));
@@ -447,4 +450,22 @@ function contact_(p,actor){
   else patchRow_(SHEETS.repairs,rec.__row,{updated_at:now_(),revision:rev+1});
   addEvent_(kind,p.id,'contact',actor,{});
   return kind==='storage'?mapStorage_(find_(SHEETS.storage,'storage_id',p.id)):mapRepair_(find_(SHEETS.repairs,'repair_id',p.id));
+}
+
+function finishStorage_(p,actor,deleting){
+ if(role_(actor)!=='receiver')throw httpError_('Действие доступно только мастеру-приёмщику',403);
+ if(p.kind!=='storage')throw httpError_('Выберите хранение',400);
+ const r=find_(SHEETS.storage,'storage_id',p.id);
+ if(!r)throw httpError_('Хранение не найдено',404);
+ if(p.revision===undefined||!Number.isInteger(Number(p.revision)))throw httpError_('Нужна версия карточки',400);
+ const rev=assertRevision_(r,p),before=normStatus_(r['Статус'],'storage'),note=String(p.note||'').trim();
+ if(before==='deleted')throw httpError_('Приёмка уже удалена',409);
+ if(!note)throw httpError_('Укажите причину или отметку о выдаче',400);
+ const linked=rows_(SHEETS.repairs).filter(x=>x.storage_id===p.id);
+ if(!deleting&&(num_(r['Оплачено'])<num_(r['Сумма'])||linked.some(x=>!['issued','cancelled'].includes(normStatus_(x['Статус'],'repair')))))throw httpError_('Сначала оплатите хранение и завершите связанные ремонты',409);
+ if(!deleting&&['returned','cancelled'].includes(before))throw httpError_('Хранение уже закрыто',409);
+ const status=deleting?'deleted':'returned',stamp=now_();
+ patchRow_(SHEETS.storage,r.__row,{'Статус':deleting?'deleted':humanStatus_(status,'storage'),'Выдано':deleting?r['Выдано']:stamp,'Примечание':note,updated_at:stamp,revision:rev+1});
+ addEvent_('storage',p.id,deleting?'storage_delete':'storage_close',actor,{number:r['Номер'],from_status:before,to_status:status,note:note,actor_name:actor.name||actor.email||actor.id});
+ return {id:p.id,status:status,revision:rev+1};
 }

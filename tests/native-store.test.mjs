@@ -17,7 +17,7 @@ function harness(){
   if(failResponse){failResponse=false;throw Error('response lost');}return {result:p.p_result};
  };
  const client=actor=>nativeClient({db,actor,google:async()=>{googleCalls++;throw Error('Google unavailable');},storage:{put:async()=>{},sign:async p=>'signed:'+p}});
- const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
+ const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
  return {call,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
@@ -39,4 +39,45 @@ test('mechanic cannot view an unrelated repair or change warehouse balance',asyn
 });
 test('new private photos can be selected and viewed while Google is unavailable',async()=>{
  const h=harness();const uploaded=await h.call('part_photo_upload',{part_id:part,content_type:'image/png',content_base64:Buffer.from([137,80,78,71,13,10,26,10]).toString('base64'),primary_for_category:true});assert.ok(uploaded.path.startsWith('native:'));const photo=await h.call('part_photo_url',{part_id:part});assert.ok(photo.url.startsWith('signed:'));assert.equal(h.googleCalls(),0);assert.equal(h.outbox.length,1);
+});
+
+const receiver={...manager,role:'receiver',name:'Приёмщик'};
+test('only receiver can close or delete storage; legal settings are owner-only',async()=>{
+ const h=harness(),r=await h.call('create',{...intake(),kind:'storage'});
+ for(const role of ['owner','admin','manager','mechanic']){
+  for(const action of ['storage_close','storage_delete'])await assert.rejects(h.call(action,{kind:'storage',id:r.id,revision:r.revision,note:'test'},{...manager,role}),/мастеру-приёмщику/);
+ }
+ for(const role of ['admin','receiver','manager','mechanic']){
+  await assert.rejects(h.call('legal',{}, {...manager,role}),/владельцу/);
+  await assert.rejects(h.call('legal_save',{legal_name:'test'},{...manager,role}),/владельцу/);
+ }
+ assert.equal(h.outbox.length,1);
+});
+test('storage close rejects debt, then completes and logs verified actor',async()=>{
+ const h=harness(),r=await h.call('create',{...intake(),kind:'storage'});
+ await assert.rejects(h.call('storage_close',{kind:'storage',id:r.id,revision:r.revision,note:'Выдано'},receiver),/оплатите/);
+ await h.call('payment',{kind:'storage',id:r.id,amount:r.storage_amount,method:'cash'});
+ const paid=(await h.call('get',{kind:'storage',id:r.id})).record;
+ const result=await h.call('storage_close',{kind:'storage',id:r.id,revision:paid.revision,note:'Выдано'},receiver);
+ assert.equal(result.status,'returned');
+ assert.equal((await h.call('list',{kind:'storage',status:'active'})).count,0);
+ const events=(await h.call('get',{kind:'storage',id:r.id})).events;
+ assert.equal(events.find(e=>e.action==='storage_close').actor_id,receiver.id);
+});
+test('storage deletion retains payments and audit, hides records, fences stale and duplicate writes',async()=>{
+ const h=harness(),r=await h.call('create',{...intake(),kind:'storage'});
+ await h.call('payment',{kind:'storage',id:r.id,amount:100,method:'cash'});
+ await assert.rejects(h.call('storage_delete',{kind:'storage',id:r.id,revision:r.revision,note:'Ошибка'},receiver),/изменена/);
+ const paid=(await h.call('get',{kind:'storage',id:r.id})).record;
+ const params={kind:'storage',id:r.id,revision:paid.revision,note:'Ошибка приёмки',request_id:randomUUID()};
+ h.failResponse();await assert.rejects(h.call('storage_delete',params,receiver),/response lost/);
+ await h.call('storage_delete',params,receiver);
+ assert.equal((await h.call('list',{kind:'storage',status:'all'})).count,0);
+ assert.equal((await h.call('overview')).storage,0);
+ assert.equal((await h.call('finance')).total,100);
+ const d=await h.call('get',{kind:'storage',id:r.id});
+ const events=d.events.filter(e=>e.action==='storage_delete');
+ assert.equal(events.length,1);assert.equal(events[0].actor_id,receiver.id);
+ assert.equal(d.record.status,'deleted');
+ await assert.rejects(h.call('update',{kind:'storage',id:r.id,revision:d.record.revision,status:'stored',reopen_reason:'restore'}),/удалена/);
 });
