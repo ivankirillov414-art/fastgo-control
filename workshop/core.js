@@ -19,8 +19,8 @@ export const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Yekaterin
 export const fio=r=>[r.last_name,r.first_name,r.middle_name].filter(Boolean).join(' ');
 export const number=(r,k)=>String(k==='repair'?r.repair_number:r.storage_number).padStart(4,'0');
 export const roles={owner:'Владелец',admin:'Администратор',receiver:'Мастер-приёмщик',manager:'Менеджер',mechanic:'Мастер'};
-export const statuses={repair:{accepted:'Принят',diagnostics:'Диагностика',waiting_parts:'Ждём запчасти',repair:'В ремонте',ready:'Готов',issued:'Выдан',cancelled:'Отменён'},storage:{accepted:'Принят',stored:'На хранении',ready_return:'К выдаче',returned:'Выдан',cancelled:'Отменён'}};
-export const badge=(s,k)=>`<span class="badge ${esc(s)}">${esc(statuses[k]?.[s]||s)}</span>`;
+export const statuses={repair:{accepted:'Принят',diagnostics:'Диагностика',waiting_parts:'Ждём запчасти',repair:'В ремонте',ready:'Готов',issued:'Выдан',cancelled:'Отменён'},storage:{accepted:'Принят',stored:'На хранении',ready_return:'К выдаче',returned:'Исполнено',cancelled:'Отменён'}};
+export const badge=(s,k)=>`<span class="badge ${esc(s)}">${esc(statuses[k]?.[s]||(s==='deleted'?'Удалено':s))}</span>`;
 export const total=(r,k)=>Number(k==='repair'?r.total_amount:r.storage_amount)||0;
 export const opts=(values,selected,blank)=> (blank?`<option value="">${esc(blank)}</option>`:'')+Object.entries(values).map(([v,l])=>`<option value="${esc(v)}"${String(v)===String(selected)?' selected':''}>${esc(l)}</option>`).join('');
 export function suggestedEnd(start,tariff,months){const d=new Date(start+'T12:00:00Z');if(!Number.isFinite(d.getTime()))return '';if(tariff==='season')return `${d.getUTCFullYear()+(d.getUTCMonth()>=2?1:0)}-03-31`;const day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+Number(months||1));const last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();d.setUTCDate(Math.min(day,last));return d.toISOString().slice(0,10);}
