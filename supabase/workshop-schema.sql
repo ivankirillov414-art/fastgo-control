@@ -322,7 +322,7 @@ begin
    update service_repairs set works=works_new,parts=parts_new,labor_amount=round(labor,2),parts_amount=round(parts_total,2),total_amount=total,status=st,
     diagnostics_notes=coalesce(p->>'diagnostics_notes',diagnostics_notes),assigned_master_id=assignment,assigned_master=(select name from workshop_members where profile_id=assignment),
     promised_date=case when p ? 'promised_date' then nullif(p->>'promised_date','')::date else promised_date end,
-    approved_amount=rr.approved_amount,approval_note=rr.approval_note,quality_checked=coalesce((p->>'quality_checked')::boolean,quality_checked),
+    approved_amount=rr.approved_amount,approval_note=rr.approval_note,quality_checked=case when st in ('diagnostics','waiting_parts','repair') then false else coalesce((p->>'quality_checked')::boolean,quality_checked) end,
     handover_notes=coalesce(p->>'handover_notes',handover_notes),issued_at=case when st='issued' then now() else issued_at end,updated_at=now(),revision=revision+1
     where id=rid returning to_jsonb(service_repairs.*) into rec;
   else
