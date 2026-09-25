@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-repair-flow-2026-09-25';
+const RELEASE = 'workshop-role-rights-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -98,6 +98,19 @@ async function requireActiveMechanic(profileId){
   const staff=await db('workshop_members','profile_id=eq.'+encodeURIComponent(profileId)+'&active=eq.true&role=eq.mechanic&select=profile_id&limit=1');
   if(!staff?.length)fail('Назначить можно только активного мастера');
 }
+const defaultRolePermissions={
+  owner:{role:'owner',can_mark_ready:true,can_issue:true,can_cancel:true},
+  admin:{role:'admin',can_mark_ready:true,can_issue:true,can_cancel:true},
+  receiver:{role:'receiver',can_mark_ready:false,can_issue:true,can_cancel:true},
+  manager:{role:'manager',can_mark_ready:true,can_issue:false,can_cancel:true},
+  mechanic:{role:'mechanic',can_mark_ready:true,can_issue:false,can_cancel:false}
+};
+async function rolePermission(role){
+  if(role==='owner')return {...defaultRolePermissions.owner};
+  const rows=await db('workshop_role_permissions','role=eq.'+encodeURIComponent(role)+'&select=role,can_mark_ready,can_issue,can_cancel&limit=1');
+  return rows?.[0]||defaultRolePermissions[role]||{role,can_mark_ready:false,can_issue:false,can_cancel:false};
+}
+const statusPermissionKey=status=>status==='ready'?'can_mark_ready':status==='issued'?'can_issue':status==='cancelled'?'can_cancel':'';
 const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
 const writeActions=new Set(['storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','sales','stock','sale','payment','extend','contact','legacy']);
@@ -133,7 +146,7 @@ async function main(req){
     }
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
-    if(action==='me'){const c=await config();return out({data:{...me,email:user.email,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
+    if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(action==='owner_device_status'||action==='owner_device_enroll'){
       if(me.role!=='owner')fail('Доступно только владельцу',403);
       const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
@@ -175,6 +188,24 @@ async function main(req){
       await rest('/auth/v1/admin/users/'+user.id,'PUT',changes);
       return out({data:{password_changed:!!changes.password,login_changed:!!changes.email,email:changes.email||user.email,sign_in_again:true}});
     }
+    if(action==='role_permissions'){
+      if(me.role!=='owner')fail('Права ролей доступны только владельцу',403);
+      const rows=await db('workshop_role_permissions','select=role,can_mark_ready,can_issue,can_cancel,updated_at&order=role');
+      const byRole=Object.fromEntries((rows||[]).map(x=>[x.role,x]));
+      return out({data:Object.keys(defaultRolePermissions).map(role=>role==='owner'?{...defaultRolePermissions.owner,locked:true}:({...defaultRolePermissions[role],...(byRole[role]||{}),locked:false}))});
+    }
+    if(action==='role_permissions_update'){
+      if(me.role!=='owner')fail('Изменять права ролей может только владелец',403);
+      if(!Array.isArray(p.roles)||p.roles.length<1||p.roles.length>4)fail('Неверный список прав');
+      const allowed=new Set(['admin','receiver','manager','mechanic']),seen=new Set(),rows=[];
+      for(const x of p.roles){
+        const role=text(x?.role,30);if(!allowed.has(role)||seen.has(role))fail('Неверная роль');seen.add(role);
+        rows.push({role,can_mark_ready:bool(x.can_mark_ready),can_issue:bool(x.can_issue),can_cancel:bool(x.can_cancel),updated_at:new Date().toISOString(),updated_by:user.id});
+      }
+      await db('workshop_role_permissions','','POST',rows,{Prefer:'resolution=merge-duplicates'});
+      await db('workshop_events','','POST',{kind:'settings',record_id:user.id,action:'role_permissions_update',actor_id:user.id,details:{roles:rows.map(x=>({role:x.role,can_mark_ready:x.can_mark_ready,can_issue:x.can_issue,can_cancel:x.can_cancel}))}});
+      return out({data:{ok:true}});
+    }
     if(['member_update','staff_create'].includes(action)){
       if(!admin(me))fail('Нет права изменять сотрудников',403);
       if(action==='member_update'){
@@ -200,7 +231,7 @@ async function main(req){
     if(['legal','legal_save'].includes(action)&&me.role!=='owner')fail('Реквизиты доступны только владельцу',403);
     if(['storage_close','storage_delete'].includes(action)&&me.role!=='receiver')fail('Действие доступно только мастеру-приёмщику',403);
     if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
-    const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role};
+    const c=await config(),status_permissions=await rolePermission(me.role),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,status_permissions};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
       async put(path,bytes,mime){const r=await fetch(BASE+'/storage/v1/object/fastgo-workshop-private/'+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':mime},body:bytes,signal:AbortSignal.timeout(30000)});if(!r.ok&&r.status!==409)fail('Не удалось сохранить файл',503);},
@@ -296,6 +327,8 @@ async function main(req){
       }
       if(action==='update'){
         if(p.kind==='repair'){
+          const targetStatus=p.status||r.status,permissionKey=targetStatus!==r.status?statusPermissionKey(targetStatus):'';
+          if(permissionKey){const permissions=await rolePermission(me.role);if(!permissions[permissionKey])fail('У вашей роли нет права на этот статус ремонта',403);}
           if(p.works!==undefined)p.works=lines(p.works);if(p.parts!==undefined)p.parts=lines(p.parts);
           p.discount=numeric(p.discount??r.discount??0,'скидку');p.warranty_days=integer(p.warranty_days??r.warranty_days??0,'гарантию',0,3650);
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
