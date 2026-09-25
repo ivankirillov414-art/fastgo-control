@@ -30,6 +30,23 @@ async function request(path,body,token){let r;try{r=await fetch(BASE+path,{metho
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token,user_id:s.user?.id||session?.user_id,expires_at:s.expires_at||Math.floor(Date.now()/1000)+s.expires_in};localStorage.setItem(STORE,JSON.stringify(session));}
 async function refresh(){if(!session?.refresh_token)return false;if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(s=>{saveSession(s);return true;}).catch(e=>{if(e.status===400||e.status===401)clearSession();throw e;}).finally(()=>refreshing=null);return refreshing;}
 export async function signIn(email,password){reads.clear();saveSession(await request('/auth/v1/token?grant_type=password',{email,password}));}
+export async function sendPasswordRecovery(email){
+ email=String(email||'').trim().toLowerCase();if(!email)throw new Error('Укажите почту');
+ await request('/auth/v1/recover',{email,redirect_to:location.origin+location.pathname});
+ return true;
+}
+export async function recoveryApi(accessToken,action,params={}){
+ const response=await request('/functions/v1/fastgo-workshop-api',{action,params},accessToken);
+ if(!response||!Object.prototype.hasOwnProperty.call(response,'data'))throw new Error('Сервер не подтвердил запрос');
+ return response.data;
+}
+export async function setRecoveryPassword(accessToken,password){
+ if(String(password||'').length<12)throw new Error('Новый пароль должен содержать не менее 12 символов');
+ const r=await fetch(BASE+'/auth/v1/user',{method:'PUT',headers:{apikey:KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({password}),signal:AbortSignal.timeout(30000)});
+ let j;try{j=await r.json();}catch{throw new Error('Сервер авторизации вернул неполный ответ');}
+ if(!r.ok)throw new Error(j.error_description||j.msg||j.message||j.error||'Не удалось изменить пароль');
+ return j;
+}
 export async function signUp(name,email,password){
  name=String(name||'').trim();email=String(email||'').trim();
  if(!name)throw new Error('Укажите имя и фамилию');
