@@ -11,6 +11,7 @@ update public.workshop_members set approved_at=created_at where active and appro
 alter table public.workshop_members drop constraint if exists workshop_members_role_check;
 alter table public.workshop_members add constraint workshop_members_role_check check(role in ('developer','owner','admin','receiver','manager','mechanic'));
 create unique index if not exists workshop_members_one_developer on public.workshop_members((role)) where role='developer';
+create unique index if not exists workshop_members_one_owner on public.workshop_members((role)) where role='owner';
 create or replace function public.fastgo_stamp_workshop_member_approval()
 returns trigger language plpgsql set search_path=public as $
 begin
