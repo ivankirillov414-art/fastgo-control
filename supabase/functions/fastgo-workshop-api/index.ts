@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-direct-credentials-2026-09-25';
+const RELEASE = 'workshop-owner-recovery-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -107,10 +107,24 @@ async function main(req){
   if(req.method==='GET'){try{const c=await config();return out({ok:true,service:'fastgo-workshop-api',backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE,authentication:'required',upstream_checked:false,optimization:'shared-reads-2026-09-13'});}catch{return out({error:'Конфигурация временно недоступна'},503);}}
   if(req.method!=='POST')return out({error:'Разрешён только POST'},405);
   try{
+    const input=await readBody(req),action=text(input.action,40);let p=input.params||{};if(Array.isArray(p)||typeof p!=='object')fail('Некорректные параметры');p={...p};
+    if(action==='owner_device_recovery'){
+      const ua=req.headers.get('user-agent')||'',token=text(p.device_token,80),newPassword=String(p.new_password||'');
+      if(!/iPhone/i.test(ua))fail('Восстановление владельца доступно только на доверенном iPhone 13',403);
+      if(!uuid(token))fail('На этом iPhone нет действующей привязки владельца',403);
+      if(newPassword.length<12)fail('Новый пароль должен содержать не менее 12 символов');
+      const devices=await db('workshop_owner_devices','device_token=eq.'+encodeURIComponent(token)+'&active=eq.true&select=profile_id,device_token&limit=1');
+      const device=devices?.[0];if(!device||!uuid(device.profile_id))fail('Привязка доверенного iPhone не найдена',403);
+      const owners=await db('workshop_members','profile_id=eq.'+encodeURIComponent(device.profile_id)+'&role=eq.owner&active=eq.true&select=profile_id&limit=1');
+      if(!owners?.length)fail('Учётная запись владельца недоступна',403);
+      await rest('/auth/v1/admin/users/'+device.profile_id,'PUT',{password:newPassword});
+      const nextToken=crypto.randomUUID();
+      await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(device.profile_id)+'&device_token=eq.'+encodeURIComponent(token),'PATCH',{device_token:nextToken,last_used_at:new Date().toISOString()});
+      return out({data:{reset:true,device_token:nextToken}});
+    }
     const authorization=req.headers.get('authorization')||'';if(!/^Bearer [^\s]+$/i.test(authorization))fail('Войдите в приложение',401);
     const u=await fetch(BASE+'/auth/v1/user',{headers:{apikey:KEY,Authorization:authorization},signal:AbortSignal.timeout(15000)});if(!u.ok)fail('Сессия истекла. Войдите снова',401);
     const user=await u.json();if(!uuid(user.id))fail('Неверная сессия',401);
-    const input=await readBody(req),action=text(input.action,40);let p=input.params||{};if(Array.isArray(p)||typeof p!=='object')fail('Некорректные параметры');p={...p};
     if(action==='request_access'){
       if(!user.email_confirmed_at)fail('Подтвердите почту перед запросом доступа',403);
       const query='profile_id=eq.'+encodeURIComponent(user.id)+'&select=profile_id,active,created_at,approved_at';
