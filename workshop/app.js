@@ -109,13 +109,14 @@ async function pricePage(token){
 }
 
 async function staffPage(token){
- const c=await catalog(),staff=[...(c.staff||[])].sort((a,b)=>{
+ const [c,permissionRows]=await Promise.all([catalog(),me.role==='owner'?api('role_permissions',{}, {fresh:true}):Promise.resolve([])]),staff=[...(c.staff||[])].sort((a,b)=>{
   const rank=x=>!x.active&&!x.approved_at?0:x.active?1:2;
   return rank(a)-rank(b)||String(a.name||'').localeCompare(String(b.name||''),'ru');
- }),pending=staff.filter(x=>!x.active&&!x.approved_at).length;
+ }),pending=staff.filter(x=>!x.active&&!x.approved_at).length,permissionMap=Object.fromEntries(permissionRows.map(x=>[x.role,x]));
  const accessLabel=x=>!x.active&&!x.approved_at?'Новая заявка':x.active?'Активен':'Доступ отключён';
  const sub=pending?`${staff.length} сотрудников · ${pending} ждут доступа`:`${staff.length} сотрудников · права доступа и специализации`;
- if(!mount(head('Сотрудники',sub,'<button class="btn" id="add-staff">+ Сотрудник</button>')+`<div class="panel flush"><table class="records"><thead><tr><th>Сотрудник</th><th>Роль</th><th>Специализации</th><th>Доступ</th><th></th></tr></thead><tbody>${staff.map(x=>`<tr><td><b>${esc(x.name||'Без имени')}</b>${x.profile_id===me.profile_id?'<small>Это вы</small>':(!x.active&&!x.approved_at&&x.created_at?`<small>Заявка: ${date(x.created_at)}</small>`:'')}</td><td data-label="Роль">${esc(roles[x.role]||x.role)}</td><td data-label="Специализации">${esc((x.tags||[]).join(', ')||'—')}</td><td data-label="Доступ"><b>${accessLabel(x)}</b></td><td>${x.profile_id!==me.profile_id?`<div class="actions">${!x.active&&!x.approved_at?`<button class="btn small" data-approve="${x.profile_id}">Одобрить как мастер</button>`:''}<button class="btn ghost small" data-staff="${x.profile_id}">${!x.active&&!x.approved_at?'Настроить':'Редактировать'}</button></div>`:''}</td></tr>`).join('')}</tbody></table></div>`,token))return;
+ const rights=me.role==='owner'?`<section class="panel"><div class="panelhead"><div><h2>Права ролей на статусы ремонта</h2><p class="muted">Владелец всегда имеет все права. Для остальных ролей отметьте, кто может поставить «Готов», выдать или отменить ремонт.</p></div></div><div class="panel flush"><table class="records"><thead><tr><th>Роль</th><th>Ставить «Готов»</th><th>Выдавать ремонт</th><th>Отменять ремонт</th></tr></thead><tbody>${['owner','admin','receiver','manager','mechanic'].map(role=>{const p=permissionMap[role]||{};const locked=role==='owner';return `<tr><td><b>${esc(roles[role])}</b>${locked?'<small>Всегда полный доступ</small>':''}</td><td data-label="Готов"><input type="checkbox" data-role-perm="${role}" data-perm="can_mark_ready" ${locked||p.can_mark_ready?'checked':''} ${locked?'disabled':''} aria-label="${esc(roles[role])}: ставить Готов"></td><td data-label="Выдача"><input type="checkbox" data-role-perm="${role}" data-perm="can_issue" ${locked||p.can_issue?'checked':''} ${locked?'disabled':''} aria-label="${esc(roles[role])}: выдавать ремонт"></td><td data-label="Отмена"><input type="checkbox" data-role-perm="${role}" data-perm="can_cancel" ${locked||p.can_cancel?'checked':''} ${locked?'disabled':''} aria-label="${esc(roles[role])}: отменять ремонт"></td></tr>`}).join('')}</tbody></table></div><button class="btn" id="save-role-permissions">Сохранить права ролей</button></section>`:''; 
+ if(!mount(head('Сотрудники',sub,'<button class="btn" id="add-staff">+ Сотрудник</button>')+`<div class="panel flush"><table class="records"><thead><tr><th>Сотрудник</th><th>Роль</th><th>Специализации</th><th>Доступ</th><th></th></tr></thead><tbody>${staff.map(x=>`<tr><td><b>${esc(x.name||'Без имени')}</b>${x.profile_id===me.profile_id?'<small>Это вы</small>':(!x.active&&!x.approved_at&&x.created_at?`<small>Заявка: ${date(x.created_at)}</small>`:'')}</td><td data-label="Роль">${esc(roles[x.role]||x.role)}</td><td data-label="Специализации">${esc((x.tags||[]).join(', ')||'—')}</td><td data-label="Доступ"><b>${accessLabel(x)}</b></td><td>${x.profile_id!==me.profile_id?`<div class="actions">${!x.active&&!x.approved_at?`<button class="btn small" data-approve="${x.profile_id}">Одобрить как мастер</button>`:''}<button class="btn ghost small" data-staff="${x.profile_id}">${!x.active&&!x.approved_at?'Настроить':'Редактировать'}</button></div>`:''}</td></tr>`).join('')}</tbody></table></div>${rights}`,token))return;
  const form=(x={},isnew=false)=>{
   const pendingRequest=!isnew&&!x.active&&!x.approved_at;
   const roleOpts=Object.fromEntries(Object.entries(roles).filter(([r])=>me.role==='owner'||r!=='owner').filter(([r])=>!isnew||r!=='owner'));
@@ -130,6 +131,13 @@ async function staffPage(token){
   await api('member_update',{profile_id:x.profile_id,name:x.name||'Сотрудник',role:'mechanic',active:true,tags:x.tags||[]});
   cache=null;toast('Доступ выдан: роль «Мастер»');render();
  }));
+ if($('save-role-permissions'))$('save-role-permissions').onclick=e=>run(e.currentTarget,async()=>{
+  const rows=['admin','receiver','manager','mechanic'].map(role=>{
+   const checked=perm=>document.querySelector(`[data-role-perm="${role}"][data-perm="${perm}"]`)?.checked===true;
+   return {role,can_mark_ready:checked('can_mark_ready'),can_issue:checked('can_issue'),can_cancel:checked('can_cancel')};
+  });
+  await api('role_permissions_update',{roles:rows});toast('Права ролей сохранены');
+ });
 }
 const OWNER_DEVICE_KEY='fastgo_owner_device_v1';
 function ownerDeviceToken(create=false){
