@@ -12,7 +12,7 @@ async function chooseFile(){return new Promise(resolve=>{const i=document.create
 async function importWorkbook(){
  if(busy)return;busy=true;let started=false;
  try{
-  const me=await api('me');if(!['owner','admin'].includes(me.role))throw new Error('Импорт Excel доступен владельцу и администратору');
+  const me=await api('me');if(!['developer','owner','admin'].includes(me.role))throw new Error('Импорт Excel доступен владельцу и администратору');
   const file=await chooseFile();if(!file)return;if(file.size>10*1024*1024)throw new Error('Файл больше 10 МБ. Разделите его на несколько файлов');
   const data=await file.arrayBuffer(),fileHash=await digestBytes(data),checkpoint=checkpointStore(localStorage,fileHash);
   if(checkpoint.state.complete){alert('Этот файл уже импортирован. Повторный приход не выполнен. Для новой поставки подготовьте отдельный файл с номером нового документа.');return;}
