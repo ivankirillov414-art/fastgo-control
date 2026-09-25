@@ -42,15 +42,17 @@ test('new private photos can be selected and viewed while Google is unavailable'
 });
 
 const receiver={...manager,role:'receiver',name:'Приёмщик'};
-test('only receiver can close or delete storage; legal settings are owner-only',async()=>{
+test('storage completion and legal settings respect privileged access',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),kind:'storage'});
- for(const role of ['owner','admin','manager','mechanic']){
-  for(const action of ['storage_close','storage_delete'])await assert.rejects(h.call(action,{kind:'storage',id:r.id,revision:r.revision,note:'test'},{...manager,role}),/мастеру-приёмщику/);
+ for(const role of ['admin','manager','mechanic']){
+  for(const action of ['storage_close','storage_delete'])await assert.rejects(h.call(action,{kind:'storage',id:r.id,revision:r.revision,note:'test'},{...manager,role}),/владельцу|мастеру-приёмщику/);
  }
  for(const role of ['admin','receiver','manager','mechanic']){
   await assert.rejects(h.call('legal',{}, {...manager,role}),/владельцу/);
   await assert.rejects(h.call('legal_save',{legal_name:'test'},{...manager,role}),/владельцу/);
  }
+ const developer={...owner,role:'developer'};
+ assert.ok(await h.call('legal',{},developer));
  assert.equal(h.outbox.length,1);
 });
 test('storage close rejects debt, then completes and logs verified actor',async()=>{
