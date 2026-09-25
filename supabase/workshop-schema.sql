@@ -165,7 +165,7 @@ begin
      and (coalesce(jsonb_array_length(p->'tags'),0)=0 or w.tags && array(select jsonb_array_elements_text(p->'tags')))
      order by (select count(*) from service_repairs r where r.assigned_master_id=w.profile_id and r.status not in ('issued','cancelled')),w.created_at limit 1;
    end if;
-   if assignment is not null and not exists(select 1 from workshop_members where profile_id=assignment and active) then raise exception 'Мастер неактивен'; end if;
+   if assignment is not null and not exists(select 1 from workshop_members where profile_id=assignment and active and role='mechanic') then raise exception 'Назначить можно только активного мастера'; end if;
    if nullif(p->>'storage_id','') is not null and not exists(select 1 from storage_intakes where id=(p->>'storage_id')::uuid and status not in ('returned','cancelled')) then raise exception 'Приёмка хранения закрыта'; end if;
    insert into service_repairs(request_id,last_name,first_name,middle_name,phone,email,vehicle_type,brand,model,serial_number,issue_description,condition_notes,accessories,promised_date,assigned_master_id,assigned_master,storage_id,tags)
     values(reqid,trim(p->>'last_name'),trim(p->>'first_name'),p->>'middle_name',p->>'phone',p->>'email',coalesce(p->>'vehicle_type','Электросамокат'),p->>'brand',p->>'model',p->>'serial_number',p->>'issue_description',p->>'condition_notes',p->>'accessories',nullif(p->>'promised_date','')::date,assignment,(select name from workshop_members where profile_id=assignment),nullif(p->>'storage_id','')::uuid,array(select jsonb_array_elements_text(coalesce(p->'tags','[]')))) returning to_jsonb(service_repairs.*) into rec;
@@ -268,7 +268,7 @@ begin
    if st='cancelled' and (paid<>0 or jsonb_array_length(parts_new)>0) then raise exception 'Перед отменой верните оплату и снимите установленные запчасти'; end if;
    assignment:=case when p ? 'assigned_master_id' then nullif(p->>'assigned_master_id','')::uuid else rr.assigned_master_id end;
    if not role_allowed and assignment is distinct from rr.assigned_master_id then raise exception 'Мастера назначает приёмщик'; end if;
-   if assignment is not null and not exists(select 1 from workshop_members where profile_id=assignment and active) then raise exception 'Мастер неактивен'; end if;
+   if assignment is not null and not exists(select 1 from workshop_members where profile_id=assignment and active and role='mechanic') then raise exception 'Назначить можно только активного мастера'; end if;
    -- Serialize all affected parts in UUID order. Existing trigger prevents negative stock.
    for change in
     select part_id,sum(q)::integer dq from (

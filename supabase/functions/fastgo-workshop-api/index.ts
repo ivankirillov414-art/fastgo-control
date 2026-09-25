@@ -92,6 +92,12 @@ async function catalogueCapabilities(c,g){
 function recordDates(r){if(!r)return r;for(const k of ['starts_on','planned_return_date','promised_date'])if(typeof r[k]==='string')r[k]=r[k].slice(0,10);return r;}
 function required(p,fields){for(const f of fields)if(!text(p[f]))fail('Заполните поле '+f);}
 function lines(items){if(!Array.isArray(items)||items.length>200)fail('Неверный список работ / запчастей');return items.map(x=>{required(x,['name']);return {...x,name:text(x.name,200),quantity:integer(x.quantity,'количество',1,1000),price:numeric(x.price,'цену')};});}
+async function requireActiveMechanic(profileId){
+  if(!profileId)return;
+  if(!uuid(profileId))fail('Неверный мастер');
+  const staff=await db('workshop_members','profile_id=eq.'+encodeURIComponent(profileId)+'&active=eq.true&role=eq.mechanic&select=profile_id&limit=1');
+  if(!staff?.length)fail('Назначить можно только активного мастера');
+}
 const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
 const writeActions=new Set(['storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','sales','stock','sale','payment','extend','contact','legacy']);
@@ -193,6 +199,7 @@ async function main(req){
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
     if(['legal','legal_save'].includes(action)&&me.role!=='owner')fail('Реквизиты доступны только владельцу',403);
     if(['storage_close','storage_delete'].includes(action)&&me.role!=='receiver')fail('Действие доступно только мастеру-приёмщику',403);
+    if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
     const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
@@ -278,6 +285,7 @@ async function main(req){
       required(p,['last_name','first_name','phone','brand','model']);if(!/^\+7\d{10}$/.test(p.phone))fail('Введите полный телефон');if(!uuid(p.request_id))fail('Неверный код приёмки');
       if(p.kind==='storage'){if(!['monthly','season'].includes(p.storage_tariff))fail('Неверный тариф');p.storage_months=integer(p.storage_months||1,'месяцы',1,12);p.wash=bool(p.wash);if(!/^\d{4}-\d{2}-\d{2}$/.test(p.starts_on||'')||!/^\d{4}-\d{2}-\d{2}$/.test(p.planned_return_date||'')||p.planned_return_date<p.starts_on)fail('Проверьте сроки хранения');}
       if(p.auto_assign){const staff=await db('workshop_members','active=eq.true&role=eq.mechanic&select=profile_id,tags');const tags=(p.tags||[]).map(x=>String(x).toLowerCase());const available=(staff||[]).filter(x=>!tags.length||(x.tags||[]).some(t=>tags.includes(String(t).toLowerCase())));p.assigned_master_id=available[0]?.profile_id||'';}
+      if(p.kind==='repair'&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
     }
     if(['update','payment','extend','contact','upload','documents'].includes(action)){
       const d=await g('get',{kind:p.kind,id:p.id}),r=recordDates(d.record);
@@ -291,6 +299,7 @@ async function main(req){
           if(p.works!==undefined)p.works=lines(p.works);if(p.parts!==undefined)p.parts=lines(p.parts);
           p.discount=numeric(p.discount??r.discount??0,'скидку');p.warranty_days=integer(p.warranty_days??r.warranty_days??0,'гарантию',0,3650);
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
+          if(p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
           const amount=[...(p.works||r.works||[]),...(p.parts||r.parts||[])].reduce((s,x)=>s+x.price*x.quantity,0)-p.discount;
           if(p.approve&&!text(p.approval_note))fail('Укажите как согласована стоимость');
           if(['ready','issued'].includes(p.status)&&(!(p.quality_checked??r.quality_checked)||(p.approve?amount:r.approved_amount)!==amount))fail('Перед выдачей нужны проверка техники и согласование текущей стоимости',409);
