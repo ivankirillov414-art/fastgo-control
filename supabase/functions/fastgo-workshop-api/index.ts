@@ -358,6 +358,7 @@ async function main(req){
           if(!['accepted','cancelled'].includes(targetStatus)&&!assignedMaster)fail('Сначала назначьте мастера',409);
           const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
           if(['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
+          if(['diagnostics','waiting_parts','repair'].includes(targetStatus))p.quality_checked=false;
           const amount=[...(p.works||r.works||[]),...(p.parts||r.parts||[])].reduce((s,x)=>s+x.price*x.quantity,0)-p.discount;
           if(p.approve&&!text(p.approval_note))fail('Укажите как согласована стоимость');
           const approved=p.approve?amount:(Math.abs(Number(r.total_amount||0)-amount)<.005?Number(r.approved_amount):NaN);
