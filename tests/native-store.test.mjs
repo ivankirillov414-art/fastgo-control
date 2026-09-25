@@ -26,7 +26,24 @@ test('repair intake, stock usage, approval, payment and issue work without Googl
  const h=harness(),r=await h.call('create',intake());const details={kind:'repair',id:r.id,revision:r.revision,status:'repair',works:[{name:'Диагностика',price:200,quantity:1}],parts:[{part_id:part,name:'Запчасть',price:100,quantity:1}],discount:0};
  const fixed=await h.call('update',details);const ready=await h.call('update',{...details,revision:fixed.revision,status:'ready',approve:true,approval_note:'Согласовано',quality_checked:true});
  await h.call('payment',{kind:'repair',id:r.id,amount:300,method:'cash'});const paid=(await h.call('get',{kind:'repair',id:r.id})).record;
- await h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true});assert.equal((await h.call('get',{kind:'repair',id:r.id})).record.status,'issued');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);assert.equal(h.outbox.length,5);assert.equal(h.googleCalls(),0);
+ await h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true,handover_notes:'Техника и комплектность проверены, выдано клиенту'});assert.equal((await h.call('get',{kind:'repair',id:r.id})).record.status,'issued');assert.equal((await h.call('get',{kind:'repair',id:r.id})).record.handover_notes,'Техника и комплектность проверены, выдано клиенту');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);assert.equal(h.outbox.length,5);assert.equal(h.googleCalls(),0);
+});
+test('repair issue requires handover note',async()=>{
+ const h=harness(),r=await h.call('create',intake());
+ const details={kind:'repair',id:r.id,revision:r.revision,status:'repair',works:[{name:'Диагностика',price:100,quantity:1}],parts:[],discount:0};
+ const fixed=await h.call('update',details);
+ await h.call('update',{...details,revision:fixed.revision,status:'ready',approve:true,approval_note:'Согласовано',quality_checked:true});
+ await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'});
+ const paid=(await h.call('get',{kind:'repair',id:r.id})).record;
+ await assert.rejects(h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true}),/комплектности/);
+});
+test('repair cancellation requires a reason and records it',async()=>{
+ const h=harness(),r=await h.call('create',intake());
+ await assert.rejects(h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'cancelled',works:[],parts:[],discount:0}),/причину/);
+ const cancelled=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'cancelled',works:[],parts:[],discount:0,note:'Клиент отказался от ремонта'});
+ assert.equal(cancelled.status,'cancelled');
+ const details=await h.call('get',{kind:'repair',id:r.id});
+ assert.equal(details.events.find(e=>e.details?.to_status==='cancelled')?.details.note,'Клиент отказался от ремонта');
 });
 test('two simultaneous sales of the last unit result in one sale and one outbox job',async()=>{
  const h=harness(),p={payment_method:'cash',items:[{part_id:part,quantity:1}]};const results=await Promise.allSettled([h.call('sale',p),h.call('sale',p,manager)]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.sheets['Продажи'].rows.length,1);assert.equal(h.outbox.length,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);

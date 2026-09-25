@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-developer-role-2026-09-25';
+const RELEASE = 'workshop-repair-close-flow-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -353,7 +353,8 @@ async function main(req){
           const amount=[...(p.works||r.works||[]),...(p.parts||r.parts||[])].reduce((s,x)=>s+x.price*x.quantity,0)-p.discount;
           if(p.approve&&!text(p.approval_note))fail('Укажите как согласована стоимость');
           if(['ready','issued'].includes(p.status)&&(!(p.quality_checked??r.quality_checked)||(p.approve?amount:r.approved_amount)!==amount))fail('Перед выдачей нужны проверка техники и согласование текущей стоимости',409);
-          if(p.status==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount))fail('Для выдачи нужны статус «Готов» и оплата',409);
+          if(p.status==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount||!text(p.handover_notes)))fail('Для выдачи нужны статус «Готов», полная оплата и отметка о комплектности',409);
+          if(p.status==='cancelled'&&p.status!==r.status){if(!text(p.note))fail('Укажите причину отмены');if(Number(r.paid_amount)!==0||(p.parts||r.parts||[]).length)fail('Перед отменой верните оплату и снимите установленные запчасти',409);}
           if(!['accepted','diagnostics','waiting_parts','repair','ready','issued','cancelled'].includes(p.status||r.status))fail('Неверный статус');
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');
