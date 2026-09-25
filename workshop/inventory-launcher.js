@@ -4,7 +4,7 @@ let role=null;
 async function enhance(){
   if(!document.querySelector('.shell')){role=null;document.getElementById('inventory-sale-fab')?.remove();return;}
   if(!role){try{role=(await api('me')).role;}catch{return;}}
-  if(!['owner','admin','receiver','manager'].includes(role))return;
+  if(!['developer','owner','admin','receiver','manager'].includes(role))return;
   const sales=document.querySelector('[data-sales-nav]');
   const loading=document.querySelector('#workspace>.panel')?.textContent==='Загружаем данные…';
   let b=document.getElementById('inventory-sale-fab');

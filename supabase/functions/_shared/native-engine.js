@@ -73,11 +73,11 @@ function bool_(v){ return v===true || String(v).toLowerCase()==='true' || String
 
 function role_(a){ return String(a.role||''); }
 
-function requireManager_(a){ if(!['owner','admin','receiver','manager'].includes(role_(a))) throw httpError_('Нет доступа',403); }
+function requireManager_(a){ if(!['developer','owner','admin','receiver','manager'].includes(role_(a))) throw httpError_('Нет доступа',403); }
 
-function requireOwner_(a){if(role_(a)!=='owner')throw httpError_('Реквизиты доступны только владельцу',403);}
+function requireOwner_(a){if(!['developer','owner'].includes(role_(a)))throw httpError_('Реквизиты доступны только владельцу',403);}
 
-function requireAdmin_(a){ if(!['owner','admin'].includes(role_(a))) throw httpError_('Нет права изменять справочник',403); }
+function requireAdmin_(a){ if(!['developer','owner','admin'].includes(role_(a))) throw httpError_('Нет права изменять справочник',403); }
 
 function httpError_(m,s){ const e=new Error(m); e.status=s; return e; }
 
@@ -89,7 +89,7 @@ function mapProduct_(r){ return {id:r.product_id,name:r['Модель / назв
 
 function mapService_(r){ return {id:r.service_id,code:r['Код'],category:r['Категория'],wheel_position:r['Позиция колеса'],service_kind:r['Тип работы'],title:r['Работа'],parts_price:num_(r['Запчасти, ₽']),labor_price:num_(r['Работа, ₽']),total_price:num_(r['Итого, ₽']),labor_price_max:num_(r['Работа максимум, ₽']),pricing_note:r['Примечание'],active:r['Активна']!==false}; }
 
-function mapStaff_(r){ return {profile_id:r.employee_id,name:r['ФИО'],email:r['Email'],role:({'Владелец':'owner','Администратор':'admin','Мастер-приёмщик':'receiver','Механик':'mechanic','Менеджер':'manager','Кассир':'manager'})[r['Роль']]||r['Роль'],active:r['Активен']!==false,tags:[]}; }
+function mapStaff_(r){ return {profile_id:r.employee_id,name:r['ФИО'],email:r['Email'],role:({'Разработчик':'developer','Владелец':'owner','Администратор':'admin','Мастер-приёмщик':'receiver','Механик':'mechanic','Менеджер':'manager','Кассир':'manager'})[r['Роль']]||r['Роль'],active:r['Активен']!==false,tags:[]}; }
 
 function catalog_(){
   return {services:rows_(SHEETS.services).filter(r=>r['Работа']).map(mapService_).filter(x=>x.active),parts:rows_(SHEETS.products).filter(r=>r.product_id).map(mapProduct_),staff:rows_(SHEETS.staff).filter(r=>r.employee_id).map(mapStaff_),categories:rows_(SHEETS.categories).filter(r=>r['Категория (ключ)']).map(r=>({id:r['Категория (ключ)'],name:r['Категория (ключ)'],label:r['Понятное название'],barcode:r['Штрих-код категории'],primary_photo_path:r['Основное фото']||''}))};
@@ -246,9 +246,9 @@ function parseJson_(v,fallback){
   try{ const x=JSON.parse(String(v||'')); return Array.isArray(x)?x:fallback; }catch(_){ return fallback; }
 }
 
-function isManager_(a){ return ['owner','admin','receiver','manager'].includes(role_(a)); }
+function isManager_(a){ return ['developer','owner','admin','receiver','manager'].includes(role_(a)); }
 function canSetRepairStatus_(actor,status){
-  if(role_(actor)==='owner')return true;
+  if(['developer','owner'].includes(role_(actor)))return true;
   const p=actor?.status_permissions||{};
   if(status==='ready')return p.can_mark_ready===true;
   if(status==='issued')return p.can_issue===true;
@@ -451,7 +451,7 @@ function contact_(p,actor){
 }
 
 function finishStorage_(p,actor,deleting){
- if(role_(actor)!=='receiver')throw httpError_('Действие доступно только мастеру-приёмщику',403);
+ if(!['developer','owner','receiver'].includes(role_(actor)))throw httpError_('Действие доступно владельцу или мастеру-приёмщику',403);
  if(p.kind!=='storage')throw httpError_('Выберите хранение',400);
  const r=find_(SHEETS.storage,'storage_id',p.id);
  if(!r)throw httpError_('Хранение не найдено',404);
@@ -473,10 +473,10 @@ function validateOrderUpdate_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair',r=find_(kind==='storage'?SHEETS.storage:SHEETS.repairs,kind==='storage'?'storage_id':'repair_id',p.id);
   if(!r)throw httpError_('Заказ не найден',404);requireOrderAccess_(actor,kind,r);assertRevision_(r,p);
   const before=normStatus_(r['Статус'],kind),status=p.status||before,closed=['issued','returned','cancelled'];
-  if(closed.includes(before)&&!(role_(actor)==='owner'||role_(actor)==='admin')||closed.includes(before)&&(!String(p.reopen_reason||'').trim()||status!==(kind==='storage'?'stored':'accepted')))throw httpError_('Закрытый заказ может открыть администратор с причиной',409);
+  if(closed.includes(before)&&!['developer','owner','admin'].includes(role_(actor))||closed.includes(before)&&(!String(p.reopen_reason||'').trim()||status!==(kind==='storage'?'stored':'accepted')))throw httpError_('Закрытый заказ может открыть администратор с причиной',409);
   if(kind==='storage'){
     if(before==='deleted')throw httpError_('Приёмка удалена',409);
-    if(status==='returned'&&status!==before&&role_(actor)!=='receiver')throw httpError_('Закрыть хранение может только мастер-приёмщик',403);
+    if(status==='returned'&&status!==before&&!['developer','owner','receiver'].includes(role_(actor)))throw httpError_('Закрыть хранение может владелец или мастер-приёмщик',403);
     if(!['accepted','stored','ready_return','returned','cancelled'].includes(status))throw httpError_('Неверный статус',400);
     if(status==='returned'&&(before!=='ready_return'||num_(r['Оплачено'])<num_(r['Сумма'])||rows_(SHEETS.repairs).some(x=>x.storage_id===p.id&&!closed.includes(normStatus_(x['Статус'],'repair')))))throw httpError_('Для выдачи нужны готовность, полная оплата и завершённые ремонты',409);
     return;
@@ -520,7 +520,7 @@ function migrationManifest_(actor){requireAdmin_(actor);return rows_(SHEETS.file
   append_(PHOTO_SHEET,{photo_id:p.photo_id,product_id:p.part_id,category:product['Категория'],path:p.path,created_at:now_(),sha256:p.sha256});return partPhotoPrimary_(p);
  }
  return {sheets,changes:()=>[...changes.values()],run(action,p,actor){
-  if(!actor.id||!['owner','admin','receiver','manager','mechanic'].includes(actor.role))throw httpError_('Нет доступа',403);
+  if(!actor.id||!['developer','owner','admin','receiver','manager','mechanic'].includes(actor.role))throw httpError_('Нет доступа',403);
   if(action==='native_photo'){requireAdmin_(actor);return nativePhoto(p);}
   if(action==='native_document')return documents_(p,actor);
   if(action==='native_file_migration'){requireAdmin_(actor);const r=find_(SHEETS.files,'object_id',p.object_id);if(!r)throw httpError_('Файл не найден',404);patchRow_(SHEETS.files,r.__row,{'Google Drive URL':p.path,'Статус миграции':'Приватное хранилище',updated_at:now_()});return {object_id:p.object_id,migrated:true,path:p.path};}

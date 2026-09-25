@@ -2,12 +2,15 @@
 begin;
 create table if not exists public.workshop_members (
  profile_id uuid primary key references public.profiles(id),
- name text not null default '', role text not null check(role in ('owner','admin','receiver','manager','mechanic')),
+ name text not null default '', role text not null check(role in ('developer','owner','admin','receiver','manager','mechanic')),
  active boolean not null default true, tags text[] not null default '{}', created_at timestamptz not null default now(),
  approved_at timestamptz
 );
 alter table public.workshop_members add column if not exists approved_at timestamptz;
 update public.workshop_members set approved_at=created_at where active and approved_at is null;
+alter table public.workshop_members drop constraint if exists workshop_members_role_check;
+alter table public.workshop_members add constraint workshop_members_role_check check(role in ('developer','owner','admin','receiver','manager','mechanic'));
+create unique index if not exists workshop_members_one_developer on public.workshop_members((role)) where role='developer';
 create or replace function public.fastgo_stamp_workshop_member_approval()
 returns trigger language plpgsql set search_path=public as $
 begin
@@ -126,12 +129,12 @@ declare
 begin
  select * into m from workshop_members where profile_id=p_actor and active;
  if not found then raise exception 'Доступ сотрудника не подтверждён' using errcode='42501'; end if;
- role_allowed:=m.role in ('owner','admin','receiver','manager');
+ role_allowed:=m.role in ('developer','owner','admin','receiver','manager');
  if p_action='member_update' then
-  if m.role not in ('owner','admin') then raise exception 'Нет права управлять сотрудниками' using errcode='42501'; end if;
-  if p->>'role'='owner' and m.role<>'owner' then raise exception 'Только владелец назначает владельца'; end if;
+  if m.role not in ('developer','owner','admin') then raise exception 'Нет права управлять сотрудниками' using errcode='42501'; end if;
+  if p->>'role'='owner' and m.role not in ('developer','owner') then raise exception 'Только владелец или технический администратор назначает владельца'; end if;
   if (p->>'profile_id')::uuid=p_actor then raise exception 'Собственный доступ здесь изменить нельзя'; end if;
-  if exists(select 1 from workshop_members where profile_id=(p->>'profile_id')::uuid and role='owner') and m.role<>'owner' then raise exception 'Только владелец меняет доступ владельца'; end if;
+  if exists(select 1 from workshop_members where profile_id=(p->>'profile_id')::uuid and role in ('owner','developer')) and m.role not in ('developer','owner') then raise exception 'Нет права менять привилегированный доступ'; end if;
   insert into workshop_members(profile_id,name,role,active,tags) values((p->>'profile_id')::uuid,left(p->>'name',100),p->>'role',coalesce((p->>'active')::boolean,true),array(select jsonb_array_elements_text(coalesce(p->'tags','[]'))))
    on conflict(profile_id) do update set name=excluded.name,role=excluded.role,active=excluded.active,tags=excluded.tags;
   insert into workshop_events(kind,record_id,action,actor_id,details) values('staff',(p->>'profile_id')::uuid,p_action,p_actor,p-'password');
@@ -223,7 +226,7 @@ begin
   amt:=(p->>'amount')::numeric;
   if amt is null or amt=0 or round(amt,2)<>amt or abs(amt)>10000000 then raise exception 'Проверьте сумму'; end if;
   if oldst='cancelled' then raise exception 'Заказ отменён'; end if;
-  if amt<0 and (m.role not in ('owner','admin') or coalesce(p->>'note','')='') then raise exception 'Возврат оформляет администратор с указанием причины'; end if;
+  if amt<0 and (m.role not in ('developer','owner','admin') or coalesce(p->>'note','')='') then raise exception 'Возврат оформляет администратор с указанием причины'; end if;
   if paid+amt<0 or paid+amt>total then raise exception 'Сумма превышает остаток к оплате или возврату'; end if;
   if amt<0 and oldst in ('issued','returned') then raise exception 'Для возврата по выданной технике сначала откройте заказ повторно'; end if;
   insert into workshop_payments(request_id,repair_id,storage_id,amount,method,note,actor_id)
@@ -264,11 +267,11 @@ begin
   if (p->>'revision')::integer is distinct from revision_old then raise exception 'Карточку уже изменили. Обновите её перед сохранением' using errcode='40001'; end if;
   st:=coalesce(p->>'status',oldst);
   if oldst in ('issued','returned','cancelled') then
-   if m.role not in ('owner','admin') or st<>(case when k='repair' then 'accepted' else 'stored' end) or length(trim(coalesce(p->>'reopen_reason','')))<3 then raise exception 'Закрытый заказ может открыть администратор с указанием причины'; end if;
+   if m.role not in ('developer','owner','admin') or st<>(case when k='repair' then 'accepted' else 'stored' end) or length(trim(coalesce(p->>'reopen_reason','')))<3 then raise exception 'Закрытый заказ может открыть администратор с указанием причины'; end if;
    if k='repair' then update service_repairs set status='accepted',issued_at=null,quality_checked=false,revision=revision+1,updated_at=now() where id=rid returning to_jsonb(service_repairs.*) into rec;
    else update storage_intakes set status='stored',issued_at=null,revision=revision+1,updated_at=now() where id=rid returning to_jsonb(storage_intakes.*) into rec; end if;
   elsif k='repair' then
-   if m.role<>'owner' and st<>oldst and st in ('ready','issued','cancelled') then
+   if m.role not in ('developer','owner') and st<>oldst and st in ('ready','issued','cancelled') then
     select * into perm from workshop_role_permissions where role=m.role;
     if st='ready' and not coalesce(perm.can_mark_ready,false) then raise exception 'У роли нет права ставить ремонт в статус Готов' using errcode='42501'; end if;
     if st='issued' and not coalesce(perm.can_issue,false) then raise exception 'У роли нет права выдавать ремонт' using errcode='42501'; end if;

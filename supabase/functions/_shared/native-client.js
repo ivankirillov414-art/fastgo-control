@@ -19,7 +19,7 @@ export function nativeClient({db,actor,google,storage}){
    // Validate object access before uploading bytes to the private bucket.
    const engine=createNativeEngine((await state()).sheets);
    if(action==='upload')engine.run('get',p,actor);
-   else if(!['owner','admin'].includes(actor.role))fail('Нет доступа',403);
+   else if(!['developer','owner','admin'].includes(actor.role))fail('Нет доступа',403);
    if(action==='part_photo_upload'&&!engine.sheets['Товары'].rows.some(r=>r.product_id===p.part_id))fail('Товар не найден',404);
    const bytes=Uint8Array.from(atob(String(p.content_base64||'')),c=>c.charCodeAt(0));
    if(!bytes.length||bytes.length>10*1024*1024)fail('Неверный размер файла',413);
