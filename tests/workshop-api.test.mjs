@@ -57,8 +57,8 @@ test('owner can bind the first iPhone as trusted device',async()=>{
     throw new Error('Unexpected fetch: '+url);
   }});
   const r=await s.invoke({action:'owner_device_enroll',params:{device_token:token}},{Authorization:'Bearer test-user-jwt','User-Agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'});
-  assert.equal(r.status,200,await r.text());
-  const body=await r.json();assert.equal(body.data.trusted,true);
+  const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));
+  assert.equal(body.data.trusted,true);
 });
 test('owner password recovery requires the bound iPhone token',async()=>{
   const token='33333333-3333-4333-8333-333333333333';
