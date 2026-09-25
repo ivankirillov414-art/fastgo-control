@@ -231,7 +231,7 @@ async function main(req){
     if(['legal','legal_save'].includes(action)&&me.role!=='owner')fail('Реквизиты доступны только владельцу',403);
     if(['storage_close','storage_delete'].includes(action)&&me.role!=='receiver')fail('Действие доступно только мастеру-приёмщику',403);
     if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
-    const c=await config(),status_permissions=await rolePermission(me.role),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,status_permissions};
+    const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,...(status_permissions?{status_permissions}:{})};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
       async put(path,bytes,mime){const r=await fetch(BASE+'/storage/v1/object/fastgo-workshop-private/'+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':mime},body:bytes,signal:AbortSignal.timeout(30000)});if(!r.ok&&r.status!==409)fail('Не удалось сохранить файл',503);},
