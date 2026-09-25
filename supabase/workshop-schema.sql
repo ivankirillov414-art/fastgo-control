@@ -122,7 +122,7 @@ declare
  k text:=coalesce(p->>'kind','repair'); rid uuid; reqid uuid; st text; oldst text;
  total numeric:=0; labor numeric:=0; parts_total numeric:=0; paid numeric:=0; amt numeric;
  works_new jsonb; parts_new jsonb; oldparts jsonb; pid uuid; delta integer; oldq integer; newq integer;
- change record; legacy record; assignment uuid; role_allowed boolean; revision_old integer; dates date;
+ change record; legacy record; assignment uuid; role_allowed boolean; revision_old integer; dates date; perm workshop_role_permissions%rowtype;
 begin
  select * into m from workshop_members where profile_id=p_actor and active;
  if not found then raise exception 'Доступ сотрудника не подтверждён' using errcode='42501'; end if;
@@ -268,7 +268,12 @@ begin
    if k='repair' then update service_repairs set status='accepted',issued_at=null,quality_checked=false,revision=revision+1,updated_at=now() where id=rid returning to_jsonb(service_repairs.*) into rec;
    else update storage_intakes set status='stored',issued_at=null,revision=revision+1,updated_at=now() where id=rid returning to_jsonb(storage_intakes.*) into rec; end if;
   elsif k='repair' then
-   if not role_allowed and st in ('issued','cancelled') then raise exception 'Выдачу и отмену оформляет приёмщик'; end if;
+   if m.role<>'owner' and st<>oldst and st in ('ready','issued','cancelled') then
+    select * into perm from workshop_role_permissions where role=m.role;
+    if st='ready' and not coalesce(perm.can_mark_ready,false) then raise exception 'У роли нет права ставить ремонт в статус Готов' using errcode='42501'; end if;
+    if st='issued' and not coalesce(perm.can_issue,false) then raise exception 'У роли нет права выдавать ремонт' using errcode='42501'; end if;
+    if st='cancelled' and not coalesce(perm.can_cancel,false) then raise exception 'У роли нет права отменять ремонт' using errcode='42501'; end if;
+   end if;
    works_new:=coalesce(p->'works',rr.works); parts_new:=coalesce(p->'parts',rr.parts); oldparts:=rr.parts;
    if jsonb_typeof(works_new)<>'array' or jsonb_typeof(parts_new)<>'array' or jsonb_array_length(works_new)>100 or jsonb_array_length(parts_new)>100 then raise exception 'Некорректные работы или запчасти'; end if;
    for item in select value from jsonb_array_elements(works_new || parts_new) loop
