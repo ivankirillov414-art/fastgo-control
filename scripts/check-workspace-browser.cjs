@@ -16,7 +16,7 @@ const server=createServer((req,res)=>{
  const kind=process.argv[2]||'chromium',browser=await ({chromium,firefox,webkit})[kind].launch();
  fs.mkdirSync('browser-results',{recursive:true});
  try{
- for(const role of ['owner','receiver','admin','manager','mechanic']){
+ for(const role of ['developer','owner','receiver','admin','manager','mechanic']){
   const context=await browser.newContext(),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'fixture',expires_at:4102444800})));
@@ -36,7 +36,7 @@ const server=createServer((req,res)=>{
    await page.setViewportSize({width,height});await page.goto(origin+'/workshop.html#repairs');
    await page.locator('.records').waitFor();
    assert.equal(await page.locator('.topbar,#refresh-data').count(),0);
-   assert.equal(await page.locator('.nav a[href="#settings"]').count(),role==='owner'?1:0);
+   assert.equal(await page.locator('.nav a[href="#settings"]').count(),['developer','owner'].includes(role)?1:0);
    const sizes=await page.evaluate(()=>({page:document.documentElement.scrollWidth,width:innerWidth,side:document.querySelector('.sidebar').scrollWidth,sideWidth:document.querySelector('.sidebar').clientWidth}));
    assert.ok(sizes.page<=sizes.width+1,JSON.stringify({kind,role,width,sizes}));
    if(width>760)assert.ok(sizes.side<=sizes.sideWidth+1,JSON.stringify(sizes));
@@ -47,11 +47,12 @@ const server=createServer((req,res)=>{
   await page.goto(origin+'/workshop.html#catalog');await page.getByRole('heading',{name:'Электрические работы',exact:true}).waitFor();
   if(role!=='mechanic'){
    await page.goto(origin+'/workshop.html#order?kind=storage&id=test');await page.locator('#order-form').waitFor();
-   assert.equal(await page.locator('#delete-storage').count(),role==='receiver'?1:0);
-   assert.equal(await page.locator('#close-storage').count(),role==='receiver'?1:0);
+   assert.equal(await page.locator('#delete-storage').count(),['developer','owner','receiver'].includes(role)?1:0);
+   assert.equal(await page.locator('#close-storage').count(),['developer','owner','receiver'].includes(role)?1:0);
   }
+  if(role==='developer'){await page.goto(origin+'/workshop.html#account');await page.getByRole('heading',{name:'Аккаунт',exact:true}).waitFor();const body=(await page.locator('body').innerText()).toLowerCase();assert.equal(body.includes('developer'),false);assert.equal(body.includes('разработчик'),false);}
   assert.deepEqual(errors,[]);await context.close();
  }
- console.log('PASS',kind,'five widths, five roles, table default, board, price groups, storage buttons');
+ console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
