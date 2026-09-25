@@ -1,7 +1,7 @@
 name: FastGo staff registration validation
 on:
   push:
-    branches: [codex/fastgo-staff-registration-20260925, codex/fastgo-account-device-20260925]
+    branches: [codex/fastgo-staff-registration-20260925, codex/fastgo-account-device-20260925, codex/fastgo-direct-credentials-20260925]
   pull_request:
     branches: [main]
     paths:
@@ -25,8 +25,7 @@ jobs:
         run: |
           node --check workshop/app.js
           node --check workshop/core.js
-          node --check workshop/reset-password.js
       - name: Registration and workshop regression tests
         run: |
-          node --test --test-name-pattern="non-admin cannot change staff|self-registration always creates a pending mechanic request|unconfirmed email cannot create an access request|admin cannot promote a member to owner|owner device enrollment is limited to iPhone|owner can bind the first iPhone as trusted device|owner password recovery requires the bound iPhone token|trusted owner iPhone may request password recovery|approved employee can request password recovery|owner login cannot be changed from the employee account form|approved employee can request login change" tests/workshop-api.test.mjs
+          node --test --test-name-pattern="non-admin cannot change staff|self-registration always creates a pending mechanic request|unconfirmed email cannot create an access request|admin cannot promote a member to owner|owner device enrollment is limited to iPhone|owner can bind the first iPhone as trusted device|owner credential change requires the bound iPhone token|trusted owner iPhone changes password after current password verification|wrong current password prevents credential changes|approved employee can change password directly|approved employee can change login directly without email confirmation flow|owner login remains immutable from account page" tests/workshop-api.test.mjs
           node --test tests/workshop-core.test.mjs tests/pending.test.mjs
