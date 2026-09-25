@@ -100,7 +100,7 @@ function exportInventory(){
 async function receiveByBarcode(){
   const code=await scanCode('Приёмка товара по штрих-коду');if(!code)return;
   let part;try{part=await partByCode(code);}catch(e){
-    if(e.status===404&&!String(code).startsWith('FGC-')&&me&&['owner','admin'].includes(me.role)&&confirm('Такого товара ещё нет. Создать новую позицию?'))return newPartForm(code);
+    if(e.status===404&&!String(code).startsWith('FGC-')&&me&&['developer','owner','admin'].includes(me.role)&&confirm('Такого товара ещё нет. Создать новую позицию?'))return newPartForm(code);
     return notice(e.message,'bad');
   }
   const d=showDialog('Поступление на склад',`<div class="inv-product"><b>${esc(part.name)}</b><small>${esc(part.model||part.sku||part.barcode)}</small><strong>Сейчас: ${part.quantity} ${esc(part.unit||'шт')}</strong></div><form id="receipt-form"><label>Количество<input name="quantity" type="number" min="1" step="1" value="1" required></label><label>Основание / поставщик<input name="note" value="Приёмка по штрих-коду" required></label></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="receipt-save">Принять</button>`);
@@ -117,7 +117,7 @@ async function uploadPartPhoto(part,file,categoryPrimary,requestId){
 
 async function photoDialog(part){
   const photos=await api('part_photos',{part_id:part.id});
-  const editable=['owner','admin'].includes(me.role);
+  const editable=['developer','owner','admin'].includes(me.role);
   showDialog('Фотографии: '+part.name,`<div id="part-photo-list" class="photo-grid"></div>${editable?'<label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label><input id="part-photo-category" type="checkbox"> Основное фото категории</label>':''}`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
   const host=$('part-photo-list');
   if(!photos.length)host.textContent='Фотографий пока нет.';
@@ -189,7 +189,7 @@ function addToCart(part){
 }
 
 async function openSales(){
-  if(!me)me=await api('me');restoreSale();if(!['owner','admin','receiver','manager'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
+  if(!me)me=await api('me');restoreSale();if(!['developer','owner','admin','receiver','manager'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
   const d=showDialog('Продажи',`<div class="sales-tools"><button class="btn" id="sale-scan">▣ Сканировать</button><div class="inv-search"><input id="sale-search" placeholder="Поиск по названию, модели, SKU"><div id="sale-results"></div></div></div><div id="sales-cart"></div><div class="inv-form"><label>Оплата<select id="sale-payment"><option value="cash">Наличные</option><option value="card">Карта</option><option value="transfer">Перевод</option></select></label><label>Комментарий<input id="sale-note" placeholder="Необязательно"></label></div>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="sale-complete" disabled>Провести продажу</button>`);
   const search=$('sale-search'),results=$('sale-results');
@@ -214,14 +214,14 @@ async function enhance(){
   try{
     if(!me){try{me=await api('me');}catch{return;}}
     const nav=document.querySelector('.sidebar .nav');
-    if(nav&&!nav.querySelector('[data-sales-nav]')&&['owner','admin','receiver','manager'].includes(me.role)){
+    if(nav&&!nav.querySelector('[data-sales-nav]')&&['developer','owner','admin','receiver','manager'].includes(me.role)){
       const a=document.createElement('a');a.href='#';a.dataset.salesNav='1';a.innerHTML='<span class="nav-mark" aria-hidden="true">▦</span>Продажи';a.onclick=e=>{e.preventDefault();openSales();};
       const stock=[...nav.querySelectorAll('a')].find(x=>x.getAttribute('href')==='#stock');stock?.after(a)||nav.appendChild(a);
     }
     if(location.hash.startsWith('#stock')){
       const head=document.querySelector('.workspace .pagehead');
       if(head&&!head.querySelector('[data-inv-tools]')){
-        const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button><button class="btn ghost" data-history>Продажи</button>${['owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
+        const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button><button class="btn ghost" data-history>Продажи</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
         head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm().catch(e=>notice(e.message,'bad')));box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
       }
       const table=document.querySelector('.workspace table.records');
