@@ -113,16 +113,17 @@ async function main(req){
     const input=await readBody(req),action=text(input.action,40);let p=input.params||{};if(Array.isArray(p)||typeof p!=='object')fail('Некорректные параметры');p={...p};
     if(action==='request_access'){
       if(!user.email_confirmed_at)fail('Подтвердите почту перед запросом доступа',403);
-      const query='profile_id=eq.'+encodeURIComponent(user.id)+'&select=profile_id,active';
+      const query='profile_id=eq.'+encodeURIComponent(user.id)+'&select=profile_id,active,created_at,approved_at';
       let member=(await db('workshop_members',query))?.[0];
       if(!member){
         const name=text(user.user_metadata?.full_name||user.user_metadata?.name||user.email,200);
         await db('profiles','','POST',{id:user.id,full_name:name,role:'customer'},{Prefer:'resolution=ignore-duplicates'});
-        // Fixed inactive role. Never accept role, active or identity from caller.
+        // Self-registration is always a pending mechanic request. Never trust role or active from the caller.
         await db('workshop_members','','POST',{profile_id:user.id,name,role:'mechanic',active:false,tags:[]},{Prefer:'resolution=ignore-duplicates'});
         member=(await db('workshop_members',query))?.[0];
       }
-      return out({data:{active:member?.active===true}});
+      const state=member?.active===true?'active':member?.approved_at?'disabled':'pending';
+      return out({data:{active:member?.active===true,state,requested_at:member?.created_at||null}});
     }
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
@@ -131,12 +132,21 @@ async function main(req){
       if(!admin(me))fail('Нет права изменять сотрудников',403);
       if(action==='member_update'){
         if(!uuid(p.profile_id))fail('Не указан сотрудник');
-        const data=await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:p.profile_id,name:text(p.name,200),role:text(p.role,30),active:bool(p.active),tags:Array.isArray(p.tags)?p.tags.map(x=>text(x,100)).slice(0,20):[]}});return out({data});
+        const name=text(p.name,200),role=text(p.role,30);
+        if(!name)fail('Укажите имя сотрудника');
+        if(!['owner','admin','receiver','manager','mechanic'].includes(role))fail('Недопустимая роль');
+        if(role==='owner'&&me.role!=='owner')fail('Только владелец назначает владельца',403);
+        const tags=Array.isArray(p.tags)?p.tags.map(x=>text(x,100)).filter(Boolean).slice(0,20):[];
+        const data=await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:p.profile_id,name,role,active:bool(p.active),tags}});return out({data});
       }
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email||'')||String(p.password||'').length<12||!text(p.name))fail('Укажите имя, почту и пароль от 12 символов');
-      if(!['admin','receiver','manager','mechanic'].includes(p.role))fail('Недопустимая роль');
-      const created=await rest('/auth/v1/admin/users','POST',{email:p.email,password:p.password,email_confirm:true});const id=created?.id||created?.user?.id;if(!uuid(id))fail('Не удалось создать сотрудника');
-      try{await db('profiles','','POST',{id,full_name:p.name,role:'customer'},{Prefer:'resolution=ignore-duplicates'});await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:id,name:p.name,role:p.role,active:true,tags:p.tags||[]}});}catch(e){await rest('/auth/v1/admin/users/'+id,'DELETE').catch(()=>{});throw e;}return out({data:{id}});
+      const email=text(p.email,320).toLowerCase(),name=text(p.name,200),role=text(p.role,30);
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||String(p.password||'').length<12||!name)fail('Укажите имя, почту и пароль от 12 символов');
+      if(!['admin','receiver','manager','mechanic'].includes(role))fail('Недопустимая роль');
+      const tags=Array.isArray(p.tags)?p.tags.map(x=>text(x,100)).filter(Boolean).slice(0,20):[];
+      let created;try{created=await rest('/auth/v1/admin/users','POST',{email,password:String(p.password),email_confirm:true});}
+      catch(e){if(/already|registered|exists/i.test(e.message||''))fail('Сотрудник с этой почтой уже зарегистрирован',409);throw e;}
+      const id=created?.id||created?.user?.id;if(!uuid(id))fail('Не удалось создать сотрудника');
+      try{await db('profiles','','POST',{id,full_name:name,role:'customer'},{Prefer:'resolution=ignore-duplicates'});await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:id,name,role,active:true,tags}});}catch(e){await rest('/auth/v1/admin/users/'+id,'DELETE').catch(()=>{});throw e;}return out({data:{id}});
     }
     if(!readActions.has(action)&&!writeActions.has(action))fail(action==='part_photo_upload'?'Загрузка фото товара пока отключена: текущий скрипт делает их публичными. Фото приёмок работают.':'Неизвестная операция',400);
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
@@ -184,7 +194,7 @@ async function main(req){
 
 
     if(action==='catalog'){
-      const [d,staff,capabilities]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags&order=name'),catalogueCapabilities(c,g)]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=capabilities;d.backend=backend;return out({data:d});
+      const [d,staff,capabilities]=await Promise.all([g('catalog'),db('workshop_members','select=profile_id,name,role,active,tags,created_at,approved_at&order=name'),catalogueCapabilities(c,g)]);if(!d||!Array.isArray(d.parts)||!Array.isArray(d.services)||!Array.isArray(d.categories))fail('Google вернул неполный каталог. Повторите чтение позже.',502);d.staff=staff||[];d.capabilities=capabilities;d.backend=backend;return out({data:d});
     }
     if(action==='part_by_barcode'){required(p,['barcode']);const d=await g(action,{barcode:text(p.barcode,100)});if(d.active===false)fail('Товар отключён',404);return out({data:d});}
     if(action==='overview'&&!manager(me)){
