@@ -3,8 +3,21 @@ begin;
 create table if not exists public.workshop_members (
  profile_id uuid primary key references public.profiles(id),
  name text not null default '', role text not null check(role in ('owner','admin','receiver','manager','mechanic')),
- active boolean not null default true, tags text[] not null default '{}', created_at timestamptz not null default now()
+ active boolean not null default true, tags text[] not null default '{}', created_at timestamptz not null default now(),
+ approved_at timestamptz
 );
+alter table public.workshop_members add column if not exists approved_at timestamptz;
+update public.workshop_members set approved_at=created_at where active and approved_at is null;
+create or replace function public.fastgo_stamp_workshop_member_approval()
+returns trigger language plpgsql set search_path=public as $
+begin
+ if new.active and new.approved_at is null then new.approved_at=now(); end if;
+ return new;
+end $;
+drop trigger if exists fastgo_workshop_member_approval_stamp on public.workshop_members;
+create trigger fastgo_workshop_member_approval_stamp before insert or update of active
+on public.workshop_members for each row execute function public.fastgo_stamp_workshop_member_approval();
+
 insert into public.workshop_members(profile_id,name,role)
  select id,coalesce(full_name,''),role::text from public.profiles where role::text in ('owner','admin','mechanic')
  on conflict do nothing;
