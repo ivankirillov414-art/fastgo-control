@@ -142,3 +142,47 @@ test('repair intake rejects manual assignment to a non-mechanic',async()=>{
   assert.equal(r.status,400,JSON.stringify(body));
   assert.match(body.error,/активного мастера/);
 });
+
+test('only owner can change repair status permissions',async()=>{
+  const s=setup({role:'admin'});
+  const r=await s.invoke({action:'role_permissions_update',params:{roles:[{role:'mechanic',can_mark_ready:true,can_issue:true,can_cancel:false}]}});
+  assert.equal(r.status,403,await r.text());
+});
+test('owner can save separate repair status rights for roles',async()=>{
+  let saved=null,event=null;
+  const s=setup({role:'owner',respond:async(url,options)=>{
+    if(url.endsWith('/rest/v1/workshop_role_permissions')&&options.method==='POST'){saved=JSON.parse(options.body);return Response.json({});}
+    if(url.endsWith('/rest/v1/workshop_events')&&options.method==='POST'){event=JSON.parse(options.body);return Response.json({});}
+    throw new Error('Unexpected fetch: '+url);
+  }});
+  const rolesToSave=[
+    {role:'admin',can_mark_ready:true,can_issue:true,can_cancel:true},
+    {role:'receiver',can_mark_ready:false,can_issue:true,can_cancel:false},
+    {role:'manager',can_mark_ready:true,can_issue:false,can_cancel:true},
+    {role:'mechanic',can_mark_ready:true,can_issue:false,can_cancel:false}
+  ];
+  const r=await s.invoke({action:'role_permissions_update',params:{roles:rolesToSave}});
+  assert.equal(r.status,200,await r.text());
+  assert.equal(saved.length,4);
+  assert.deepEqual(saved.map(x=>[x.role,x.can_mark_ready,x.can_issue,x.can_cancel]),rolesToSave.map(x=>[x.role,x.can_mark_ready,x.can_issue,x.can_cancel]));
+  assert.equal(event.action,'role_permissions_update');
+});
+test('owner status permissions are always full and locked',async()=>{
+  const s=setup({role:'owner',respond:async(url)=>{
+    if(url.includes('/workshop_role_permissions'))return Response.json([
+      {role:'owner',can_mark_ready:false,can_issue:false,can_cancel:false},
+      {role:'mechanic',can_mark_ready:true,can_issue:false,can_cancel:false}
+    ]);
+    throw new Error('Unexpected fetch: '+url);
+  }});
+  const r=await s.invoke({action:'role_permissions'});
+  const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));
+  const owner=body.data.find(x=>x.role==='owner');
+  assert.equal(owner.can_mark_ready,true);assert.equal(owner.can_issue,true);assert.equal(owner.can_cancel,true);assert.equal(owner.locked,true);
+});
+test('repair status transitions consult role permissions in API and native engine',()=>{
+  assert.match(source,/statusPermissionKey\(targetStatus\)/);
+  const native=fs.readFileSync(new URL('../supabase/functions/_shared/native-engine.js',import.meta.url),'utf8');
+  assert.match(native,/canSetRepairStatus_\(actor,status\)/);
+  assert.match(native,/У вашей роли нет права на этот статус ремонта/);
+});
