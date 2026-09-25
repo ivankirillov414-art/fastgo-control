@@ -199,6 +199,7 @@ async function main(req){
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
     if(['legal','legal_save'].includes(action)&&me.role!=='owner')fail('Реквизиты доступны только владельцу',403);
     if(['storage_close','storage_delete'].includes(action)&&me.role!=='receiver')fail('Действие доступно только мастеру-приёмщику',403);
+    if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
     const c=await config(),actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
