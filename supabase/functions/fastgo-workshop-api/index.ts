@@ -3,13 +3,13 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-role-rights-2026-09-25';
+const RELEASE = 'workshop-developer-role-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||''));
-const admin=m=>['owner','admin'].includes(m.role);
-const manager=m=>['owner','admin','receiver','manager'].includes(m.role);
+const admin=m=>['developer','owner','admin'].includes(m.role);
+const manager=m=>['developer','owner','admin','receiver','manager'].includes(m.role);
 const numeric=(v,label,min=0,max=1e9)=>{if(v===null||v===''||typeof v==='boolean')fail('Проверьте '+label);const n=Number(v);if(!Number.isFinite(n)||n<min||n>max)fail('Проверьте '+label);return n;};
 const integer=(v,label,min=1,max=100000)=>{const n=numeric(v,label,min,max);if(!Number.isInteger(n))fail('Укажите целое число: '+label);return n;};
 const text=(v,max=500)=>String(v??'').trim().slice(0,max);
@@ -106,7 +106,7 @@ const defaultRolePermissions={
   mechanic:{role:'mechanic',can_mark_ready:true,can_issue:false,can_cancel:false}
 };
 async function rolePermission(role){
-  if(role==='owner')return {...defaultRolePermissions.owner};
+  if(role==='developer'||role==='owner')return {...defaultRolePermissions.owner,role};
   const rows=await db('workshop_role_permissions','role=eq.'+encodeURIComponent(role)+'&select=role,can_mark_ready,can_issue,can_cancel&limit=1');
   return rows?.[0]||defaultRolePermissions[role]||{role,can_mark_ready:false,can_issue:false,can_cancel:false};
 }
@@ -144,13 +144,15 @@ async function main(req){
       const state=member?.active===true?'active':member?.approved_at?'disabled':'pending';
       return out({data:{active:member?.active===true,state,requested_at:member?.created_at||null}});
     }
-    const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
+    const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['developer','owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(action==='owner_device_status'||action==='owner_device_enroll'){
-      if(me.role!=='owner')fail('Доступно только владельцу',403);
-      const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
-      if(!primary||primary.profile_id!==user.id)fail('Управление паролем владельца доступно только основному владельцу',403);
+      if(!['developer','owner'].includes(me.role))fail('Доступно только привилегированной учётной записи',403);
+      if(me.role==='owner'){
+        const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
+        if(!primary||primary.profile_id!==user.id)fail('Управление паролем владельца доступно только основному владельцу',403);
+      }
       const ua=req.headers.get('user-agent')||'',isIphone=/iPhone/i.test(ua);
       const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=device_token,label,created_at,last_used_at&limit=1');
       const current=rows?.[0]||null,token=text(p.device_token,80);
@@ -169,9 +171,11 @@ async function main(req){
       const currentPassword=String(p.current_password||''),newPassword=String(p.new_password||''),newEmail=text(p.email,320).toLowerCase(),token=text(p.device_token,80);
       if(!currentPassword)fail('Введите текущий пароль');
       if(newPassword&&newPassword.length<12)fail('Новый пароль должен содержать не менее 12 символов');
-      if(me.role==='owner'){
-        const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
-        if(!primary||primary.profile_id!==user.id)fail('Изменение пароля владельца доступно только основному владельцу',403);
+      if(['developer','owner'].includes(me.role)){
+        if(me.role==='owner'){
+          const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
+          if(!primary||primary.profile_id!==user.id)fail('Изменение пароля владельца доступно только основному владельцу',403);
+        }
         if(newEmail&&newEmail!==String(user.email||'').toLowerCase())fail('Логин владельца здесь не изменяется',403);
         if(!uuid(token))fail('Изменение пароля владельца доступно только на доверенном iPhone 13',403);
         const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&device_token=eq.'+encodeURIComponent(token)+'&active=eq.true&select=device_token&limit=1');
@@ -183,19 +187,19 @@ async function main(req){
       login.body?.cancel().catch(()=>{});
       const changes={};
       if(newPassword)changes.password=newPassword;
-      if(me.role!=='owner'&&newEmail&&newEmail!==String(user.email||'').toLowerCase()){changes.email=newEmail;changes.email_confirm=true;}
+      if(!['developer','owner'].includes(me.role)&&newEmail&&newEmail!==String(user.email||'').toLowerCase()){changes.email=newEmail;changes.email_confirm=true;}
       if(!Object.keys(changes).length)fail('Укажите новый логин или новый пароль');
       await rest('/auth/v1/admin/users/'+user.id,'PUT',changes);
       return out({data:{password_changed:!!changes.password,login_changed:!!changes.email,email:changes.email||user.email,sign_in_again:true}});
     }
     if(action==='role_permissions'){
-      if(me.role!=='owner')fail('Права ролей доступны только владельцу',403);
+      if(!['developer','owner'].includes(me.role))fail('Права ролей доступны только владельцу или техническому администратору',403);
       const rows=await db('workshop_role_permissions','select=role,can_mark_ready,can_issue,can_cancel,updated_at&order=role');
       const byRole=Object.fromEntries((rows||[]).map(x=>[x.role,x]));
       return out({data:Object.keys(defaultRolePermissions).map(role=>role==='owner'?{...defaultRolePermissions.owner,locked:true}:({...defaultRolePermissions[role],...(byRole[role]||{}),locked:false}))});
     }
     if(action==='role_permissions_update'){
-      if(me.role!=='owner')fail('Изменять права ролей может только владелец',403);
+      if(!['developer','owner'].includes(me.role))fail('Изменять права ролей может только владелец или технический администратор',403);
       if(!Array.isArray(p.roles)||p.roles.length<1||p.roles.length>4)fail('Неверный список прав');
       const allowed=new Set(['admin','receiver','manager','mechanic']),seen=new Set(),rows=[];
       for(const x of p.roles){
@@ -206,6 +210,19 @@ async function main(req){
       await db('workshop_events','','POST',{kind:'settings',record_id:user.id,action:'role_permissions_update',actor_id:user.id,details:{roles:rows.map(x=>({role:x.role,can_mark_ready:x.can_mark_ready,can_issue:x.can_issue,can_cancel:x.can_cancel}))}});
       return out({data:{ok:true}});
     }
+    if(action==='technical_access_status'){
+      if(!['developer','owner'].includes(me.role))fail('Нет доступа',403);
+      const rows=await db('workshop_members','role=eq.developer&select=profile_id,active&limit=1');
+      return out({data:{exists:!!rows?.length,active:rows?.[0]?.active===true}});
+    }
+    if(action==='technical_access_set'){
+      if(me.role!=='owner')fail('Технический доступ изменяет владелец',403);
+      const rows=await db('workshop_members','role=eq.developer&select=profile_id,active&limit=1');
+      if(!rows?.length)fail('Технический доступ не настроен',404);
+      await db('workshop_members','profile_id=eq.'+encodeURIComponent(rows[0].profile_id),'PATCH',{active:bool(p.active)});
+      await db('workshop_events','','POST',{kind:'settings',record_id:rows[0].profile_id,action:'technical_access_set',actor_id:user.id,details:{active:bool(p.active)}});
+      return out({data:{ok:true,active:bool(p.active)}});
+    }
     if(['member_update','staff_create'].includes(action)){
       if(!admin(me))fail('Нет права изменять сотрудников',403);
       if(action==='member_update'){
@@ -213,7 +230,7 @@ async function main(req){
         const name=text(p.name,200),role=text(p.role,30);
         if(!name)fail('Укажите имя сотрудника');
         if(!['owner','admin','receiver','manager','mechanic'].includes(role))fail('Недопустимая роль');
-        if(role==='owner'&&me.role!=='owner')fail('Только владелец назначает владельца',403);
+        if(role==='owner'&&!['developer','owner'].includes(me.role))fail('Только владелец или технический администратор назначает владельца',403);
         const tags=Array.isArray(p.tags)?p.tags.map(x=>text(x,100)).filter(Boolean).slice(0,20):[];
         const data=await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:p.profile_id,name,role,active:bool(p.active),tags}});return out({data});
       }
@@ -228,8 +245,8 @@ async function main(req){
     }
     if(!readActions.has(action)&&!writeActions.has(action))fail(action==='part_photo_upload'?'Загрузка фото товара пока отключена: текущий скрипт делает их публичными. Фото приёмок работают.':'Неизвестная операция',400);
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
-    if(['legal','legal_save'].includes(action)&&me.role!=='owner')fail('Реквизиты доступны только владельцу',403);
-    if(['storage_close','storage_delete'].includes(action)&&me.role!=='receiver')fail('Действие доступно только мастеру-приёмщику',403);
+    if(['legal','legal_save'].includes(action)&&!['developer','owner'].includes(me.role))fail('Реквизиты доступны только владельцу',403);
+    if(['storage_close','storage_delete'].includes(action)&&!['developer','owner','receiver'].includes(me.role))fail('Действие доступно владельцу или мастеру-приёмщику',403);
     if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
     const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,...(status_permissions?{status_permissions}:{})};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
@@ -340,7 +357,7 @@ async function main(req){
           if(!['accepted','diagnostics','waiting_parts','repair','ready','issued','cancelled'].includes(p.status||r.status))fail('Неверный статус');
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');
-          if(p.status==='returned'&&p.status!==r.status&&me.role!=='receiver')fail('Закрыть хранение может только мастер-приёмщик',403);
+          if(p.status==='returned'&&p.status!==r.status&&!['developer','owner','receiver'].includes(me.role))fail('Закрыть хранение может владелец или мастер-приёмщик',403);
           if(p.status==='returned'&&(r.status!=='ready_return'||Number(r.paid_amount)<Number(r.storage_amount)||(d.linked||[]).some(x=>!terminal.has(x.status))))fail('Для выдачи нужны готовность, оплата и завершение связанных ремонтов',409);
         }
       }
