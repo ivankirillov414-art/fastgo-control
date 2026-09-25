@@ -1,0 +1,30 @@
+name: FastGo staff registration validation
+on:
+  push:
+    branches: [codex/fastgo-staff-registration-20260925]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'workshop/**'
+      - 'workshop.html'
+      - 'supabase/functions/fastgo-workshop-api/**'
+      - 'supabase/workshop-schema.sql'
+      - 'supabase/migrations/**'
+      - 'tests/workshop-api.test.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          node --check workshop/app.js
+          node --check workshop/core.js
+      - name: Registration and workshop regression tests
+        run: |
+          node --test tests/workshop-api.test.mjs tests/workshop-core.test.mjs tests/pending.test.mjs
