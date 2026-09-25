@@ -19,8 +19,8 @@ test('non-admin cannot change staff',async()=>{const s=setup({role:'receiver'});
 test('self-registration always creates a pending mechanic request',async()=>{
   const s=setup({active:false,respond:async(url)=>{if(url.includes('/profiles'))return Response.json({});throw new Error('Unexpected fetch: '+url);}});
   const r=await s.invoke({action:'request_access',params:{role:'owner',active:true}});
-  assert.equal(r.status,200,await r.text());
-  const body=await r.json();assert.equal(body.data.active,false);assert.equal(body.data.state,'pending');
+  const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));
+  assert.equal(body.data.active,false);assert.equal(body.data.state,'pending');
   const create=s.calls.find(c=>c.url.includes('/workshop_members')&&c.options.method==='POST');
   assert.ok(create,'membership insert was not attempted');
   const member=JSON.parse(create.options.body);assert.equal(member.role,'mechanic');assert.equal(member.active,false);
