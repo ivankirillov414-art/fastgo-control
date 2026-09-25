@@ -78,6 +78,14 @@ test('ready status requires quality control and can only follow repair',async()=
  const ready=await h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0,quality_checked:true});
  assert.equal(ready.status,'ready');
 });
+test('returning from ready to repair resets quality control',async()=>{
+ const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
+ const diagnostics=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0});
+ const started=await h.call('update',{kind:'repair',id:r.id,revision:diagnostics.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0});
+ const ready=await h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0,quality_checked:true});
+ const reopened=await h.call('update',{kind:'repair',id:r.id,revision:ready.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Нужна доработка',works:[],parts:[],discount:0,quality_checked:true});
+ assert.equal(reopened.status,'repair');assert.equal(reopened.quality_checked,false);
+});
 test('repair cancellation requires a reason and records it',async()=>{
  const h=harness(),r=await h.call('create',intake());
  await assert.rejects(h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'cancelled',works:[],parts:[],discount:0}),/причину/);
