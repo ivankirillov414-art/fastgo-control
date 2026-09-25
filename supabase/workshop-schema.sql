@@ -277,6 +277,17 @@ begin
     if st='issued' and not coalesce(perm.can_issue,false) then raise exception 'У роли нет права выдавать ремонт' using errcode='42501'; end if;
     if st='cancelled' and not coalesce(perm.can_cancel,false) then raise exception 'У роли нет права отменять ремонт' using errcode='42501'; end if;
    end if;
+   if not (
+    st=oldst
+    or oldst='accepted' and st in ('diagnostics','cancelled')
+    or oldst='diagnostics' and st in ('waiting_parts','repair','cancelled')
+    or oldst='waiting_parts' and st in ('diagnostics','repair','cancelled')
+    or oldst='repair' and st in ('diagnostics','waiting_parts','ready','cancelled')
+    or oldst='ready' and st in ('repair','issued','cancelled')
+   ) then raise exception 'Сначала пройдите предыдущий этап ремонта'; end if;
+   assignment:=case when p ? 'assigned_master_id' then nullif(p->>'assigned_master_id','')::uuid else rr.assigned_master_id end;
+   if st not in ('accepted','cancelled') and assignment is null then raise exception 'Сначала назначьте мастера'; end if;
+   if st in ('waiting_parts','repair','ready','issued') and length(trim(coalesce(p->>'diagnostics_notes',rr.diagnostics_notes,'')))=0 then raise exception 'Сначала заполните результат диагностики'; end if;
    works_new:=coalesce(p->'works',rr.works); parts_new:=coalesce(p->'parts',rr.parts); oldparts:=rr.parts;
    if jsonb_typeof(works_new)<>'array' or jsonb_typeof(parts_new)<>'array' or jsonb_array_length(works_new)>100 or jsonb_array_length(parts_new)>100 then raise exception 'Некорректные работы или запчасти'; end if;
    for item in select value from jsonb_array_elements(works_new || parts_new) loop
@@ -294,7 +305,6 @@ begin
    if st in ('ready','issued') and not coalesce((p->>'quality_checked')::boolean,rr.quality_checked) then raise exception 'Подтвердите проверку техники'; end if;
    if st='issued' and (oldst<>'ready' or paid<total or coalesce(p->>'handover_notes','')='') then raise exception 'Для выдачи нужны статус «Готов», полная оплата и отметка о проверке комплектности'; end if;
    if st='cancelled' and (paid<>0 or jsonb_array_length(parts_new)>0 or length(trim(coalesce(p->>'note','')))<3) then raise exception 'Перед отменой верните оплату, снимите установленные запчасти и укажите причину'; end if;
-   assignment:=case when p ? 'assigned_master_id' then nullif(p->>'assigned_master_id','')::uuid else rr.assigned_master_id end;
    if not role_allowed and assignment is distinct from rr.assigned_master_id then raise exception 'Мастера назначает приёмщик'; end if;
    if assignment is not null and not exists(select 1 from workshop_members where profile_id=assignment and active and role='mechanic') then raise exception 'Назначить можно только активного мастера'; end if;
    -- Serialize all affected parts in UUID order. Existing trigger prevents negative stock.
@@ -312,7 +322,7 @@ begin
    update service_repairs set works=works_new,parts=parts_new,labor_amount=round(labor,2),parts_amount=round(parts_total,2),total_amount=total,status=st,
     diagnostics_notes=coalesce(p->>'diagnostics_notes',diagnostics_notes),assigned_master_id=assignment,assigned_master=(select name from workshop_members where profile_id=assignment),
     promised_date=case when p ? 'promised_date' then nullif(p->>'promised_date','')::date else promised_date end,
-    approved_amount=rr.approved_amount,approval_note=rr.approval_note,quality_checked=coalesce((p->>'quality_checked')::boolean,quality_checked),
+    approved_amount=rr.approved_amount,approval_note=rr.approval_note,quality_checked=case when st in ('diagnostics','waiting_parts','repair') then false else coalesce((p->>'quality_checked')::boolean,quality_checked) end,
     handover_notes=coalesce(p->>'handover_notes',handover_notes),issued_at=case when st='issued' then now() else issued_at end,updated_at=now(),revision=revision+1
     where id=rid returning to_jsonb(service_repairs.*) into rec;
   else

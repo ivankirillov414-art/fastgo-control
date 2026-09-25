@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-repair-close-flow-2026-09-25';
+const RELEASE = 'workshop-repair-midflow-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -111,6 +111,8 @@ async function rolePermission(role){
   return rows?.[0]||defaultRolePermissions[role]||{role,can_mark_ready:false,can_issue:false,can_cancel:false};
 }
 const statusPermissionKey=status=>status==='ready'?'can_mark_ready':status==='issued'?'can_issue':status==='cancelled'?'can_cancel':'';
+const repairTransitions={accepted:new Set(['accepted','diagnostics','cancelled']),diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),ready:new Set(['ready','repair','issued','cancelled']),issued:new Set(['issued']),cancelled:new Set(['cancelled'])};
+function requireRepairTransition(from,to){if(!repairTransitions[from]?.has(to))fail('Сначала пройдите предыдущий этап ремонта',409);}
 const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
 const writeActions=new Set(['storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','sales','stock','sale','payment','extend','contact','legacy']);
@@ -345,17 +347,25 @@ async function main(req){
       if(action==='update'){
         if(p.kind==='repair'){
           const targetStatus=p.status||r.status,permissionKey=targetStatus!==r.status?statusPermissionKey(targetStatus):'';
+          if(!repairTransitions[targetStatus])fail('Неверный статус');
+          requireRepairTransition(r.status,targetStatus);
           if(permissionKey){const permissions=await rolePermission(me.role);if(!permissions[permissionKey])fail('У вашей роли нет права на этот статус ремонта',403);}
           if(p.works!==undefined)p.works=lines(p.works);if(p.parts!==undefined)p.parts=lines(p.parts);
           p.discount=numeric(p.discount??r.discount??0,'скидку');p.warranty_days=integer(p.warranty_days??r.warranty_days??0,'гарантию',0,3650);
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
-          if(p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
+          const assignedMaster=p.assigned_master_id===undefined?r.assigned_master_id:p.assigned_master_id;
+          if(assignedMaster)await requireActiveMechanic(assignedMaster);
+          if(!['accepted','cancelled'].includes(targetStatus)&&!assignedMaster)fail('Сначала назначьте мастера',409);
+          const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
+          if(['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
+          if(['diagnostics','waiting_parts','repair'].includes(targetStatus))p.quality_checked=false;
           const amount=[...(p.works||r.works||[]),...(p.parts||r.parts||[])].reduce((s,x)=>s+x.price*x.quantity,0)-p.discount;
           if(p.approve&&!text(p.approval_note))fail('Укажите как согласована стоимость');
-          if(['ready','issued'].includes(p.status)&&(!(p.quality_checked??r.quality_checked)||(p.approve?amount:r.approved_amount)!==amount))fail('Перед выдачей нужны проверка техники и согласование текущей стоимости',409);
-          if(p.status==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount||!text(p.handover_notes)))fail('Для выдачи нужны статус «Готов», полная оплата и отметка о комплектности',409);
-          if(p.status==='cancelled'&&p.status!==r.status){if(!text(p.note))fail('Укажите причину отмены');if(Number(r.paid_amount)!==0||(p.parts||r.parts||[]).length)fail('Перед отменой верните оплату и снимите установленные запчасти',409);}
-          if(!['accepted','diagnostics','waiting_parts','repair','ready','issued','cancelled'].includes(p.status||r.status))fail('Неверный статус');
+          const approved=p.approve?amount:(Math.abs(Number(r.total_amount||0)-amount)<.005?Number(r.approved_amount):NaN);
+          if(['repair','ready','issued'].includes(targetStatus)&&amount>0&&Math.abs(approved-amount)>.005)fail('Сначала согласуйте текущую стоимость с клиентом',409);
+          if(['ready','issued'].includes(targetStatus)&&!(p.quality_checked??r.quality_checked))fail('Перед статусом «Готов» выполните контроль качества',409);
+          if(targetStatus==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount||!text(p.handover_notes)))fail('Для выдачи нужны статус «Готов», полная оплата и отметка о комплектности',409);
+          if(targetStatus==='cancelled'&&targetStatus!==r.status){if(!text(p.note))fail('Укажите причину отмены');if(Number(r.paid_amount)!==0||(p.parts||r.parts||[]).length)fail('Перед отменой верните оплату и снимите установленные запчасти',409);}
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');
           if(p.status==='returned'&&p.status!==r.status&&!['developer','owner','receiver'].includes(me.role))fail('Закрыть хранение может владелец или мастер-приёмщик',403);
