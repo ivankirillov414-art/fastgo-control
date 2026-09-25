@@ -60,50 +60,68 @@ test('owner can bind the first iPhone as trusted device',async()=>{
   const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));
   assert.equal(body.data.trusted,true);
 });
-test('owner password recovery requires the bound iPhone token',async()=>{
+test('owner credential change requires the bound iPhone token',async()=>{
   const token='33333333-3333-4333-8333-333333333333';
-  let recover=0;
-  const s=setup({role:'owner',respond:async(url)=>{
+  let verified=0,updated=0;
+  const s=setup({role:'owner',respond:async(url,options)=>{
     if(url.includes('/workshop_owner_devices'))return Response.json([]);
-    if(url.includes('/auth/v1/recover')){recover++;return Response.json({});}
+    if(url.includes('/auth/v1/token?grant_type=password')){verified++;return Response.json({access_token:'x'});}
+    if(url.includes('/auth/v1/admin/users/')){updated++;return Response.json({id:user});}
     throw new Error('Unexpected fetch: '+url);
   }});
-  const r=await s.invoke({action:'account_recovery',params:{device_token:token}});
-  assert.equal(r.status,403,await r.text());assert.equal(recover,0);
+  const r=await s.invoke({action:'account_credentials_update',params:{device_token:token,current_password:'old-password',new_password:'new-password-123'}});
+  assert.equal(r.status,403,await r.text());assert.equal(verified,0);assert.equal(updated,0);
 });
-test('trusted owner iPhone may request password recovery',async()=>{
+test('trusted owner iPhone changes password after current password verification',async()=>{
   const token='33333333-3333-4333-8333-333333333333';
-  let recover=0;
+  let verified=0,updated=0;
+  const s=setup({role:'owner',respond:async(url,options)=>{
+    if(url.includes('/workshop_owner_devices'))return Response.json([{device_token:token}]);
+    if(url.includes('/auth/v1/token?grant_type=password')){verified++;assert.equal(JSON.parse(options.body).password,'old-password');return Response.json({access_token:'x'});}
+    if(url.includes('/auth/v1/admin/users/')){updated++;const body=JSON.parse(options.body);assert.equal(body.password,'new-password-123');assert.equal(body.email,undefined);return Response.json({id:user});}
+    throw new Error('Unexpected fetch: '+url);
+  }});
+  const r=await s.invoke({action:'account_credentials_update',params:{device_token:token,current_password:'old-password',new_password:'new-password-123'}});
+  const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));assert.equal(body.data.password_changed,true);assert.equal(body.data.login_changed,false);assert.equal(verified,1);assert.equal(updated,1);
+});
+test('wrong current password prevents credential changes',async()=>{
+  let updated=0;
+  const s=setup({role:'mechanic',respond:async(url)=>{
+    if(url.includes('/auth/v1/token?grant_type=password'))return Response.json({error:'invalid'},{status:400});
+    if(url.includes('/auth/v1/admin/users/')){updated++;return Response.json({id:user});}
+    throw new Error('Unexpected fetch: '+url);
+  }});
+  const r=await s.invoke({action:'account_credentials_update',params:{current_password:'wrong',new_password:'new-password-123'}});
+  assert.equal(r.status,403,await r.text());assert.equal(updated,0);
+});
+test('approved employee can change password directly',async()=>{
+  let updated=0;
+  const s=setup({role:'mechanic',respond:async(url,options)=>{
+    if(url.includes('/auth/v1/token?grant_type=password'))return Response.json({access_token:'x'});
+    if(url.includes('/auth/v1/admin/users/')){updated++;assert.equal(JSON.parse(options.body).password,'new-password-123');return Response.json({id:user});}
+    throw new Error('Unexpected fetch: '+url);
+  }});
+  const r=await s.invoke({action:'account_credentials_update',params:{current_password:'old-password',new_password:'new-password-123'}});
+  assert.equal(r.status,200,await r.text());assert.equal(updated,1);
+});
+test('approved employee can change login directly without email confirmation flow',async()=>{
+  let updated=0;
+  const s=setup({role:'mechanic',respond:async(url,options)=>{
+    if(url.includes('/auth/v1/token?grant_type=password'))return Response.json({access_token:'x'});
+    if(url.includes('/auth/v1/admin/users/')){updated++;const body=JSON.parse(options.body);assert.equal(body.email,'new@example.com');assert.equal(body.email_confirm,true);return Response.json({id:user,email:'new@example.com'});}
+    throw new Error('Unexpected fetch: '+url);
+  }});
+  const r=await s.invoke({action:'account_credentials_update',params:{current_password:'old-password',email:'new@example.com'}});
+  const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));assert.equal(body.data.login_changed,true);assert.equal(updated,1);
+});
+test('owner login remains immutable from account page',async()=>{
+  const token='33333333-3333-4333-8333-333333333333';
+  let verified=0;
   const s=setup({role:'owner',respond:async(url)=>{
     if(url.includes('/workshop_owner_devices'))return Response.json([{device_token:token}]);
-    if(url.includes('/auth/v1/recover')){recover++;return Response.json({});}
+    if(url.includes('/auth/v1/token?grant_type=password')){verified++;return Response.json({access_token:'x'});}
     throw new Error('Unexpected fetch: '+url);
   }});
-  const r=await s.invoke({action:'account_recovery',params:{device_token:token}});
-  assert.equal(r.status,200,await r.text());assert.equal(recover,1);
-});
-test('approved employee can request password recovery',async()=>{
-  let recover=0;
-  const s=setup({role:'mechanic',respond:async(url)=>{
-    if(url.includes('/auth/v1/recover')){recover++;return Response.json({});}
-    throw new Error('Unexpected fetch: '+url);
-  }});
-  const r=await s.invoke({action:'account_recovery'});
-  assert.equal(r.status,200,await r.text());assert.equal(recover,1);
-});
-test('owner login cannot be changed from the employee account form',async()=>{
-  const s=setup({role:'owner'});
-  const r=await s.invoke({action:'account_email_change',params:{email:'new@example.com'}});
-  assert.equal(r.status,403,await r.text());
-});
-test('approved employee can request login change',async()=>{
-  let updated=false;
-  const s=setup({role:'mechanic',respond:async(url,options)=>{
-    if(url.endsWith('/auth/v1/user')&&options.method==='PUT'){
-      updated=true;assert.equal(JSON.parse(options.body).email,'new@example.com');return Response.json({id:user,email:'new@example.com'});
-    }
-    throw new Error('Unexpected fetch: '+url);
-  }});
-  const r=await s.invoke({action:'account_email_change',params:{email:'new@example.com'}});
-  assert.equal(r.status,200,await r.text());assert.equal(updated,true);
+  const r=await s.invoke({action:'account_credentials_update',params:{device_token:token,current_password:'old-password',new_password:'new-password-123',email:'new@example.com'}});
+  assert.equal(r.status,403,await r.text());assert.equal(verified,0);
 });
