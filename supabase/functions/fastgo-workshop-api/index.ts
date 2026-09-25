@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-staff-registration-2026-09-25';
+const RELEASE = 'workshop-account-device-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -128,6 +128,46 @@ async function main(req){
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
     if(action==='me'){const c=await config();return out({data:{...me,email:user.email,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
+    if(action==='owner_device_status'||action==='owner_device_enroll'){
+      if(me.role!=='owner')fail('Доступно только владельцу',403);
+      const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
+      if(!primary||primary.profile_id!==user.id)fail('Управление паролем владельца доступно только основному владельцу',403);
+      const ua=req.headers.get('user-agent')||'',isIphone=/iPhone/i.test(ua);
+      const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=device_token,label,created_at,last_used_at&limit=1');
+      const current=rows?.[0]||null,token=text(p.device_token,80);
+      if(action==='owner_device_status'){
+        const trusted=!!current&&uuid(token)&&current.device_token===token;
+        if(trusted)await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&device_token=eq.'+encodeURIComponent(token),'PATCH',{last_used_at:new Date().toISOString()});
+        return out({data:{registered:!!current,trusted,can_enroll:!current&&isIphone,label:current?.label||null}});
+      }
+      if(!isIphone)fail('Привязка владельца разрешена только с iPhone',403);
+      if(!uuid(token))fail('Не удалось создать код доверенного устройства');
+      if(current&&current.device_token!==token)fail('Доверенный iPhone владельца уже привязан',409);
+      if(!current)await db('workshop_owner_devices','','POST',{profile_id:user.id,device_token:token,label:'iPhone 13',active:true,last_used_at:new Date().toISOString()});
+      return out({data:{registered:true,trusted:true,label:'iPhone 13'}});
+    }
+    if(action==='account_recovery'){
+      const token=text(p.device_token,80);
+      if(me.role==='owner'){
+        const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
+        if(!primary||primary.profile_id!==user.id)fail('Смена пароля владельца доступна только основному владельцу',403);
+        if(!uuid(token))fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
+        const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&device_token=eq.'+encodeURIComponent(token)+'&active=eq.true&select=device_token&limit=1');
+        if(!rows?.length)fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
+      }
+      const r=await fetch(BASE+'/auth/v1/recover',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({email:user.email,redirect_to:'https://ivankirillov414-art.github.io/fastgo-control/reset-password.html'}),signal:AbortSignal.timeout(20000)});
+      if(!r.ok)fail('Не удалось отправить ссылку для смены пароля. Повторите позже.',503);
+      return out({data:{sent:true}});
+    }
+    if(action==='account_email_change'){
+      if(me.role==='owner')fail('Логин владельца здесь не изменяется',403);
+      const email=text(p.email,320).toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Укажите корректную почту');
+      const r=await fetch(BASE+'/auth/v1/user',{method:'PUT',headers:{apikey:KEY,Authorization:authorization,'Content-Type':'application/json'},body:JSON.stringify({email}),signal:AbortSignal.timeout(20000)});
+      const raw=await r.text();let j={};try{j=raw?JSON.parse(raw):{};}catch{}
+      if(!r.ok)fail(j?.msg||j?.message||'Не удалось запросить смену логина',r.status>=500?503:400);
+      return out({data:{requested:true,email}});
+    }
     if(['member_update','staff_create'].includes(action)){
       if(!admin(me))fail('Нет права изменять сотрудников',403);
       if(action==='member_update'){

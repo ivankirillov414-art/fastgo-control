@@ -18,6 +18,21 @@ drop trigger if exists fastgo_workshop_member_approval_stamp on public.workshop_
 create trigger fastgo_workshop_member_approval_stamp before insert or update of active
 on public.workshop_members for each row execute function public.fastgo_stamp_workshop_member_approval();
 
+create table if not exists public.workshop_owner_devices (
+ profile_id uuid not null references public.profiles(id) on delete cascade,
+ device_token uuid not null,
+ label text not null default 'iPhone 13',
+ active boolean not null default true,
+ created_at timestamptz not null default now(),
+ last_used_at timestamptz,
+ primary key(profile_id,device_token)
+);
+create unique index if not exists workshop_owner_devices_one_active
+ on public.workshop_owner_devices(profile_id) where active;
+alter table public.workshop_owner_devices enable row level security;
+revoke all on public.workshop_owner_devices from anon,authenticated;
+grant all on public.workshop_owner_devices to service_role;
+
 insert into public.workshop_members(profile_id,name,role)
  select id,coalesce(full_name,''),role::text from public.profiles where role::text in ('owner','admin','mechanic')
  on conflict do nothing;
