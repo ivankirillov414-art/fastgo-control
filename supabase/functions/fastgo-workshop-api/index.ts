@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-account-device-2026-09-25';
+const RELEASE = 'workshop-direct-credentials-2026-09-25';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -146,27 +146,28 @@ async function main(req){
       if(!current)await db('workshop_owner_devices','','POST',{profile_id:user.id,device_token:token,label:'iPhone 13',active:true,last_used_at:new Date().toISOString()});
       return out({data:{registered:true,trusted:true,label:'iPhone 13'}});
     }
-    if(action==='account_recovery'){
-      const token=text(p.device_token,80);
+    if(action==='account_credentials_update'){
+      const currentPassword=String(p.current_password||''),newPassword=String(p.new_password||''),newEmail=text(p.email,320).toLowerCase(),token=text(p.device_token,80);
+      if(!currentPassword)fail('Введите текущий пароль');
+      if(newPassword&&newPassword.length<12)fail('Новый пароль должен содержать не менее 12 символов');
       if(me.role==='owner'){
         const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
-        if(!primary||primary.profile_id!==user.id)fail('Смена пароля владельца доступна только основному владельцу',403);
-        if(!uuid(token))fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
+        if(!primary||primary.profile_id!==user.id)fail('Изменение пароля владельца доступно только основному владельцу',403);
+        if(newEmail&&newEmail!==String(user.email||'').toLowerCase())fail('Логин владельца здесь не изменяется',403);
+        if(!uuid(token))fail('Изменение пароля владельца доступно только на доверенном iPhone 13',403);
         const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&device_token=eq.'+encodeURIComponent(token)+'&active=eq.true&select=device_token&limit=1');
-        if(!rows?.length)fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
-      }
-      const r=await fetch(BASE+'/auth/v1/recover',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({email:user.email,redirect_to:'https://ivankirillov414-art.github.io/fastgo-control/reset-password.html'}),signal:AbortSignal.timeout(20000)});
-      if(!r.ok)fail('Не удалось отправить ссылку для смены пароля. Повторите позже.',503);
-      return out({data:{sent:true}});
-    }
-    if(action==='account_email_change'){
-      if(me.role==='owner')fail('Логин владельца здесь не изменяется',403);
-      const email=text(p.email,320).toLowerCase();
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Укажите корректную почту');
-      const r=await fetch(BASE+'/auth/v1/user',{method:'PUT',headers:{apikey:KEY,Authorization:authorization,'Content-Type':'application/json'},body:JSON.stringify({email}),signal:AbortSignal.timeout(20000)});
-      const raw=await r.text();let j={};try{j=raw?JSON.parse(raw):{};}catch{}
-      if(!r.ok)fail(j?.msg||j?.message||'Не удалось запросить смену логина',r.status>=500?503:400);
-      return out({data:{requested:true,email}});
+        if(!rows?.length)fail('Изменение пароля владельца доступно только на доверенном iPhone 13',403);
+        if(!newPassword)fail('Введите новый пароль');
+      }else if(newEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail))fail('Укажите корректный логин / email');
+      const login=await fetch(BASE+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({email:user.email,password:currentPassword}),signal:AbortSignal.timeout(20000)});
+      if(!login.ok){login.body?.cancel().catch(()=>{});fail('Текущий пароль неверен',403);}
+      login.body?.cancel().catch(()=>{});
+      const changes={};
+      if(newPassword)changes.password=newPassword;
+      if(me.role!=='owner'&&newEmail&&newEmail!==String(user.email||'').toLowerCase()){changes.email=newEmail;changes.email_confirm=true;}
+      if(!Object.keys(changes).length)fail('Укажите новый логин или новый пароль');
+      await rest('/auth/v1/admin/users/'+user.id,'PUT',changes);
+      return out({data:{password_changed:!!changes.password,login_changed:!!changes.email,email:changes.email||user.email,sign_in_again:true}});
     }
     if(['member_update','staff_create'].includes(action)){
       if(!admin(me))fail('Нет права изменять сотрудников',403);
