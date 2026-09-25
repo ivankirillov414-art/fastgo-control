@@ -1,7 +1,7 @@
 name: FastGo staff registration validation
 on:
   push:
-    branches: [codex/fastgo-staff-registration-20260925, codex/fastgo-account-device-20260925, codex/fastgo-direct-credentials-20260925]
+    branches: [codex/fastgo-staff-registration-20260925, codex/fastgo-account-device-20260925, codex/fastgo-direct-credentials-20260925, codex/fastgo-email-recovery-20260925]
   pull_request:
     branches: [main]
     paths:
