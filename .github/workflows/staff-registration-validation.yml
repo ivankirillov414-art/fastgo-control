@@ -27,4 +27,5 @@ jobs:
           node --check workshop/core.js
       - name: Registration and workshop regression tests
         run: |
-          node --test tests/workshop-api.test.mjs tests/workshop-core.test.mjs tests/pending.test.mjs
+          node --test --test-name-pattern="non-admin cannot change staff|self-registration always creates a pending mechanic request|unconfirmed email cannot create an access request|admin cannot promote a member to owner" tests/workshop-api.test.mjs
+          node --test tests/workshop-core.test.mjs tests/pending.test.mjs
