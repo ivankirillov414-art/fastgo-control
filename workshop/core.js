@@ -44,7 +44,7 @@ async function apiRequest(action,params,retried=false){if(session?.expires_at &&
 const inFlight=new Map();
 export async function api(action,params={},options={}){
   if(!mutations.has(action)){
-    if(['member_update','staff_create','import_legacy','owner_device_enroll','account_recovery','account_email_change'].includes(action)){const end=reads.beginWrite();try{return await apiRequest(action,params);}finally{end();changed();}}
+    if(['member_update','staff_create','import_legacy','owner_device_enroll','account_credentials_update'].includes(action)){const end=reads.beginWrite();try{return await apiRequest(action,params);}finally{end();changed();}}
     if(session?.expires_at&&session.expires_at*1000<Date.now()+45000)await refresh();
     const actor=session?.user_id||session?.access_token||'anonymous';
     try{return await reads.read(canonical({actor,action,params}),()=>apiRequest(action,params),{fresh:options.fresh,retain:cachedReads.has(action)});}
