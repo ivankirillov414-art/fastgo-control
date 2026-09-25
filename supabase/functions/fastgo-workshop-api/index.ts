@@ -130,6 +130,8 @@ async function main(req){
     if(action==='me'){const c=await config();return out({data:{...me,email:user.email,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(action==='owner_device_status'||action==='owner_device_enroll'){
       if(me.role!=='owner')fail('Доступно только владельцу',403);
+      const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
+      if(!primary||primary.profile_id!==user.id)fail('Управление паролем владельца доступно только основному владельцу',403);
       const ua=req.headers.get('user-agent')||'',isIphone=/iPhone/i.test(ua);
       const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=device_token,label,created_at,last_used_at&limit=1');
       const current=rows?.[0]||null,token=text(p.device_token,80);
@@ -147,6 +149,8 @@ async function main(req){
     if(action==='account_recovery'){
       const token=text(p.device_token,80);
       if(me.role==='owner'){
+        const primary=(await db('workshop_members','role=eq.owner&active=eq.true&select=profile_id&order=created_at.asc&limit=1'))?.[0];
+        if(!primary||primary.profile_id!==user.id)fail('Смена пароля владельца доступна только основному владельцу',403);
         if(!uuid(token))fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
         const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&device_token=eq.'+encodeURIComponent(token)+'&active=eq.true&select=device_token&limit=1');
         if(!rows?.length)fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
