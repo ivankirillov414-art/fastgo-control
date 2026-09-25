@@ -1,7 +1,7 @@
 name: FastGo staff registration validation
 on:
   push:
-    branches: [codex/fastgo-staff-registration-20260925, codex/fastgo-account-device-20260925, codex/fastgo-direct-credentials-20260925, codex/fastgo-email-recovery-20260925, codex/fastgo-repair-flow-hardening-20260925, codex/fastgo-role-status-rights-20260925]
+    branches: [codex/fastgo-staff-registration-20260925, codex/fastgo-account-device-20260925, codex/fastgo-direct-credentials-20260925, codex/fastgo-email-recovery-20260925, codex/fastgo-repair-flow-hardening-20260925, codex/fastgo-role-status-rights-20260925, codex/fastgo-role-transition-20260925]
   pull_request:
     branches: [main]
     paths:
@@ -27,6 +27,11 @@ jobs:
           node --check workshop/core.js
           node --check workshop/orders.js
           node --check supabase/functions/_shared/native-engine.js
+          node --check supabase/functions/_shared/native-client.js
+          node --check workshop/inventory-ui.js
+          node --check workshop/inventory-import.js
+          node --check workshop/inventory-launcher.js
+          node --check workshop/documents.js
       - name: Registration and workshop regression tests
         run: |
           node --test --test-name-pattern="non-admin cannot change staff|self-registration always creates a pending mechanic request|unconfirmed email cannot create an access request|admin cannot promote a member to owner|owner device enrollment is limited to iPhone|owner can bind the first iPhone as trusted device|owner credential change requires the bound iPhone token|trusted owner iPhone changes password after current password verification|wrong current password prevents credential changes|approved employee can change password directly|approved employee can change login directly without email confirmation flow|owner login remains immutable from account page|repair intake rejects manual assignment to a non-mechanic|only owner can change repair status permissions|owner can save separate repair status rights for roles|owner status permissions are always full and locked|repair status transitions consult role permissions in API and native engine" tests/workshop-api.test.mjs
