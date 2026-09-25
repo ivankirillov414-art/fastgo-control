@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8');
 const user='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
-function setup({role='owner',active=true,valid=true,record={},respond}={}){let handler;const calls=[];const fetch=async(url,options={})=>{calls.push({url,options});if(url.endsWith('/auth/v1/user'))return Response.json(valid?{id:user}:{error:'invalid'},{status:valid?200:401});if(url.includes('/workshop_members'))return Response.json(active?[{profile_id:user,name:'QA',role,active:true}]:[]);if(url.includes('/service_repairs?'))return Response.json([{id,assigned_master_id:user,fault_photo_paths:[],signed_document_paths:[],...record}]);if(respond)return respond(url,options);throw new Error('Unexpected fetch: '+url);};const context={Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://db.invalid':'test-server-key'},serve:fn=>handler=fn},Request,Response,Headers,URL,URLSearchParams,AbortSignal,Uint8Array,atob,fetch,crypto:globalThis.crypto};vm.runInNewContext(source,context);return {calls,invoke:(body,headers={Authorization:'Bearer test-user-jwt'},method='POST')=>handler(new Request('https://edge.invalid/fastgo-workshop-api',{method,headers:{'Content-Type':'application/json',...headers},body:method==='POST'?JSON.stringify(body):undefined}))};}
+function setup({role='owner',active=true,valid=true,confirmed=true,record={},respond}={}){let handler;const calls=[];const fetch=async(url,options={})=>{calls.push({url,options});if(url.endsWith('/auth/v1/user'))return Response.json(valid?{id:user,email:'qa@example.com',email_confirmed_at:confirmed?'2026-09-25T00:00:00Z':null,user_metadata:{full_name:'QA User'}}:{error:'invalid'},{status:valid?200:401});if(url.includes('/workshop_members'))return Response.json(active?[{profile_id:user,name:'QA',role,active:true,created_at:'2026-09-25T00:00:00Z',approved_at:'2026-09-25T00:00:00Z'}]:[]);if(url.includes('/service_repairs?'))return Response.json([{id,assigned_master_id:user,fault_photo_paths:[],signed_document_paths:[],...record}]);if(respond)return respond(url,options);throw new Error('Unexpected fetch: '+url);};const context={Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://db.invalid':'test-server-key'},serve:fn=>handler=fn},Request,Response,Headers,URL,URLSearchParams,AbortSignal,Uint8Array,atob,fetch,crypto:globalThis.crypto};vm.runInNewContext(source,context);return {calls,invoke:(body,headers={Authorization:'Bearer test-user-jwt'},method='POST')=>handler(new Request('https://edge.invalid/fastgo-workshop-api',{method,headers:{'Content-Type':'application/json',...headers},body:method==='POST'?JSON.stringify(body):undefined}))};}
 test('unauthenticated caller cannot query data',async()=>{const s=setup();assert.equal((await s.invoke({action:'list'},{})).status,401);assert.equal(s.calls.length,0);});
 test('invalid JWT cannot query records',async()=>{const s=setup({valid:false});assert.equal((await s.invoke({action:'get',params:{id}})).status,401);assert.equal(s.calls.length,1);});
 test('inactive membership is enforced independently of token',async()=>{const s=setup({active:false});assert.equal((await s.invoke({action:'list'})).status,403);assert.equal(s.calls.length,2);});
@@ -15,3 +15,25 @@ test('a record cannot sign an unrelated document',async()=>{const s=setup();cons
 test('mutation actor comes from verified identity',async()=>{const s=setup({respond:async(url,options)=>{assert.match(url,/rpc\/workshop_mutate/);const body=JSON.parse(options.body);assert.equal(body.p_actor,user);return Response.json({id});}});const r=await s.invoke({action:'payment',params:{kind:'repair',id,p_actor:'forged-id'}});assert.equal(r.status,200);});
 test('database conflicts are reported as conflicts',async()=>{const s=setup({respond:async()=>Response.json({code:'40001',message:'Card was updated'},{status:400})});const r=await s.invoke({action:'update',params:{id}});assert.equal(r.status,409,await r.text());});
 test('non-admin cannot change staff',async()=>{const s=setup({role:'receiver'});const r=await s.invoke({action:'staff_create',params:{}});assert.equal(r.status,403,await r.text());});
+
+test('self-registration always creates a pending mechanic request',async()=>{
+  const s=setup({active:false,respond:async(url)=>{if(url.includes('/profiles'))return Response.json({});throw new Error('Unexpected fetch: '+url);}});
+  const r=await s.invoke({action:'request_access',params:{role:'owner',active:true}});
+  assert.equal(r.status,200,await r.text());
+  const body=await r.json();assert.equal(body.data.active,false);assert.equal(body.data.state,'pending');
+  const create=s.calls.find(c=>c.url.includes('/workshop_members')&&c.options.method==='POST');
+  assert.ok(create,'membership insert was not attempted');
+  const member=JSON.parse(create.options.body);assert.equal(member.role,'mechanic');assert.equal(member.active,false);
+});
+test('unconfirmed email cannot create an access request',async()=>{
+  const s=setup({active:false,confirmed:false});
+  const r=await s.invoke({action:'request_access'});
+  assert.equal(r.status,403,await r.text());
+  assert.equal(s.calls.filter(c=>c.url.includes('/workshop_members')&&c.options.method==='POST').length,0);
+});
+test('admin cannot promote a member to owner',async()=>{
+  const s=setup({role:'admin'});
+  const r=await s.invoke({action:'member_update',params:{profile_id:id,name:'QA',role:'owner',active:true,tags:[]}});
+  assert.equal(r.status,403,await r.text());
+  assert.equal(s.calls.filter(c=>c.url.includes('/rpc/workshop_mutate')).length,0);
+});
