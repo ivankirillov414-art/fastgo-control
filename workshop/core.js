@@ -30,6 +30,18 @@ async function request(path,body,token){let r;try{r=await fetch(BASE+path,{metho
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token,user_id:s.user?.id||session?.user_id,expires_at:s.expires_at||Math.floor(Date.now()/1000)+s.expires_in};localStorage.setItem(STORE,JSON.stringify(session));}
 async function refresh(){if(!session?.refresh_token)return false;if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(s=>{saveSession(s);return true;}).catch(e=>{if(e.status===400||e.status===401)clearSession();throw e;}).finally(()=>refreshing=null);return refreshing;}
 export async function signIn(email,password){reads.clear();saveSession(await request('/auth/v1/token?grant_type=password',{email,password}));}
+export async function sendAccountRecovery(email){
+ await request('/auth/v1/recover',{email:String(email||'').trim().toLowerCase(),redirect_to:location.origin+location.pathname+'#account'});
+ return true;
+}
+export async function requestLoginChange(email){
+ if(!session?.access_token)throw new Error('Войдите в приложение');
+ const next=String(email||'').trim().toLowerCase();
+ const r=await fetch(BASE+'/auth/v1/user',{method:'PUT',headers:{apikey:KEY,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({email:next}),signal:AbortSignal.timeout(30000)});
+ let j;try{j=await r.json();}catch{throw new Error('Сервер авторизации вернул неполный ответ');}
+ if(!r.ok){const msg=j.error_description||j.msg||j.message||j.error||'Не удалось запросить смену логина';throw Object.assign(new Error(msg),{status:r.status});}
+ return j;
+}
 export async function signUp(name,email,password){
  name=String(name||'').trim();email=String(email||'').trim();
  if(!name)throw new Error('Укажите имя и фамилию');
