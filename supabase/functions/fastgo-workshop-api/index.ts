@@ -151,7 +151,7 @@ async function main(req){
         const rows=await db('workshop_owner_devices','profile_id=eq.'+encodeURIComponent(user.id)+'&device_token=eq.'+encodeURIComponent(token)+'&active=eq.true&select=device_token&limit=1');
         if(!rows?.length)fail('Смена пароля владельца доступна только на доверенном iPhone 13',403);
       }
-      const r=await fetch(BASE+'/auth/v1/recover',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({email:user.email,redirect_to:'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#account'}),signal:AbortSignal.timeout(20000)});
+      const r=await fetch(BASE+'/auth/v1/recover',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({email:user.email,redirect_to:'https://ivankirillov414-art.github.io/fastgo-control/reset-password.html'}),signal:AbortSignal.timeout(20000)});
       if(!r.ok)fail('Не удалось отправить ссылку для смены пароля. Повторите позже.',503);
       return out({data:{sent:true}});
     }
