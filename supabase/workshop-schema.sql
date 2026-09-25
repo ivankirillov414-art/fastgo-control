@@ -293,7 +293,7 @@ begin
    if st in ('repair','ready','issued') and total>0 and coalesce(rr.approved_amount,-1)<>total then raise exception 'Сначала согласуйте текущую стоимость с клиентом'; end if;
    if st in ('ready','issued') and not coalesce((p->>'quality_checked')::boolean,rr.quality_checked) then raise exception 'Подтвердите проверку техники'; end if;
    if st='issued' and (oldst<>'ready' or paid<total or coalesce(p->>'handover_notes','')='') then raise exception 'Для выдачи нужны статус «Готов», полная оплата и отметка о проверке комплектности'; end if;
-   if st='cancelled' and (paid<>0 or jsonb_array_length(parts_new)>0) then raise exception 'Перед отменой верните оплату и снимите установленные запчасти'; end if;
+   if st='cancelled' and (paid<>0 or jsonb_array_length(parts_new)>0 or length(trim(coalesce(p->>'note','')))<3) then raise exception 'Перед отменой верните оплату, снимите установленные запчасти и укажите причину'; end if;
    assignment:=case when p ? 'assigned_master_id' then nullif(p->>'assigned_master_id','')::uuid else rr.assigned_master_id end;
    if not role_allowed and assignment is distinct from rr.assigned_master_id then raise exception 'Мастера назначает приёмщик'; end if;
    if assignment is not null and not exists(select 1 from workshop_members where profile_id=assignment and active and role='mechanic') then raise exception 'Назначить можно только активного мастера'; end if;
