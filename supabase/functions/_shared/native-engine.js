@@ -247,6 +247,14 @@ function parseJson_(v,fallback){
 }
 
 function isManager_(a){ return ['owner','admin','receiver','manager'].includes(role_(a)); }
+function canSetRepairStatus_(actor,status){
+  if(role_(actor)==='owner')return true;
+  const p=actor?.status_permissions||{};
+  if(status==='ready')return p.can_mark_ready===true;
+  if(status==='issued')return p.can_issue===true;
+  if(status==='cancelled')return p.can_cancel===true;
+  return true;
+}
 
 function assertRevision_(row,p){
   const current=Math.max(1,Math.floor(num_(row.revision)||1));
@@ -474,6 +482,7 @@ function validateOrderUpdate_(p,actor){
     return;
   }
   if(!['accepted','diagnostics','waiting_parts','repair','ready','issued','cancelled'].includes(status))throw httpError_('Неверный статус',400);
+  if(status!==before&&['ready','issued','cancelled'].includes(status)&&!canSetRepairStatus_(actor,status))throw httpError_('У вашей роли нет права на этот статус ремонта',403);
   const works=p.works||parseJson_(r['Работы'],[]),parts=p.parts||parseJson_(r['Строки запчастей'],[]);
   for(const line of [...works,...parts])if(!Number.isInteger(Number(line.quantity))||Number(line.quantity)<1||!Number.isFinite(Number(line.price))||Number(line.price)<0)throw httpError_('Проверьте количество и цену',400);
   const discount=num_(p.discount===undefined?r['Скидка']:p.discount),amount=[...works,...parts].reduce((s,x)=>s+Number(x.price)*Number(x.quantity),0)-discount;
