@@ -10,7 +10,7 @@
   append_(PHOTO_SHEET,{photo_id:p.photo_id,product_id:p.part_id,category:product['Категория'],path:p.path,created_at:now_(),sha256:p.sha256});return partPhotoPrimary_(p);
  }
  return {sheets,changes:()=>[...changes.values()],run(action,p,actor){
-  if(!actor.id||!['owner','admin','receiver','manager','mechanic'].includes(actor.role))throw httpError_('Нет доступа',403);
+  if(!actor.id||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(actor.role))throw httpError_('Нет доступа',403);
   if(action==='native_photo'){requireAdmin_(actor);return nativePhoto(p);}
   if(action==='native_document')return documents_(p,actor);
   if(action==='native_file_migration'){requireAdmin_(actor);const r=find_(SHEETS.files,'object_id',p.object_id);if(!r)throw httpError_('Файл не найден',404);patchRow_(SHEETS.files,r.__row,{'Google Drive URL':p.path,'Статус миграции':'Приватное хранилище',updated_at:now_()});return {object_id:p.object_id,migrated:true,path:p.path};}

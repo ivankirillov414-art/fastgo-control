@@ -17,10 +17,42 @@ function harness(){
   if(failResponse){failResponse=false;throw Error('response lost');}return {result:p.p_result};
  };
  const client=actor=>nativeClient({db,actor,google:async()=>{googleCalls++;throw Error('Google unavailable');},storage:{put:async()=>{},sign:async p=>'signed:'+p}});
- const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
+ const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['shift_open','shift_close','storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
  return {call,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
+test('cash shift totals separate cash, card and transfer and freeze at close',async()=>{
+ const h=harness(),seller={...manager,role:'seller'};h.sheets['Товары'].rows[0]['Остаток, шт.']=10;
+ const shift=await h.call('shift_open',{register:'Касса 1',opening_cash:500},seller);
+ for(const method of ['cash','card','transfer'])await h.call('sale',{shift_id:shift.id,payment_method:method,items:[{part_id:part,quantity:1}]},seller);
+ const report=await h.call('cash_state',{shift_id:shift.id},seller);
+ assert.deepEqual(report.totals,{cash:100,card:100,transfer:100,cashless:200,total:300,count:3,expected_cash:600});
+ const closed=await h.call('shift_close',{shift_id:shift.id,counted_cash:590},seller);assert.equal(closed.difference,-10);
+ await assert.rejects(h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]},seller),/смену/);
+ assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],7);assert.equal((await h.call('cash_state',{shift_id:shift.id})).selected.status,'closed');
+});
+test('cash permissions reject all other staff roles and seller cannot change stock',async()=>{
+ const h=harness();for(const role of ['admin','receiver','manager','mechanic'])for(const action of ['cash_state','shift_open','shift_close','sale','sales'])await assert.rejects(h.call(action,{}, {...manager,role}),/Касса/);
+ await assert.rejects(h.call('stock',{part_id:part,quantity:3,movement_type:'receipt'},{...manager,role:'seller'}),/доступ/);
+});
+test('simultaneous open allows only one shift per register',async()=>{
+ const h=harness();const r=await Promise.allSettled([h.call('shift_open',{register:'Основная'}),h.call('shift_open',{register:'основная'})]);assert.equal(r.filter(x=>x.status==='fulfilled').length,1);
+ assert.equal((await h.call('cash_state')).shifts.length,1);
+});
+test('lost sale response is replayed once, including the cash ledger and stock',async()=>{
+ const h=harness(),shift=await h.call('shift_open',{}),p={request_id:randomUUID(),shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]};h.failResponse();
+ await assert.rejects(h.call('sale',p),/response lost/);await h.call('sale',p);assert.equal((await h.call('cash_state')).totals.count,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);
+});
+test('sale without a shift and invalid opening money do not change records',async()=>{
+ const h=harness();await assert.rejects(h.call('sale',{payment_method:'cash',items:[{part_id:part,quantity:1}]}),/смену/);
+ for(const opening_cash of [-1,'oops',0.001])await assert.rejects(h.call('shift_open',{opening_cash}),/сумму/);
+ assert.equal(h.outbox.length,0);assert.equal(h.sheets['Продажи'].rows.length,0);
+});
+test('sale racing closure is either included or rejected, never added after close',async()=>{
+ const h=harness(),shift=await h.call('shift_open',{});
+ await Promise.allSettled([h.call('shift_close',{shift_id:shift.id,counted_cash:0}),h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]})]);
+ const r=await h.call('cash_state',{shift_id:shift.id});assert.equal(r.selected.status,'closed');assert.equal(r.totals.total,r.selected.closing.total);
+});
 test('all primary screens read Postgres while Google is unavailable',async()=>{const h=harness();for(const action of ['catalog','overview','customers','list','finance','legal','sales'])await h.call(action);assert.equal(h.googleCalls(),0);});
 test('repair intake follows diagnostics, approval, repair, quality, ready and issue without Google',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
@@ -95,7 +127,7 @@ test('repair cancellation requires a reason and records it',async()=>{
  assert.equal(details.events.find(e=>e.details?.to_status==='cancelled')?.details.note,'Клиент отказался от ремонта');
 });
 test('two simultaneous sales of the last unit result in one sale and one outbox job',async()=>{
- const h=harness(),p={payment_method:'cash',items:[{part_id:part,quantity:1}]};const results=await Promise.allSettled([h.call('sale',p),h.call('sale',p,manager)]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.sheets['Продажи'].rows.length,1);assert.equal(h.outbox.length,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);
+ const h=harness(),shift=await h.call('shift_open',{register:'Основная',opening_cash:0}),p={shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]};const results=await Promise.allSettled([h.call('sale',p),h.call('sale',p,{...manager,role:'seller'})]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.sheets['Продажи'].rows.length,1);assert.equal(h.outbox.length,2);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);
 });
 test('a lost response replays the committed receipt without a second stock write',async()=>{
  const h=harness(),p={request_id:randomUUID(),part_id:part,movement_type:'receipt',quantity:2,note:'test'};h.failResponse();await assert.rejects(h.call('stock',p),/response lost/);await h.call('stock',p);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);assert.equal(h.outbox.length,1);

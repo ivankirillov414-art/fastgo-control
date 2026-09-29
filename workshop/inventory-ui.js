@@ -8,7 +8,7 @@ let me=null;
 let catalogCache=null;
 let enhancing=false;
 const cart=new Map();
-let pendingSale=null;
+let pendingSale=null,saleBusy=false;
 const saleStore=()=> 'fastgo_sale_draft_v1:'+me.profile_id;
 function saveSale(){if(me)localStorage.setItem(saleStore(),JSON.stringify({cart:[...cart.values()],pendingSale}));}
 function restoreSale(){if(!me||cart.size)return;try{const d=JSON.parse(localStorage.getItem(saleStore())||'null');if(d){for(const x of d.cart||[])cart.set(x.part.id,x);pendingSale=d.pendingSale||null;}}catch{}}
@@ -81,6 +81,7 @@ async function printPartLabel(part){
 
 async function printAllLabels(){
   const w=window.open('','_blank','width=800,height=700');if(!w)throw new Error('Разрешите всплывающие окна для печати');w.document.write('<p>Подготовка этикеток…</p>');
+  const state=await api('cash_state',shiftId?{shift_id:shiftId}:{},{fresh:true}),shift=state.selected;if(!pendingSale&&(!shift||shift.status!=='open')){location.hash='#cash';return notice('Откройте смену в разделе «Кассы и продажи»','bad');}
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
   if(!parts.length){w.close();return notice('Нет товаров для печати','bad');}
   await loadScript(BARCODE_URL,'JsBarcode');
@@ -180,27 +181,30 @@ function renderCart(){
   host.querySelectorAll('[data-minus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.minus);if(x){x.qty--;if(x.qty<1)cart.delete(b.dataset.minus);renderCart();}});
   host.querySelectorAll('[data-plus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.plus);if(x&&x.qty<x.part.quantity){x.qty++;renderCart();}else notice('Больше остатка на складе добавить нельзя','bad');});
   host.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{cart.delete(b.dataset.remove);renderCart();});
-  host.querySelectorAll('button').forEach(b=>b.disabled=!!pendingSale);['sale-payment','sale-note','sale-search','sale-scan'].forEach(id=>{if($(id))$(id).disabled=!!pendingSale;});
-  const btn=$('sale-complete');if(btn){btn.disabled=!rows.length;btn.textContent=pendingSale?'Проверить и завершить продажу':'Провести продажу';}
+  host.querySelectorAll('button').forEach(b=>b.disabled=!!pendingSale||saleBusy);['sale-payment','sale-note','sale-search','sale-scan'].forEach(id=>{if($(id))$(id).disabled=!!pendingSale||saleBusy;});
+  const btn=$('sale-complete');if(btn){btn.disabled=!rows.length||saleBusy;btn.textContent=pendingSale?'Проверить и завершить продажу':'Провести продажу';}
 }
 function addToCart(part){
   if(Number(part.quantity)<=0)return notice('Этого товара нет в наличии','bad');
   const x=cart.get(part.id);if(x){if(x.qty>=part.quantity)return notice('В корзине уже весь доступный остаток','bad');x.qty++;}else cart.set(part.id,{part,qty:1});renderCart();
 }
 
-async function openSales(){
-  if(!me)me=await api('me');restoreSale();if(!['developer','owner','admin','receiver','manager'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
+export async function openSales(shiftId){
+  if(!me)me=await api('me');restoreSale();if(!['developer','owner','seller'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
+  const state=await api('cash_state',shiftId?{shift_id:shiftId}:{},{fresh:true}),shift=state.selected;if(!pendingSale&&(!shift||shift.status!=='open')){location.hash='#cash';return notice('Откройте смену в разделе «Кассы и продажи»','bad');}
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
-  const d=showDialog('Продажи',`<div class="sales-tools"><button class="btn" id="sale-scan">▣ Сканировать</button><div class="inv-search"><input id="sale-search" placeholder="Поиск по названию, модели, SKU"><div id="sale-results"></div></div></div><div id="sales-cart"></div><div class="inv-form"><label>Оплата<select id="sale-payment"><option value="cash">Наличные</option><option value="card">Карта</option><option value="transfer">Перевод</option></select></label><label>Комментарий<input id="sale-note" placeholder="Необязательно"></label></div>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="sale-complete" disabled>Провести продажу</button>`);
+  const d=showDialog('Продажи · '+(shift?.register||'Проверка операции'),`<p class="muted">USB-сканер: поставьте курсор в поиск и сканируйте. Код + Enter добавляет товар. Для камеры нажмите «Сканировать».</p><div class="sales-tools"><button class="btn" id="sale-scan">▣ Сканировать</button><div class="inv-search"><input id="sale-search" placeholder="Поиск по названию, модели, SKU"><div id="sale-results"></div></div></div><div id="sales-cart"></div><div class="inv-form"><label>Оплата<select id="sale-payment"><option value="cash">Наличные</option><option value="card">Карта</option><option value="transfer">Перевод</option></select></label><label>Комментарий<input id="sale-note" placeholder="Необязательно"></label></div>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="sale-complete" disabled>Провести продажу</button>`);
   const search=$('sale-search'),results=$('sale-results');
   const showResults=()=>{const q=search.value.trim().toLowerCase();if(q.length<2){results.innerHTML='';return;}const found=parts.filter(x=>(`${x.name} ${x.model||''} ${x.sku||''} ${x.barcode||''}`).toLowerCase().includes(q)).slice(0,12);results.innerHTML=found.map(x=>`<button type="button" data-pick="${x.id}"><span>${esc(x.name)}${x.model?` · ${esc(x.model)}`:''}</span><small>${esc(x.barcode)} · ${x.quantity} шт. · ${money(x.retail_price)}</small></button>`).join('');results.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{addToCart(found.find(x=>x.id===b.dataset.pick));search.value='';results.innerHTML='';});};
   search.oninput=showResults;
-  $('sale-scan').onclick=async()=>{const code=await scanCode('Сканирование продажи');if(!code){await openSales();return;}try{addToCart(await partByCode(code));}catch(e){notice(e.message,'bad');}finally{if(!ownDialog().open)openSales();}};
+  let scanQueue=Promise.resolve();search.onkeydown=e=>{if(e.key!=='Enter'||pendingSale||saleBusy)return;e.preventDefault();const code=search.value.trim();if(!code)return;search.value='';results.innerHTML='';scanQueue=scanQueue.then(async()=>{try{addToCart(await partByCode(code));}catch(err){notice(err.message,'bad');}});};
+  search.focus();
+  $('sale-scan').onclick=async()=>{const code=await scanCode('Сканирование продажи');if(!code){await openSales(shiftId);return;}try{addToCart(await partByCode(code));}catch(e){notice(e.message,'bad');}finally{if(!ownDialog().open)openSales(shiftId);}};
   if(pendingSale?.payload){$('sale-payment').value=pendingSale.payload.payment_method;$('sale-note').value=pendingSale.payload.note||'';}
   renderCart();
   $('sale-complete').onclick=async()=>{
-    if(!cart.size)return;const btn=$('sale-complete');btn.disabled=true;
-    try{const payload={payment_method:$('sale-payment').value,note:$('sale-note').value,items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;cart.clear();saveSale();catalogCache=null;closeDialog();notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');renderCart();}
+    if(saleBusy)return;saleBusy=true;renderCart();
+    try{await scanQueue;if(!cart.size)return;const payload={shift_id:shift?.id,payment_method:$('sale-payment').value,note:$('sale-note').value,items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;cart.clear();saveSale();catalogCache=null;closeDialog();notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');}finally{saleBusy=false;renderCart();}
   };
 }
 
@@ -214,15 +218,11 @@ async function enhance(){
   try{
     if(!me){try{me=await api('me');}catch{return;}}
     const nav=document.querySelector('.sidebar .nav');
-    if(nav&&!nav.querySelector('[data-sales-nav]')&&['developer','owner','admin','receiver','manager'].includes(me.role)){
-      const a=document.createElement('a');a.href='#';a.dataset.salesNav='1';a.innerHTML='<span class="nav-mark" aria-hidden="true">▦</span>Продажи';a.onclick=e=>{e.preventDefault();openSales();};
-      const stock=[...nav.querySelectorAll('a')].find(x=>x.getAttribute('href')==='#stock');stock?.after(a)||nav.appendChild(a);
-    }
     if(location.hash.startsWith('#stock')){
       const head=document.querySelector('.workspace .pagehead');
       if(head&&!head.querySelector('[data-inv-tools]')){
-        const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button><button class="btn ghost" data-history>Продажи</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
-        head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm().catch(e=>notice(e.message,'bad')));box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
+        const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button>${['developer','owner','seller'].includes(me.role)?'<button class="btn ghost" data-history>Продажи</button>':''}${['developer','owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
+        head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm().catch(e=>notice(e.message,'bad')));box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;if(box.querySelector('[data-history]'))box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
       }
       const table=document.querySelector('.workspace table.records');
       if(table&&!table.dataset.barcodeEnhanced){

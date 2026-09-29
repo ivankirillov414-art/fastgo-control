@@ -16,6 +16,7 @@ export function createNativeEngine(snapshot,{uuid=()=>crypto.randomUUID(),now=()
  function health_(){return {ok:true,backend:'POSTGRES_GOOGLE_MIRROR',capabilities:{atomic_writes:true,private_product_photos:true,background_google_sync:true}};}
 
 function routeUnlocked_(action,p,actor){
+  if(role_(actor)==='seller'&&!['cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','stock_history','health'].includes(action))throw httpError_('Нет доступа',403);
   switch(action){
     case 'health': return health_();
     case 'catalog': return catalog_();
@@ -32,8 +33,11 @@ function routeUnlocked_(action,p,actor){
     case 'signed_url': return signedUrl_(p,actor);
     case 'stock_history': return stockHistory_(p);
     case 'stock': requireManager_(actor); return stock_(p,actor);
-    case 'sale': requireManager_(actor); return sale_(p,actor);
-    case 'sales': requireManager_(actor); return sales_(p);
+    case 'cash_state': return cashState_(p,actor);
+    case 'shift_open': return shiftOpen_(p,actor);
+    case 'shift_close': return shiftClose_(p,actor);
+    case 'sale': requireCash_(actor); return sale_(p,actor);
+    case 'sales': requireCash_(actor); return sales_(p);
     case 'list': return list_(p,actor);
     case 'get': return get_(p,actor);
     case 'create': requireManager_(actor); return createOrder_(p,actor);
@@ -149,15 +153,27 @@ function stock_(p,actor){
   append_(SHEETS.movements,movement); return movement;
 }
 
+function requireCash_(actor){if(!['developer','owner','seller'].includes(role_(actor)))throw httpError_('Касса доступна продажнику, владельцу и разработчику',403);}
+function cashMoney_(v){const n=Number(v);if(v===null||v===''||typeof v==='boolean'||!Number.isFinite(n)||n<0||n>100000000||Math.abs(n*100-Math.round(n*100))>0.00001)throw httpError_('Укажите сумму в рублях, не более двух знаков после запятой',400);return Math.round(n*100)/100;}
+function cashEvents_(){return rows_(SHEETS.events).filter(e=>e['Тип']==='cash').map(e=>{let details;try{details=JSON.parse(e['Детали']||'{}');}catch{throw httpError_('Повреждена запись кассовой смены',503);}return {...e,details};});}
+function cashShifts_(){const events=cashEvents_();return events.filter(e=>e['Действие']==='shift_open').map(e=>{const closed=events.find(c=>c.record_id===e.record_id&&c['Действие']==='shift_close');return {id:e.record_id,...e.details,opened_at:e['Дата'],opened_by:e.actor_id,status:closed?'closed':'open',closed_at:closed?.['Дата']||null,closed_by:closed?.actor_id||null,closing:closed?.details||null};}).sort((a,b)=>b.opened_at.localeCompare(a.opened_at));}
+function cashSales_(shiftId){const ids=new Set(cashEvents_().filter(e=>e['Действие']==='sale'&&e.details.shift_id===shiftId).map(e=>e.record_id));return rows_(SHEETS.sales).filter(s=>ids.has(s.sale_id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата'])));}
+function cashTotals_(shift){let cash=0,card=0,transfer=0;const sales=cashSales_(shift.id);for(const s of sales){const cents=Math.round(num_(s['Итого'])*100);if(s['Способ оплаты']==='Наличные')cash+=cents;else if(s['Способ оплаты']==='Карта')card+=cents;else if(s['Способ оплаты']==='Перевод')transfer+=cents;else throw httpError_('Неизвестный способ оплаты в смене',503);}return {cash:cash/100,card:card/100,transfer:transfer/100,cashless:(card+transfer)/100,total:(cash+card+transfer)/100,count:sales.length,expected_cash:(Math.round(shift.opening_cash*100)+cash)/100};}
+function cashState_(p,actor){requireCash_(actor);const all=cashShifts_(),selected=p.shift_id?all.find(s=>s.id===p.shift_id):all.find(s=>s.status==='open');if(p.shift_id&&!selected)throw httpError_('Смена не найдена',404);const offset=Math.max(0,Math.floor(num_(p.offset)));return {shifts:all.filter(s=>s.status==='open').concat(all.filter(s=>s.status==='closed').slice(0,100)),selected:selected||null,totals:selected?cashTotals_(selected):null,sales:selected?cashSales_(selected.id).slice(offset,offset+100).map(saleResponse_):[],offset,limit:100};}
+function shiftOpen_(p,actor){requireCash_(actor);const register=String(p.register||'Основная касса').trim().replace(/\s+/g,' ');if(!register||register.length>80)throw httpError_('Название кассы: от 1 до 80 символов',400);const shifts=cashShifts_();if(shifts.some(s=>s.status==='open'&&s.register.toLowerCase()===register.toLowerCase()))throw httpError_('На этой кассе уже открыта смена. Обновите раздел.',409);const id=uid_();addEvent_('cash',id,'shift_open',actor,{register,number:shifts.length+1,opening_cash:cashMoney_(p.opening_cash??0),cashier:actor.name||actor.email||actor.id});return {id};}
+function shiftClose_(p,actor){requireCash_(actor);const shift=cashShifts_().find(s=>s.id===p.shift_id);if(!shift||shift.status!=='open')throw httpError_('Смена уже закрыта или не найдена',409);const totals=cashTotals_(shift),counted=cashMoney_(p.counted_cash),difference=Math.round((counted-totals.expected_cash)*100)/100;addEvent_('cash',shift.id,'shift_close',actor,{...totals,counted_cash:counted,difference,note:String(p.note||'').trim().slice(0,500),cashier:actor.name||actor.email||actor.id});return {id:shift.id,...totals,counted_cash:counted,difference};}
+
 function sale_(p,actor){
   const req=String(p.request_id||''); if(req){ const old=find_(SHEETS.sales,'request_id',req); if(old) return saleResponse_(old); }
+  requireCash_(actor);const shift=cashShifts_().find(s=>s.id===p.shift_id);if(!shift||shift.status!=='open')throw httpError_('Откройте кассовую смену перед продажей',409);
   const merged={};for(const x of (Array.isArray(p.items)?p.items:[])){const id=x.part_id||x.id,q=Number(x.quantity);if(!id||!Number.isInteger(q)||q<1)throw httpError_('Неверное количество',400);merged[id]=(merged[id]||0)+q;}
   const items=Object.entries(merged).map(([part_id,quantity])=>({part_id,quantity}));if(!items.length)throw httpError_('Корзина пустая',400);
   if(!['cash','card','transfer'].includes(p.payment_method))throw httpError_('Укажите оплату',400);if(num_(p.discount)>0)requireAdmin_(actor);
   const prepared=items.map(i=>{ const r=find_(SHEETS.products,'product_id',i.part_id||i.id); if(!r||r['Активен']===false) throw httpError_('Товар не найден',404); const q=Math.max(1,Math.floor(num_(i.quantity))); const stock=num_(r['Остаток, шт.']); if(stock<q) throw httpError_('Недостаточно на складе: '+r['Модель / название'],409); return {r,q,price:num_(r['Цена продажи, ₽'])}; });
-  const no=nextSeq_('next_sale_seq'), id=uid_(), created=now_(), subtotal=prepared.reduce((s,x)=>s+x.q*x.price,0), discount=Math.max(0,num_(p.discount)), total=Math.max(0,subtotal-discount);
+  const no=nextSeq_('next_sale_seq'), id=uid_(), created=now_(), subtotal=prepared.reduce((s,x)=>s+x.q*x.price,0), discount=Math.max(0,num_(p.discount)), total=Math.round(Math.max(0,subtotal-discount)*100)/100;
   const sale={sale_id:id,'Номер':'FGS-'+pad_(no,6),'Дата':created,client_id:String(p.client_id||''),'Клиент':String(p.client_name||''),'Сотрудник':actor.email||actor.id||'','Способ оплаты':({'cash':'Наличные','card':'Карта','transfer':'Перевод','mixed':'Смешанная'})[p.payment_method]||p.payment_method||'Наличные','Сумма':subtotal,'Скидка':discount,'Итого':total,'Статус':'Проведена','Комментарий':String(p.note||''),updated_at:created,request_id:req,'Документ URL':''}; append_(SHEETS.sales,sale);
   prepared.forEach((x,idx)=>{ const stock=num_(x.r['Остаток, шт.'])-x.q; patchRow_(SHEETS.products,x.r.__row,{'Остаток, шт.':stock,updated_at:created}); const movementId=uid_(); append_(SHEETS.movements,{movement_id:movementId,'Дата':created,'Тип':'Продажа',product_id:x.r.product_id,'Штрих-код':x.r['Штрих-код'],'Товар':x.r['Модель / название'],'Количество':x.q,'Цена закупки':num_(x.r['Цена закупки, ₽']),'Цена продажи':x.price,'Сумма':x.q*x.price,'Источник':'Продажа',reference_id:id,'Сотрудник':actor.email||actor.id||'','Комментарий':'Продажа '+sale['Номер'],'Остаток после':stock,request_id:req?req+':'+idx:''}); append_(SHEETS.saleItems,{sale_item_id:uid_(),sale_id:id,product_id:x.r.product_id,'Штрих-код':x.r['Штрих-код'],'Товар':x.r['Модель / название'],'Количество':x.q,'Цена':x.price,'Скидка':0,'Сумма строки':x.q*x.price,movement_id:movementId}); });
+  addEvent_('cash',id,'sale',actor,{shift_id:shift.id,register:shift.register});
   return saleResponse_(find_(SHEETS.sales,'sale_id',id));
 }
 
@@ -538,7 +554,7 @@ function migrationManifest_(actor){requireAdmin_(actor);return rows_(SHEETS.file
   append_(PHOTO_SHEET,{photo_id:p.photo_id,product_id:p.part_id,category:product['Категория'],path:p.path,created_at:now_(),sha256:p.sha256});return partPhotoPrimary_(p);
  }
  return {sheets,changes:()=>[...changes.values()],run(action,p,actor){
-  if(!actor.id||!['developer','owner','admin','receiver','manager','mechanic'].includes(actor.role))throw httpError_('Нет доступа',403);
+  if(!actor.id||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(actor.role))throw httpError_('Нет доступа',403);
   if(action==='native_photo'){requireAdmin_(actor);return nativePhoto(p);}
   if(action==='native_document')return documents_(p,actor);
   if(action==='native_file_migration'){requireAdmin_(actor);const r=find_(SHEETS.files,'object_id',p.object_id);if(!r)throw httpError_('Файл не найден',404);patchRow_(SHEETS.files,r.__row,{'Google Drive URL':p.path,'Статус миграции':'Приватное хранилище',updated_at:now_()});return {object_id:p.object_id,migrated:true,path:p.path};}

@@ -6,7 +6,7 @@ import {createHash,randomUUID} from 'node:crypto';
 const source=['Code.gs','Reliability.gs'].map(f=>readFileSync(new URL('../google-apps-script/'+f,import.meta.url),'utf8')).join('\n');
 const schema=JSON.parse(readFileSync(new URL('./google-schema.json',import.meta.url),'utf8'));
 const owner={id:'11111111-1111-4111-8111-111111111111',role:'owner',email:'owner@example.invalid'};
-const manager={id:'22222222-2222-4222-8222-222222222222',role:'manager',email:'manager@example.invalid'};
+const manager={id:'22222222-2222-4222-8222-222222222222',role:'seller',email:'seller@example.invalid'};
 const part='33333333-3333-4333-8333-333333333333';
 function harness(){
   let sequence=0,locked=false,fault='',clock=Date.now(),fetches=0;
@@ -21,6 +21,7 @@ function harness(){
   tables['Фото товаров']=new Sheet('Фото товаров',['photo_id','product_id','category','path','created_at','sha256']);
   function seed(name,obj){const t=tables[name];t.cells.push(t.cells[0].map(h=>obj[h]??''));}
   seed('Товары',{product_id:part,'Модель / название':'Тестовый товар','Категория':'Тест','Штрих-код':'FGP-00000001','Остаток, шт.':1,'Цена закупки, ₽':40,'Цена продажи, ₽':100,'Активен':true});
+  seed('События',{event_id:'cash-open-test',record_id:'44444444-4444-4444-8444-444444444444','Тип':'cash','Действие':'shift_open','Дата':'2026-09-29T08:00:00Z','Детали':JSON.stringify({register:'Test',opening_cash:0,number:1})});
   seed('Категории',{'Категория (ключ)':'Тест'});
   for(const [Ключ,Значение]of Object.entries({intakes_folder_id:'intakes',backups_folder_id:'backups',documents_folder_id:'documents',products_photo_folder_id:'products'}))seed('Настройки',{Ключ,Значение});
   const blob=(bytes,mime='application/json')=>({getDataAsString:()=>typeof bytes==='string'?bytes:Buffer.from(bytes).toString(),getBytes:()=>[...Buffer.from(bytes)],getContentType:()=>mime});
@@ -47,7 +48,7 @@ function harness(){
   });
   vm.runInContext(source,context);
   const run=(action,p={},actor=owner)=>JSON.parse(JSON.stringify(context.route_(action,JSON.parse(JSON.stringify(p)),actor)));
-  const sale=(extra={})=>({request_id:randomUUID(),payment_method:'cash',items:[{part_id:part,quantity:1}],...extra});
+  const sale=(extra={})=>({shift_id:'44444444-4444-4444-8444-444444444444',request_id:randomUUID(),payment_method:'cash',items:[{part_id:part,quantity:1}],...extra});
   const rows=n=>tables[n].cells.slice(1).map(r=>Object.fromEntries(tables[n].cells[0].map((h,i)=>[h,r[i]??''])));
   return {run,sale,rows,seed,context,props,files,setFault:x=>fault=x,advance:()=>clock+=301000,fetches:()=>fetches,lock:()=>locked=true,unlock:()=>locked=false};
 }

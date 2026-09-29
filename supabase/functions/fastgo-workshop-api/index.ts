@@ -113,9 +113,9 @@ async function rolePermission(role){
 const statusPermissionKey=status=>status==='ready'?'can_mark_ready':status==='issued'?'can_issue':status==='cancelled'?'can_cancel':'';
 const repairTransitions={accepted:new Set(['accepted','diagnostics','cancelled']),diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),ready:new Set(['ready','repair','issued','cancelled']),issued:new Set(['issued']),cancelled:new Set(['cancelled'])};
 function requireRepairTransition(from,to){if(!repairTransitions[from]?.has(to))fail('Сначала пройдите предыдущий этап ремонта',409);}
-const readActions=new Set(['catalog','part_by_barcode','stock_history','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
-const writeActions=new Set(['storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
-const managementActions=new Set(['create','customers','finance','sales','stock','sale','payment','extend','contact','legacy']);
+const readActions=new Set(['catalog','part_by_barcode','stock_history','cash_state','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
+const writeActions=new Set(['shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const managementActions=new Set(['create','customers','finance','stock','payment','extend','contact','legacy']);
 const administrationActions=new Set(['part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
 const terminal=new Set(['issued','returned','cancelled']);
 async function legacyPhotos(kind,id){
@@ -146,8 +146,10 @@ async function main(req){
       const state=member?.active===true?'active':member?.approved_at?'disabled':'pending';
       return out({data:{active:member?.active===true,state,requested_at:member?.created_at||null}});
     }
-    const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['developer','owner','admin','receiver','manager','mechanic'].includes(me.role))fail('Доступ к мастерской не выдан',403);
+    const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
+    if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!['developer','owner','seller'].includes(me.role))fail('Касса доступна продажнику, владельцу и разработчику',403);
+    if(me.role==='seller'&&!['me','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(action==='owner_device_status'||action==='owner_device_enroll'){
       if(!['developer','owner'].includes(me.role))fail('Доступно только привилегированной учётной записи',403);
@@ -231,14 +233,14 @@ async function main(req){
         if(!uuid(p.profile_id))fail('Не указан сотрудник');
         const name=text(p.name,200),role=text(p.role,30);
         if(!name)fail('Укажите имя сотрудника');
-        if(!['owner','admin','receiver','manager','mechanic'].includes(role))fail('Недопустимая роль');
+        if(!['owner','admin','receiver','manager','mechanic','seller'].includes(role))fail('Недопустимая роль');
         if(role==='owner'&&!['developer','owner'].includes(me.role))fail('Только владелец или технический администратор назначает владельца',403);
         const tags=Array.isArray(p.tags)?p.tags.map(x=>text(x,100)).filter(Boolean).slice(0,20):[];
         const data=await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:p.profile_id,name,role,active:bool(p.active),tags}});return out({data});
       }
       const email=text(p.email,320).toLowerCase(),name=text(p.name,200),role=text(p.role,30);
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||String(p.password||'').length<12||!name)fail('Укажите имя, почту и пароль от 12 символов');
-      if(!['admin','receiver','manager','mechanic'].includes(role))fail('Недопустимая роль');
+      if(!['admin','receiver','manager','mechanic','seller'].includes(role))fail('Недопустимая роль');
       const tags=Array.isArray(p.tags)?p.tags.map(x=>text(x,100)).filter(Boolean).slice(0,20):[];
       let created;try{created=await rest('/auth/v1/admin/users','POST',{email,password:String(p.password),email_confirm:true});}
       catch(e){if(/already|registered|exists/i.test(e.message||''))fail('Сотрудник с этой почтой уже зарегистрирован',409);throw e;}
@@ -252,6 +254,7 @@ async function main(req){
     if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
     const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,...(status_permissions?{status_permissions}:{})};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
+    if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&c.storage_mode!=='postgres')fail('Касса требует рабочую базу FastGo. Обратитесь к разработчику.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
       async put(path,bytes,mime){const r=await fetch(BASE+'/storage/v1/object/fastgo-workshop-private/'+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':mime},body:bytes,signal:AbortSignal.timeout(30000)});if(!r.ok&&r.status!==409)fail('Не удалось сохранить файл',503);},
       async sign(path){const r=await rest('/storage/v1/object/sign/fastgo-workshop-private/'+path.split('/').map(encodeURIComponent).join('/'),'POST',{expiresIn:300});return BASE+'/storage/v1'+r.signedURL;}
@@ -316,6 +319,7 @@ async function main(req){
       required(p,['note']);if(!uuid(p.part_id)||!uuid(p.request_id))fail('Неверный код операции');p.quantity=integer(p.quantity,'количество');
       if(!['receipt','issue','return','adjustment'].includes(p.movement_type))fail('Неверное движение');if(p.movement_type==='adjustment'){if(!admin(me))fail('Нет права корректировки',403);p.balance_after=integer(p.balance_after??p.quantity,'остаток',0);}
     }
+    if(['sale','shift_close'].includes(action)&&!uuid(p.shift_id))fail('Выберите открытую смену');
     if(action==='sale'){
       if(!uuid(p.request_id)||!Array.isArray(p.items)||!p.items.length||p.items.length>200)fail('Неверная корзина');
       if(!['cash','card','transfer'].includes(p.payment_method))fail('Укажите способ оплаты');
