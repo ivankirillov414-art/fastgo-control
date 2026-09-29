@@ -5,7 +5,7 @@ const OP_SHEET = 'Операции API';
 const PHOTO_SHEET = 'Фото товаров';
 const OP_HEADERS = ['request_id','actor_id','action','fingerprint','result','created_at'];
 const PHOTO_HEADERS = ['photo_id','product_id','category','path','created_at','sha256'];
-const MUTATIONS = new Set(['shift_open','shift_close','storage_close','storage_delete','create','update','payment','documents','contact','extend','stock','sale','part_save','part_photo_upload','part_photo_primary','catalog_save','legal_save','upload','migrate_legacy_file']);
+const MUTATIONS = new Set(['stock_receive','shift_open','shift_close','storage_close','storage_delete','create','update','payment','documents','contact','extend','stock','sale','part_save','part_photo_upload','part_photo_primary','catalog_save','legal_save','upload','migrate_legacy_file']);
 let TX = null;
 
 function stable_(v){

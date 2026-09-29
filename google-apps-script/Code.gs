@@ -27,7 +27,7 @@ function doPost(e) {
 
 function route_(action,p,actor){ return reliableRoute_(action,p,actor); }
 function routeUnlocked_(action,p,actor){
-  if(role_(actor)==='seller'&&!['cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','stock_history','health'].includes(action))throw httpError_('Нет доступа',403);
+  if(role_(actor)==='seller'&&!['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','stock_history','health'].includes(action))throw httpError_('Нет доступа',403);
   switch(action){
     case 'health': return health_();
     case 'catalog': return catalog_();
@@ -42,6 +42,8 @@ function routeUnlocked_(action,p,actor){
     case 'migrate_legacy_file': return migrateLegacy_(p,actor);
     case 'operation_status': return operationStatus_(p,actor);
     case 'signed_url': return signedUrl_(p,actor);
+    case 'stock_receive': return stockReceive_(p,actor);
+    case 'stock_receipts': return stockReceipts_(p,actor);
     case 'stock_history': return stockHistory_(p);
     case 'stock': requireManager_(actor); return stock_(p,actor);
     case 'cash_state': return cashState_(p,actor);
@@ -144,6 +146,25 @@ function partSave_(p){
   append_(SHEETS.products,{...value,'Штрих-код':barcode,'Приход, шт.':0,'Сумма прихода, ₽':0,'Фото / примечание':'',product_id:id,'Остаток, шт.':0,'Фото URL':''});
   return mapProduct_(find_(SHEETS.products,'product_id',id));
 }
+function stockReceive_(p,actor){
+  requireCash_(actor);
+  if(!Array.isArray(p.items)||!p.items.length||p.items.length>40)throw httpError_('Добавьте от 1 до 40 позиций',400);
+  const note=String(p.note||'').trim();if(!note||note.length>500)throw httpError_('Укажите поставщика или документ (до 500 символов)',400);
+  const id=uid_(),items=[];
+  p.items.forEach((x,index)=>{
+    if(!x||typeof x!=='object'||!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>10000)throw httpError_('Проверьте количество в строке '+(index+1),400);
+    let r;
+    if(x.part_id){r=find_(SHEETS.products,'product_id',x.part_id);if(!r||r['Активен']===false)throw httpError_('Товар не найден или отключён',400);}
+    else {const product=partSave_({name:x.name,category:x.category,model:x.model,sku:x.sku,unit_cost:x.unit_cost,retail_price:x.retail_price});r=find_(SHEETS.products,'product_id',product.id);}
+    if(!r['Штрих-код'])patchRow_(SHEETS.products,r.__row,{'Штрих-код':barcodeNext_(SHEETS.products,'Штрих-код','next_product_seq','FGP-',8)});
+    stock_({part_id:r.product_id,quantity:x.quantity,movement_type:'receipt',note,reference_id:id,request_id:p.request_id+':'+index},actor);
+    const product=mapProduct_(find_(SHEETS.products,'product_id',r.product_id));
+    items.push({id:product.id,name:product.name,barcode:product.barcode,quantity:x.quantity,balance:product.quantity,retail_price:product.retail_price,category:product.category,model:product.model});
+  });
+  const result={id,created_at:now_(),note,items};addEvent_('stock_receipt',id,'stock_receive',actor,result);return result;
+}
+function stockReceipts_(p,actor){requireCash_(actor);return rows_(SHEETS.events).filter(x=>x['Тип']==='stock_receipt').sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,50).map(x=>JSON.parse(x['Детали']));}
+
 function stockHistory_(p){ if(!p.part_id) throw httpError_('Не указана запчасть',400); return rows_(SHEETS.movements).filter(r=>String(r.product_id)===String(p.part_id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,100).map(r=>({id:r.movement_id,part_id:r.product_id,movement_type:({'Приход':'receipt','Расход':'issue','Продажа':'issue','Возврат':'return','Корректировка':'adjustment'})[r['Тип']]||r['Тип'],quantity:num_(r['Количество']),note:r['Комментарий'],created_at:r['Дата']})); }
 function stock_(p,actor){
   if(!Number.isInteger(Number(p.quantity))||Number(p.quantity)<1)throw httpError_('Неверное количество',400);

@@ -69,7 +69,7 @@ async function partByCode(code){
   return api('part_by_barcode',{barcode:String(code).trim()});
 }
 
-async function printPartLabel(part){
+export async function printPartLabel(part){
   const w=window.open('','_blank','width=520,height=420');if(!w)throw new Error('Разрешите всплывающие окна для печати');
   w.document.write('<p>Подготовка этикетки…</p>');
   await loadScript(BARCODE_URL,'JsBarcode');
@@ -81,7 +81,6 @@ async function printPartLabel(part){
 
 async function printAllLabels(){
   const w=window.open('','_blank','width=800,height=700');if(!w)throw new Error('Разрешите всплывающие окна для печати');w.document.write('<p>Подготовка этикеток…</p>');
-  const state=await api('cash_state',shiftId?{shift_id:shiftId}:{},{fresh:true}),shift=state.selected;if(!pendingSale&&(!shift||shift.status!=='open')){location.hash='#cash';return notice('Откройте смену в разделе «Кассы и продажи»','bad');}
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
   if(!parts.length){w.close();return notice('Нет товаров для печати','bad');}
   await loadScript(BARCODE_URL,'JsBarcode');

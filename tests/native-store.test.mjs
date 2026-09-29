@@ -17,7 +17,7 @@ function harness(){
   if(failResponse){failResponse=false;throw Error('response lost');}return {result:p.p_result};
  };
  const client=actor=>nativeClient({db,actor,google:async()=>{googleCalls++;throw Error('Google unavailable');},storage:{put:async()=>{},sign:async p=>'signed:'+p}});
- const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['shift_open','shift_close','storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
+ const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['stock_receive','shift_open','shift_close','storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
  return {call,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
@@ -180,4 +180,28 @@ test('storage deletion retains payments and audit, hides records, fences stale a
  assert.equal(events.length,1);assert.equal(events[0].actor_id,receiver.id);
  assert.equal(d.record.status,'deleted');
  await assert.rejects(h.call('update',{kind:'storage',id:r.id,revision:d.record.revision,status:'stored',reopen_reason:'restore'}),/удалена/);
+});
+
+test('seller receives existing and new goods atomically with model barcodes and history',async()=>{
+ const h=harness(),seller={...manager,role:'seller'};
+ const r=await h.call('stock_receive',{note:'Накладная 15',items:[{part_id:part,quantity:15,retail_price:1},{name:'Руль',category:'Рули',model:'Колхозник',quantity:3,unit_cost:500,retail_price:900}]},seller);
+ assert.equal(r.items[0].balance,16);assert.equal(r.items[0].barcode,'FGP-00000001');assert.equal(r.items[0].retail_price,100);
+ assert.equal(r.items[1].balance,3);assert.match(r.items[1].barcode,/^FGP-/);assert.notEqual(r.items[1].barcode,r.items[0].barcode);
+ assert.equal(h.outbox.length,1);assert.equal(h.sheets['Движения склада'].rows.length,2);
+ assert.equal((await h.call('stock_receipts',{},seller))[0].id,r.id);
+});
+test('bad last receipt row rolls back products, categories and all quantities',async()=>{
+ const h=harness(),before=structuredClone(h.sheets);
+ await assert.rejects(h.call('stock_receive',{note:'Test',items:[{name:'Руль',category:'Новая категория',quantity:2},{part_id:part,quantity:-1}]}),/количество/);
+ assert.deepEqual(h.sheets,before);assert.equal(h.outbox.length,0);
+});
+test('lost receipt response replays once after retry',async()=>{
+ const h=harness(),p={request_id:randomUUID(),note:'Test',items:[{part_id:part,quantity:15}]};h.failResponse();
+ await assert.rejects(h.call('stock_receive',p),/response lost/);await h.call('stock_receive',p);
+ assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],16);assert.equal(h.outbox.length,1);
+});
+test('receipts restrict roles, validate size, and backfill missing barcodes',async()=>{
+ const h=harness();for(const role of ['mechanic','manager','receiver','admin'])await assert.rejects(h.call('stock_receive',{}, {...manager,role}),/Касса/);
+ await assert.rejects(h.call('stock_receive',{note:'test',items:Array(41).fill({part_id:part,quantity:1})}),/40/);
+ h.sheets['Товары'].rows[0]['Штрих-код']='';const r=await h.call('stock_receive',{note:'test',items:[{part_id:part,quantity:1}]});assert.match(r.items[0].barcode,/^FGP-/);
 });

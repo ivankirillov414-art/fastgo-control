@@ -53,6 +53,51 @@ const server=createServer((req,res)=>{
   if(role==='developer'){await page.goto(origin+'/workshop.html#account');await page.getByRole('heading',{name:'Аккаунт',exact:true}).waitFor();const body=(await page.locator('body').innerText()).toLowerCase();assert.equal(body.includes('developer'),false);assert.equal(body.includes('разработчик'),false);}
   assert.deepEqual(errors,[]);await context.close();
  }
+
+ // Isolated fixture: never writes live business data.
+ {
+ const context=await browser.newContext(),page=await context.newPage(),errors=[];let attempts=0,requests=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'seller-fixture',expires_at:4102444800})));
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  const {action,params}=req.postDataJSON();let data={};
+  if(action==='request_access')data={active:true};
+  if(action==='me')data={role:'seller',name:'Продажник',profile_id:'seller-fixture',active:true};
+  if(action==='catalog')data={services:[],staff:[],parts:[{id:'part-1',name:'Руль',barcode:'FGP-00000001',quantity:0,retail_price:100,active:true}],categories:[]};
+  if(action==='stock_receipts')data=[];
+  if(action==='stock_receive'){
+   requests.push(params);attempts++;
+   if(attempts===1)return route.fulfill({status:503,headers,json:{error:'Тест потери ответа'}});
+   data={id:'receipt-1',note:params.note,created_at:'2026-09-29T12:00:00Z',items:params.items.map((x,i)=>({id:x.part_id||'new-1',name:x.name||'Руль',barcode:'FGP-0000000'+(i+1),quantity:x.quantity,balance:x.quantity}))};
+  }
+  return route.fulfill({json:{data},headers});
+ });
+ await page.setViewportSize({width:360,height:800});
+ await page.goto(origin+'/workshop.html#stock');await page.getByRole('link',{name:'+ Приход списком'}).click();
+ await page.getByLabel('Поставщик / накладная').fill('Поставка 15');
+ await page.locator('[data-field="quantity"]').fill('15');
+ await page.getByRole('button',{name:'+ Позиция',exact:true}).click();
+ const row=page.locator('#receipt-lines section').nth(1);
+ await row.locator('select').selectOption('');
+ await row.getByLabel('Название',{exact:true}).fill('Камера');
+ await row.getByLabel('Категория',{exact:true}).fill('Колёса');
+ await row.getByLabel('Количество',{exact:true}).fill('2');
+ await page.getByRole('button',{name:'Сохранить весь приход'}).click();
+ await page.getByText('Тест потери ответа',{exact:true}).waitFor();
+ assert.equal(await page.locator('[data-field="quantity"]').first().isDisabled(),true);
+ await page.reload();
+ await page.getByRole('button',{name:'Проверить и повторить сохранение'}).click();
+ await page.getByRole('heading',{name:'Приход сохранён'}).waitFor();
+ assert.equal(attempts,2);assert.deepEqual(requests[0],requests[1]);assert.equal(requests[1].items[0].quantity,15);assert.equal(requests[1].items[1].name,'Камера');
+ assert.equal(await page.getByRole('button',{name:'Этикетка',exact:true}).count(),2);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ assert.deepEqual(errors,[]);await page.screenshot({path:`browser-results/${kind}-receipt.png`,fullPage:true});await context.close();
+ }
+
  console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
