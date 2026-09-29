@@ -2,7 +2,7 @@ import {renderReceipt} from './stock-receipt.js';
 import {renderCash} from './cash.js';
 import {icon} from './icons.js';
 import {orderBoard} from './board.js';
-import {api,invalidateReads,esc,money,date,today,fio,number,roles,statuses,badge,opts,sessionAvailable,signIn,signUp,signOut,sendPasswordRecovery,recoveryApi,setRecoveryPassword,csvDownload} from './core.js';
+import {api,invalidateReads,esc,money,date,today,fio,number,roles,statuses,badge,opts,sessionAvailable,signIn,signUp,signOut,sendPasswordRecovery,verifyRecoveryCode,finishPasswordRecovery,recoveryApi,setRecoveryPassword,csvDownload} from './core.js';
 import {renderIntake,renderDetail} from './orders.js';
 import {renderDocument} from './documents.js';
 import {renderQa} from './qa.js';
@@ -31,10 +31,10 @@ function table(items,k){return items.length?`<div class="panel flush"><table cla
 function login(error='',register=false,email=''){
  me=null;clearTimeout(loadingTimer);
  app.innerHTML=`<main class="login-shell"><section class="login-intro"><small>FASTGO / КОМАНДА СЕРВИСА</small><h2>Сервис<br>с характером<span>.</span></h2><p>Ремонт электротранспорта, зимнее хранение и склад в одном рабочем пространстве.</p></section><form class="login-card" id="login"><div class="brand">Fast<span>Go</span><small>СЕРВИС ЭЛЕКТРОТРАНСПОРТА</small></div><h1>${register?'Регистрация сотрудника':'Вход для сотрудников'}</h1>${register?field('name','Имя и фамилия','','text',true):''}${field('email','Электронная почта',email,'email',true)}<div class="field"><label for="password">Пароль${register?' (от 12 символов)':''}</label><div class="password-wrap"><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" ${register?'minlength="12"':''} required><button type="button" id="show-password">Показать</button></div></div>${register?field('confirm','Повторите пароль','','password',true):''}<div id="login-error" role="alert">${error?`<p class="error">${esc(error)}</p>`:''}</div><button class="btn" type="submit">${register?'Зарегистрироваться':'Войти'}</button><button class="btn secondary" type="button" id="auth-switch">${register?'Уже есть аккаунт — войти':'Создать аккаунт'}</button>${register?'':'<button class="btn ghost" type="button" id="forgot-password">Забыли пароль?</button>'}<footer>${register?'После регистрации вы сразу войдёте в приложение. Руководитель назначит вам роль и откроет доступ к заказам.':'Используйте почту и пароль своей учётной записи FastGo.'}</footer></form></main>`;
- $('f-email').autocomplete='username';
+ $('f-email').autocomplete='username';$('f-email').autocapitalize='none';$('f-email').spellcheck=false;
  if(register){$('f-name').autocomplete='name';$('f-confirm').autocomplete='new-password';}
  $('auth-switch').onclick=()=>login('',!register,$('f-email').value);
- if($('forgot-password'))$('forgot-password').onclick=async e=>{const email=$('f-email').value.trim();if(!email){$('login-error').innerHTML='<p class="error">Сначала укажите почту владельца или сотрудника.</p>';return;}e.currentTarget.disabled=true;try{await sendPasswordRecovery(email);$('login-error').innerHTML='<p>Письмо для восстановления отправлено. Откройте его на нужном устройстве.</p>';}catch(err){$('login-error').innerHTML=`<p class="error">${esc(err.message)}</p>`;}finally{e.currentTarget.disabled=false;}};
+ if($('forgot-password'))$('forgot-password').onclick=()=>renderRecoveryRequest($('f-email').value.trim());
  $('show-password').onclick=()=>{const p=$('password');p.type=p.type==='password'?'text':'password';if(register)$('f-confirm').type=p.type;$('show-password').textContent=p.type==='password'?'Показать':'Скрыть';};
  $('login').onsubmit=async e=>{
   e.preventDefault();const b=e.submitter;b.disabled=true;$('auth-switch').disabled=true;$('login-error').textContent='';
@@ -48,18 +48,39 @@ function login(error='',register=false,email=''){
   finally{b.disabled=false;if($('auth-switch'))$('auth-switch').disabled=false;}
  };
 }
+function renderRecoveryRequest(email='',sent=false){
+ me=null;clearTimeout(loadingTimer);
+ let busy=false,nextSend=sent?Date.now()+60000:0;
+ const draw=()=>{
+ app.innerHTML=`<main class="login-shell"><section class="login-card"><div class="brand">Fast<span>Go</span></div><h1>Восстановление доступа</h1><form id="recovery-request">${field('recovery_email','Электронная почта',email,'email',true)}${sent?'<p>Если эта почта зарегистрирована, письмо отправлено. Введите код из последнего письма. Если в письме пока только ссылка, откройте её для восстановления.</p><div class="field"><label for="recovery-code">Код из письма</label><input id="recovery-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,12}" maxlength="12" required></div>':'<p>Укажите почту своей учётной записи FastGo.</p>'}<div id="recovery-request-error" role="alert"></div><button class="btn" type="submit">${sent?'Подтвердить код':'Отправить письмо'}</button>${sent?'<button class="btn secondary" type="button" id="recovery-resend">Отправить ещё раз</button><button class="btn ghost" type="button" id="recovery-change-email">Изменить почту</button>':''}<button class="btn ghost" type="button" id="recovery-back">Вернуться ко входу</button></form></section></main>`;
+ const form=$('recovery-request'),input=$('f-recovery_email');input.autocomplete='username';input.autocapitalize='none';input.spellcheck=false;input.readOnly=sent;
+ const error=message=>{if(form.isConnected)$('recovery-request-error').textContent=message;};
+ const send=async()=>{
+  if(Date.now()<nextSend){error('Повторная отправка через '+Math.ceil((nextSend-Date.now())/1000)+' сек.');return;}
+  email=input.value.trim();await sendPasswordRecovery(email);sent=true;nextSend=Date.now()+60000;draw();
+ };
+ const perform=async fn=>{if(busy)return;busy=true;form.querySelectorAll('button').forEach(b=>b.disabled=true);error('');try{await fn();}catch(e){if(e.status===429)nextSend=Date.now()+60000;error(e.message);}finally{busy=false;if(form.isConnected)form.querySelectorAll('button').forEach(b=>b.disabled=false);}};
+ form.onsubmit=e=>{e.preventDefault();perform(async()=>{if(!sent){await send();return;}const token=await verifyRecoveryCode(email,$('recovery-code').value);await renderRecovery(token);});};
+ if($('recovery-resend'))$('recovery-resend').onclick=()=>perform(send);
+ if($('recovery-change-email'))$('recovery-change-email').onclick=()=>renderRecoveryRequest(email);
+ $('recovery-back').onclick=()=>login('',false,input.value.trim());
+ };draw();
+}
 async function renderRecovery(accessToken){
  me=null;clearTimeout(loadingTimer);
+ history.replaceState(null,'',location.pathname+location.search);
  let account;
- try{account=await recoveryApi(accessToken,'me');}catch(e){login('Ссылка восстановления недействительна или истекла.');return;}
+ try{account=await recoveryApi(accessToken,'me');}catch(e){login('Подтверждение восстановления недействительно или истекло. Запросите новое письмо.');return;}
  if(['developer','owner'].includes(account.role)){
   if(!/iPhone/i.test(navigator.userAgent)){login('Пароль привилегированной учётной записи можно восстановить только на доверенном iPhone 13.');return;}
   let device='';try{device=localStorage.getItem('fastgo_owner_device_v1')||'';}catch{}
   try{const status=await recoveryApi(accessToken,'owner_device_status',{device_token:device});if(!status?.trusted){login('Этот iPhone не является доверенным устройством владельца.');return;}}catch(e){login(e.message);return;}
  }
- app.innerHTML=`<main class="login-shell"><section class="login-card"><div class="brand">Fast<span>Go</span></div><h1>Новый пароль</h1><p class="muted">${esc(account.email||'')}</p><form id="recovery-form">${field('new_password','Новый пароль (от 12 символов)','','password',true)}${field('confirm_password','Повторите новый пароль','','password',true)}<div id="recovery-error" role="alert"></div><button class="btn" type="submit">Сохранить новый пароль</button></form></section></main>`;
+ app.innerHTML=`<main class="login-shell"><section class="login-card"><div class="brand">Fast<span>Go</span></div><h1>Новый пароль</h1><p class="muted">${esc(account.email||'')}</p><form id="recovery-form">${field('recovery_username','Электронная почта',account.email||'','email',true)}${field('new_password','Новый пароль (от 12 символов)','','password',true)}${field('confirm_password','Повторите новый пароль','','password',true)}<div id="recovery-error" role="alert"></div><button class="btn" type="submit">Сохранить новый пароль</button></form></section></main>`;
+ $('f-recovery_username').autocomplete='username';$('f-recovery_username').readOnly=true;
+ $('f-new_password').autocomplete='new-password';$('f-confirm_password').autocomplete='new-password';
  $('f-new_password').minLength=12;$('f-confirm_password').minLength=12;
- $('recovery-form').onsubmit=async e=>{e.preventDefault();const b=e.submitter,v=Object.fromEntries(new FormData(e.currentTarget));if(v.new_password!==v.confirm_password){$('recovery-error').innerHTML='<p class="error">Пароли не совпадают</p>';return;}b.disabled=true;try{await setRecoveryPassword(accessToken,v.new_password);localStorage.removeItem('fastgo_workshop_session');localStorage.removeItem('fastgo_token');history.replaceState(null,'',location.pathname);login('Пароль изменён. Войдите с новым паролем.',false,account.email||'');}catch(err){$('recovery-error').innerHTML=`<p class="error">${esc(err.message)}</p>`;b.disabled=false;}};
+ $('recovery-form').onsubmit=async e=>{e.preventDefault();const b=e.submitter,v=Object.fromEntries(new FormData(e.currentTarget));if(v.new_password!==v.confirm_password){$('recovery-error').innerHTML='<p class="error">Пароли не совпадают</p>';return;}b.disabled=true;try{await setRecoveryPassword(accessToken,v.new_password);await finishPasswordRecovery(accessToken);history.replaceState(null,'',location.pathname);login('Пароль изменён. Войдите с новым паролем.',false,account.email||'');}catch(err){$('recovery-error').innerHTML=`<p class="error">${esc(err.message)}</p>`;b.disabled=false;}};
 }
 async function enterWorkshop(){
  const access=await api('request_access',{}, {fresh:true});

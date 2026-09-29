@@ -26,14 +26,26 @@ export const opts=(values,selected,blank)=> (blank?`<option value="">${esc(blank
 export function suggestedEnd(start,tariff,months){const d=new Date(start+'T12:00:00Z');if(!Number.isFinite(d.getTime()))return '';if(tariff==='season')return `${d.getUTCFullYear()+(d.getUTCMonth()>=2?1:0)}-03-31`;const day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+Number(months||1));const last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();d.setUTCDate(Math.min(day,last));return d.toISOString().slice(0,10);}
 export function normalizePhone(value){let d=String(value).replace(/\D/g,'');if(d.length===11&&(d[0]==='7'||d[0]==='8'))d=d.slice(1);if(d.length!==10)throw new Error('Введите полный номер телефона: +7 и 10 цифр');return '+7'+d;}
 export function sessionAvailable(){return !!session?.access_token;}
-async function request(path,body,token){let r;try{r=await fetch(BASE+path,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});}catch(e){throw new Error(e.name==='TimeoutError'?'Сервер не ответил. Проверьте подключение и повторите попытку.':'Нет соединения с сервером. Проверьте интернет и повторите попытку.');}let j;try{j=await r.json();}catch{throw new Error('Сервер вернул неполный ответ. Повторите попытку.');}if(!r.ok){const msg=j.error_description||j.error||j.message||j.msg||'Ошибка запроса';const messages={'Invalid login credentials':'Неверная почта или пароль','User already registered':'Этот адрес уже зарегистрирован. Войдите с вашим паролем.','Email not confirmed':'Вход недоступен: подтверждение почты всё ещё включено в настройках FastGo.','Signups not allowed for this instance':'Регистрация временно отключена. Обратитесь к руководителю.','Email rate limit exceeded':'Слишком много попыток. Подождите несколько минут и повторите.'};const e=new Error(messages[msg]||msg);e.status=r.status;throw e;}return j;}
+async function request(path,body,token){let r;try{r=await fetch(BASE+path,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});}catch(e){throw new Error(e.name==='TimeoutError'?'Сервер не ответил. Проверьте подключение и повторите попытку.':'Нет соединения с сервером. Проверьте интернет и повторите попытку.');}let j;try{j=await r.json();}catch{throw new Error('Сервер вернул неполный ответ. Повторите попытку.');}if(!r.ok){const msg=j.error_description||j.error||j.message||j.msg||'Ошибка запроса';const messages={'Invalid login credentials':'Неверная почта или пароль','User already registered':'Этот адрес уже зарегистрирован. Войдите с вашим паролем.','Email not confirmed':'Вход недоступен: подтверждение почты всё ещё включено в настройках FastGo.','Signups not allowed for this instance':'Регистрация временно отключена. Обратитесь к руководителю.','Email rate limit exceeded':'Слишком много попыток. Подождите несколько минут и повторите.'};const authErrors={otp_expired:'Код неверный или срок его действия истёк. Используйте последнее письмо или запросите новое.',over_email_send_rate_limit:'Достигнут лимит отправки писем. Попробуйте позже; частые повторы не ускорят отправку.',over_request_rate_limit:'Слишком много попыток. Подождите перед повтором.'};const e=new Error(authErrors[j.error_code||j.code]||messages[msg]||msg);e.status=r.status;throw e;}return j;}
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token,user_id:s.user?.id||session?.user_id,expires_at:s.expires_at||Math.floor(Date.now()/1000)+s.expires_in};localStorage.setItem(STORE,JSON.stringify(session));}
 async function refresh(){if(!session?.refresh_token)return false;if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(s=>{saveSession(s);return true;}).catch(e=>{if(e.status===400||e.status===401)clearSession();throw e;}).finally(()=>refreshing=null);return refreshing;}
 export async function signIn(email,password){reads.clear();saveSession(await request('/auth/v1/token?grant_type=password',{email,password}));}
 export async function sendPasswordRecovery(email){
  email=String(email||'').trim().toLowerCase();if(!email)throw new Error('Укажите почту');
- await request('/auth/v1/recover',{email,redirect_to:location.origin+location.pathname});
+ await request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+location.pathname),{email});
  return true;
+}
+export async function verifyRecoveryCode(email,code){
+ email=String(email||'').trim().toLowerCase();const token=String(code||'').replace(/\s/g,'');
+ if(!email||!/^\d{6,10}$/.test(token))throw new Error('Введите код из письма целиком');
+ const result=await request('/auth/v1/verify',{email,token,type:'recovery'});
+ if(!result.access_token)throw new Error('Не удалось подтвердить код. Запросите новое письмо.');
+ // Recovery credentials stay in memory, never in the application session store.
+ return result.access_token;
+}
+export async function finishPasswordRecovery(accessToken){
+ clearSession();
+ try{await request('/auth/v1/logout?scope=local',{},accessToken);}catch{}
 }
 export async function recoveryApi(accessToken,action,params={}){
  const response=await request('/functions/v1/fastgo-workshop-api',{action,params},accessToken);

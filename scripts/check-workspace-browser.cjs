@@ -98,6 +98,77 @@ const server=createServer((req,res)=>{
  assert.deepEqual(errors,[]);await page.screenshot({path:`browser-results/${kind}-receipt.png`,fullPage:true});await context.close();
  }
 
+
+ // Recovery fixture: no real mail, accounts, codes or password changes.
+ {
+ const context=await browser.newContext({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'}),page=await context.newPage(),errors=[];
+ let verified=0,updated=0,logout=0,loggedIn=0,trust=false;
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,PUT,OPTIONS'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  const p=req.postDataJSON();
+  if(req.url().includes('/auth/v1/recover')){assert.equal(p.email,'recovery@example.invalid');assert.equal(new URL(req.url()).searchParams.get('redirect_to'),origin+'/workshop.html');return route.fulfill({json:{},headers});}
+  if(req.url().includes('/auth/v1/verify')){
+   assert.equal(p.type,'recovery');assert.equal(p.email,'recovery@example.invalid');
+   if(p.token==='00000000')return route.fulfill({status:403,json:{error_code:'otp_expired',msg:'expired'},headers});
+   verified++;return route.fulfill({json:{access_token:'recovery-fixture',refresh_token:'unused'},headers});
+  }
+  if(req.url().endsWith('/auth/v1/user')){assert.equal(req.method(),'PUT');assert.equal(req.headers().authorization,'Bearer recovery-fixture');assert.equal(p.password,'Fixture-password-42');updated++;return route.fulfill({json:{id:'fixture'},headers});}
+  if(req.url().includes('/auth/v1/logout')){logout++;return route.fulfill({status:204,headers});}
+  if(req.url().includes('/auth/v1/token')){loggedIn++;return route.fulfill({json:{access_token:'normal-fixture',refresh_token:'normal-refresh',expires_in:3600,user:{id:'fixture'}},headers});}
+  if(req.url().includes('/functions/v1/fastgo-workshop-api')){
+   let data={};const {action}=p;
+   if(action==='me')data={role:'owner',email:'recovery@example.invalid',profile_id:'fixture',name:'Тест',active:true};
+   if(action==='owner_device_status')data={trusted:trust};
+   if(action==='request_access')data={active:true};
+   if(action==='catalog')data={parts:[],services:[],staff:[],categories:[]};
+   if(action==='overview')data={repairs:0,storage:0,ready:0,overdue:0,storage_due:0,debt:0,today_payments:0};
+   if(action==='list')data={count:0,items:[]};
+   return route.fulfill({json:{data},headers});
+  }
+  return route.abort();
+ });
+ await page.goto(origin+'/workshop.html');
+ await page.getByRole('button',{name:'Забыли пароль?'}).click();
+ await page.getByLabel('Электронная почта',{exact:false}).fill('recovery@example.invalid');
+ await page.getByRole('button',{name:'Отправить письмо',exact:true}).click();
+ await page.getByLabel('Код из письма').fill('00000000');
+ await page.getByRole('button',{name:'Подтвердить код'}).click();
+ await page.getByText('Код неверный или срок его действия истёк.',{exact:false}).waitFor();
+ assert.equal(updated,0);
+ await page.getByLabel('Код из письма').fill('12345678');
+ await page.getByRole('button',{name:'Подтвердить код'}).click();
+ await page.getByText('Этот iPhone не является доверенным устройством владельца.',{exact:true}).waitFor();
+ assert.equal(updated,0);
+ trust=true;
+ await page.getByRole('button',{name:'Забыли пароль?'}).click();
+ await page.getByLabel('Электронная почта',{exact:false}).fill('recovery@example.invalid');
+ await page.getByRole('button',{name:'Отправить письмо',exact:true}).click();
+ await page.getByLabel('Код из письма').fill('12345678');
+ await page.getByRole('button',{name:'Подтвердить код'}).click();
+ await page.getByRole('heading',{name:'Новый пароль',exact:true}).waitFor();
+ assert.equal(await page.locator('#f-new_password').getAttribute('autocomplete'),'new-password');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('fastgo_workshop_session')),null);
+ await page.locator('#f-new_password').fill('Fixture-password-42');
+ await page.locator('#f-confirm_password').fill('Fixture-password-43');
+ await page.getByRole('button',{name:'Сохранить новый пароль'}).click();
+ await page.getByText('Пароли не совпадают',{exact:true}).waitFor();assert.equal(updated,0);
+ await page.locator('#f-confirm_password').fill('Fixture-password-42');
+ await page.getByRole('button',{name:'Сохранить новый пароль'}).click();
+ await page.getByRole('heading',{name:'Вход для сотрудников',exact:true}).waitFor();
+ assert.equal(verified,2);assert.equal(updated,1);assert.equal(logout,1);assert.equal(loggedIn,0);
+ assert.equal(await page.locator('#f-email').inputValue(),'recovery@example.invalid');
+ assert.equal(await page.locator('#f-email').getAttribute('autocomplete'),'username');
+ assert.equal(await page.locator('#password').getAttribute('autocomplete'),'current-password');
+ assert.equal(await page.locator('#password').inputValue(),'');
+ assert.equal(await page.evaluate(()=>JSON.stringify(localStorage).includes('Fixture-password')),false);
+ await page.locator('#password').fill('Fixture-password-42');await page.getByRole('button',{name:'Войти',exact:true}).click();
+ await page.getByRole('heading',{name:'Заявки и хранение'}).waitFor();assert.equal(loggedIn,1);
+ assert.deepEqual(errors,[]);await context.close();
+ }
+
  console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
