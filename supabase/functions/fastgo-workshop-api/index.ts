@@ -3,7 +3,7 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-repair-midflow-2026-09-25';
+const RELEASE = 'workshop-sale-prices-2026-10-02';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -324,8 +324,17 @@ async function main(req){
       if(!uuid(p.request_id)||!Array.isArray(p.items)||!p.items.length||p.items.length>200)fail('Неверная корзина');
       if(!['cash','card','transfer'].includes(p.payment_method))fail('Укажите способ оплаты');
       const catalog=await g('catalog'),merged=new Map();
-      for(const x of p.items){const id=x.part_id||x.id;if(!uuid(id))fail('Неверный товар');merged.set(id,(merged.get(id)||0)+integer(x.quantity,'количество',1,1000));}
-      p.items=[...merged].map(([id,quantity])=>{const pr=catalog.parts.find(x=>x.id===id&&x.active!==false);if(!pr)fail('Товар не найден',404);return {part_id:id,quantity,price:numeric(pr.retail_price,'цену')};});
+      for(const x of p.items){
+        const id=x.part_id||x.id;if(!uuid(id))fail('Неверный товар');
+        const pr=catalog.parts.find(x=>x.id===id&&x.active!==false);if(!pr)fail('Товар не найден',404);
+        const mode=x.price_mode??'base';if(!['base','free'].includes(mode))fail('Неверный режим цены');
+        const price=mode==='free'?numeric(x.unit_price,'свободную цену'):numeric(pr.retail_price,'цену');
+        if(mode==='free'&&(x.unit_price===undefined||x.unit_price===null||x.unit_price===''||typeof x.unit_price==='boolean'||Math.abs(price*100-Math.round(price*100))>0.0001))fail('Проверьте свободную цену');
+        const quantity=integer(x.quantity,'количество',1,1000),old=merged.get(id);
+        if(old&&(old.price_mode!==mode||old.price!==price))fail('У товара разные цены в корзине');
+        merged.set(id,{part_id:id,quantity:(old?.quantity||0)+quantity,price,price_mode:mode,...(mode==='free'?{unit_price:price}:{})});
+      }
+      p.items=[...merged.values()];
       const subtotal=p.items.reduce((s,x)=>s+x.price*x.quantity,0);p.discount=numeric(p.discount??0,'скидку',0,subtotal);if(p.discount&&!admin(me))fail('Скидку задаёт администратор',403);
     }
     if(action==='part_save'){
@@ -397,3 +406,4 @@ async function main(req){
   }catch(e){return out({error:e.status?e.message:'Сервис временно недоступен. Повторите эту же операцию.'},e.status||503);}
 }
 Deno.serve(main);
+
