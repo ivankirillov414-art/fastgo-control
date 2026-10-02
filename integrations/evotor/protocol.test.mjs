@@ -1,0 +1,16 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {prepareCheckout,verifyReceipt,transition,canReleaseReservation} from './protocol.mjs';
+const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const input={checkout_id:id(1),terminal_id:id(2),shift_id:id(3),items:[{product_id:id(4),quantity:2,price_kopecks:1}]};
+const catalog=[{product_id:id(4),fiscal_product_id:id(5),active:true,available:3,price_kopecks:12345,tax:'configured-on-terminal',unit:'шт',name:'Руль',barcode:'FGP-4'}];
+const job=()=>prepareCheckout(input,catalog,0);
+const receipt=()=>({checkout_id:id(1),terminal_id:id(2),receipt_id:'receipt-1',fiscalized:true,total_kopecks:24690,items:job().items,payments:[{method:'cash',amount_kopecks:4690},{method:'card',amount_kopecks:20000}]});
+test('prices come from server and monetary amounts are exact',()=>assert.equal(job().total_kopecks,24690));
+test('missing fiscal mapping blocks preparation',()=>assert.throws(()=>prepareCheckout(input,[{...catalog[0],fiscal_product_id:null}])));
+test('insufficient stock and duplicate rows are rejected',()=>{assert.throws(()=>prepareCheckout(input,[{...catalog[0],available:1}]));assert.throws(()=>prepareCheckout({...input,items:[...input.items,...input.items]},catalog));});
+test('payload hash is stable across retries',()=>assert.equal(job().payload_hash,prepareCheckout(input,catalog,10000).payload_hash));
+test('receipt accepts split payment',()=>assert.equal(verifyReceipt(job(),receipt()).total_kopecks,24690));
+test('changed positions, totals, payment and terminal are rejected',()=>{for(const patch of [{total_kopecks:1},{terminal_id:id(99)},{payments:[{method:'cash',amount_kopecks:1}]},{items:[]},{fiscalized:false}])assert.throws(()=>verifyReceipt(job(),{...receipt(),...patch}));});
+test('unknown checkout cannot be retried or cancelled automatically',()=>{const unknown=transition(transition(job(),'opening'),'unknown');assert.throws(()=>transition(unknown,'queued'));assert.throws(()=>transition(unknown,'cancelled'));assert.equal(canReleaseReservation(unknown),false);});
+test('committed cannot fiscalize a second time',()=>{let j=job();for(const state of ['opening','opened','fiscalized','committed'])j=transition(j,state);assert.throws(()=>transition(j,'fiscalized'));});
