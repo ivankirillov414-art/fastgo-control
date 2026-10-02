@@ -205,3 +205,21 @@ test('receipts restrict roles, validate size, and backfill missing barcodes',asy
  await assert.rejects(h.call('stock_receive',{note:'test',items:Array(41).fill({part_id:part,quantity:1})}),/40/);
  h.sheets['Товары'].rows[0]['Штрих-код']='';const r=await h.call('stock_receive',{note:'test',items:[{part_id:part,quantity:1}]});assert.match(r.items[0].barcode,/^FGP-/);
 });
+
+test('free sale price affects ledger and item without changing catalogue; retry remains one sale',async()=>{
+ const h=harness(),seller={...manager,role:'seller'};h.sheets['Товары'].rows[0]['Остаток, шт.']=10;
+ const shift=await h.call('shift_open',{register:'Свободная цена'},seller),request_id=randomUUID();
+ const payload={request_id,shift_id:shift.id,payment_method:'card',items:[{part_id:part,quantity:2,price_mode:'free',unit_price:123.45}]};
+ const sale=await h.call('sale',payload,seller);assert.equal(sale.total,246.9);
+ assert.equal((await h.call('sale',payload,seller)).id,sale.id);
+ assert.equal(h.sheets['Товары'].rows[0]['Цена продажи, ₽'],100);
+ assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],8);
+ assert.equal(h.sheets['Строки продаж'].rows[0]['Цена'],123.45);
+ assert.equal((await h.call('cash_state',{shift_id:shift.id},seller)).totals.card,246.9);
+});
+test('free price rejects invalid money and base mode ignores submitted override',async()=>{
+ const h=harness();h.sheets['Товары'].rows[0]['Остаток, шт.']=10;
+ const shift=await h.call('shift_open',{register:'Проверка цен'});
+ for(const unit_price of [-1,'',null,true,'no',1.001,1000000001])await assert.rejects(h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1,price_mode:'free',unit_price}]}),/цен/);
+ const sale=await h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1,price_mode:'base',unit_price:1}]});assert.equal(sale.total,100);
+});
