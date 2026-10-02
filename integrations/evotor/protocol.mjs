@@ -3,6 +3,9 @@ import {createHash} from 'node:crypto';
 const uuid = s => typeof s==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 const assert=(ok,msg)=>{if(!ok)throw new Error(msg);};
 const money=n=>Number.isSafeInteger(n)&&n>=0;
+/** Trusted server catalog only. This function does not reserve stock; its caller must
+ * lock inventory and persist the job atomically before making it deliverable.
+ * Client-supplied prices are deliberately ignored. Money is integer kopecks. */
 export function prepareCheckout({checkout_id,terminal_id,shift_id,items},catalog,now=Date.now()){
  assert(uuid(checkout_id)&&uuid(terminal_id)&&uuid(shift_id),'Invalid identifiers');
  assert(Array.isArray(items)&&items.length>0&&items.length<=40,'Invalid basket');
@@ -25,6 +28,9 @@ export function prepareCheckout({checkout_id,terminal_id,shift_id,items},catalog
  const payload={version:1,checkout_id,terminal_id,shift_id,items:rows,total_kopecks};
  return {...payload,payload_hash:createHash('sha256').update(JSON.stringify(payload)).digest('hex'),expires_at:new Date(now+300000).toISOString(),state:'queued'};
 }
+/** Call only after authenticating the terminal/webhook. This is content validation,
+ * not cryptographic verification and not a DB commit. Enforce unique receipt_id
+ * in persistent storage before recording payment or releasing stock. */
 export function verifyReceipt(job,receipt){
  assert(receipt.checkout_id===job.checkout_id&&receipt.terminal_id===job.terminal_id,'Receipt correlation mismatch');
  assert(receipt.fiscalized===true&&typeof receipt.receipt_id==='string'&&receipt.receipt_id.length>0,'Fiscal confirmation required');
@@ -38,6 +44,8 @@ export function verifyReceipt(job,receipt){
  assert(total===job.total_kopecks,'Payment total mismatch');
  return {receipt_id:receipt.receipt_id,checkout_id:job.checkout_id,payments:receipt.payments,total_kopecks:total};
 }
+// opening is persisted BEFORE calling the SDK. An unknown outcome cannot be
+// cancelled or retried automatically: reconcile with the existing fiscal receipt.
 const transitions={queued:['opening','cancelled'],opening:['opened','unknown'],opened:['fiscalized','unknown'],unknown:['opened','fiscalized'],fiscalized:['committed'],committed:[],cancelled:[]};
 export function transition(job,next){assert(transitions[job.state]?.includes(next),'Unsafe checkout transition');return {...job,state:next};}
 export function canReleaseReservation(job){return job.state==='cancelled';}
