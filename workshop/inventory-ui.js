@@ -214,7 +214,7 @@ export async function openSales(shiftId){
   let buffer='',lastKey=0;
   const scanner=e=>{
     if(!d.open||!$('sales-cart')||pendingSale||saleBusy||e.ctrlKey||e.altKey||e.metaKey)return;
-    if(e.target.closest('input,textarea,select,[contenteditable="true"]'))return;
+    if(e.target.closest('input:not([type="radio"]):not([type="checkbox"]),textarea,select,[contenteditable="true"]'))return;
     const now=performance.now();
     if(e.key==='Enter'){if(buffer.length>=3&&now-lastKey<150){e.preventDefault();queueCode(buffer);}buffer='';return;}
     if(e.key.length===1){if(now-lastKey>150)buffer='';buffer+=e.key;lastKey=now;}
