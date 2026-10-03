@@ -14,3 +14,5 @@
 .project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.project-card{padding:20px;border:1px solid var(--line);border-radius:16px;background:#100b18}.project-card p{color:var(--muted)}.project-skills{display:flex;gap:6px;flex-wrap:wrap}.project-skills button{min-height:34px;padding:5px 9px;font-size:.75rem}.history-panel{margin:28px 0;padding:20px;border:1px solid var(--line);border-radius:18px;background:#0e0a14}.system-cards{margin-top:18px}
 .tree-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:600px){.rank-strip{align-items:flex-start;flex-direction:column}.rank-metrics span{text-align:left}.direction-grid,.branch-grid,.skill-list,.project-grid{grid-template-columns:1fr}.tree-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.boss-card{grid-template-columns:42px minmax(0,1fr)}.boss-card>span:last-child{grid-column:2;text-align:left}.level-road{overflow-x:auto}.level-road>div{min-width:76px}}
+
+.project-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.skill-picker [hidden]{display:none}.project-skills button{font-size:.875rem}

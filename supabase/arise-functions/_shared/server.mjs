@@ -56,11 +56,23 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   }
   if(action==='projects'){
    if(req.method==='GET')return json({items:await db.rest('arise_projects',{user_id:'eq.'+user.id,select:'id,title,description,status,created_at,updated_at',order:'updated_at.desc'})});
-   const body=await req.json(),title=String(body.title||'').trim(),description=String(body.description||'').trim(),skills=[...new Set(Array.isArray(body.skills)?body.skills.map(String):[])];
-   if(title.length<2||title.length>160||description.length>2000||skills.length>12||skills.some(x=>!SKILL_IDS.has(x)))return json({error:'invalid_project'},400);
-   const created=await db.rest('arise_projects',{},'POST',{user_id:user.id,title,description,status:'active'}),project=created[0];
-   if(skills.length)await db.rest('arise_project_skills',{},'POST',skills.map(skill_id=>({project_id:project.id,skill_id})));
-   return json({...project,skills},201);
+   const body=await req.json(),actionName=body.action||'create',id=String(body.id||'');
+   if(!['create','update','archive','restore'].includes(actionName))return json({error:'invalid_action'},400);
+   let current=null;
+   if(actionName!=='create'){
+    if(!/^[a-f0-9-]{36}$/i.test(id))return json({error:'invalid_project'},400);
+    current=(await db.rest('arise_projects',{id:'eq.'+id,user_id:'eq.'+user.id,select:'id,title,description,status,updated_at'}))[0];
+    if(!current)return json({error:'project_not_found'},404);
+    if(typeof body.updated_at!=='string'||body.updated_at!==current.updated_at)return json({error:'project_changed'},409);
+   }
+   const title=String(body.title??current?.title??'').trim(),description=String(body.description??current?.description??'').trim();
+   const changesSkills=['create','update'].includes(actionName),skills=changesSkills?[...new Set(Array.isArray(body.skills)?body.skills.map(String):[])]:null;
+   const status=actionName==='create'||actionName==='update'?String(body.status||current?.status||'active'):null;
+   if(title.length<2||title.length>160||description.length>2000||(changesSkills&&(skills.length>12||skills.some(x=>!SKILL_IDS.has(x))))||(status&&!['planned','active','completed'].includes(status)))return json({error:'invalid_project'},400);
+   if(actionName==='update'&&current.status==='archived')return json({error:'project_archived'},409);
+   const result=await db.rpc('arise_save_project',{p_user_id:user.id,p_id:current?.id||null,p_action:actionName,p_title:title,p_description:description,p_status:status,p_skills:skills,p_expected_updated_at:current?body.updated_at:null});
+   if(result.error)return json(result,result.error==='project_not_found'?404:409);
+   return json(result,actionName==='create'?201:200);
   }
   if(action==='boss-quest'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
