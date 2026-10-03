@@ -16,6 +16,17 @@ revoke all on public.daily_instances from anon, authenticated;
 revoke all on public.daily_sources from anon, authenticated;
 revoke all on public.daily_evidence from anon, authenticated;
 
+alter table public.quest_evidence enable row level security;
+alter table public.quest_evidence_parts enable row level security;
+alter table public.rpg_progress enable row level security;
+alter table public.daily_sources enable row level security;
+alter table public.daily_instances enable row level security;
+alter table public.daily_evidence enable row level security;
+alter table public.push_subscriptions enable row level security;
+alter table public.push_log enable row level security;
+alter table public.quest_submissions enable row level security;
+revoke all on public.push_subscriptions,public.push_log,public.quest_submissions from anon,authenticated;
+
 create or replace function public.sync_rpg_progress_from_evidence(p_device_id text)
 returns public.rpg_progress language plpgsql security invoker set search_path = public, pg_temp
 as $body$

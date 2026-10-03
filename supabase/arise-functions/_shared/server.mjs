@@ -6,9 +6,11 @@ import {aggregateQuest,evaluateFile,localClock,validateUpload} from './evidence.
 const H={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,x-device-id,authorization,apikey','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:H});
 const devicePattern=/^[a-zA-Z0-9_-]{16,80}$/;
+async function proofBody(req){if(req.headers.get('content-type')?.startsWith('multipart/form-data')){const form=await req.formData();return {body:JSON.parse(String(form.get('metadata')||'{}')),file:form.get('file')};}return {body:await req.json(),file:null};}
 function database(env,fetcher){const origin=env.get('SUPABASE_URL'),key=env.get('SUPABASE_SERVICE_ROLE_KEY');if(!origin||!key)throw Error('server_not_configured');const headers={apikey:key,Authorization:`Bearer ${key}`};return {
  async rest(table,query={},method='GET',body,prefer='return=representation'){const url=new URL(origin+'/rest/v1/'+table);for(const [k,v] of Object.entries(query))url.searchParams.set(k,String(v));const response=await fetcher(url,{method,headers:{...headers,'Content-Type':'application/json',Prefer:prefer},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('database_error');const raw=await response.text();return raw?JSON.parse(raw):null;},
  async rpc(name,body){return this.rest('rpc/'+name,{},'POST',body);},
+ async signed(path){const response=await fetcher(origin+'/storage/v1/object/sign/quest-evidence/'+path,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:60}),signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('file_unavailable');const data=await response.json();return origin+'/storage/v1'+data.signedURL;},
  async upload(path,file){const response=await fetcher(origin+'/storage/v1/object/quest-evidence/'+path,{method:'POST',headers:{...headers,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file,signal:AbortSignal.timeout(30000)});if(!response.ok)throw Error('upload_failed');}
 };}
 export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now=()=>new Date()}={}){return async req=>{
@@ -21,6 +23,38 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   if(!devicePattern.test(device))throw Error('database_error');
   const sync=()=>db.rpc('sync_rpg_progress_from_evidence',{p_device_id:device});
 
+  if(['review-access','review-queue','review-file','review'].includes(action)){
+   const reviewers=await db.rest('arise_reviewers',{user_id:'eq.'+user.id,select:'user_id'}),authorized=reviewers.length>0;
+   if(action==='review-access')return json({authorized});
+   if(!authorized)return json({error:'review_forbidden'},403);
+   if(action==='review-queue'){
+    if(req.method!=='GET')return json({error:'method_not_allowed'},405);
+    const [skills,bosses,quests,dailies]=await Promise.all([
+     db.rest('arise_skill_evidence',{status:'eq.pending',select:'id,user_id,skill_id,target_level,practical_task,evidence_text,evidence_url,file_name,created_at',order:'created_at.asc',limit:100}),
+     db.rest('arise_boss_progress',{status:'eq.pending',select:'user_id,boss_id,title,evidence_text,file_name,updated_at',order:'updated_at.asc',limit:100}),
+     db.rest('quest_evidence',{status:'eq.pending',select:'id,quest_title,file_name,review_note,created_at',order:'created_at.asc',limit:100}),
+     db.rest('daily_evidence',{status:'eq.pending',select:'id,file_name,review_note,created_at,daily_instances(title,details)',order:'created_at.asc',limit:100})]);
+    return json({items:[...skills.map(x=>({...x,kind:'skill'})),...bosses.map(x=>({...x,kind:'boss'})),...quests.map(x=>({...x,kind:'quest'})),...dailies.map(x=>({...x,kind:'daily'}))]});
+   }
+   const body=req.method==='POST'?await req.json():Object.fromEntries(url.searchParams),kind=String(body.kind||'');
+   const tables={skill:'arise_skill_evidence',boss:'arise_boss_progress',quest:'quest_evidence',daily:'daily_evidence'};
+   if(!tables[kind])return json({error:'invalid_evidence'},400);
+   const query=kind==='boss'?{user_id:'eq.'+body.user_id,boss_id:'eq.'+body.boss_id}:{id:'eq.'+body.id};
+   const row=(await db.rest(tables[kind],{...query,select:'*'}))[0];if(!row)return json({error:'evidence_not_found'},404);
+   if(action==='review-file'){
+    if(req.method!=='GET'||!row.file_path||row.file_path.startsWith('local-camera/'))return json({error:'file_unavailable'},404);
+    return json({url:await db.signed(row.file_path),file_name:row.file_name});
+   }
+   if(req.method!=='POST')return json({error:'method_not_allowed'},405);
+   const note=String(body.note||'').trim();if(typeof body.accept!=='boolean'||note.length<5||note.length>500)return json({error:'invalid_evidence'},400);
+   if(row.status!=='pending')return json({error:'evidence_not_pending'},409);
+   let result;
+   if(kind==='skill')result=await db.rpc('arise_review_skill',{p_evidence_id:row.id,p_accept:body.accept,p_note:note});
+   else if(kind==='boss')result=await db.rpc('arise_review_boss',{p_user_id:row.user_id,p_boss_id:row.boss_id,p_accept:body.accept,p_note:note});
+   else if(kind==='daily')result=await db.rpc('arise_review_daily',{p_evidence_id:row.id,p_accept:body.accept,p_note:note});
+   else result=await db.rpc('arise_record_quest',{p_device_id:row.device_id,p_index:row.quest_index,p_title:row.quest_title,p_path:row.file_path,p_name:row.file_name,p_mime:row.mime_type,p_size:row.file_size,p_status:body.accept?'accepted':'rejected',p_note:note});
+   await db.rest('arise_review_audit',{},'POST',{reviewer_id:user.id,kind,reference_id:String(row.id||row.boss_id),decision:body.accept?'accepted':'rejected',note});return json(result);
+  }
   if(action==='development-tree'){
    if(req.method!=='GET')return json({error:'method_not_allowed'},405);
    const [progress,projects,evidence,bosses,history]=await Promise.all([
@@ -43,7 +77,7 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   }
   if(action==='skill-evidence'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
-   const body=await req.json(),skillId=String(body.skill_id||''),skill=SKILLS.find(x=>x.id===skillId),text=String(body.evidence_text||'').trim(),urlText=String(body.evidence_url||'').trim();
+   const {body,file}=await proofBody(req),skillId=String(body.skill_id||''),skill=SKILLS.find(x=>x.id===skillId),text=String(body.evidence_text||'').trim(),urlText=String(body.evidence_url||'').trim();
    if(!skill||text.length<20||text.length>2000)return json({error:'invalid_evidence'},400);
    if(urlText&&!/^https:\/\//i.test(urlText))return json({error:'invalid_evidence_url'},400);
    const progress=(await db.rest('arise_skill_progress',{user_id:'eq.'+user.id,skill_id:'eq.'+skillId,select:'level,active'}))[0]||{level:0,active:false};
@@ -51,8 +85,9 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
    const target=progress.level+1,pending=await db.rest('arise_skill_evidence',{user_id:'eq.'+user.id,skill_id:'eq.'+skillId,target_level:'eq.'+target,status:'eq.pending',select:'id'});
    if(pending.length)return json({error:'evidence_pending'},409);
    let projectId=null;if(body.project_id){const projects=await db.rest('arise_projects',{id:'eq.'+body.project_id,user_id:'eq.'+user.id,select:'id'});if(!projects.length)return json({error:'invalid_project'},400);projectId=projects[0].id;}
-   const row={user_id:user.id,skill_id:skillId,target_level:target,practical_task:taskFor(skill,target),project_id:projectId,evidence_text:text,evidence_url:urlText||null};
-   const created=await db.rest('arise_skill_evidence',{},'POST',row);return json(created[0],201);
+   let proof={};if(file){const extension=validateUpload(file),path=`${device}/skill-${skillId}/${crypto.randomUUID()}.${extension}`;await db.upload(path,file);proof={file_path:path,file_name:file.name.slice(0,240),mime_type:file.type||null};}
+   const row={...proof,user_id:user.id,skill_id:skillId,target_level:target,practical_task:taskFor(skill,target),project_id:projectId,evidence_text:text,evidence_url:urlText||null};
+   const created=await db.rest('arise_skill_evidence',{},'POST',row);let result=created[0];if(file){const evaluated=await evaluateFile(file,{id:-1,title:skill.name,mission:taskFor(skill,target)},env,fetcher);if(evaluated.check_status!=='pending')result=await db.rpc('arise_review_skill',{p_evidence_id:result.id,p_accept:evaluated.check_status==='accepted',p_note:evaluated.check_note});else{await db.rest('arise_skill_evidence',{id:'eq.'+result.id,user_id:'eq.'+user.id},'PATCH',{review_note:evaluated.check_note});result.review_note=evaluated.check_note;}}return json(result,201);
   }
   if(action==='projects'){
    if(req.method==='GET')return json({items:await db.rest('arise_projects',{user_id:'eq.'+user.id,select:'id,title,description,status,created_at,updated_at',order:'updated_at.desc'})});
@@ -76,14 +111,16 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   }
   if(action==='boss-quest'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
-   const body=await req.json(),boss=BOSS_QUESTS.find(x=>x.id===body.boss_id);if(!boss)return json({error:'invalid_boss'},400);
+   const {body,file}=await proofBody(req),boss=BOSS_QUESTS.find(x=>x.id===body.boss_id);if(!boss)return json({error:'invalid_boss'},400);
    const actionName=String(body.action||'start'),current=(await db.rest('arise_boss_progress',{user_id:'eq.'+user.id,boss_id:'eq.'+boss.id,select:'status'}))[0];
+   if(current?.status==='pending')return json({error:'evidence_pending'},409);
    if(current?.status==='accepted')return json({error:'already_completed'},409);
    let projectId=null;if(body.project_id){const projects=await db.rest('arise_projects',{id:'eq.'+body.project_id,user_id:'eq.'+user.id,select:'id'});if(!projects.length)return json({error:'invalid_project'},400);projectId=projects[0].id;}
    const evidence=String(body.evidence_text||'').trim(),skillIds=[...new Set(Array.isArray(body.skill_ids)?body.skill_ids.map(String):[])],validSkills=skillIds.every(id=>{const skill=SKILLS.find(x=>x.id===id);return skill&&boss.branches.includes(skill.branch);});if(actionName==='submit'&&(evidence.length<30||evidence.length>3000||skillIds.length<2||skillIds.length>12||!validSkills))return json({error:'invalid_evidence'},400);
    if(!['start','submit'].includes(actionName))return json({error:'invalid_action'},400);
-   const row={user_id:user.id,boss_id:boss.id,title:boss.title,xp:boss.xp,status:actionName==='submit'?'pending':'active',project_id:projectId,skill_ids:actionName==='submit'?skillIds:[],evidence_text:actionName==='submit'?evidence:null,updated_at:now().toISOString()};
-   await db.rest('arise_boss_progress',{on_conflict:'user_id,boss_id'},'POST',row,'resolution=merge-duplicates,return=minimal');return json(row);
+   let proof={};if(file){const extension=validateUpload(file),path=`${device}/boss-${boss.id}/${crypto.randomUUID()}.${extension}`;await db.upload(path,file);proof={file_path:path,file_name:file.name.slice(0,240),mime_type:file.type||null};}
+   const row={...proof,user_id:user.id,boss_id:boss.id,title:boss.title,xp:boss.xp,status:actionName==='submit'?'pending':'active',project_id:projectId,skill_ids:actionName==='submit'?skillIds:[],evidence_text:actionName==='submit'?evidence:null,updated_at:now().toISOString()};
+   await db.rest('arise_boss_progress',{on_conflict:'user_id,boss_id'},'POST',row,'resolution=merge-duplicates,return=minimal');let result=row;if(file&&actionName==='submit'){const evaluated=await evaluateFile(file,{id:-1,title:boss.title,mission:boss.task||boss.description||boss.title},env,fetcher);if(evaluated.check_status!=='pending')result=await db.rpc('arise_review_boss',{p_user_id:user.id,p_boss_id:boss.id,p_accept:evaluated.check_status==='accepted',p_note:evaluated.check_note});else{await db.rest('arise_boss_progress',{user_id:'eq.'+user.id,boss_id:'eq.'+boss.id},'PATCH',{review_note:evaluated.check_note});result.review_note=evaluated.check_note;}}return json(result);
   }
   if(action==='migration'){
    if(req.method==='GET')return json({items:await db.rest('arise_migration_requests',{user_id:'eq.'+user.id,select:'id,status,created_at,reviewed_at',order:'created_at.desc'})});
@@ -92,28 +129,43 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
    const rows=await db.rest('arise_migration_requests',{on_conflict:'user_id,legacy_device_id'},'POST',{user_id:user.id,legacy_device_id:legacy},'resolution=ignore-duplicates,return=minimal');
    return json({status:'pending',message:'Заявка сохранена. Старый ключ не даёт доступа без подтверждения владельца.'});
   }
+  if(action==='daily-sources'){
+   if(req.method==='GET')return json({items:await db.rest('daily_sources',{device_id:'eq.'+device,is_template:'eq.true',select:'id,title,details,source_type,active,verification_mode,physical_quest_index',order:'id'})});
+   const body=await req.json(),id=Number(body.id),title=String(body.title||'').trim(),details=String(body.details||'').trim();
+   if(!Number.isSafeInteger(id)||id<=0||!title||title.length>160||!details||details.length>500||typeof body.active!=='boolean')return json({error:'invalid_quest'},400);
+   const result=await db.rpc('arise_save_daily_source',{p_device_id:device,p_id:id,p_title:title,p_details:details,p_active:body.active,p_physical_index:Number.isSafeInteger(body.physical_quest_index)?body.physical_quest_index:null});return json(result);
+  }
   if(action==='physical-start'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
-   const body=await req.json(),quest=QUESTS.find(q=>q.id===body.quest_index&&q.kind==='physical');
+   const body=await req.json();let daily=null;
+   if(body.daily_id!==undefined){
+    if(clock.expired)return json({error:'daily_expired'},409);
+    if(!Number.isSafeInteger(body.daily_id)||body.daily_id<=0)return json({error:'invalid_quest'},400);
+    daily=(await db.rest('daily_instances',{id:'eq.'+body.daily_id,device_id:'eq.'+device,daily_date:'eq.'+clock.date,select:'id,physical_quest_index,verification_mode,status'}))[0];
+    if(!daily||daily.verification_mode!=='camera'||!['active','rejected'].includes(daily.status))return json({error:'daily_not_active'},409);
+   }
+   const quest=QUESTS.find(q=>q.id===(daily?daily.physical_quest_index:body.quest_index)&&q.kind==='physical');
    if(!quest)return json({error:'invalid_quest'},400);
-   const completed=await db.rest('quest_evidence',{device_id:'eq.'+device,status:'eq.accepted',select:'quest_index'});
-
-   if(QUESTS.some(q=>q.track===quest.track&&q.id<quest.id&&!completed.some(x=>x.quest_index===q.id)))return json({error:'quest_locked'},409);
+   if(!daily){const completed=await db.rest('quest_evidence',{device_id:'eq.'+device,status:'eq.accepted',select:'quest_index'});
+    if(QUESTS.some(q=>q.track===quest.track&&q.id<quest.id&&!completed.some(x=>x.quest_index===q.id)))return json({error:'quest_locked'},409);
+   }
    const recent=await db.rest('arise_physical_sessions',{user_id:'eq.'+user.id,started_at:'gte.'+new Date(now().getTime()-60000).toISOString(),select:'id',limit:6});
    if(recent.length>=5)return json({error:'rate_limited'},429);
-   const rows=await db.rest('arise_physical_sessions',{},'POST',{user_id:user.id,device_id:device,quest_index:quest.id,goal:quest.goal,mode:quest.mode});
+   const rows=await db.rest('arise_physical_sessions',{},'POST',{user_id:user.id,device_id:device,quest_index:quest.id,goal:quest.goal,mode:quest.mode,...(daily?{daily_id:daily.id}:{})});
    return json({session_id:rows[0].id,goal:quest.goal,mode:quest.mode,expires_at:rows[0].expires_at});
   }
   if(action==='physical-finish'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
    const body=await req.json();
    if(!/^[a-f0-9-]{36}$/i.test(body.session_id||'')||!['reps','valid_ms','observations'].every(k=>Number.isSafeInteger(body[k])&&body[k]>=0))return json({error:'invalid_result'},400);
-   const sessions=await db.rest('arise_physical_sessions',{id:'eq.'+body.session_id,user_id:'eq.'+user.id,select:'quest_index'});
+   const sessions=await db.rest('arise_physical_sessions',{id:'eq.'+body.session_id,user_id:'eq.'+user.id,select:'quest_index,daily_id'});
    const quest=QUESTS.find(q=>q.id===sessions[0]?.quest_index&&q.kind==='physical');
    if(!quest)return json({error:'invalid_session'},404);
+   if(sessions[0]?.daily_id){const record=await db.rpc('arise_finish_daily_physical',{p_user_id:user.id,p_session_id:body.session_id,p_reps:body.reps,p_valid_ms:body.valid_ms,p_observations:body.observations});return json({daily:record,progress:await sync()});}
    const record=await db.rpc('arise_finish_physical',{p_user_id:user.id,p_session_id:body.session_id,p_reps:body.reps,p_valid_ms:body.valid_ms,p_observations:body.observations,p_title:quest.title});
    return json({...record,progress:await sync()});
   }
+  if(action==='diagnose'){const reviewers=await db.rest('arise_reviewers',{user_id:'eq.'+user.id,select:'user_id'});if(!reviewers.length)return json({error:'review_forbidden'},403);return json({ai_configured:Boolean(env.get('GEMINI_API_KEY')),model:env.get('ARISE_REVIEW_MODEL')||'gemini-3.5-flash-lite'});}
   if(action==='push-config'){const publicKey=env.get('VAPID_PUBLIC_KEY');return publicKey?json({publicKey}):json({error:'vapid_not_configured'},503);}
   if(action==='push-subscribe'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
@@ -128,7 +180,7 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   if(action==='rpg-progress'){if(req.method!=='GET')return json({error:'method_not_allowed'},405);const p=await sync(),done=p.completed_quests||[];return json({xp:p.xp||0,completed_quests:done,daily_xp:p.daily_xp||0,next_quest:QUESTS.find(q=>q.track==='fusion'&&!done.includes(q.id))?.id??null,updated_at:p.updated_at,training_days:await db.rpc('arise_training_days',{p_user_id:user.id})});}
   if(action==='quest-status'||action==='quest-evidence-bundle'){if(req.method!=='GET')return json({error:'method_not_allowed'},405);const raw=url.searchParams.get('quest_index'),index=raw===null?null:Number(raw);if(raw!==null&&(!/^\d+$/.test(raw)||!QUESTS.some(q=>q.id===index)))return json({error:'invalid_quest'},400);if(action==='quest-evidence-bundle'&&index===null)return json({error:'invalid_quest'},400);const parts=action==='quest-evidence-bundle',query={device_id:'eq.'+device,select:parts?'id,file_name,mime_type,evidence_type,check_status,check_note,created_at':'id,quest_index,quest_title,status,review_note,created_at,reviewed_at',order:'created_at.desc',limit:parts?'100':'100'};if(index!==null)query.quest_index='eq.'+index;return json({items:await db.rest(parts?'quest_evidence_parts':'quest_evidence',query)});}
   if(action==='rpg-dailies'){
-   if(req.method==='POST'){const body=await req.json();if(body.action==='complete')return json({error:'verification_required'},403);if(body.action!=='add')return json({error:'invalid_action'},400);if(clock.expired)return json({error:'daily_expired'},409);const title=String(body.title||'').trim(),details=String(body.details||'').trim(),type=String(body.source_type||'work');if(!title||title.length>160||!details||details.length>500||!['work','learning','project'].includes(type))return json({error:'invalid_quest'},400);const rows=await db.rpc('arise_add_daily',{p_device_id:device,p_title:title,p_details:details,p_type:type,p_repeat:body.repeat===true,p_date:clock.date});return json(rows);}
+   if(req.method==='POST'){const body=await req.json();if(body.action==='complete')return json({error:'verification_required'},403);if(body.action!=='add')return json({error:'invalid_action'},400);if(clock.expired)return json({error:'daily_expired'},409);const title=String(body.title||'').trim(),details=String(body.details||'').trim(),type=String(body.source_type||'work');if(!title||title.length>160||!details||details.length>500||!['work','learning','project','physical'].includes(type))return json({error:'invalid_quest'},400);const physical=type==='physical'?QUESTS.find(q=>q.kind==='physical'&&q.id===body.physical_quest_index&&[52,58,64,70].includes(q.id)):null;if(type==='physical'&&!physical)return json({error:'invalid_quest'},400);const rows=await db.rpc('arise_add_daily_v2',{p_device_id:device,p_title:title,p_details:details,p_type:type,p_repeat:body.repeat===true,p_date:clock.date,p_physical_index:physical?.id??null});return json(rows);}
    const items=await db.rpc('arise_daily_list',{p_device_id:device,p_date:clock.date,p_expired:clock.expired});return json({...clock,deadline:'23:00',items:items||[]});
   }
   if(!['submit-quest-evidence','submit-daily-evidence'].includes(action))return json({error:'not_found'},404);
@@ -146,5 +198,5 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
   if(questMode){await db.rest('quest_evidence_parts',{},'POST',{...metadata,quest_index:id,evidence_type:extension,...evaluated});const parts=await db.rest('quest_evidence_parts',{device_id:'eq.'+device,quest_index:'eq.'+id,select:'check_status,check_note,evidence_type',order:'created_at.asc'});const result=aggregateQuest(id,parts,existing);const record=await db.rpc('arise_record_quest',{p_device_id:device,p_index:id,p_title:quest.title,p_path:path,p_name:metadata.file_name,p_mime:metadata.mime_type,p_size:file.size,p_status:result.status,p_note:result.review_note});return json({...record,part_status:evaluated.check_status,part_note:evaluated.check_note,progress:await sync()});}
   // Submission began before the deadline. A slow verifier must not invalidate it later.
   const evidence=await db.rpc('arise_record_daily',{p_device_id:device,p_daily_id:id,p_date:clock.date,p_path:path,p_name:metadata.file_name,p_mime:metadata.mime_type,p_size:file.size,p_status:evaluated.check_status,p_note:evaluated.check_note});return json({status:evidence.status,note:evidence.review_note,progress:await sync()});
- }catch(error){const message=String(error?.message||error),allowed=['invalid_skill','skill_locked','active_limit','invalid_evidence','invalid_evidence_url','skill_not_active','evidence_pending','invalid_project','invalid_boss','auth_required','auth_unavailable','email_verification_required','file_required','file_too_large','unsupported_file','invalid_quest','daily_expired','daily_not_active','server_not_configured','database_error','upload_failed'];return json({error:allowed.includes(message)?message:'request_failed'},message==='skill_locked'||message==='active_limit'||message==='skill_not_active'||message==='evidence_pending'||message==='already_completed'?409:message==='auth_required'?401:message==='email_verification_required'?403:message==='auth_unavailable'?503:message==='file_too_large'?413:message==='database_error'||message==='server_not_configured'?503:400);}
+ }catch(error){const message=String(error?.message||error),allowed=['evidence_not_pending','boss_not_pending','file_unavailable','daily_limit','template_not_found','invalid_result','invalid_session','session_expired','insufficient_result','quest_locked','invalid_skill','skill_locked','active_limit','invalid_evidence','invalid_evidence_url','skill_not_active','evidence_pending','invalid_project','invalid_boss','auth_required','auth_unavailable','email_verification_required','file_required','file_too_large','unsupported_file','invalid_quest','daily_expired','daily_not_active','server_not_configured','database_error','upload_failed'];return json({error:allowed.includes(message)?message:'request_failed'},message==='evidence_not_pending'||message==='boss_not_pending'||message==='skill_locked'||message==='active_limit'||message==='skill_not_active'||message==='evidence_pending'||message==='already_completed'?409:message==='auth_required'?401:message==='email_verification_required'?403:message==='auth_unavailable'?503:message==='file_too_large'?413:message==='database_error'||message==='server_not_configured'?503:400);}
 };}

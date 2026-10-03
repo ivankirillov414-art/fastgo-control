@@ -112,7 +112,7 @@ test('full upload flow stores an unavailable AI review as pending, not completed
 
 test('new daily reward cannot be chosen by an untrusted client',async()=>{
   const handler=createHandler('rpg-dailies',{env,now:()=>new Date('2026-09-10T10:00:00Z'),fetcher:async(url,opt)=>{
-    assert.equal(url.pathname,'/rest/v1/rpc/arise_add_daily');
+    assert.equal(url.pathname,'/rest/v1/rpc/arise_add_daily_v2');
     const body=JSON.parse(opt.body);
     assert.equal(body.p_repeat,false); assert.equal(body.p_type,'project');
     assert.equal(Object.hasOwn(body,'xp'),false); assert.equal(Object.hasOwn(body,'p_xp'),false);
