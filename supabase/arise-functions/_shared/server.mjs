@@ -1,3 +1,4 @@
+import {validPushEndpoint} from './push.mjs';
 import {authenticatedUser} from './identity.mjs';
 import {QUESTS} from '../../../arise/curriculum.mjs';
 import {SKILL_IDS,BOSS_QUESTS,BRANCH_MAP,branchStatus,taskFor,SKILLS} from '../../../arise/development-tree.mjs';
@@ -166,11 +167,18 @@ export function createHandler(action,{env=globalThis.Deno?.env,fetcher=fetch,now
    return json({...record,progress:await sync()});
   }
   if(action==='diagnose'){const reviewers=await db.rest('arise_reviewers',{user_id:'eq.'+user.id,select:'user_id'});if(!reviewers.length)return json({error:'review_forbidden'},403);return json({ai_configured:Boolean(env.get('GEMINI_API_KEY')),model:env.get('ARISE_REVIEW_MODEL')||'gemini-3.5-flash-lite'});}
-  if(action==='push-config'){const publicKey=env.get('VAPID_PUBLIC_KEY');return publicKey?json({publicKey}):json({error:'vapid_not_configured'},503);}
+  if(action==='push-config'){const publicKey=env.get('VAPID_PUBLIC_KEY');return publicKey&&env.get('VAPID_PRIVATE_KEY')?json({publicKey,schedule:['09:00','21:00'],timeZone:'Asia/Yekaterinburg'}):json({error:'vapid_not_configured'},503);}
+  if(action==='push-unsubscribe'){
+   if(req.method!=='POST')return json({error:'method_not_allowed'},405);
+   const body=await req.json(),endpoint=String(body.endpoint||'');
+   if(!validPushEndpoint(endpoint))return json({error:'invalid_subscription'},400);
+   await db.rest('push_subscriptions',{device_id:'eq.'+device,endpoint:'eq.'+endpoint},'PATCH',{active:false,updated_at:now().toISOString()},'return=minimal');
+   return json({ok:true});
+  }
   if(action==='push-subscribe'){
    if(req.method!=='POST')return json({error:'method_not_allowed'},405);
    const body=await req.json(),endpoint=String(body.endpoint||'');
-   if(!endpoint.startsWith('https://')||endpoint.length>4096||typeof body.keys?.p256dh!=='string'||typeof body.keys?.auth!=='string'||body.keys.p256dh.length>256||body.keys.auth.length>256)return json({error:'invalid_subscription'},400);
+   if(!validPushEndpoint(endpoint)||endpoint.length>4096||typeof body.keys?.p256dh!=='string'||typeof body.keys?.auth!=='string'||body.keys.p256dh.length>256||body.keys.auth.length>256)return json({error:'invalid_subscription'},400);
    // Never transfer another account's endpoint ownership in an upsert.
    const current=await db.rest('push_subscriptions',{endpoint:'eq.'+endpoint,select:'device_id'});
    if(current.some(x=>x.device_id!==device))return json({error:'subscription_conflict'},409);

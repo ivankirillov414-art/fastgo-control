@@ -1,4 +1,4 @@
-const CACHE='arise-shell-20261003-release';
+const CACHE='arise-shell-20261004-push';
 const ROOT=new URL('./',self.location.href);
 const ASSETS=['achievements.html','arise/app.css','arise/app.mjs','arise/core.mjs','arise/curriculum.mjs','arise/development-tree.mjs','arise/auth.mjs','arise/config.mjs','arise/pose.mjs','arise/vendor/auth-sdk.mjs','arise/vendor/pose-sdk.mjs','ARISE-app-icon-180.png','rpg-icon.svg','manifest.webmanifest'];
 const paths=new Set(ASSETS.map(path=>new URL(path,ROOT).pathname));
