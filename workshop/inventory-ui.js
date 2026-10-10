@@ -143,18 +143,19 @@ async function uploadPartPhoto(part,file,categoryPrimary,requestId){
   await api('part_photo_upload',{part_id:part.id,content_type:file.type,content_base64:base64,primary_for_category:categoryPrimary,...(requestId?{request_id:requestId}:{})});
 }
 
-async function photoDialog(part){
+export async function photoDialog(part){
+  if(!me)me=await api('me');
   const photos=await api('part_photos',{part_id:part.id});
   const editable=['developer','owner','admin'].includes(me.role);
-  showDialog('Фотографии: '+part.name,`<div id="part-photo-list" class="photo-grid"></div>${editable?'<label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label><input id="part-photo-category" type="checkbox"> Основное фото категории</label>':''}`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
+  showDialog('Фотографии: '+part.name,`<p>${esc(part.model||'')} · ${money(part.retail_price)} · ${Number(part.quantity)||0} шт.</p><div id="part-photo-list" class="photo-grid"></div>${editable?'<label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label><input id="part-photo-category" type="checkbox"> Основное фото категории</label>':''}`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
   const host=$('part-photo-list');
   if(!photos.length)host.textContent='Фотографий пока нет.';
   for(const p of photos){
     const card=document.createElement('div'),img=document.createElement('img');img.alt=part.name;card.appendChild(img);host.appendChild(card);
-    if(editable){const button=document.createElement('button');button.className='btn secondary small';button.textContent=p.primary?'Основное фото · выбрать для категории':'Сделать основным';button.onclick=async()=>{try{button.disabled=true;await api('part_photo_primary',{part_id:part.id,photo_id:p.id,primary_for_category:$('part-photo-category').checked});catalogCache=null;await photoDialog(part);}catch(e){notice(e.message,'bad');button.disabled=false;}};card.appendChild(button);}
+    if(editable){const button=document.createElement('button');button.className='btn secondary small';button.textContent=p.primary?'Основное фото · выбрать для категории':'Сделать основным';button.onclick=async()=>{try{button.disabled=true;await api('part_photo_primary',{part_id:part.id,photo_id:p.id,primary_for_category:$('part-photo-category').checked});catalogCache=null;ownDialog().addEventListener('close',()=>window.dispatchEvent(new Event('workshop-data-changed')),{once:true});await photoDialog(part);}catch(e){notice(e.message,'bad');button.disabled=false;}};card.appendChild(button);}
     try{const result=await api('part_photo_url',{part_id:part.id,photo_id:p.id});if(host.isConnected)img.src=result.url;}catch{img.alt='Фото не загрузилось';}
   }
-  if(editable)$('part-photo-upload').onclick=async()=>{const button=$('part-photo-upload');try{const file=$('part-photo-file').files[0];if(!file)throw new Error('Выберите фотографию');button.disabled=true;await uploadPartPhoto(part,file,$('part-photo-category').checked);catalogCache=null;await photoDialog(part);}catch(e){notice(e.message,'bad');button.disabled=false;}};
+  if(editable)$('part-photo-upload').onclick=async()=>{const button=$('part-photo-upload');try{const file=$('part-photo-file').files[0];if(!file)throw new Error('Выберите фотографию');button.disabled=true;await uploadPartPhoto(part,file,$('part-photo-category').checked);catalogCache=null;ownDialog().addEventListener('close',()=>window.dispatchEvent(new Event('workshop-data-changed')),{once:true});await photoDialog(part);}catch(e){notice(e.message,'bad');button.disabled=false;}};
 }
 
 async function maintenanceDialog(){
@@ -178,9 +179,11 @@ export async function newPartForm(prefill='',{equipment=false}={}){
   if(!me)me=await api('me');
   const c=await getCatalog();const photoReady=!!c.capabilities?.private_product_photos;const categories=[...new Set((c.categories||[]).map(x=>x.name).filter(Boolean))].sort();
   const options=categories.map(x=>`<option value="${esc(x)}"></option>`).join('');
-  const d=showDialog(equipment?'Новая техника':'Новая товарная позиция',`<form id="new-part-form" class="inv-form">${equipment?`<label>Тип техники<select name="category" required>${equipmentTypes.map(t=>`<option value="Техника · ${esc(t)}">${esc(t)}</option>`).join('')}</select></label>`:`<label>Категория<input name="category" list="part-categories" required placeholder="Подшипники"><datalist id="part-categories">${options}</datalist></label>`}<label>Наименование<input name="name" required placeholder="Подшипник рулевой 2008 2RS"></label><label>Модель / размер<input name="model" placeholder="2008 2RS"></label><label>Артикул / SKU<input name="sku" value="${esc(prefill&&!String(prefill).startsWith('FGP-')?prefill:'')}"></label><div class="inv-grid"><label>Закупка, ₽<input name="unit_cost" type="number" min="0" step="0.01" value="0"></label><label>Продажа, ₽<input name="retail_price" type="number" min="0" step="0.01" value="0" required></label><label>Количество<input name="initial_quantity" type="number" min="0" step="1" value="0"></label><label>Ед.<input name="unit" value="шт"></label></div>${photoReady?'<p class="muted">Фотографии доступны только сотрудникам мастерской.</p>':'<p class="muted">Загрузка фото станет доступна после обновления сервера.</p>'}<label>Основное фото<input name="photo" ${photoReady?'':'disabled'} type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="inv-check"><input name="category_primary" ${photoReady?'':'disabled'} type="checkbox"> Сделать это фото основным и для категории</label><p class="muted">Штрих-код FastGo будет присвоен автоматически после сохранения.</p></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="new-part-save">Создать и принять</button>`);
+  const d=showDialog(equipment?'Новая техника':'Новая товарная позиция',`<form id="new-part-form" class="inv-form">${equipment?`<label>Тип техники<select name="category" required>${equipmentTypes.map(t=>`<option value="Техника · ${esc(t)}">${esc(t)}</option>`).join('')}</select></label>`:`<label>Категория<input name="category" list="part-categories" required placeholder="Подшипники"><datalist id="part-categories">${options}</datalist></label>`}<label>Наименование<input name="name" required placeholder="Подшипник рулевой 2008 2RS"></label><label>Модель / размер<input name="model" placeholder="2008 2RS"></label><label>Артикул / SKU<input name="sku" value="${esc(prefill&&!String(prefill).startsWith('FGP-')?prefill:'')}"></label><div class="inv-grid"><label>Закупка, ₽<input name="unit_cost" type="number" min="0" step="0.01" value="0"></label><label>Продажа, ₽<input name="retail_price" type="number" min="0" step="0.01" value="0" required></label><label>Количество<input name="initial_quantity" type="number" min="0" step="1" value="0"></label><label>Ед.<input name="unit" value="шт"></label></div>${photoReady?'<p class="muted">Фотографии доступны только сотрудникам мастерской.</p>':'<p class="muted">Загрузка фото станет доступна после обновления сервера.</p>'}<label>Фото товара<input name="photo" ${photoReady?'':'disabled'} type="file" accept="image/jpeg,image/png,image/webp"></label><img id="product-photo-preview" class="product-photo-preview" alt="Выбранное фото товара" hidden><label class="inv-check"><input name="category_primary" ${photoReady?'':'disabled'} type="checkbox"> Сделать это фото основным и для категории</label><p class="muted">Штрих-код FastGo будет присвоен автоматически после сохранения.</p></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="new-part-save">Создать и принять</button>`);
   const progress=document.createElement('p');progress.className='muted';progress.setAttribute('role','status');progress.setAttribute('aria-live','polite');d.querySelector('.inv-body').appendChild(progress);
   const form=$('new-part-form'),button=$('new-part-save'),actor=me.profile_id;
+  let previewUrl=null;form.elements.photo.onchange=()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);const file=form.elements.photo.files[0],img=$('product-photo-preview');img.hidden=!file;if(file){previewUrl=URL.createObjectURL(file);img.src=previewUrl;}else img.removeAttribute('src');};
+  d.addEventListener('close',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);},{once:true});
   const restore=()=>{const state=loadProductIntake(localStorage,actor);if(!state)return null;for(const [name,value] of Object.entries({...state.product,initial_quantity:state.quantity})){const field=form.elements.namedItem(name);if(field){field.value=value;field.disabled=true;}}form.elements.category_primary.checked=!!state.photo?.primary;form.elements.category_primary.disabled=true;button.textContent='Продолжить приёмку';return state;};
   const unfinished=restore();if(unfinished)progress.textContent='Есть незавершённая приёмка. Продолжим с сохранённого шага.'+(unfinished.photo&&!unfinished.photoSaved?' Выберите то же фото ещё раз.':'');
   $('new-part-save').onclick=async()=>{
@@ -280,7 +283,7 @@ async function enhance(){
       if(table&&!table.dataset.barcodeEnhanced){
         table.dataset.barcodeEnhanced='1';
         const c=await getCatalog();const map=new Map((c.parts||[]).map(x=>[x.name,x]));
-        table.querySelectorAll('tbody tr').forEach(tr=>{const name=tr.querySelector('td b')?.textContent||'';const id=tr.querySelector('[data-editpart]')?.dataset.editpart||tr.querySelector('[data-stock]')?.dataset.stock;const p=c.parts.find(x=>x.id===id)||map.get(name);if(!p)return;if(c.capabilities?.private_product_photos){const button=document.createElement('button');button.className='btn ghost small';button.textContent='Фото';button.onclick=()=>photoDialog(p).catch(e=>notice(e.message,'bad'));tr.lastElementChild.appendChild(button);}const small=tr.querySelector('td small');if(small)small.innerHTML=`${esc(p.sku||'Без артикула')} · <b>${esc(p.barcode)}</b>`;tr.addEventListener('dblclick',()=>printPartLabel(p).catch(e=>notice(e.message,'bad')));});
+        table.querySelectorAll('tbody tr').forEach(tr=>{const name=tr.querySelector('td b')?.textContent||'';const id=tr.querySelector('[data-editpart]')?.dataset.editpart||tr.querySelector('[data-stock]')?.dataset.stock;const p=c.parts.find(x=>x.id===id)||map.get(name);if(!p)return;if(c.capabilities?.private_product_photos){const button=document.createElement('button');button.className='btn ghost small';button.textContent='Фото';button.onclick=()=>photoDialog(p).catch(e=>notice(e.message,'bad'));tr.lastElementChild.appendChild(button);const preview=document.createElement('button');preview.type='button';preview.className='product-photo-thumb';preview.dataset.productPhoto=p.id;preview.setAttribute('aria-label','Фото товара: '+p.name);preview.textContent='Фото';tr.firstElementChild.prepend(preview);}const small=tr.querySelector('td small');if(small)small.innerHTML=`${esc(p.sku||'Без артикула')} · <b>${esc(p.barcode)}</b>`;tr.addEventListener('dblclick',()=>printPartLabel(p).catch(e=>notice(e.message,'bad')));});bindProductPreviews(table,c.parts);
       }
     }
   }catch(e){notice(e.message,'bad');}finally{enhancing=false;}
@@ -292,3 +295,20 @@ window.addEventListener('hashchange',()=>setTimeout(enhance,80));
 window.addEventListener('workshop-session-cleared',()=>{me=null;catalogCache=null;pendingSale=null;cart.clear();closeDialog();});
 setTimeout(enhance,120);
 
+
+export function bindProductPreviews(host,products){
+  const byId=new Map(products.map(p=>[String(p.id),p]));
+  let running=0,queue=[];
+  const load=async button=>{
+    const p=byId.get(button.dataset.productPhoto);if(!p||!button.isConnected)return;
+    try{const result=await api('part_photo_url',{part_id:p.id});if(!button.isConnected)return;const img=document.createElement('img');img.alt=p.name;img.loading='lazy';img.src=result.url;img.onerror=()=>{button.textContent='Фото';};button.replaceChildren(img);}catch{if(button.isConnected)button.textContent='Фото';}
+  };
+  const drain=()=>{while(running<3&&queue.length){const b=queue.shift();running++;load(b).finally(()=>{running--;drain();});}};
+  const observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting){observer.unobserve(e.target);queue.push(e.target);}drain();},{rootMargin:'100px'});
+  host.querySelectorAll('[data-product-photo]').forEach(button=>{
+    const p=byId.get(button.dataset.productPhoto);if(!p)return;
+    button.onclick=()=>photoDialog(p).catch(e=>notice(e.message,'bad'));
+    if(p.primary_photo_path)observer.observe(button);
+  });
+  const cleanup=new MutationObserver(()=>{if(!host.isConnected){observer.disconnect();cleanup.disconnect();queue=[];}});cleanup.observe(document.body,{childList:true,subtree:true});
+}
