@@ -47,8 +47,8 @@ const server=createServer((req,res)=>{
   await page.goto(origin+'/workshop.html#catalog');await page.getByRole('heading',{name:'Электрические работы',exact:true}).waitFor();
   if(role!=='mechanic'){
    await page.goto(origin+'/workshop.html#order?kind=storage&id=test');await page.locator('#order-form').waitFor();
-   assert.equal(await page.locator('#delete-storage').count(),['developer','owner','receiver'].includes(role)?1:0);
-   assert.equal(await page.locator('#close-storage').count(),['developer','owner','receiver'].includes(role)?1:0);
+   assert.equal(await page.locator('#delete-storage').count(),['developer','owner','receiver','manager','mechanic'].includes(role)?1:0);
+   assert.equal(await page.locator('#close-storage').count(),['developer','owner','receiver','manager','mechanic'].includes(role)?1:0);
   }
   if(role==='developer'){await page.goto(origin+'/workshop.html#account');await page.getByRole('heading',{name:'Аккаунт',exact:true}).waitFor();const body=(await page.locator('body').innerText()).toLowerCase();assert.equal(body.includes('developer'),false);assert.equal(body.includes('разработчик'),false);}
   assert.deepEqual(errors,[]);await context.close();
