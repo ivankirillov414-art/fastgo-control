@@ -237,16 +237,22 @@ export async function openSales(shiftId,partId){
   d.querySelectorAll('[name="sale-payment-choice"]').forEach(input=>input.onchange=()=>{$('sale-payment').value=input.value;});
   d.classList.add('sale-dialog');
   let closed=false,camera=null;
-  const fitViewport=()=>d.style.setProperty('--sale-viewport-height',(window.visualViewport?.height||innerHeight)+'px');
-  fitViewport();window.visualViewport?.addEventListener('resize',fitViewport);
-  d.addEventListener('close',()=>window.visualViewport?.removeEventListener('resize',fitViewport),{once:true});
+  const fitViewport=()=>{
+    const editing=d.contains(document.activeElement)&&document.activeElement.matches('input:not([type=radio]),textarea');
+    // Dynamic CSS handles rotation; pixels are only needed for the iOS keyboard.
+    d.style.setProperty('--sale-viewport-height',editing&&window.visualViewport?window.visualViewport.height+'px':'100dvh');
+  };
+  fitViewport();window.visualViewport?.addEventListener('resize',fitViewport);window.addEventListener('resize',fitViewport);
+  d.addEventListener('focusin',fitViewport);d.addEventListener('focusout',fitViewport);
+  d.addEventListener('close',()=>{window.visualViewport?.removeEventListener('resize',fitViewport);window.removeEventListener('resize',fitViewport);d.removeEventListener('focusin',fitViewport);d.removeEventListener('focusout',fitViewport);},{once:true});
   const cameraPanel=$('sale-camera-panel'),searchPanel=$('sale-search-panel');
   const setMode=mode=>{
     camera?.stop();cameraPanel.hidden=mode!=='camera';searchPanel.hidden=mode!=='search';
     $('sale-scan-toggle').setAttribute('aria-expanded',String(mode==='camera'));
     $('sale-search-toggle').setAttribute('aria-expanded',String(mode==='search'));
     $('sale-search-toggle').textContent=mode==='search'?'Закрыть поиск':'Поиск товара';
-    if(mode==='search')$('sale-search').focus();
+    if(mode==='search')$('sale-search').focus();else $('sale-search').blur();
+    fitViewport();
     if(mode==='camera')camera?.start();
   };
   $('sale-search-toggle').onclick=()=>setMode(searchPanel.hidden?'search':null);

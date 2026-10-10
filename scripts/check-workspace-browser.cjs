@@ -246,8 +246,8 @@ const server=createServer((req,res)=>{
   await page.waitForFunction(()=>document.querySelector('.cart-qty strong').textContent==='2');
   for(const size of [{width,height:844},{width:844,height:390},{width,height:844}]){
    await page.setViewportSize(size);
-   const fit=await page.locator('#inventory-dialog').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,bottom:el.querySelector('.inv-foot').getBoundingClientRect().bottom,view:innerHeight}));
-   assert.ok(fit.scroll<=fit.width+1,JSON.stringify(fit));assert.ok(fit.bottom<=fit.view+1,JSON.stringify(fit));
+   const fit=await page.locator('#inventory-dialog').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,height:el.clientHeight,bottom:el.querySelector('.inv-foot').getBoundingClientRect().bottom,view:innerHeight}));
+   assert.ok(fit.scroll<=fit.width+1,JSON.stringify(fit));assert.ok(fit.bottom<=fit.view+1,JSON.stringify(fit));if(size.width<=700)assert.ok(fit.height>=fit.view-1,JSON.stringify(fit));
   }
   await page.screenshot({path:`browser-results/${kind}-sale-${width}.png`});
   await page.locator('#inventory-dialog .inv-head [data-inv-close]').click();
