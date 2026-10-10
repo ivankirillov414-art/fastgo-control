@@ -15,3 +15,5 @@
  input[type=date]{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;text-align:left}
  input[type=date]::-webkit-date-and-time-value{min-height:1.5em;text-align:left}
 }
+
+.photo-grid .media-video{min-width:0}.photo-grid video{display:block;width:100%;max-height:280px;border-radius:10px;background:#080d14}

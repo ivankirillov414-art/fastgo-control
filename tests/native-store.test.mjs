@@ -250,3 +250,13 @@ test('order photo is linked to the order and readable through a private signed U
  assert.deepEqual(saved.fault_photo_paths,[photo.path]);assert.ok((await h.call('signed_url',{kind:'repair',id:r.id,path:photo.path})).url.startsWith('signed:'));
  const other=await h.call('create',intake());await assert.rejects(h.call('signed_url',{kind:'repair',id:other.id,path:photo.path}),/не относится/);
 });
+
+test('order videos persist privately and receive playable signed links',async()=>{
+ for(const [mime,ext] of [['video/mp4','mp4'],['video/quicktime','mov'],['video/webm','webm']]){
+  const h=harness(),created=await h.call('create',intake());
+  const uploaded=await h.call('upload',{id:created.id,slot:'photos',content_type:mime,content_base64:Buffer.from('test-video').toString('base64')});
+  assert.ok(uploaded.path.startsWith('native:orders/repair/'));assert.ok(uploaded.path.endsWith('.'+ext));
+  const record=(await h.call('get',{id:created.id})).record;assert.ok(record.fault_photo_paths.includes(uploaded.path));
+  const link=await h.call('signed_url',{id:created.id,path:uploaded.path});assert.ok(link.url.startsWith('signed:'));assert.equal(h.googleCalls(),0);
+ }
+});

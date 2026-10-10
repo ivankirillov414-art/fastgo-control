@@ -28,7 +28,7 @@ export function nativeClient({db,actor,google,storage}){
    }
    const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
    if(action==='migrate_legacy_file'&&digest!==p.sha256)fail('Контрольная сумма не совпадает',409);
-   const object=(action==='part_photo_upload'?'products/'+p.part_id:action==='upload'?'orders/'+p.kind+'/'+p.id:'legacy/'+p.object_id)+'/'+p.request_id+'/'+digest;
+   const object=(action==='part_photo_upload'?'products/'+p.part_id:action==='upload'?'orders/'+p.kind+'/'+p.id:'legacy/'+p.object_id)+'/'+p.request_id+'/'+digest+(action==='upload'?({'video/mp4':'.mp4','video/quicktime':'.mov','video/webm':'.webm'}[p.content_type]||''):'');
    await storage.put(object,bytes,p.content_type||'application/octet-stream');file={path:'native:'+object,sha256:digest,size:bytes.length};
   }
   for(let attempt=0;attempt<4;attempt++){

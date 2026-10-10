@@ -391,8 +391,9 @@ async function main(req){
       if(action==='contact'&&p.phone!==undefined&&!/^\+7\d{10}$/.test(String(p.phone)))fail('Введите полный телефон: +7 и 10 цифр');
       if(action==='extend'){p.months=integer(p.months,'месяцы',1,12);required(p,['note']);}
       if(action==='upload'){
-        if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(p.content_type))fail('Поддерживаются JPG, PNG, WebP, PDF');
+        if(!['image/jpeg','image/png','image/webp','application/pdf','video/mp4','video/quicktime','video/webm'].includes(p.content_type))fail('Поддерживаются JPG, PNG, WebP, PDF, MP4, MOV, WebM');
         let bytes;try{bytes=atob(String(p.content_base64||''));}catch{fail('Повреждённый файл');}if(!bytes.length||bytes.length>10*1024*1024)fail('Максимум 10 МБ',413);
+        if(p.slot==='signed'&&String(p.content_type).startsWith('video/'))fail('Видео загружается в раздел фото и видео');
         const slot=p.slot==='signed'?'signed':'photos';if(slot==='signed'&&!manager(me))fail('Нет доступа к подписанным документам',403);
         const uploaded=await g('upload',p);if(!reliable)await g('documents',{kind:p.kind,id:p.id,paths:[uploaded.path],slot});return out({data:uploaded});
       }

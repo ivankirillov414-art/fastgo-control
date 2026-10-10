@@ -74,3 +74,10 @@ test('catalogue reuses capabilities only, never business data or write health ch
 
 test('cash endpoints reject admin receiver manager mechanic before any backend call',async()=>{for(const role of ['admin','receiver','manager','mechanic'])for(const action of ['cash_state','shift_open','shift_close','sale','sales']){const s=setup({role});assert.equal((await s.go({action})).status,403);assert.ok(!s.calls.some(x=>x.url.includes('script.google')));}});
 test('cash cannot fall back to obsolete Google sales without shifts',async()=>{assert.equal((await setup().go({action:'cash_state'})).status,503);});
+
+test('order upload accepts mobile video formats and rejects video as signed documents',async()=>{
+ for(const mime of ['video/mp4','video/quicktime','video/webm']){
+  const r=await setup().go({action:'upload',params:{kind:'repair',id:rid,request_id:pid,slot:'photos',content_type:mime,content_base64:'dGVzdA=='}});assert.equal(r.status,200,await r.text());
+ }
+ const r=await setup().go({action:'upload',params:{kind:'repair',id:rid,request_id:pid,slot:'signed',content_type:'video/mp4',content_base64:'dGVzdA=='}});assert.equal(r.status,400);
+});
