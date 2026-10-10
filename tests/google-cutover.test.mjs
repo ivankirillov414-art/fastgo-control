@@ -18,7 +18,15 @@ test('catalog uses Google and verified actor; credentials not exposed',async()=>
 test('missing Google config fails closed; no fallback',async()=>{const s=setup({connected:false});assert.equal((await s.go({action:'catalog'})).status,503);assert.ok(!s.calls.some(c=>c.url.includes('/parts')));});
 test('negative and fractional stock inputs rejected',async()=>{for(const quantity of [-1,0,1.5]){const s=setup();const r=await s.go({action:'stock',params:{part_id:pid,request_id:rid,note:'test',movement_type:'receipt',quantity}});assert.equal(r.status,400);assert.ok(!s.calls.some(c=>c.url.includes('script.google')));}});
 test('sale aggregates duplicate products and takes server price',async()=>{let sent;const s=setup({native:true,google:b=>{if(b.action==='catalog')return{parts:[{id:pid,active:true,retail_price:100,quantity:10}]};sent=b;return{sale_number:1};}});assert.equal((await s.go({action:'sale',params:{shift_id:rid,request_id:rid,payment_method:'cash',items:[{part_id:pid,quantity:1,price:-100},{part_id:pid,quantity:2,price:1}]}})).status,200);assert.deepEqual(JSON.parse(JSON.stringify(sent.params.items)),[{part_id:pid,quantity:3,price:100,price_mode:'base'}]);});
-test('mechanic forbidden money mutations',async()=>{for(const action of ['payment','stock','sale','finance','customers'])assert.equal((await setup({role:'mechanic'}).go({action,params:{}})).status,403);});
+test('master can receive repair payments and stock; retail sales stay restricted',async()=>{
+ const s=setup({role:'mechanic'});
+ const payment=await s.go({action:'payment',params:{kind:'repair',id:rid,request_id:pid,amount:100,method:'cash'}});
+ assert.equal(payment.status,200,await payment.text());
+ const stock=await s.go({action:'stock',params:{part_id:pid,request_id:rid,quantity:1,movement_type:'receipt',note:'Приход'}});
+ assert.equal(stock.status,200,await stock.text());
+ for(const action of ['finance','customers'])assert.equal((await s.go({action})).status,200);
+ assert.equal((await s.go({action:'sale',params:{}})).status,403);
+});
 test('non-admin cannot refund',async()=>{const r=await setup({role:'manager'}).go({action:'payment',params:{id:rid,request_id:pid,amount:-1,method:'cash',note:'refund'}});assert.equal(r.status,403);});
 test('stale revision fails before mutation',async()=>{const r=await setup().go({action:'update',params:{id:rid,revision:99,status:'repair'}});assert.equal(r.status,409);});
 test('cannot attach arbitrary private Drive file',async()=>{const r=await setup().go({action:'documents',params:{id:rid,slot:'photos',paths:['https://drive.google.com/file/d/unknown/view']}});assert.equal(r.status,403);});
