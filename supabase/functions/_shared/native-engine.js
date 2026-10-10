@@ -79,7 +79,7 @@ function bool_(v){ return v===true || String(v).toLowerCase()==='true' || String
 
 function role_(a){ return String(a.role||''); }
 
-function requireManager_(a){ if(!['developer','owner','admin','receiver','manager'].includes(role_(a))) throw httpError_('Нет доступа',403); }
+function requireManager_(a){ if(!['developer','owner','admin','receiver','manager','mechanic'].includes(role_(a))) throw httpError_('Нет доступа',403); }
 
 function requireOwner_(a){if(!['developer','owner'].includes(role_(a)))throw httpError_('Реквизиты доступны только владельцу',403);}
 
@@ -283,9 +283,10 @@ function parseJson_(v,fallback){
   try{ const x=JSON.parse(String(v||'')); return Array.isArray(x)?x:fallback; }catch(_){ return fallback; }
 }
 
-function isManager_(a){ return ['developer','owner','admin','receiver','manager'].includes(role_(a)); }
+function isManager_(a){ return ['developer','owner','admin','receiver','manager','mechanic'].includes(role_(a)); }
 function canSetRepairStatus_(actor,status){
   if(['developer','owner'].includes(role_(actor)))return true;
+  if(['receiver','manager','mechanic'].includes(role_(actor)))return true;
   const p=actor?.status_permissions||{};
   if(status==='ready')return p.can_mark_ready===true;
   if(status==='issued')return p.can_issue===true;
@@ -331,9 +332,7 @@ function humanStatus_(v,kind){
 
 function list_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair';
-  if(role_(actor)==='mechanic'&&kind==='storage') throw httpError_('Нет доступа',403);
   let items=kind==='storage'?rows_(SHEETS.storage).filter(r=>r.storage_id&&r['Статус']!=='deleted').map(mapStorage_):rows_(SHEETS.repairs).filter(r=>r.repair_id).map(mapRepair_);
-  if(role_(actor)==='mechanic') items=items.filter(x=>String(x.assigned_master_id||'')===String(actor.id||''));
   const search=String(p.search||'').toLowerCase().trim();
   if(search) items=items.filter(x=>JSON.stringify(x).toLowerCase().includes(search));
   if(p.status&&p.status!=='all'&&p.status!=='active') items=items.filter(x=>x.status===p.status);
@@ -398,7 +397,6 @@ function get_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair';
   const raw=kind==='storage'?find_(SHEETS.storage,'storage_id',p.id):find_(SHEETS.repairs,'repair_id',p.id);
   if(!raw) throw httpError_('Приёмка не найдена',404);
-  if(role_(actor)==='mechanic'&&(kind==='storage'||String(raw.master_id||'')!==String(actor.id||''))) throw httpError_('Нет доступа к этой карточке',403);
   const record=kind==='storage'?mapStorage_(raw):mapRepair_(raw);
   const events=rows_(SHEETS.events).filter(r=>String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(eventView_);
   const payments=rows_(SHEETS.payments).filter(r=>String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(paymentView_);
@@ -499,7 +497,7 @@ function contact_(p,actor){
 }
 
 function finishStorage_(p,actor,deleting){
- if(!['developer','owner','receiver'].includes(role_(actor)))throw httpError_('Действие доступно владельцу или мастеру-приёмщику',403);
+ if(!['developer','owner','receiver','manager','mechanic'].includes(role_(actor)))throw httpError_('Действие доступно владельцу или мастеру-приёмщику',403);
  if(p.kind!=='storage')throw httpError_('Выберите хранение',400);
  const r=find_(SHEETS.storage,'storage_id',p.id);
  if(!r)throw httpError_('Хранение не найдено',404);
@@ -524,7 +522,7 @@ function validateOrderUpdate_(p,actor){
   if(closed.includes(before)&&!['developer','owner','admin'].includes(role_(actor))||closed.includes(before)&&(!String(p.reopen_reason||'').trim()||status!==(kind==='storage'?'stored':'accepted')))throw httpError_('Закрытый заказ может открыть администратор с причиной',409);
   if(kind==='storage'){
     if(before==='deleted')throw httpError_('Приёмка удалена',409);
-    if(status==='returned'&&status!==before&&!['developer','owner','receiver'].includes(role_(actor)))throw httpError_('Закрыть хранение может владелец или мастер-приёмщик',403);
+    if(status==='returned'&&status!==before&&!['developer','owner','receiver','manager','mechanic'].includes(role_(actor)))throw httpError_('Закрыть хранение может владелец или мастер-приёмщик',403);
     if(!['accepted','stored','ready_return','returned','cancelled'].includes(status))throw httpError_('Неверный статус',400);
     if(status==='returned'&&(before!=='ready_return'||num_(r['Оплачено'])<num_(r['Сумма'])||rows_(SHEETS.repairs).some(x=>x.storage_id===p.id&&!closed.includes(normStatus_(x['Статус'],'repair')))))throw httpError_('Для выдачи нужны готовность, полная оплата и завершённые ремонты',409);
     return;
@@ -533,7 +531,6 @@ function validateOrderUpdate_(p,actor){
   requireRepairTransition_(before,status);
   if(status!==before&&['ready','issued','cancelled'].includes(status)&&!canSetRepairStatus_(actor,status))throw httpError_('У вашей роли нет права на этот статус ремонта',403);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||'');
-  if(!['accepted','cancelled'].includes(status)&&!masterId)throw httpError_('Сначала назначьте мастера',409);
   const diagnostics=p.diagnostics_notes===undefined?String(r['Диагностика']||''):String(p.diagnostics_notes||'');
   if(['waiting_parts','repair','ready','issued'].includes(status)&&!diagnostics.trim())throw httpError_('Сначала заполните результат диагностики',409);
   const works=p.works||parseJson_(r['Работы'],[]),parts=p.parts||parseJson_(r['Строки запчастей'],[]);

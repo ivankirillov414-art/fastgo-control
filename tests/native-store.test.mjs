@@ -132,8 +132,11 @@ test('two simultaneous sales of the last unit result in one sale and one outbox 
 test('a lost response replays the committed receipt without a second stock write',async()=>{
  const h=harness(),p={request_id:randomUUID(),part_id:part,movement_type:'receipt',quantity:2,note:'test'};h.failResponse();await assert.rejects(h.call('stock',p),/response lost/);await h.call('stock',p);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);assert.equal(h.outbox.length,1);
 });
-test('mechanic cannot view an unrelated repair or change warehouse balance',async()=>{
- const h=harness(),r=await h.call('create',intake()),mechanic={...manager,role:'mechanic'};await assert.rejects(h.call('get',{id:r.id},mechanic),/доступ/i);await assert.rejects(h.call('stock',{part_id:part,quantity:1,movement_type:'receipt'},mechanic),/доступ/i);
+test('master can open workshop repairs and receive stock',async()=>{
+ const h=harness(),r=await h.call('create',intake()),mechanic={...manager,role:'mechanic'};
+ assert.equal((await h.call('get',{id:r.id},mechanic)).record.id,r.id);
+ await h.call('stock',{part_id:part,quantity:1,movement_type:'receipt'},mechanic);
+ assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],2);
 });
 test('new private photos can be selected and viewed while Google is unavailable',async()=>{
  const h=harness();const uploaded=await h.call('part_photo_upload',{part_id:part,content_type:'image/png',content_base64:Buffer.from([137,80,78,71,13,10,26,10]).toString('base64'),primary_for_category:true});assert.ok(uploaded.path.startsWith('native:'));const photo=await h.call('part_photo_url',{part_id:part});assert.ok(photo.url.startsWith('signed:'));assert.equal(h.googleCalls(),0);assert.equal(h.outbox.length,1);
@@ -142,7 +145,7 @@ test('new private photos can be selected and viewed while Google is unavailable'
 const receiver={...manager,role:'receiver',name:'Приёмщик'};
 test('storage completion and legal settings respect privileged access',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),kind:'storage'});
- for(const role of ['admin','manager','mechanic']){
+ for(const role of ['admin']){
   for(const action of ['storage_close','storage_delete'])await assert.rejects(h.call(action,{kind:'storage',id:r.id,revision:r.revision,note:'test'},{...manager,role}),/владельцу|мастеру-приёмщику/);
  }
  for(const role of ['admin','receiver','manager','mechanic']){
@@ -222,4 +225,20 @@ test('free price rejects invalid money and base mode ignores submitted override'
  const shift=await h.call('shift_open',{register:'Проверка цен'});
  for(const unit_price of [-1,'',null,true,'no',1.001,1000000001])await assert.rejects(h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1,price_mode:'free',unit_price}]}),/цен/);
  const sale=await h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1,price_mode:'base',unit_price:1}]});assert.equal(sale.total,100);
+});
+
+test('single master completes an unassigned repair from intake through payment and issue',async()=>{
+ const h=harness(),master={...manager,role:'mechanic'};
+ let r=await h.call('create',intake(),master);
+ assert.equal(r.assigned_master_id,'');
+ assert.equal((await h.call('list',{kind:'repair'},master)).count,1);
+ const change=async(status,extras={})=>{r=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status,works:[{name:'Диагностика',price:100,quantity:1}],parts:[],discount:0,diagnostics_notes:'Проверено',...extras},master);};
+ await change('diagnostics');
+ await change('repair',{approve:true,approval_note:'Клиент согласовал'});
+ await change('ready',{quality_checked:true});
+ await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'},master);
+ r=(await h.call('get',{kind:'repair',id:r.id},master)).record;
+ await change('issued',{quality_checked:true,handover_notes:'Выдано клиенту, комплектность проверена'});
+ assert.equal(r.status,'issued');assert.equal(r.assigned_master_id,'');assert.equal(r.paid_amount,100);
+ await assert.rejects(h.call('legal_save',{},master),/владельцу/);
 });

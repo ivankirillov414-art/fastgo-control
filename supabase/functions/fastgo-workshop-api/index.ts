@@ -3,13 +3,13 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-sale-prices-2026-10-02';
+const RELEASE = 'workshop-single-master-2026-10-10';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||''));
 const admin=m=>['developer','owner','admin'].includes(m.role);
-const manager=m=>['developer','owner','admin','receiver','manager'].includes(m.role);
+const manager=m=>['developer','owner','admin','receiver','manager','mechanic'].includes(m.role);
 const numeric=(v,label,min=0,max=1e9)=>{if(v===null||v===''||typeof v==='boolean')fail('Проверьте '+label);const n=Number(v);if(!Number.isFinite(n)||n<min||n>max)fail('Проверьте '+label);return n;};
 const integer=(v,label,min=1,max=100000)=>{const n=numeric(v,label,min,max);if(!Number.isInteger(n))fail('Укажите целое число: '+label);return n;};
 const text=(v,max=500)=>String(v??'').trim().slice(0,max);
@@ -106,6 +106,7 @@ const defaultRolePermissions={
   mechanic:{role:'mechanic',can_mark_ready:true,can_issue:false,can_cancel:false}
 };
 async function rolePermission(role){
+  if(['receiver','manager','mechanic'].includes(role))return {...defaultRolePermissions.owner,role};
   if(role==='developer'||role==='owner')return {...defaultRolePermissions.owner,role};
   const rows=await db('workshop_role_permissions','role=eq.'+encodeURIComponent(role)+'&select=role,can_mark_ready,can_issue,can_cancel&limit=1');
   return rows?.[0]||defaultRolePermissions[role]||{role,can_mark_ready:false,can_issue:false,can_cancel:false};
@@ -250,7 +251,7 @@ async function main(req){
     if(!readActions.has(action)&&!writeActions.has(action))fail(action==='part_photo_upload'?'Загрузка фото товара пока отключена: текущий скрипт делает их публичными. Фото приёмок работают.':'Неизвестная операция',400);
     if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
     if(['legal','legal_save'].includes(action)&&!['developer','owner'].includes(me.role))fail('Реквизиты доступны только владельцу',403);
-    if(['storage_close','storage_delete'].includes(action)&&!['developer','owner','receiver'].includes(me.role))fail('Действие доступно владельцу или мастеру-приёмщику',403);
+    if(['storage_close','storage_delete'].includes(action)&&!['developer','owner','receiver','manager','mechanic'].includes(me.role))fail('Действие доступно владельцу или мастеру-приёмщику',403);
     if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
     const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,...(status_permissions?{status_permissions}:{})};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
@@ -352,7 +353,6 @@ async function main(req){
     }
     if(['update','payment','extend','contact','upload','documents'].includes(action)){
       const d=await g('get',{kind:p.kind,id:p.id}),r=recordDates(d.record);
-      if(me.role==='mechanic'&&(p.kind!=='repair'||r.assigned_master_id!==user.id))fail('Нет доступа к карточке',403);
       if(['update','extend','contact'].includes(action)){if(Number(p.revision)!==Number(r.revision))fail('Карточка изменена. Обновите страницу.',409);}
       if(terminal.has(r.status)&&!['documents','upload'].includes(action)){
         if(!(action==='update'&&admin(me)&&text(p.reopen_reason)&&p.status===(p.kind==='storage'?'stored':'accepted')))fail('Заказ закрыт. Повторное открытие доступно администратору.',409);
@@ -368,7 +368,6 @@ async function main(req){
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
           const assignedMaster=p.assigned_master_id===undefined?r.assigned_master_id:p.assigned_master_id;
           if(assignedMaster)await requireActiveMechanic(assignedMaster);
-          if(!['accepted','cancelled'].includes(targetStatus)&&!assignedMaster)fail('Сначала назначьте мастера',409);
           const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
           if(['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
           if(['diagnostics','waiting_parts','repair'].includes(targetStatus))p.quality_checked=false;
@@ -381,7 +380,7 @@ async function main(req){
           if(targetStatus==='cancelled'&&targetStatus!==r.status){if(!text(p.note))fail('Укажите причину отмены');if(Number(r.paid_amount)!==0||(p.parts||r.parts||[]).length)fail('Перед отменой верните оплату и снимите установленные запчасти',409);}
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');
-          if(p.status==='returned'&&p.status!==r.status&&!['developer','owner','receiver'].includes(me.role))fail('Закрыть хранение может владелец или мастер-приёмщик',403);
+          if(p.status==='returned'&&p.status!==r.status&&!['developer','owner','receiver','manager','mechanic'].includes(me.role))fail('Закрыть хранение может владелец или мастер-приёмщик',403);
           if(p.status==='returned'&&(r.status!=='ready_return'||Number(r.paid_amount)<Number(r.storage_amount)||(d.linked||[]).some(x=>!terminal.has(x.status))))fail('Для выдачи нужны готовность, оплата и завершение связанных ремонтов',409);
         }
       }

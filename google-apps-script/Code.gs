@@ -96,7 +96,7 @@ function now_(){ return new Date().toISOString(); }
 function num_(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
 function bool_(v){ return v===true || String(v).toLowerCase()==='true' || String(v).toLowerCase()==='да'; }
 function role_(a){ return String(a.role||''); }
-function requireManager_(a){ if(!['owner','admin','receiver','manager'].includes(role_(a))) throw httpError_('Нет доступа',403); }
+function requireManager_(a){ if(!['owner','admin','receiver','manager','mechanic'].includes(role_(a))) throw httpError_('Нет доступа',403); }
 function requireOwner_(a){if(role_(a)!=='owner')throw httpError_('Реквизиты доступны только владельцу',403);}
 function requireAdmin_(a){ if(!['owner','admin'].includes(role_(a))) throw httpError_('Нет права изменять справочник',403); }
 function httpError_(m,s){ const e=new Error(m); e.status=s; return e; }
@@ -289,7 +289,7 @@ function parseJson_(v,fallback){
   if(Array.isArray(v)) return v;
   try{ const x=JSON.parse(String(v||'')); return Array.isArray(x)?x:fallback; }catch(_){ return fallback; }
 }
-function isManager_(a){ return ['owner','admin','receiver','manager'].includes(role_(a)); }
+function isManager_(a){ return ['owner','admin','receiver','manager','mechanic'].includes(role_(a)); }
 function assertRevision_(row,p){
   const current=Math.max(1,Math.floor(num_(row.revision)||1));
   if(p.revision!==undefined&&p.revision!==''&&Number(p.revision)!==current) throw httpError_('Карточка уже изменена другим сотрудником. Обновите страницу.',409);
@@ -312,9 +312,7 @@ function humanStatus_(v,kind){
 }
 function list_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair';
-  if(role_(actor)==='mechanic'&&kind==='storage') throw httpError_('Нет доступа',403);
   let items=kind==='storage'?rows_(SHEETS.storage).filter(r=>r.storage_id&&r['Статус']!=='deleted').map(mapStorage_):rows_(SHEETS.repairs).filter(r=>r.repair_id).map(mapRepair_);
-  if(role_(actor)==='mechanic') items=items.filter(x=>String(x.assigned_master_id||'')===String(actor.id||''));
   const search=String(p.search||'').toLowerCase().trim();
   if(search) items=items.filter(x=>JSON.stringify(x).toLowerCase().includes(search));
   if(p.status&&p.status!=='all'&&p.status!=='active') items=items.filter(x=>x.status===p.status);
@@ -378,7 +376,6 @@ function get_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair';
   const raw=kind==='storage'?find_(SHEETS.storage,'storage_id',p.id):find_(SHEETS.repairs,'repair_id',p.id);
   if(!raw) throw httpError_('Приёмка не найдена',404);
-  if(role_(actor)==='mechanic'&&(kind==='storage'||String(raw.master_id||'')!==String(actor.id||''))) throw httpError_('Нет доступа к этой карточке',403);
   const record=kind==='storage'?mapStorage_(raw):mapRepair_(raw);
   const events=rows_(SHEETS.events).filter(r=>String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(eventView_);
   const payments=rows_(SHEETS.payments).filter(r=>String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(paymentView_);
