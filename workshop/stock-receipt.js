@@ -1,3 +1,4 @@
+import {suggest,partChoices} from './autocomplete.js';
 import {api,esc,date} from './core.js';
 import {printPartLabel} from './inventory-ui.js';
 
@@ -23,7 +24,7 @@ export async function renderReceipt(ctx,token){
       const row=document.createElement('section');row.className='panel';
       row.innerHTML=`<h3>Позиция ${i+1}</h3><label>Поиск товара<input type="search" data-search placeholder="Название, модель, штрихкод"></label><label>Деталь<select data-field="part_id"><option value="">+ Новая деталь</option>${parts.map(p=>`<option value="${esc(p.id)}" ${p.id===x.part_id?'selected':''}>${esc([p.name,p.model,p.sku,p.barcode].filter(Boolean).join(' · '))}</option>`).join('')}</select></label><div class="grid">${!x.part_id?['name','category','model','sku','unit_cost','retail_price'].map((f,j)=>`<label>${['Название','Категория','Модель техники','Артикул','Закупочная цена, ₽','Розничная цена, ₽'][j]}<input data-field="${f}" ${j>=4?'type="number" min="0" max="1000000000" step="0.01"':'maxlength="120"'} ${['name','category','retail_price'].includes(f)?'required':''} value="${esc(x[f]??(j>=4?0:''))}"></label>`).join(''):''}<label>Количество<input data-field="quantity" type="number" min="1" max="10000" step="1" required value="${esc(x.quantity)}"></label></div><button type="button" class="btn ghost small" data-remove>Убрать позицию</button>`;
       lines.append(row);
-      row.querySelector('[data-search]').oninput=e=>{const q=e.target.value.toLowerCase();row.querySelectorAll('option').forEach(o=>{o.hidden=!!o.value&&!o.textContent.toLowerCase().includes(q);});};
+      suggest(row.querySelector('[data-search]'),partChoices(parts),choice=>{x.part_id=choice.item.id;saveDraft();draw();});
       row.querySelectorAll('[data-field]').forEach(input=>input.onchange=()=>{const f=input.dataset.field;x[f]=['quantity','unit_cost','retail_price'].includes(f)?Number(input.value):input.value;saveDraft();if(f==='part_id')draw();});
       row.querySelector('[data-remove]').onclick=()=>{draft.items.splice(i,1);saveDraft();draw();};
     });

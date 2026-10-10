@@ -1,3 +1,4 @@
+import {installSuggestions} from './autocomplete.js';
 import {renderReceipt} from './stock-receipt.js';
 import {renderCash} from './cash.js';
 import {icon} from './icons.js';
@@ -6,6 +7,7 @@ import {api,invalidateReads,esc,money,date,today,fio,number,roles,statuses,badge
 import {renderIntake,renderDetail} from './orders.js';
 import {renderDocument} from './documents.js';
 import {renderQa} from './qa.js';
+installSuggestions();
 const $=id=>document.getElementById(id),app=$('app');let me=null,epoch=0,cache=null,dirty=false,loadingTimer=null;
 const nav=[['home','Главная','◈'],['repairs','Ремонты','⚒'],['storage','Хранение','▣'],['clients','Клиенты','♙'],['stock','Склад','▤'],['cash','Кассы и продажи','₽'],['finance','Оплаты','₽'],['catalog','Прайс работ','≡'],['staff','Сотрудники','♧'],['qa','Проверка','✓'],['account','Аккаунт','●'],['settings','Реквизиты','⚙']];
 const admin=()=>['developer','owner','admin'].includes(me?.role),manager=()=>me?.role!=='mechanic',privileged=()=>['developer','owner'].includes(me?.role);

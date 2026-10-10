@@ -1,0 +1,35 @@
+import {api} from './core.js';
+export const normalize=v=>String(v??'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ').trim();
+export function matches(items,query){const words=normalize(query).split(' ').filter(Boolean);return items.filter(x=>words.every(w=>normalize(x.search||x.label||x.value).includes(w))).slice(0,12);}
+let sequence=0;
+export function suggest(input,source,onSelect){
+ if(!input||input.dataset.suggestions)return;input.dataset.suggestions='true';input.autocomplete='off';
+ const box=document.createElement('div');box.className='fg-suggestions';box.id='fg-suggestions-'+(++sequence);box.hidden=true;box.setAttribute('role','listbox');input.insertAdjacentElement('afterend',box);
+ input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',box.id);input.setAttribute('aria-expanded','false');
+ let results=[],active=-1,version=0,timer;
+ const close=()=>{box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
+ const choose=i=>{const x=results[i];if(!x||input.matches(':disabled'))return;close();input.value=x.value??x.label;if(onSelect)onSelect(x);else{input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}close();};
+ const highlight=()=>{[...box.children].forEach((b,i)=>b.setAttribute('aria-selected',String(i===active)));if(active>=0){input.setAttribute('aria-activedescendant',box.children[active].id);box.children[active].scrollIntoView({block:'nearest'});}};
+ const show=async()=>{const current=++version,q=input.value;if(input.matches(':disabled')||!input.isConnected)return close();try{const values=typeof source==='function'?await source(q):source;if(current!==version||!input.isConnected||document.activeElement!==input)return;results=matches(values||[],q);active=-1;box.replaceChildren();results.forEach((x,i)=>{const b=document.createElement('button');b.type='button';b.id=box.id+'-'+i;b.setAttribute('role','option');b.setAttribute('aria-selected','false');b.textContent=x.label||x.value;b.addEventListener('pointerdown',e=>e.preventDefault());b.onclick=()=>choose(i);box.append(b);});box.hidden=!results.length;input.setAttribute('aria-expanded',String(!!results.length));}catch{close();}};
+ input.addEventListener('input',()=>{++version;clearTimeout(timer);timer=setTimeout(show,150);});input.addEventListener('focus',show);input.addEventListener('blur',()=>{++version;clearTimeout(timer);setTimeout(close,120);});
+ input.addEventListener('keydown',e=>{if(e.key==='Escape'){++version;clearTimeout(timer);close();return;}if(box.hidden)return;if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();active=(active+(e.key==='ArrowDown'?1:-1)+results.length)%results.length;highlight();}else if(e.key==='Enter'&&active>=0){e.preventDefault();choose(active);}});
+}
+export const partChoices=parts=>parts.filter(x=>x.active!==false).map(x=>({value:x.name,label:[x.name,x.model,x.sku,x.barcode].filter(Boolean).join(' · '),search:[x.name,x.model,x.sku,x.barcode,x.category].filter(Boolean).join(' '),item:x}));
+export function searchSelect(select){if(!select||select.dataset.suggestions)return;select.dataset.suggestions='true';const input=document.createElement('input');input.type='search';input.disabled=select.matches(':disabled');input.placeholder='Начните вводить название…';input.setAttribute('aria-label','Поиск: '+(select.getAttribute('aria-label')||select.closest('label')?.textContent.trim()||'выбор из списка'));select.before(input);suggest(input,()=>[...select.options].filter(o=>o.value&&!o.disabled).map(o=>({value:o.textContent,label:o.textContent,id:o.value})),x=>{select.value=x.id;select.dispatchEvent(new Event('change',{bubbles:true}));input.value='';});}
+export function installSuggestions(){
+ const catalogValues=async field=>{const c=await api('catalog');return [...new Set((c.parts||[]).map(p=>p[field]).filter(Boolean))].map(value=>({value}));};
+ const bind=()=>{
+  document.querySelectorAll('#catalog-picker,#part-picker').forEach(searchSelect);
+  document.querySelectorAll('input:not([data-suggestions])').forEach(input=>{
+   const n=input.name||input.dataset.field;if(input.matches(':disabled')||input.closest('.login-card'))return;
+   if(['category','model','sku','unit'].includes(n)&&!input.closest('#intake-form')&& !input.closest('#modal-form')?.querySelector('[name=brand]'))suggest(input,()=>catalogValues(n));
+   if(n==='name'&&(input.closest('#new-part-form')||input.closest('#modal-form')?.querySelector('[name=retail_price]')))suggest(input,()=>catalogValues('name'));
+   if(n==='search'&&input.closest('#stock-search'))suggest(input,async()=>partChoices((await api('catalog')).parts),x=>{input.value=x.item.name;input.form.requestSubmit();});
+   if(n==='search'&&input.closest('#client-search'))suggest(input,async q=>q.trim().length<2?[]:(await api('customers',{search:q,limit:12})).items.map(x=>({value:x.phone,label:x.full_name+' · '+x.phone,search:x.full_name+' '+x.phone})),x=>{input.value=x.value;input.form.requestSubmit();});
+   if(n==='search'&&input.closest('#filters'))suggest(input,async q=>{if(q.trim().length<2)return [];const kind=location.hash.startsWith('#storage')?'storage':'repair';const d=await api('list',{kind,search:q,status:'all',limit:12});return d.items.map(r=>({value:r.phone,label:[r.last_name,r.first_name,r.phone,r.brand,r.model,r.serial_number].filter(Boolean).join(' · '),search:[r.last_name,r.first_name,r.phone,r.brand,r.model,r.serial_number].filter(Boolean).join(' ')}));},x=>{input.value=x.value;input.form.requestSubmit();});
+   if(['brand','model','storage_location'].includes(n)&&(input.closest('#intake-form')||input.closest('#order-form')||input.closest('#modal-form')?.querySelector('[name=brand]')))suggest(input,async q=>{if(q.trim().length<2)return [];const d=await Promise.all(['repair','storage'].map(kind=>api('list',{kind,search:q,status:'all',limit:50})));return [...new Set(d.flatMap(x=>x.items).map(r=>r[n]).filter(Boolean))].map(value=>({value}));});
+   if(['phone','last_name','first_name','middle_name'].includes(n)&&input.closest('#intake-form'))suggest(input,async q=>{if(q.trim().length<2)return [];const d=await Promise.all(['repair','storage'].map(kind=>api('list',{kind,search:q,status:'all',limit:12})));const seen=new Set();return d.flatMap(x=>x.items).filter(r=>{if(seen.has(r.phone))return false;seen.add(r.phone);return true;}).map(r=>({value:r[n],label:[r.last_name,r.first_name,r.middle_name,r.phone].filter(Boolean).join(' · '),search:[r.last_name,r.first_name,r.middle_name,r.phone].filter(Boolean).join(' '),item:r}));},x=>{for(const f of ['phone','last_name','first_name','middle_name','email']){const el=input.form.elements[f];if(el){el.value=x.item[f]||'';el.dispatchEvent(new Event('input',{bubbles:true}));}}});
+  });
+ };
+ let scheduled=false;new MutationObserver(()=>{if(scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;bind();});}).observe(document.body,{childList:true,subtree:true});bind();
+}
