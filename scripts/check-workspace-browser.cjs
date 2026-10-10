@@ -49,6 +49,15 @@ const server=createServer((req,res)=>{
    await page.goto(origin+'/workshop.html#order?kind=storage&id=test');await page.locator('#order-form').waitFor();
    assert.equal(await page.locator('#delete-storage').count(),['developer','owner','receiver','manager','mechanic'].includes(role)?1:0);
    assert.equal(await page.locator('#close-storage').count(),['developer','owner','receiver','manager','mechanic'].includes(role)?1:0);
+   // Printing reuses the current authenticated app instead of launching a new one.
+   const printLink=page.getByRole('link',{name:'Лист мастера + QR',exact:true});
+   assert.equal(await printLink.getAttribute('target'),null);
+   await printLink.click();await page.locator('.print-page #document-qr img').waitFor();
+   assert.equal(context.pages().length,1);
+   assert.equal(await page.locator('#login').count(),0);
+   assert.equal(await page.getByRole('button',{name:'Печать',exact:true}).count(),1);
+   await page.getByRole('link',{name:'К карточке',exact:true}).click();await page.locator('#order-form').waitFor();
+
   }
   if(role==='developer'){await page.goto(origin+'/workshop.html#account');await page.getByRole('heading',{name:'Аккаунт',exact:true}).waitFor();const body=(await page.locator('body').innerText()).toLowerCase();assert.equal(body.includes('developer'),false);assert.equal(body.includes('разработчик'),false);}
   assert.deepEqual(errors,[]);await context.close();
