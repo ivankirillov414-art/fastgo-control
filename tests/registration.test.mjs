@@ -23,12 +23,12 @@ function server({member=null,confirmed=true}={}){
 }
 test('registration cannot select role, identity or activate access',async()=>{
  const s=server();const r=await s.call('request_access',{profile_id:'someone-else',role:'owner',active:true});
- assert.equal(r.status,200);assert.deepEqual(await r.json(),{data:{active:false}});
+ assert.equal(r.status,200);assert.deepEqual(await r.json(),{data:{active:false,state:'pending',requested_at:null}});
  assert.equal(s.writes[1].profile_id,id);assert.equal(s.writes[1].role,'mechanic');assert.equal(s.writes[1].active,false);
  await s.call();assert.equal(s.writes.length,2);
 });
 test('existing owner and disabled member are never overwritten',async()=>{
- for(const active of [true,false]){const s=server({member:{profile_id:id,role:'owner',active}});assert.deepEqual(await (await s.call()).json(),{data:{active}});assert.equal(s.writes.length,0);}
+ for(const active of [true,false]){const s=server({member:{profile_id:id,role:'owner',active}});assert.deepEqual(await (await s.call()).json(),{data:{active,state:active?'active':'pending',requested_at:null}});assert.equal(s.writes.length,0);}
 });
 test('unconfirmed and anonymous requests cannot create memberships',async()=>{
  const s=server({confirmed:false});assert.equal((await s.call()).status,403);assert.equal((await s.call('request_access',{},false)).status,401);assert.equal(s.writes.length,0);
@@ -41,14 +41,24 @@ test('pending users cannot read workshop records',async()=>{
 
 const values=new Map();globalThis.localStorage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
 globalThis.window={addEventListener(){},dispatchEvent(){}};
-const {signUp,sessionAvailable,clearSession}=await import('../workshop/core.js');
+globalThis.location={origin:'https://ivankirillov414-art.github.io',pathname:'/fastgo-control/workshop.html'};
+const {signUp,acceptSignupConfirmation,sessionAvailable,clearSession}=await import('../workshop/core.js');
 test('signup stores immediate session but never stores passwords or authorization roles',async()=>{
- let sent;globalThis.fetch=async(url,o)=>{sent=JSON.parse(o.body);assert.ok(url.endsWith('/auth/v1/signup'));return Response.json({access_token:'test',refresh_token:'refresh',expires_in:3600,user:{id}});};
+ let sent;globalThis.fetch=async(url,o)=>{sent=JSON.parse(o.body);assert.equal(new URL(url).searchParams.get('redirect_to'),'https://ivankirillov414-art.github.io/fastgo-control/workshop.html');return Response.json({access_token:'test',refresh_token:'refresh',expires_in:3600,user:{id}});};
  assert.deepEqual(await signUp(' Employee ',' a@example.test ','long-password-123'),{signedIn:true});
  assert.equal(sessionAvailable(),true);assert.deepEqual(sent.data,{full_name:'Employee'});assert.equal(sent.email,'a@example.test');assert.ok(!JSON.stringify([...values]).includes('long-password'));clearSession();
 });
-test('email confirmation response is rejected because FastGo requires immediate sign-in',async()=>{
- globalThis.fetch=async()=>Response.json({id,identities:[]});await assert.rejects(signUp('Employee','a@example.test','long-password-123'),/подтверждение почты/);assert.equal(sessionAvailable(),false);
+test('email confirmation shows a pending state without storing a session',async()=>{
+ globalThis.fetch=async()=>Response.json({id,identities:[]});assert.deepEqual(await signUp('Employee','a@example.test','long-password-123'),{signedIn:false,confirmationRequired:true,email:'a@example.test'});assert.equal(sessionAvailable(),false);
+});
+test('signup callback validates the account and retains the correct identity',async()=>{
+ globalThis.fetch=async(url,o)=>{assert.ok(url.endsWith('/auth/v1/user'));assert.equal(o.headers.Authorization,'Bearer confirmation-fixture');return Response.json({id,email_confirmed_at:'2026-10-10'});};
+ assert.equal(await acceptSignupConfirmation('#access_token=confirmation-fixture&refresh_token=refresh-fixture&type=signup&expires_in=3600'),true);
+ assert.equal(JSON.parse(values.get('fastgo_workshop_session')).user_id,id);clearSession();
+});
+test('unconfirmed callback and recovery tokens never become a signup session',async()=>{
+ globalThis.fetch=async()=>Response.json({id,email_confirmed_at:null});await assert.rejects(acceptSignupConfirmation('#access_token=invalid&type=signup'),/проверить подтверждение/);assert.equal(sessionAvailable(),false);
+ assert.equal(await acceptSignupConfirmation('#access_token=recovery&type=recovery'),false);assert.equal(sessionAvailable(),false);
 });
 test('weak passwords rejected before request and duplicate account errors translated',async()=>{
  globalThis.fetch=async()=>{throw new Error('Must not request')};await assert.rejects(signUp('Employee','a@example.test','short'),/12/);

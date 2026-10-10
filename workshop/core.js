@@ -63,9 +63,20 @@ export async function signUp(name,email,password){
  name=String(name||'').trim();email=String(email||'').trim();
  if(!name)throw new Error('Укажите имя и фамилию');
  if(password.length<12)throw new Error('Пароль должен содержать не менее 12 символов');
- const result=await request('/auth/v1/signup',{email,password,data:{full_name:name}});
- if(!result.access_token)throw new Error('Регистрация не завершена: в настройках FastGo включено подтверждение почты. Обратитесь к руководителю.');
+ const result=await request('/auth/v1/signup?redirect_to='+encodeURIComponent(location.origin+location.pathname),{email,password,data:{full_name:name}});
+ if(!result.access_token){if(!result.id&&!result.user?.id)throw new Error('Сервер не подтвердил регистрацию. Повторите попытку.');return {signedIn:false,confirmationRequired:true,email};}
  reads.clear();saveSession(result);return {signedIn:true};
+}
+export async function acceptSignupConfirmation(hash){
+ const p=new URLSearchParams(String(hash||'').replace(/^#/,''));
+ if(!['signup','email'].includes(p.get('type')))return false;
+ const token=p.get('access_token');if(!token)throw new Error('Ссылка не содержит подтверждения. Войдите с почтой и паролем или откройте последнее письмо.');
+ const r=await fetch(BASE+'/auth/v1/user',{headers:{apikey:KEY,Authorization:'Bearer '+token},signal:AbortSignal.timeout(30000)});
+ let user;try{user=await r.json();}catch{throw new Error('Сервер не подтвердил учётную запись. Повторите вход.');}
+ if(!r.ok||!user.id||!user.email_confirmed_at||user.is_anonymous)throw new Error('Не удалось проверить подтверждение почты. Войдите с почтой и паролем или откройте последнее письмо.');
+ const expires=Number(p.get('expires_in'));
+ clearSession();saveSession({access_token:token,refresh_token:p.get('refresh_token')||undefined,expires_in:Number.isFinite(expires)&&expires>0?expires:3600,user});
+ return true;
 }
 export function clearSession(){reads.clear();session=null;localStorage.removeItem(STORE);localStorage.removeItem('fastgo_token');window.dispatchEvent(new Event('workshop-session-cleared'));}
 export async function signOut(){const token=session?.access_token;try{if(token)await request('/auth/v1/logout?scope=local',{},token);}catch{}finally{clearSession();}}

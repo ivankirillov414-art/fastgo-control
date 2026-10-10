@@ -210,6 +210,37 @@ const server=createServer((req,res)=>{
  assert.deepEqual(errors,[]);await context.close();
  }
 
+ // Signup email confirmation fixture: no real messages or accounts.
+ {
+ const context=await browser.newContext(),page=await context.newPage(),errors=[];let requests=0,verified=0,signupURL='';
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  if(req.url().includes('/auth/v1/signup')){signupURL=req.url();return route.fulfill({json:{id:'confirmation-fixture',identities:[{id:'fixture'}]},headers});}
+  if(req.url().endsWith('/auth/v1/user')){assert.equal(req.method(),'GET');assert.equal(req.headers().authorization,'Bearer signup-fixture');verified++;return route.fulfill({json:{id:'confirmation-fixture',email:'fixture@example.invalid',email_confirmed_at:'2026-10-10',is_anonymous:false},headers});}
+  if(req.url().includes('/functions/v1/fastgo-workshop-api')){const {action}=req.postDataJSON();if(action==='request_access'){assert.equal(verified,1);requests++;return route.fulfill({json:{data:{active:false,state:'pending'}},headers});}return route.fulfill({status:403,json:{error:'Нет доступа'},headers});}
+  return route.abort();
+ });
+ await page.goto(origin+'/workshop.html');await page.getByRole('button',{name:'Создать аккаунт',exact:true}).click();
+ await page.locator('#f-name').fill('Тестовый мастер');await page.locator('#f-email').fill('fixture@example.invalid');
+ await page.locator('#password').fill('Fixture-password-42');await page.locator('#f-confirm').fill('Fixture-password-42');
+ await page.getByRole('button',{name:'Зарегистрироваться',exact:true}).click();
+ await page.getByText('Письмо для подтверждения почты отправлено.',{exact:false}).waitFor();assert.equal(requests,0);
+ assert.equal(new URL(signupURL).searchParams.get('redirect_to'),origin+'/workshop.html');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('fastgo_workshop_session')),null);
+ await page.goto(origin+'/workshop.html#access_token=signup-fixture&refresh_token=refresh-fixture&type=signup&expires_in=3600');
+ await page.getByRole('heading',{name:'Заявка отправлена',exact:true}).waitFor();assert.equal(verified,1);assert.equal(requests,1);
+ assert.equal(await page.evaluate(()=>location.hash),'#home');
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('fastgo_workshop_session')).user_id),'confirmation-fixture');
+ await page.evaluate(()=>localStorage.removeItem('fastgo_workshop_session'));
+ await page.goto(origin+'/workshop.html#error=access_denied&error_code=otp_expired');
+ await page.getByText('Ссылка из письма недействительна или истекла.',{exact:false}).waitFor();
+ assert.equal(await page.evaluate(()=>location.hash),'#home');assert.equal(verified,1);assert.equal(requests,1);
+ assert.deepEqual(errors,[]);await context.close();
+ }
+
  console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
