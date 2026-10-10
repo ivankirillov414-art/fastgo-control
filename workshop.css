@@ -7,3 +7,11 @@
 
 /* Optional intake fields remain available without crowding the basic form. */
 .intake-extra{border-top:1px solid var(--line);margin-top:18px;padding-top:14px}.intake-extra summary{cursor:pointer;color:var(--muted);font-size:14px;line-height:1.5}.intake-extra[open] summary{margin-bottom:18px;color:var(--ink)}
+
+/* Let form columns shrink and keep native iOS date controls inside their fields. */
+@media screen{
+ .form-layout>*,.grid>*,.field{min-width:0}
+ .field input,.field select,.field textarea{min-width:0;max-width:100%}
+ input[type=date]{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;text-align:left}
+ input[type=date]::-webkit-date-and-time-value{min-height:1.5em;text-align:left}
+}

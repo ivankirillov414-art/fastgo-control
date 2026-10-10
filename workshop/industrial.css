@@ -24,7 +24,7 @@
  .pagehead{gap:18px;margin-bottom:25px;flex-wrap:wrap}.pagehead>div:first-child{min-width:0;flex:1}
  .pagehead>div:first-child:before{content:"FASTGO / РАБОЧАЯ ПАНЕЛЬ";display:block;font-size:9px;letter-spacing:2.1px;font-weight:700;color:var(--yellow);margin-bottom:10px}
  h1{font-size:32px;font-weight:850;letter-spacing:-1px;line-height:1.15}h2{font-weight:750}h3{font-weight:750}.pagehead p{color:#a6b0b3;font-size:13px;margin-top:9px}
- .btn{border-radius:5px;background:var(--yellow);color:#191c16;font-size:13px;min-height:44px;font-weight:750;border:1px solid #0873df40;box-shadow:0 2px 0 #0003;transition:background .15s,transform .15s}
+ .btn{border-radius:5px;background:var(--yellow);color:#ffffff;font-size:13px;min-height:44px;font-weight:750;border:1px solid #0873df40;box-shadow:0 2px 0 #0003;transition:background .15s,transform .15s}
  .btn:hover:not(:disabled){background:#63b2ff}.btn:active:not(:disabled){transform:translateY(1px)}
  .btn.secondary{background:#2c3437;border-color:#465054;color:#f3f4ee}.btn.secondary:hover:not(:disabled){background:#3a4549}
  .btn.ghost{background:#111827;color:#c9d0d1;border-color:#3d484b;box-shadow:none}.btn.ghost:hover:not(:disabled){background:#303a3d;color:#fff}
