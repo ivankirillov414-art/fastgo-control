@@ -54,6 +54,43 @@ const server=createServer((req,res)=>{
   assert.deepEqual(errors,[]);await context.close();
  }
 
+ // Phone uploads, compression, partial retry and cross-device gallery refresh.
+ {
+ const context=await browser.newContext(),page=await context.newPage(),errors=[];let paths=[],uploads=[],failSecond=true;
+ page.on('pageerror',e=>errors.push(e.message));
+ await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'photo-fixture',expires_at:4102444800})));
+ const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
+ const record=()=>({id:'photo-order',repair_number:9,status:'accepted',revision:1,brand:'Тест',model:'Тест',last_name:'Тест',first_name:'Клиент',phone:'+79991234567',created_at:'2026-10-10',works:[],parts:[],total_amount:0,paid_amount:0,fault_photo_paths:[...paths],signed_document_paths:[]});
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  const {action,params:p}=req.postDataJSON();let data={};
+  if(action==='me')data={role:'mechanic',name:'Мастер',profile_id:'photo-fixture',active:true,status_permissions:{}};
+  if(action==='request_access')data={active:true};if(action==='catalog')data={services:[],staff:[],parts:[],categories:[]};
+  if(action==='get')data={record:record(),events:[],payments:[],linked:[]};if(action==='signed_url')data={url:image};
+  if(action==='upload'){
+   uploads.push(p);if(uploads.length===2&&failSecond){failSecond=false;return route.fulfill({status:503,json:{error:'Тестовый обрыв соединения'},headers});}
+   const path='native:photo-'+p.request_id;if(!paths.includes(path))paths.push(path);data={path};
+  }
+  return route.fulfill({json:{data},headers});
+ });
+ await page.setViewportSize({width:390,height:844});await page.goto(origin+'/workshop.html#order?kind=repair&id=photo-order');await page.locator('#photo-grid').filter({hasText:'не добавлены'}).waitFor();
+ await page.locator('#phone-photos').click();await page.locator('#phone-photo-link img').waitFor();assert.ok((await page.locator('#phone-photo-link a').getAttribute('href')).includes('id=photo-order'));
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=2400;c.height=1800;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,2400,1800);g.addColorStop(0,'red');g.addColorStop(1,'blue');x.fillStyle=g;x.fillRect(0,0,2400,1800);return c.toDataURL('image/png').split(',')[1];});
+ const file={name:'phone.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')};
+ await page.locator('#f-diagnostics_notes').fill('Несохранённый комментарий');
+ await page.locator('#photos').setInputFiles([file,{...file,name:'second.png'}]);await page.locator('#photos-progress').filter({hasText:'Повторить'}).waitFor();
+ assert.equal(uploads.length,2);assert.equal(uploads[0].content_type,'image/jpeg');
+ const dimensions=await page.evaluate(async s=>{const i=new Image();await new Promise((r,j)=>{i.onload=r;i.onerror=j;i.src='data:image/jpeg;base64,'+s;});return [i.naturalWidth,i.naturalHeight];},uploads[0].content_base64);assert.deepEqual(dimensions,[1600,1200]);
+ await page.locator('#upload-photos').click();await page.locator('#photos-progress').filter({hasText:'Файлы сохранены'}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('#photo-grid img').length===2);
+ assert.equal(uploads.length,3);assert.equal(uploads[1].request_id,uploads[2].request_id);assert.equal(await page.locator('#f-diagnostics_notes').inputValue(),'Несохранённый комментарий');
+ paths.push('native:added-from-another-phone');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.waitForFunction(()=>document.querySelectorAll('#photo-grid img').length===3);
+ assert.equal(await page.locator('#f-diagnostics_notes').inputValue(),'Несохранённый комментарий');
+ await page.locator('#photo-camera').setInputFiles({...file,name:'camera.png'});await page.waitForFunction(()=>document.querySelectorAll('#photo-grid img').length===4);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(errors,[]);
+ await context.close();console.log(kind+': phone photos, compression, retry and cross-device refresh passed');
+ }
+
  // Intake fixture: validation, minimal repair, retries and storage, no live writes.
  {
  const context=await browser.newContext(),page=await context.newPage(),errors=[];let creates=[],failNext=false,record;

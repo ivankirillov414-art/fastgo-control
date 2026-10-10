@@ -242,3 +242,11 @@ test('single master completes an unassigned repair from intake through payment a
  assert.equal(r.status,'issued');assert.equal(r.assigned_master_id,'');assert.equal(r.paid_amount,100);
  await assert.rejects(h.call('legal_save',{},master),/владельцу/);
 });
+
+test('order photo is linked to the order and readable through a private signed URL',async()=>{
+ const h=harness(),r=await h.call('create',intake());
+ const photo=await h.call('upload',{kind:'repair',id:r.id,slot:'photos',file_name:'intake.jpg',content_type:'image/jpeg',content_base64:Buffer.from([255,216,255,1]).toString('base64')});
+ const saved=(await h.call('get',{kind:'repair',id:r.id})).record;
+ assert.deepEqual(saved.fault_photo_paths,[photo.path]);assert.ok((await h.call('signed_url',{kind:'repair',id:r.id,path:photo.path})).url.startsWith('signed:'));
+ const other=await h.call('create',intake());await assert.rejects(h.call('signed_url',{kind:'repair',id:other.id,path:photo.path}),/не относится/);
+});
