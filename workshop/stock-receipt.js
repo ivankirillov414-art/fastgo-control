@@ -1,6 +1,6 @@
 import {suggest,partChoices} from './autocomplete.js';
 import {api,esc,date} from './core.js';
-import {printPartLabel} from './inventory-ui.js';
+import {printPartLabel,chooseLabels} from './inventory-ui.js';
 
 export async function renderReceipt(ctx,token){
   const [catalog,history]=await Promise.all([api('catalog',{}, {fresh:true}),api('stock_receipts',{}, {fresh:true})]);
@@ -11,8 +11,9 @@ export async function renderReceipt(ctx,token){
   const host=document.getElementById('receipt-editor');
   const saveDraft=()=>{localStorage.setItem(key,JSON.stringify(draft));ctx.setDirty(true);};
   const showReceipt=(r,target)=>{
-    target.innerHTML=`<p><b>${esc(r.note)}</b> · ${date(r.created_at)}</p><small>Приход ${esc(r.id)}</small><div style="overflow:auto"><table class="records"><thead><tr><th>Товар</th><th>Принято</th><th>Остаток после строки</th><th>Штрихкод</th><th></th></tr></thead><tbody>${r.items.map((x,i)=>`<tr><td>${esc(x.name)}</td><td>${x.quantity}</td><td>${x.balance}</td><td>${esc(x.barcode)}</td><td><button type="button" class="btn ghost small" data-label="${i}">Этикетка</button></td></tr>`).join('')}</tbody></table></div>`;
-    target.querySelectorAll('[data-label]').forEach(b=>b.onclick=()=>printPartLabel(r.items[Number(b.dataset.label)]).catch(e=>ctx.toast(e.message)));
+    target.innerHTML=`<p><b>${esc(r.note)}</b> · ${date(r.created_at)}</p><small>Приход ${esc(r.id)}</small><div style="overflow:auto"><table class="records"><thead><tr><th>Товар</th><th>Принято</th><th>Остаток после строки</th><th>Штрихкод</th><th></th></tr></thead><tbody>${r.items.map((x,i)=>`<tr><td>${esc(x.name)}</td><td>${x.quantity}</td><td>${x.balance}</td><td>${esc(x.barcode)}</td><td><button type="button" class="btn ghost small" data-label="${i}">Этикетка</button></td></tr>`).join('')}</tbody></table></div><p><button type="button" class="btn secondary" data-receipt-labels>Напечатать этикетки для прихода</button></p>`;
+    target.querySelector('[data-receipt-labels]').onclick=()=>chooseLabels(r.items,true).catch(e=>ctx.toast(e.message));
+    target.querySelectorAll('[data-label]').forEach(b=>b.onclick=()=>printPartLabel(r.items[Number(b.dataset.label)],r.items[Number(b.dataset.label)].quantity).catch(e=>ctx.toast(e.message)));
   };
   const hist=document.getElementById('receipt-history');
   if(!history.length)hist.textContent='Приходов списком пока нет.';

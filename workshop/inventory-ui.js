@@ -1,5 +1,6 @@
 import {equipmentTypes} from './equipment-core.js';
 import {api,esc,money,csvDownload} from './core.js';
+import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.mjs';
 import {loadLibrary as loadScript} from './library-loader.js';
 import {loadProductIntake,startProductIntake,continueProductIntake} from './product-intake.js';
 
@@ -70,28 +71,54 @@ async function partByCode(code){
   return api('part_by_barcode',{barcode:String(code).trim()});
 }
 
-export async function printPartLabel(part){
-  const w=window.open('','_blank','width=520,height=420');if(!w)throw new Error('Разрешите всплывающие окна для печати');
-  w.document.write('<p>Подготовка этикетки…</p>');
-  await loadScript(BARCODE_URL,'JsBarcode');
-  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  JsBarcode(svg,part.barcode,{format:'CODE128',width:2,height:55,displayValue:true,fontSize:15,margin:3});
-  w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(part.barcode)}</title><style>@page{size:58mm 30mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden}.name{font-size:9pt;font-weight:700;text-align:center;line-height:1.05;max-height:8mm;overflow:hidden}.meta{font-size:7pt;margin:1mm 0}svg{max-width:54mm;height:14mm}</style></head><body><div class="label"><div class="name">${esc(part.name)}${part.model?` · ${esc(part.model)}`:''}</div><div class="meta">${esc(part.category||'Без категории')} · ${money(part.retail_price)}</div>${svg.outerHTML}</div><script>onload=()=>{setTimeout(()=>{print();},120)};<\/script></body></html>`);
-  w.document.close();
+export async function printPartLabel(part,quantity=1){
+  return chooseLabels([{...part,quantity}],true);
+}
+
+export async function chooseLabels(parts,received=false){
+  const rows=labelRows(parts,received);
+  if(!rows.length)return notice('Нет товаров со штрихкодом для печати','bad');
+  const d=showDialog('Печать этикеток',`<p class="muted">Выберите товары и количество этикеток. Это не меняет остатки на складе.</p><label>Поиск товара<input type="search" id="label-search" placeholder="Название, модель, артикул или штрихкод"></label><div class="inv-inline"><button type="button" class="btn ghost" id="label-select">Выбрать найденные</button><button type="button" class="btn ghost" id="label-clear">Снять весь выбор</button></div><div style="max-height:45vh;overflow:auto"><table class="records" style="width:100%"><thead><tr><th>Печатать</th><th>Товар</th><th>Этикеток, шт.</th></tr></thead><tbody id="label-rows"></tbody></table></div><label>Формат печати<select id="label-format"><option value="a4">Лист A4 — 24 этикетки 58 × 30 мм на листе</option><option value="roll">Принтер этикеток — 58 × 30 мм</option></select></label><p class="muted">В окне принтера установите масштаб 100% и отключите колонтитулы. Для листов с наклейками нужна соответствующая раскладка.</p><p id="label-total" role="status"></p><p id="label-error" class="error" role="alert"></p>`,`<button type="button" class="btn ghost" data-inv-close>Отмена</button><button type="button" class="btn" id="label-print">Напечатать выбранные</button>`);
+  const search=d.querySelector('#label-search'),format=d.querySelector('#label-format'),button=d.querySelector('#label-print');
+  const visible=()=>rows.filter(x=>[x.part.name,x.part.model,x.part.sku,x.part.barcode,x.part.category].filter(Boolean).join(' ').toLowerCase().includes(search.value.trim().toLowerCase()));
+  const update=()=>{
+    let jobs;try{jobs=labelJobs(rows);d.querySelector('#label-error').textContent='';}catch(e){d.querySelector('#label-error').textContent=rows.some(x=>x.selected)?e.message:'';}
+    button.disabled=!jobs;
+    const total=jobs?.reduce((n,x)=>n+x.quantity,0)||0;
+    d.querySelector('#label-total').textContent=`Выбрано товаров: ${rows.filter(x=>x.selected).length} · Этикеток: ${total}`+(total&&format.value==='a4'?` · Листов A4: ${Math.ceil(total/LABELS_PER_SHEET)}`:'');
+  };
+  const draw=()=>{
+    const found=visible();
+    d.querySelector('#label-rows').innerHTML=found.map(x=>`<tr data-row="${rows.indexOf(x)}"><td><input type="checkbox" data-select style="width:22px;height:22px;min-height:22px;padding:0" aria-label="${esc('Печатать '+x.part.name)}" ${x.selected?'checked':''}></td><td><b>${esc(x.part.name)}</b><br><small>${esc([x.part.model,x.part.sku,x.part.barcode].filter(Boolean).join(' · '))}</small></td><td><input type="number" data-quantity aria-label="${esc('Количество этикеток: '+x.part.name)}" min="1" max="10000" step="1" value="${esc(x.quantity)}" style="width:95px"></td></tr>`).join('')||'<tr><td colspan="3">Товары не найдены</td></tr>';
+    d.querySelectorAll('[data-row]').forEach(tr=>{const x=rows[Number(tr.dataset.row)];tr.querySelector('[data-select]').onchange=e=>{x.selected=e.target.checked;update();};tr.querySelector('[data-quantity]').oninput=e=>{x.quantity=Number(e.target.value);x.selected=true;tr.querySelector('[data-select]').checked=true;update();};});
+    update();
+  };
+  search.oninput=draw;format.onchange=update;
+  d.querySelector('#label-select').onclick=()=>{visible().forEach(x=>x.selected=true);draw();};
+  d.querySelector('#label-clear').onclick=()=>{rows.forEach(x=>x.selected=false);draw();};
+  button.onclick=async()=>{
+    let w;
+    try{
+      const jobs=labelJobs(rows).map(x=>({...x})),selectedFormat=format.value;
+      w=window.open('','_blank','width=850,height=700');if(!w)throw new Error('Разрешите всплывающие окна для печати');
+      w.document.write('<p>Подготовка этикеток…</p>');button.disabled=true;
+      await loadScript(BARCODE_URL,'JsBarcode');
+      const labels=[];
+      for(const x of jobs){
+        const part=x.part,svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+        JsBarcode(svg,part.barcode,{format:'CODE128',width:2,height:55,displayValue:true,fontSize:15,margin:10});
+        const label=`<div class="label"><div class="name">${esc(part.name)}${part.model?` · ${esc(part.model)}`:''}</div><div class="meta">${esc(part.category||'Без категории')}</div>${svg.outerHTML}</div>`;
+        for(let i=0;i<x.quantity;i++)labels.push(label);
+      }
+      w.document.open();w.document.write(labelDocument(labels,selectedFormat));w.document.close();
+    }catch(e){if(w&&!w.closed)w.close();d.querySelector('#label-error').textContent=e.message;}finally{update();}
+  };
+  draw();
 }
 
 async function printAllLabels(){
-  const w=window.open('','_blank','width=800,height=700');if(!w)throw new Error('Разрешите всплывающие окна для печати');w.document.write('<p>Подготовка этикеток…</p>');
-  const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
-  if(!parts.length){w.close();return notice('Нет товаров для печати','bad');}
-  await loadScript(BARCODE_URL,'JsBarcode');
-  const labels=[];
-  for(const part of parts){
-    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-    JsBarcode(svg,part.barcode,{format:'CODE128',width:1.7,height:45,displayValue:true,fontSize:13,margin:2});
-    labels.push(`<div class="label"><div class="name">${esc(part.name)}${part.model?` · ${esc(part.model)}`:''}</div><div class="meta">${esc(part.category||'Без категории')}</div>${svg.outerHTML}</div>`);
-  }
-  w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Этикетки FastGo</title><style>@page{size:58mm 30mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.label{width:58mm;height:30mm;padding:2mm;page-break-after:always;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden}.name{font-size:9pt;font-weight:700;text-align:center;line-height:1.05;max-height:8mm;overflow:hidden}.meta{font-size:7pt;margin:1mm 0}svg{max-width:54mm;height:14mm}</style></head><body>${labels.join('')}<script>onload=()=>setTimeout(()=>print(),150);<\/script></body></html>`);w.document.close();
+  const c=await getCatalog(true);
+  return chooseLabels((c.parts||[]).filter(x=>x.active!==false));
 }
 
 function exportInventory(){
@@ -106,7 +133,7 @@ async function receiveByBarcode(){
   }
   const d=showDialog('Поступление на склад',`<div class="inv-product"><b>${esc(part.name)}</b><small>${esc(part.model||part.sku||part.barcode)}</small><strong>Сейчас: ${part.quantity} ${esc(part.unit||'шт')}</strong></div><form id="receipt-form"><label>Количество<input name="quantity" type="number" min="1" step="1" value="1" required></label><label>Основание / поставщик<input name="note" value="Приёмка по штрих-коду" required></label></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="receipt-save">Принять</button>`);
   const receiptId=crypto.randomUUID();
-  $('receipt-save').onclick=async()=>{const f=new FormData($('receipt-form'));const q=Number(f.get('quantity'));if(!Number.isInteger(q)||q<1)return notice('Укажите количество','bad');try{$('receipt-save').disabled=true;await api('stock',{part_id:part.id,movement_type:'receipt',quantity:q,note:String(f.get('note')||'Приёмка по штрих-коду'),request_id:receiptId});catalogCache=null;closeDialog();notice(`Принято: ${part.name} +${q}`);setTimeout(()=>location.hash.startsWith('#stock')&&location.reload(),250);}catch(e){notice(e.message,'bad');$('receipt-save').disabled=false;}};
+  $('receipt-save').onclick=async()=>{const f=new FormData($('receipt-form'));const q=Number(f.get('quantity'));if(!Number.isInteger(q)||q<1)return notice('Укажите количество','bad');try{$('receipt-save').disabled=true;await api('stock',{part_id:part.id,movement_type:'receipt',quantity:q,note:String(f.get('note')||'Приёмка по штрих-коду'),request_id:receiptId});catalogCache=null;showDialog('Приход сохранён',`<p>${esc(part.name)} · принято: ${q} ${esc(part.unit||'шт')}</p>`,`<button class="btn ghost" id="receipt-done">На склад</button><button class="btn" id="receipt-labels">Напечатать этикетки</button>`);$('receipt-labels').onclick=()=>printPartLabel(part,q).catch(e=>notice(e.message,'bad'));$('receipt-done').onclick=()=>location.reload();notice(`Принято: ${part.name} +${q}`);}catch(e){notice(e.message,'bad');$('receipt-save').disabled=false;}};
 }
 
 async function uploadPartPhoto(part,file,categoryPrimary,requestId){
@@ -169,7 +196,7 @@ export async function newPartForm(prefill='',{equipment=false}={}){
       const part=await continueProductIntake(localStorage,actor,{api,onProgress:text=>{progress.textContent=text;},uploadPhoto:(part,metadata,id)=>uploadPartPhoto(part,file,metadata.primary,id)});
       catalogCache=null;window.dispatchEvent(new Event('workshop-data-changed'));
       showDialog('Приёмка завершена',`<p>${esc(part.name)}</p><p>Штрих-код: <strong>${esc(part.barcode)}</strong></p><p>Товар, приход и выбранное фото сохранены.</p>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="new-part-print">Напечатать этикетку</button>`);
-      $('new-part-print').onclick=()=>printPartLabel(part).catch(e=>notice(e.message,'bad'));
+      $('new-part-print').onclick=()=>printPartLabel(part,Number(state.quantity)||1).catch(e=>notice(e.message,'bad'));
     }catch(e){progress.textContent=e.message;notice(e.message,'bad');try{if(!loadProductIntake(localStorage,actor)){for(const field of form.elements)field.disabled=false;if(!photoReady){form.elements.photo.disabled=true;form.elements.category_primary.disabled=true;}button.textContent='Создать и принять';}}catch{} }finally{button.disabled=false;}
   };
 }
