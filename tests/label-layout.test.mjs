@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {labelRows,labelJobs,labelDocument} from '../workshop/label-layout.mjs';
+import {labelRows,labelJobs,labelDocument} from '../workshop/label-layout.js';
 const a={id:'a',name:'Амортизатор',barcode:'FGP-00000001',quantity:2};
 const b={id:'b',name:'Покрышка',barcode:'FGP-00000002',quantity:3};
 test('catalog printing requires selection and ignores warehouse balance',()=>{

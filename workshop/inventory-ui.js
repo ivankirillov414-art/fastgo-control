@@ -1,6 +1,6 @@
 import {equipmentTypes} from './equipment-core.js';
 import {api,esc,money,csvDownload} from './core.js';
-import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.mjs';
+import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.js';
 import {loadLibrary as loadScript} from './library-loader.js';
 import {loadProductIntake,startProductIntake,continueProductIntake} from './product-intake.js';
 
