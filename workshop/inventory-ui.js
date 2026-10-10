@@ -1,3 +1,4 @@
+import {equipmentTypes} from './equipment-core.js';
 import {api,esc,money,csvDownload} from './core.js';
 import {loadLibrary as loadScript} from './library-loader.js';
 import {loadProductIntake,startProductIntake,continueProductIntake} from './product-intake.js';
@@ -146,10 +147,11 @@ async function maintenanceDialog(){
   };
 }
 
-async function newPartForm(prefill=''){
+export async function newPartForm(prefill='',{equipment=false}={}){
+  if(!me)me=await api('me');
   const c=await getCatalog();const photoReady=!!c.capabilities?.private_product_photos;const categories=[...new Set((c.categories||[]).map(x=>x.name).filter(Boolean))].sort();
   const options=categories.map(x=>`<option value="${esc(x)}"></option>`).join('');
-  const d=showDialog('Новая товарная позиция',`<form id="new-part-form" class="inv-form"><label>Категория<input name="category" list="part-categories" required placeholder="Подшипники"><datalist id="part-categories">${options}</datalist></label><label>Наименование<input name="name" required placeholder="Подшипник рулевой 2008 2RS"></label><label>Модель / размер<input name="model" placeholder="2008 2RS"></label><label>Артикул / SKU<input name="sku" value="${esc(prefill&&!String(prefill).startsWith('FGP-')?prefill:'')}"></label><div class="inv-grid"><label>Закупка, ₽<input name="unit_cost" type="number" min="0" step="0.01" value="0"></label><label>Продажа, ₽<input name="retail_price" type="number" min="0" step="0.01" value="0" required></label><label>Количество<input name="initial_quantity" type="number" min="0" step="1" value="0"></label><label>Ед.<input name="unit" value="шт"></label></div>${photoReady?'<p class="muted">Фотографии доступны только сотрудникам мастерской.</p>':'<p class="muted">Загрузка фото станет доступна после обновления сервера.</p>'}<label>Основное фото<input name="photo" ${photoReady?'':'disabled'} type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="inv-check"><input name="category_primary" ${photoReady?'':'disabled'} type="checkbox"> Сделать это фото основным и для категории</label><p class="muted">Штрих-код FastGo будет присвоен автоматически после сохранения.</p></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="new-part-save">Создать и принять</button>`);
+  const d=showDialog(equipment?'Новая техника':'Новая товарная позиция',`<form id="new-part-form" class="inv-form">${equipment?`<label>Тип техники<select name="category" required>${equipmentTypes.map(t=>`<option value="Техника · ${esc(t)}">${esc(t)}</option>`).join('')}</select></label>`:`<label>Категория<input name="category" list="part-categories" required placeholder="Подшипники"><datalist id="part-categories">${options}</datalist></label>`}<label>Наименование<input name="name" required placeholder="Подшипник рулевой 2008 2RS"></label><label>Модель / размер<input name="model" placeholder="2008 2RS"></label><label>Артикул / SKU<input name="sku" value="${esc(prefill&&!String(prefill).startsWith('FGP-')?prefill:'')}"></label><div class="inv-grid"><label>Закупка, ₽<input name="unit_cost" type="number" min="0" step="0.01" value="0"></label><label>Продажа, ₽<input name="retail_price" type="number" min="0" step="0.01" value="0" required></label><label>Количество<input name="initial_quantity" type="number" min="0" step="1" value="0"></label><label>Ед.<input name="unit" value="шт"></label></div>${photoReady?'<p class="muted">Фотографии доступны только сотрудникам мастерской.</p>':'<p class="muted">Загрузка фото станет доступна после обновления сервера.</p>'}<label>Основное фото<input name="photo" ${photoReady?'':'disabled'} type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="inv-check"><input name="category_primary" ${photoReady?'':'disabled'} type="checkbox"> Сделать это фото основным и для категории</label><p class="muted">Штрих-код FastGo будет присвоен автоматически после сохранения.</p></form>`,`<button class="btn ghost" data-inv-close>Отмена</button><button class="btn" id="new-part-save">Создать и принять</button>`);
   const progress=document.createElement('p');progress.className='muted';progress.setAttribute('role','status');progress.setAttribute('aria-live','polite');d.querySelector('.inv-body').appendChild(progress);
   const form=$('new-part-form'),button=$('new-part-save'),actor=me.profile_id;
   const restore=()=>{const state=loadProductIntake(localStorage,actor);if(!state)return null;for(const [name,value] of Object.entries({...state.product,initial_quantity:state.quantity})){const field=form.elements.namedItem(name);if(field){field.value=value;field.disabled=true;}}form.elements.category_primary.checked=!!state.photo?.primary;form.elements.category_primary.disabled=true;button.textContent='Продолжить приёмку';return state;};
@@ -165,7 +167,7 @@ async function newPartForm(prefill=''){
       restore();
       if(state.photo&&!state.photoSaved&&(!photo||photo.sha256!==state.photo.sha256||photo.type!==state.photo.type))throw new Error('Для продолжения выберите то же фото. Товар и приход не будут созданы повторно.');
       const part=await continueProductIntake(localStorage,actor,{api,onProgress:text=>{progress.textContent=text;},uploadPhoto:(part,metadata,id)=>uploadPartPhoto(part,file,metadata.primary,id)});
-      catalogCache=null;
+      catalogCache=null;window.dispatchEvent(new Event('workshop-data-changed'));
       showDialog('Приёмка завершена',`<p>${esc(part.name)}</p><p>Штрих-код: <strong>${esc(part.barcode)}</strong></p><p>Товар, приход и выбранное фото сохранены.</p>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="new-part-print">Напечатать этикетку</button>`);
       $('new-part-print').onclick=()=>printPartLabel(part).catch(e=>notice(e.message,'bad'));
     }catch(e){progress.textContent=e.message;notice(e.message,'bad');try{if(!loadProductIntake(localStorage,actor)){for(const field of form.elements)field.disabled=false;if(!photoReady){form.elements.photo.disabled=true;form.elements.category_primary.disabled=true;}button.textContent='Создать и принять';}}catch{} }finally{button.disabled=false;}
@@ -195,7 +197,7 @@ function addToCart(part){
   const x=cart.get(part.id);if(x){if(x.qty>=part.quantity)return notice('В корзине уже весь доступный остаток','bad');x.qty++;}else cart.set(part.id,{part,qty:1});renderCart();
 }
 
-export async function openSales(shiftId){
+export async function openSales(shiftId,partId){
   if(!me)me=await api('me');restoreSale();if(!['developer','owner','seller'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
   const state=await api('cash_state',shiftId?{shift_id:shiftId}:{},{fresh:true}),shift=state.selected;if(!pendingSale&&(!shift||shift.status!=='open')){location.hash='#cash';return notice('Откройте смену в разделе «Кассы и продажи»','bad');}
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
@@ -223,10 +225,11 @@ export async function openSales(shiftId){
   d.addEventListener('close',()=>document.removeEventListener('keydown',scanner,true),{once:true});
   d.querySelector('[data-inv-close]').focus();
   if(pendingSale?.payload){$('sale-payment').value=pendingSale.payload.payment_method;d.querySelectorAll('[name="sale-payment-choice"]').forEach(input=>input.checked=input.value===$('sale-payment').value);}
+  if(partId&&!pendingSale&&!cart.has(partId)){const selected=parts.find(x=>x.id===partId);if(selected)addToCart(selected);}
   renderCart();
   $('sale-complete').onclick=async()=>{
     if(saleBusy)return;if([...cart.values()].some(x=>x.priceMode==='free'&&(x.freePrice===''||!Number.isFinite(salePrice(x))||salePrice(x)<0||salePrice(x)>1e9||Math.abs(salePrice(x)*100-Math.round(salePrice(x)*100))>0.0001)))return notice('Введите цену в рублях, не более двух знаков после запятой','bad');saleBusy=true;renderCart();
-    try{await scanQueue;if(!cart.size)return;const payload={shift_id:shift?.id,payment_method:$('sale-payment').value,items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty,price_mode:x.priceMode==='free'?'free':'base',...(x.priceMode==='free'?{unit_price:salePrice(x)}:{})}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;cart.clear();saveSale();catalogCache=null;closeDialog();notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');}finally{saleBusy=false;renderCart();}
+    try{await scanQueue;if(!cart.size)return;const payload={shift_id:shift?.id,payment_method:$('sale-payment').value,items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty,price_mode:x.priceMode==='free'?'free':'base',...(x.priceMode==='free'?{unit_price:salePrice(x)}:{})}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;cart.clear();saveSale();catalogCache=null;closeDialog();window.dispatchEvent(new Event('workshop-data-changed'));notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');}finally{saleBusy=false;renderCart();}
   };
 }
 
