@@ -54,6 +54,45 @@ const server=createServer((req,res)=>{
   assert.deepEqual(errors,[]);await context.close();
  }
 
+ // Intake fixture: validation, minimal repair, retries and storage, no live writes.
+ {
+ const context=await browser.newContext(),page=await context.newPage(),errors=[];let creates=[],failNext=false,record;
+ page.on('pageerror',e=>errors.push(e.message));
+ await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'intake-fixture',expires_at:4102444800})));
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  const p=req.postDataJSON(),action=p.action;let data={};
+  if(action==='me')data={role:'mechanic',name:'Мастер',profile_id:'intake-fixture',active:true,status_permissions:{}};
+  if(action==='request_access')data={active:true};
+  if(action==='catalog')data={services:[],staff:[],parts:[],categories:[]};
+  if(action==='create'){
+   creates.push(p);if(failNext){failNext=false;return route.fulfill({status:503,json:{error:'Временно не удалось сохранить'},headers});}
+   record={...p,id:'intake-'+creates.length,repair_number:7,storage_number:8,status:p.kind==='storage'?'stored':'accepted',revision:1,created_at:'2026-10-10',works:[],parts:[],total_amount:0,paid_amount:0,storage_amount:1990,fault_photo_paths:[],signed_document_paths:[]};data=record;
+  }
+  if(action==='get')data={record,events:[],payments:[],linked:[]};
+  return route.fulfill({json:{data},headers});
+ });
+ for(const width of [360,1366]){
+  await page.setViewportSize({width,height:900});await page.goto(origin+'/workshop.html#new?kind=repair');await page.locator('#intake-form').waitFor();
+  assert.equal(await page.locator('#intake-form input[required]').count(),5);
+  assert.equal(await page.locator('#f-promised_date').isVisible(),false);
+  const before=creates.length;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Телефон'}).waitFor();assert.equal(creates.length,before);
+  for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван',brand:'Ninebot',model:'G30'}))await page.locator('#f-'+name).fill(value);
+  failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
+  await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor();
+  assert.equal(creates.length,before+2);assert.equal(creates[before].request_id,creates[before+1].request_id);assert.equal(creates[before+1].phone,'+79991234567');assert.equal(creates[before+1].promised_date,'');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.goto(origin+'/workshop.html#new?kind=storage');await page.locator('#intake-form').waitFor();
+  for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван',brand:'Ninebot',model:'G30'}))await page.locator('#f-'+name).fill(value);
+  await page.locator('#f-storage_tariff').selectOption('season');assert.equal(await page.locator('#f-storage_months').isVisible(),false);
+  await page.locator('#intake-save').click();await page.locator('#order-form').waitFor();assert.equal(creates.at(-1).storage_tariff,'season');assert.ok(creates.at(-1).planned_return_date>=creates.at(-1).starts_on);
+ }
+ assert.deepEqual(errors,[]);await context.close();console.log(kind+': simplified intake, validation and retry passed');
+ }
+
  // Isolated fixture: never writes live business data.
  {
  const context=await browser.newContext(),page=await context.newPage(),errors=[];let attempts=0,requests=[];
