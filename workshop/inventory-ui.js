@@ -1,3 +1,4 @@
+import {createSaleCamera} from './sale-camera.js';
 import {equipmentTypes} from './equipment-core.js';
 import {api,esc,money,csvDownload} from './core.js';
 import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.js';
@@ -31,6 +32,7 @@ function ownDialog(){
 function closeDialog(){const d=ownDialog();if(d.open)d.close();}
 function showDialog(title,body,footer=''){
   const d=ownDialog();
+  d.classList.remove('sale-dialog');
   d.innerHTML=`<div class="inv-head"><div><small>FASTGO · СКЛАД</small><h2>${esc(title)}</h2></div><button type="button" class="inv-icon" data-inv-close aria-label="Закрыть">✕</button></div><div class="inv-body">${body}</div>${footer?`<div class="inv-foot">${footer}</div>`:''}`;
   d.querySelectorAll('[data-inv-close]').forEach(b=>b.onclick=closeDialog);
   if(!d.open)d.showModal();
@@ -219,7 +221,7 @@ function renderCart(){
   host.querySelectorAll('input').forEach(input=>input.disabled=!!pendingSale||saleBusy);
   if($('sale-checkout'))$('sale-checkout').hidden=!rows.length;
   if($('sale-complete'))$('sale-complete').hidden=!rows.length;
-  host.querySelectorAll('button').forEach(b=>b.disabled=!!pendingSale||saleBusy);['sale-payment','sale-search','sale-find','sale-search-toggle'].forEach(id=>{if($(id))$(id).disabled=!!pendingSale||saleBusy;});
+  host.querySelectorAll('button').forEach(b=>b.disabled=!!pendingSale||saleBusy);['sale-payment','sale-search','sale-find','sale-search-toggle','sale-scan-toggle'].forEach(id=>{if($(id))$(id).disabled=!!pendingSale||saleBusy;});
   const btn=$('sale-complete');if(btn){btn.disabled=!rows.length||saleBusy;btn.textContent=pendingSale?'Проверить и завершить продажу':'Провести продажу';}
 }
 function addToCart(part){
@@ -231,14 +233,32 @@ export async function openSales(shiftId,partId){
   if(!me)me=await api('me');restoreSale();if(!['developer','owner','seller'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
   const state=await api('cash_state',shiftId?{shift_id:shiftId}:{},{fresh:true}),shift=state.selected;if(!pendingSale&&(!shift||shift.status!=='open')){location.hash='#cash';return notice('Откройте смену в разделе «Кассы и продажи»','bad');}
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
-  const d=showDialog('Продажа · '+(shift?.register||'Проверка операции'),`<div class="sales-tools"><button class="btn secondary" id="sale-search-toggle">Поиск</button><div class="inv-search" id="sale-search-panel" hidden><div class="inv-inline"><input id="sale-search" autocomplete="off" placeholder="Название, модель, SKU или штрихкод"><button type="button" class="btn secondary" id="sale-find">Найти</button></div><div id="sale-results"></div></div></div><div id="sales-cart"></div><div id="sale-checkout" hidden><fieldset><legend>Оплата</legend><label><input type="radio" name="sale-payment-choice" value="cash" checked> Наличные</label><label><input type="radio" name="sale-payment-choice" value="card"> Безналичные</label></fieldset><input id="sale-payment" type="hidden" value="cash"></div>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="sale-complete" hidden disabled>Провести продажу</button>`);
+  const d=showDialog('Продажа · '+(shift?.register||'Проверка операции'),`<div class="sales-tools"><div class="sale-modes"><button type="button" class="btn secondary" id="sale-scan-toggle" aria-expanded="false" aria-controls="sale-camera-panel">Сканировать</button><button type="button" class="btn secondary" id="sale-search-toggle" aria-expanded="false" aria-controls="sale-search-panel">Поиск товара</button></div><section id="sale-camera-panel" hidden aria-label="Сканер штрих-кода"><div class="scan-box"><video id="sale-video" muted playsinline autoplay></video><div class="scan-line"></div></div><p id="sale-camera-status" role="status">Запускаем камеру…</p><button type="button" class="btn ghost" id="sale-camera-close">Закрыть камеру</button></section><div class="inv-search" id="sale-search-panel" hidden><div class="inv-inline"><input id="sale-search" type="search" aria-label="Название или штрих-код товара" autocomplete="off" placeholder="Название или штрих-код"><button type="button" class="btn secondary" id="sale-find">Найти</button></div><div id="sale-results"></div></div></div><div id="sales-cart"></div><div id="sale-checkout" hidden><fieldset><legend>Оплата</legend><label><input type="radio" name="sale-payment-choice" value="cash" checked> Наличные</label><label><input type="radio" name="sale-payment-choice" value="card"> Безналичные</label></fieldset><input id="sale-payment" type="hidden" value="cash"></div>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="sale-complete" hidden disabled>Провести продажу</button>`);
   d.querySelectorAll('[name="sale-payment-choice"]').forEach(input=>input.onchange=()=>{$('sale-payment').value=input.value;});
-  $('sale-search-toggle').onclick=()=>{$('sale-search-panel').hidden=!$('sale-search-panel').hidden;if(!$('sale-search-panel').hidden)$('sale-search').focus();};
+  d.classList.add('sale-dialog');
+  let closed=false,camera=null;
+  const fitViewport=()=>d.style.setProperty('--sale-viewport-height',(window.visualViewport?.height||innerHeight)+'px');
+  fitViewport();window.visualViewport?.addEventListener('resize',fitViewport);
+  d.addEventListener('close',()=>window.visualViewport?.removeEventListener('resize',fitViewport),{once:true});
+  const cameraPanel=$('sale-camera-panel'),searchPanel=$('sale-search-panel');
+  const setMode=mode=>{
+    camera?.stop();cameraPanel.hidden=mode!=='camera';searchPanel.hidden=mode!=='search';
+    $('sale-scan-toggle').setAttribute('aria-expanded',String(mode==='camera'));
+    $('sale-search-toggle').setAttribute('aria-expanded',String(mode==='search'));
+    $('sale-search-toggle').textContent=mode==='search'?'Закрыть поиск':'Поиск товара';
+    if(mode==='search')$('sale-search').focus();
+    if(mode==='camera')camera?.start();
+  };
+  $('sale-search-toggle').onclick=()=>setMode(searchPanel.hidden?'search':null);
+  $('sale-scan-toggle').onclick=()=>setMode(cameraPanel.hidden?'camera':null);
+  $('sale-camera-close').onclick=()=>setMode(null);
   const search=$('sale-search'),results=$('sale-results');
-  const showResults=()=>{const q=search.value.trim().toLowerCase();if(q.length<2){results.innerHTML='';return;}const found=parts.filter(x=>(`${x.name} ${x.model||''} ${x.sku||''} ${x.barcode||''}`).toLowerCase().includes(q)).slice(0,12);results.innerHTML=found.map(x=>`<button type="button" data-pick="${x.id}"><span>${esc(x.name)}${x.model?` · ${esc(x.model)}`:''}</span><small>${esc(x.barcode)} · ${x.quantity} шт. · ${money(x.retail_price)}</small></button>`).join('');results.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{addToCart(found.find(x=>x.id===b.dataset.pick));search.value='';results.innerHTML='';});};
+  const showResults=()=>{const q=search.value.trim().toLowerCase();if(!q){results.innerHTML='';return;}const found=parts.filter(x=>(`${x.name} ${x.model||''} ${x.sku||''} ${x.barcode||''}`).toLowerCase().includes(q)).slice(0,12);results.innerHTML=found.length?found.map(x=>`<button type="button" data-pick="${x.id}"><span>${esc(x.name)}${x.model?` · ${esc(x.model)}`:''}</span><small>${esc(x.barcode)} · ${x.quantity} шт. · ${money(x.retail_price)}</small></button>`).join(''):'<p class="muted" role="status">Товар не найден. Попробуйте другое название или штрих-код.</p>';results.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{addToCart(found.find(x=>x.id===b.dataset.pick));search.value='';results.innerHTML='';setMode(null);});};
   search.oninput=showResults;
   let scanQueue=Promise.resolve();
-  const queueCode=code=>{scanQueue=scanQueue.then(async()=>{try{addToCart(await partByCode(code));}catch(err){notice(err.message,'bad');}});};
+  const queueCode=code=>{scanQueue=scanQueue.then(async()=>{try{const part=await partByCode(code);if(closed||!d.open)return;addToCart(part);}catch(err){notice(err.message,'bad');}});};
+  camera=createSaleCamera({video:$('sale-video'),loadReader:async()=>{await loadScript(ZXING_URL,'ZXingBrowser');return ZXingBrowser.BrowserMultiFormatReader;},onCode:code=>{setMode(null);queueCode(code);},onStatus:message=>{if(!closed)$('sale-camera-status').textContent=message;}});
+  d.addEventListener('close',()=>{closed=true;camera.stop();},{once:true});
   search.onkeydown=e=>{if(e.key!=='Enter'||pendingSale||saleBusy)return;e.preventDefault();const code=search.value.trim();if(!code)return;const exact=parts.find(x=>x.barcode===code||x.sku===code);if(exact){addToCart(exact);search.value='';results.innerHTML='';}else showResults();};
   $('sale-find').onclick=showResults;
   // HID scanners type a fast sequence ending in Enter. Listen only in this sale
@@ -257,8 +277,9 @@ export async function openSales(shiftId,partId){
   if(pendingSale?.payload){$('sale-payment').value=pendingSale.payload.payment_method;d.querySelectorAll('[name="sale-payment-choice"]').forEach(input=>input.checked=input.value===$('sale-payment').value);}
   if(partId&&!pendingSale&&!cart.has(partId)){const selected=parts.find(x=>x.id===partId);if(selected)addToCart(selected);}
   renderCart();
+  if(!pendingSale&&!partId&&(matchMedia('(pointer: coarse)').matches||matchMedia('(max-width: 700px)').matches))setMode('camera');
   $('sale-complete').onclick=async()=>{
-    if(saleBusy)return;if([...cart.values()].some(x=>x.priceMode==='free'&&(x.freePrice===''||!Number.isFinite(salePrice(x))||salePrice(x)<0||salePrice(x)>1e9||Math.abs(salePrice(x)*100-Math.round(salePrice(x)*100))>0.0001)))return notice('Введите цену в рублях, не более двух знаков после запятой','bad');saleBusy=true;renderCart();
+    if(saleBusy)return;if([...cart.values()].some(x=>x.priceMode==='free'&&(x.freePrice===''||!Number.isFinite(salePrice(x))||salePrice(x)<0||salePrice(x)>1e9||Math.abs(salePrice(x)*100-Math.round(salePrice(x)*100))>0.0001)))return notice('Введите цену в рублях, не более двух знаков после запятой','bad');saleBusy=true;camera.stop();renderCart();
     try{await scanQueue;if(!cart.size)return;const payload={shift_id:shift?.id,payment_method:$('sale-payment').value,items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty,price_mode:x.priceMode==='free'?'free':'base',...(x.priceMode==='free'?{unit_price:salePrice(x)}:{})}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;cart.clear();saveSale();catalogCache=null;closeDialog();window.dispatchEvent(new Event('workshop-data-changed'));notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');}finally{saleBusy=false;renderCart();}
   };
 }

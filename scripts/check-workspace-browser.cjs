@@ -210,6 +210,53 @@ const server=createServer((req,res)=>{
  assert.deepEqual(errors,[]);await context.close();
  }
 
+ // Mobile sale fixture: fake camera and API; no live orders or camera access.
+ {
+ const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await context.addInitScript(()=>{
+  localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'sale-fixture',user_id:'sale-fixture',expires_at:4102444800}));
+  window.cameraStarts=0;window.cameraStops=0;
+  window.ZXingBrowser={BrowserMultiFormatReader:class{async decodeFromConstraints(constraints,video,cb){window.cameraStarts++;window.saleDecode=cb;return {stop:()=>window.cameraStops++};}}};
+ });
+ const product={id:'sale-part',name:'Амортизатор рулевой длинное название модели',barcode:'FGP-00000001',quantity:10,retail_price:800,active:true};
+ const shift={id:'sale-shift',number:1,register:'Основная касса',status:'open',opened_at:'2026-10-10'};
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  const {action}=req.postDataJSON();
+  const data=({me:{role:'owner',name:'Тест',profile_id:'sale-fixture',active:true},catalog:{parts:[product],categories:[],services:[],staff:[]},cash_state:{selected:shift,shifts:[shift],sales:[],offset:0,totals:{count:0,total:0,cash:0,card:0,transfer:0,cashless:0,expected_cash:0}},part_by_barcode:product})[action]||{};
+  return route.fulfill({json:{data},headers});
+ });
+ for(const width of [360,390,430]){
+  await page.setViewportSize({width,height:844});await page.goto(origin+'/workshop.html#cash');
+  await page.locator('#cash-sale').click();await page.locator('#sale-camera-panel').waitFor({state:'visible'});
+  await page.waitForFunction(()=>window.cameraStarts>window.cameraStops);
+  await page.locator('#sale-search-toggle').click();await page.locator('#sale-camera-panel').waitFor({state:'hidden'});
+  await page.locator('#sale-search').fill('Амортизатор');await page.locator('[data-pick]').waitFor();
+  assert.equal(await page.locator('#sale-results').evaluate(el=>getComputedStyle(el).position),'static');
+  await page.locator('#sale-search-toggle').click();await page.locator('#sale-search-panel').waitFor({state:'hidden'});
+  await page.locator('#sale-search-toggle').click();await page.locator('[data-pick]').click();
+  await page.locator('.cart-row').waitFor();await page.locator('#sale-search-panel').waitFor({state:'hidden'});
+  await page.locator('#sale-scan-toggle').click();await page.locator('#sale-camera-panel').waitFor({state:'visible'});
+  await page.evaluate(()=>window.saleDecode({getText:()=> 'FGP-00000001'}));
+  await page.locator('#sale-camera-panel').waitFor({state:'hidden'});
+  await page.waitForFunction(()=>document.querySelector('.cart-qty strong').textContent==='2');
+  for(const size of [{width,height:844},{width:844,height:390},{width,height:844}]){
+   await page.setViewportSize(size);
+   const fit=await page.locator('#inventory-dialog').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,bottom:el.querySelector('.inv-foot').getBoundingClientRect().bottom,view:innerHeight}));
+   assert.ok(fit.scroll<=fit.width+1,JSON.stringify(fit));assert.ok(fit.bottom<=fit.view+1,JSON.stringify(fit));
+  }
+  await page.screenshot({path:`browser-results/${kind}-sale-${width}.png`});
+  await page.locator('#inventory-dialog .inv-head [data-inv-close]').click();
+  assert.equal(await page.evaluate(()=>window.cameraStarts===window.cameraStops),true);
+  await page.evaluate(()=>localStorage.removeItem('fastgo_sale_draft_v1:sale-fixture'));
+ }
+ assert.deepEqual(errors,[]);await context.close();
+ }
+
  // Signup email confirmation fixture: no real messages or accounts.
  {
  const context=await browser.newContext(),page=await context.newPage(),errors=[];let requests=0,verified=0,signupURL='';

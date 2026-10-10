@@ -125,3 +125,39 @@
  @media(max-height:800px) and (min-width:761px){.sidebar{padding-block:16px}.sidebar-note{display:none}.nav{margin-top:15px;gap:3px}.nav a{padding-block:8px;min-height:40px}.profile{padding-top:12px}}
  @media(max-width:760px){.shell{display:block}.sidebar{display:none}.workspace{padding-top:22px}.records{table-layout:auto}.order-board{grid-template-columns:minmax(0,1fr)}}
 }
+/* Mobile sale: one scrolling body, fixed actions, no floating search dropdown. */
+#inventory-dialog.sale-dialog{box-sizing:border-box;overflow:hidden;padding:0;max-height:calc(100dvh - 24px)}
+#inventory-dialog.sale-dialog[open]{display:flex;flex-direction:column}
+#inventory-dialog.sale-dialog .inv-head,#inventory-dialog.sale-dialog .inv-foot{flex:0 0 auto;position:static}
+#inventory-dialog.sale-dialog .inv-head h2{overflow-wrap:anywhere}
+#inventory-dialog.sale-dialog .inv-body{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain}
+#inventory-dialog.sale-dialog .sales-tools{display:flex;flex-direction:column;gap:12px}
+#inventory-dialog.sale-dialog .sales-tools>*,#inventory-dialog.sale-dialog .inv-inline{width:100%;min-width:0}
+#inventory-dialog.sale-dialog .sale-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#inventory-dialog.sale-dialog .sale-modes button[aria-expanded=true]{border-color:var(--yellow);background:#0873df25}
+#inventory-dialog.sale-dialog .inv-inline{grid-template-columns:minmax(0,1fr) auto;margin-top:0}
+#inventory-dialog.sale-dialog input{min-width:0;font-size:16px}
+#inventory-dialog.sale-dialog #sale-results{position:static;max-height:260px;overflow:auto;margin-top:10px;box-shadow:none;background:#121d2a;border-radius:6px}
+#inventory-dialog.sale-dialog #sale-results:empty{display:none}
+#inventory-dialog.sale-dialog #sale-results button{min-height:58px;background:#182236;color:var(--ink);border-color:#394447;overflow-wrap:anywhere}
+#inventory-dialog.sale-dialog #sale-results small{color:#aabac6}
+#inventory-dialog.sale-dialog .scan-box{aspect-ratio:16/9;max-height:240px}
+#inventory-dialog.sale-dialog #sale-camera-status{font-size:14px;line-height:1.4;margin:8px 0}
+#inventory-dialog.sale-dialog .cart-row{gap:10px;overflow-wrap:anywhere}
+#inventory-dialog.sale-dialog .cart-qty button,#inventory-dialog.sale-dialog .inv-icon{min-width:44px;min-height:44px}
+#inventory-dialog.sale-dialog .sale-price-options label{min-height:44px;line-height:1.35}
+#inventory-dialog.sale-dialog #sale-checkout label{min-height:44px}
+@media(max-width:700px){
+ #inventory-dialog.sale-dialog{width:100%;max-width:100%;height:var(--sale-viewport-height,100dvh);max-height:var(--sale-viewport-height,100dvh);margin:0;border-radius:0;border:0}
+ #inventory-dialog.sale-dialog .inv-head{padding:12px 14px;padding-top:max(12px,env(safe-area-inset-top));gap:8px}
+ #inventory-dialog.sale-dialog .inv-head h2{font-size:18px}
+ #inventory-dialog.sale-dialog .inv-body{padding:14px}
+ #inventory-dialog.sale-dialog .inv-foot{padding:12px 14px;padding-bottom:max(12px,env(safe-area-inset-bottom));gap:8px}
+ #inventory-dialog.sale-dialog .btn{min-height:46px;padding:10px 12px;font-size:14px;white-space:normal}
+ #inventory-dialog.sale-dialog .cart-row{grid-template-columns:minmax(0,1fr) 44px}
+ #inventory-dialog.sale-dialog .cart-row>div:first-child{grid-column:1;grid-row:1}
+ #inventory-dialog.sale-dialog .cart-row>.inv-icon{grid-column:2;grid-row:1;align-self:start}
+ #inventory-dialog.sale-dialog .cart-row>.cart-qty{grid-column:1;grid-row:2}
+ #inventory-dialog.sale-dialog .cart-row>b{grid-column:1 / -1;grid-row:3}
+ #inventory-dialog.sale-dialog .empty{padding:20px 10px}
+}
