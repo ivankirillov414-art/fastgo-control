@@ -68,7 +68,7 @@ const server=createServer((req,res)=>{
  const context=await browser.newContext(),page=await context.newPage(),errors=[];let paths=[],uploads=[],failSecond=true;
  page.on('pageerror',e=>errors.push(e.message));
  await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'photo-fixture',expires_at:4102444800})));
- const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
+ const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4o6EBAAMQAS0ujiXaAAAAAElFTkSuQmCC';
  const record=()=>({id:'photo-order',repair_number:9,status:'accepted',revision:1,brand:'Тест',model:'Тест',last_name:'Тест',first_name:'Клиент',phone:'+79991234567',created_at:'2026-10-10',works:[],parts:[],total_amount:0,paid_amount:0,fault_photo_paths:[...paths],signed_document_paths:[]});
  await page.route('**/*',async route=>{
   const req=route.request();if(req.url().startsWith(origin)||req.url().startsWith('blob:'))return route.continue();if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
