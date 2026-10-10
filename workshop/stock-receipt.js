@@ -20,11 +20,15 @@ export async function renderReceipt(ctx,token){
   const draw=()=>{
     host.innerHTML=`<form class="panel" id="receipt-form"><fieldset ${draft.submitted?'disabled':''} style="border:0;padding:0;min-width:0"><label>Поставщик / накладная<input name="note" maxlength="500" required value="${esc(draft.note)}" placeholder="Поставщик, накладная №…"></label><p class="muted">Выберите существующую деталь или создайте новую. Одинаковые детали используют один штрихкод.</p><div id="receipt-lines"></div><button type="button" class="btn secondary" id="receipt-add" ${draft.items.length>=40?'disabled':''}>+ Позиция</button></fieldset><p id="receipt-error" class="error" role="alert"></p>${draft.submitted?'<p>Проверяем сохранение ранее отправленного прихода. Повтор использует тот же код операции.</p>':''}<button class="btn" type="submit">${draft.submitted?'Проверить и повторить сохранение':'Сохранить весь приход'}</button></form>`;
     const form=host.querySelector('form'),lines=host.querySelector('#receipt-lines');
+    suggest(form.elements.note,[...new Set(history.map(r=>r.note).filter(Boolean))].map(value=>({value})),choice=>{draft.note=choice.value;saveDraft();});
     draft.items.forEach((x,i)=>{
       const row=document.createElement('section');row.className='panel';
       row.innerHTML=`<h3>Позиция ${i+1}</h3><label>Поиск товара<input type="search" data-search placeholder="Название, модель, штрихкод"></label><label>Деталь<select data-field="part_id"><option value="">+ Новая деталь</option>${parts.map(p=>`<option value="${esc(p.id)}" ${p.id===x.part_id?'selected':''}>${esc([p.name,p.model,p.sku,p.barcode].filter(Boolean).join(' · '))}</option>`).join('')}</select></label><div class="grid">${!x.part_id?['name','category','model','sku','unit_cost','retail_price'].map((f,j)=>`<label>${['Название','Категория','Модель техники','Артикул','Закупочная цена, ₽','Розничная цена, ₽'][j]}<input data-field="${f}" ${j>=4?'type="number" min="0" max="1000000000" step="0.01"':'maxlength="120"'} ${['name','category','retail_price'].includes(f)?'required':''} value="${esc(x[f]??(j>=4?0:''))}"></label>`).join(''):''}<label>Количество<input data-field="quantity" type="number" min="1" max="10000" step="1" required value="${esc(x.quantity)}"></label></div><button type="button" class="btn ghost small" data-remove>Убрать позицию</button>`;
       lines.append(row);
-      suggest(row.querySelector('[data-search]'),partChoices(parts),choice=>{x.part_id=choice.item.id;saveDraft();draw();});
+      const search=row.querySelector('[data-search]');
+      const selected=parts.find(p=>p.id===x.part_id);search.value=selected?[selected.name,selected.model,selected.sku,selected.barcode].filter(Boolean).join(' · '):'';
+      search.addEventListener('input',()=>search.setCustomValidity(search.value.trim()?'Выберите товар из подсказок или списка деталей.':''));
+      suggest(search,partChoices(parts),choice=>{x.part_id=choice.item.id;saveDraft();draw();});
       row.querySelectorAll('[data-field]').forEach(input=>input.onchange=()=>{const f=input.dataset.field;x[f]=['quantity','unit_cost','retail_price'].includes(f)?Number(input.value):input.value;saveDraft();if(f==='part_id')draw();});
       row.querySelector('[data-remove]').onclick=()=>{draft.items.splice(i,1);saveDraft();draw();};
     });
