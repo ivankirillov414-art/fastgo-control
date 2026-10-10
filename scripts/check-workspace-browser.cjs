@@ -169,6 +169,47 @@ const server=createServer((req,res)=>{
  assert.deepEqual(errors,[]);await context.close();
  }
 
+ // Receipt fixture: mixed new/existing products and card editing, without live stock writes.
+ {
+ const context=await browser.newContext(),page=await context.newPage(),errors=[];
+ let product={id:'part-1',name:'Амортизатор',category:'Подвеска',model:'М2',sku:'A-1',barcode:'FGP-00000001',quantity:10,unit_cost:200,retail_price:400},saved=null,received=null;
+ page.on('pageerror',e=>errors.push(e.message));
+ await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'receipt-fixture',expires_at:4102444800})));
+ await page.route('**/*',async route=>{
+  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
+  const {action,params:p}=req.postDataJSON();let data={};
+  if(action==='me')data={role:'owner',name:'Тест',profile_id:'receipt-fixture',active:true,backend:'POSTGRES_GOOGLE_MIRROR'};
+  if(action==='request_access')data={active:true};
+  if(action==='catalog')data={parts:[product],services:[],staff:[],categories:['Подвеска']};
+  if(action==='stock_receipts')data=[];
+  if(action==='part_save'){saved=p;product={...product,...p};data=product;}
+  if(action==='stock_receive'){received=p;data={id:'receipt-fixture',created_at:'2026-10-10',note:p.note,items:p.items.map((x,i)=>({...product,...x,id:x.part_id||'new-'+i,name:x.part_id?product.name:x.name,balance:12}))};}
+  return route.fulfill({json:{data},headers});
+ });
+ await page.goto(origin+'/workshop.html#stock-receive');await page.locator('#receipt-add-new').waitFor();
+ await page.locator('#receipt-form [name=note]').fill('Накладная 42');
+ await page.locator('#receipt-lines [data-field=quantity]').fill('2');
+ await page.locator('#receipt-add-new').click();
+ const newRow=page.locator('#receipt-lines > section').nth(1);
+ await newRow.locator('[data-field=name]').fill('Новая покрышка');await newRow.locator('[data-field=category]').fill('Покрышки');
+ await newRow.locator('[data-field=retail_price]').fill('900');await newRow.locator('[data-field=quantity]').fill('3');
+ await page.locator('[data-edit-product]').click();
+ await page.locator('#modal-form [name=name]').fill('Амортизатор М2');await page.locator('#modal-form [name=unit_cost]').fill('250');
+ await page.locator('#modal-form [type=submit]').click();await page.locator('#dialog').waitFor({state:'hidden'});
+ assert.equal(saved.id,'part-1');assert.equal(saved.unit_cost,250);assert.equal(product.barcode,'FGP-00000001');assert.equal(product.quantity,10);
+ assert.equal(await page.locator('#receipt-lines > section').count(),2);
+ assert.equal(await newRow.locator('[data-field=name]').inputValue(),'Новая покрышка');
+ assert.equal(await page.locator('#receipt-lines [data-field=quantity]').first().inputValue(),'2');
+ await page.locator('#receipt-form [type=submit]').click();await page.getByRole('heading',{name:'Приход сохранён',exact:true}).waitFor();
+ assert.equal(received.items.length,2);assert.equal(received.items[0].part_id,'part-1');assert.equal(received.items[0].quantity,2);
+ assert.equal(received.items[1].part_id,'');assert.equal(received.items[1].name,'Новая покрышка');assert.equal(received.items[1].quantity,3);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('fastgo_receipt_v1:receipt-fixture')),null);
+ assert.deepEqual(errors,[]);await context.close();
+ }
+
  console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
