@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FastGo — аренда электровелосипедов</title>
 <style>
-:root{--bg:#080c14;--panel:#111827;--panel2:#0c1320;--line:#293542;--text:#eef2f7;--muted:#96a3b4;--accent:#0873df;--danger:#ff8e8e}
+:root{--bg:#0b0f14;--panel:#141b23;--panel2:#0e141b;--line:#293542;--text:#eef2f7;--muted:#96a3b4;--accent:#b8ff35;--danger:#ff8e8e}
 *{box-sizing:border-box}
 html,body{min-height:100%}
-body{margin:0;background:radial-gradient(circle at 50% 12%,rgba(8,115,223,.04),transparent 28%),var(--bg);color:var(--text);font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;background:radial-gradient(circle at 50% 12%,rgba(184,255,53,.04),transparent 28%),var(--bg);color:var(--text);font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 header{display:flex;justify-content:center;padding:28px 20px 18px}
 .logo{width:min(320px,76vw)} .logo img{display:block;width:100%;height:auto}
 main{width:100%;max-width:720px;margin:auto;padding:18px 20px 56px}
@@ -20,7 +20,7 @@ h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}
 .address{font-size:18px;margin:0 0 18px;color:var(--muted)}
 .tariffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:18px 0 20px}
 .tariff{position:relative;cursor:pointer;touch-action:manipulation;background:var(--panel2);border:1px solid #202b36;border-radius:14px;padding:15px;overflow:hidden}
-.tariff.selected{border-color:var(--accent)!important;box-shadow:0 0 0 2px rgba(8,115,223,.35),0 0 24px rgba(8,115,223,.12)!important;}\n.tariff strong{display:block;font-size:22px;margin:7px 0 4px}
+.tariff.selected{border-color:var(--accent)!important;box-shadow:0 0 0 2px rgba(184,255,53,.35),0 0 24px rgba(184,255,53,.12)!important;}\n.tariff strong{display:block;font-size:22px;margin:7px 0 4px}
 .tariff.weekly{
   background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));
   border-color:#6b7480;
@@ -28,7 +28,7 @@ h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}
 }
 .tariff.monthly{
   border-color:var(--accent);
-  box-shadow:0 0 0 1px rgba(8,115,223,.22),0 0 24px rgba(8,115,223,.08);
+  box-shadow:0 0 0 1px rgba(184,255,53,.22),0 0 24px rgba(184,255,53,.08);
 }
 .old-price{
   display:inline-block;
@@ -52,7 +52,7 @@ h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}
   text-transform:uppercase;
 }
 .badge.popular{background:#f1f3f5;color:#13181d}
-.badge.best{background:var(--accent);color:#ffffff}
+.badge.best{background:var(--accent);color:#10150b}
 .choice-note{
   display:block;
   margin-top:8px;
@@ -61,14 +61,14 @@ h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 12px}
 }
 .choice-note.popular{color:#f2f4f7}
 .choice-note.best{color:var(--accent)}
-button{width:100%;min-height:58px;border:0;border-radius:12px;background:var(--accent);color:#ffffff;font:inherit;font-weight:850;font-size:19px;cursor:pointer}
+button{width:100%;min-height:58px;border:0;border-radius:12px;background:var(--accent);color:#10150b;font:inherit;font-weight:850;font-size:19px;cursor:pointer}
 button:disabled{opacity:.55;cursor:not-allowed}
 .notice{padding:15px;border-radius:13px;background:#2a1d1d;border:1px solid #603737;color:#ffc2c2;font-weight:750;margin:18px 0}
 .hidden{display:none!important}
 .muted{color:var(--muted)}
 
 @media(min-width:760px){header{padding-top:54px}.logo{width:390px}main{padding-top:28px}.card{padding:28px}.backdrop{align-items:center}.sheet{border-radius:22px}}
-img[src="fastgo-logo.png"]{filter:hue-rotate(115deg) saturate(1.2)}</style>
+</style>
 </head>
 <body>
 <header><div class="logo"><img src="fastgo-logo.png" alt="FastGo"></div></header>
