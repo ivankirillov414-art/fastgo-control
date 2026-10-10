@@ -64,7 +64,7 @@ const server=createServer((req,res)=>{
   if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
-  const p=req.postDataJSON(),action=p.action;let data={};
+  const {action,params:p}=req.postDataJSON();let data={};
   if(action==='me')data={role:'mechanic',name:'Мастер',profile_id:'intake-fixture',active:true,status_permissions:{}};
   if(action==='request_access')data={active:true};
   if(action==='catalog')data={services:[],staff:[],parts:[],categories:[]};
