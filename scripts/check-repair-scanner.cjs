@@ -54,9 +54,11 @@ module.exports=async function checkRepairScanner({browser,origin,kind}){
   await page.goto(origin+'/workshop.html#order?kind=repair&id=scanner-order');await page.locator('#order-form').waitFor();
   await page.locator('#f-diagnostics_notes').fill('Не потерять комментарий мастера');
   await page.locator('#work-rows [data-prop="price"]').fill('450');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.locator('#scan-part').click();await page.waitForFunction(()=>window.repairCameraStarts===1);
   const fit=await page.locator('#repair-part-scanner').evaluate(dialog=>({width:dialog.clientWidth,scroll:dialog.scrollWidth,left:dialog.getBoundingClientRect().left,right:dialog.getBoundingClientRect().right,view:innerWidth}));
   assert.ok(fit.scroll<=fit.width+1&&fit.left>=0&&fit.right<=fit.view+1,JSON.stringify(fit));
+  await page.screenshot({path:`browser-results/${kind}-repair-scanner.png`});
   // Two frames of the same physical scan add exactly once.
   await page.evaluate(()=>{window.repairDecode({getText:()=> 'FGP-00000001'});window.repairDecode({getText:()=> 'FGP-00000001'});});
   await feedback(/Добавлено/);assert.deepEqual(await quantities(),[2]);assert.equal(updates.length,0);
@@ -76,6 +78,7 @@ module.exports=async function checkRepairScanner({browser,origin,kind}){
   const orderURL=page.url();await submitCode('https://example.test/workshop.html#order?id=other');await feedback(/не найден/);assert.equal(page.url(),orderURL);
   catalogParts.push({id:'a0000000-0000-4000-8000-000000000006',name:'Новая колодка',barcode:'FGP-00000006',quantity:4,retail_price:250,active:true});
   await submitCode('FGP-00000006');await feedback(/Новая колодка/);assert.deepEqual(await quantities(),[3,2,1]);
+  assert.equal(await page.locator('#part-picker option[value="a0000000-0000-4000-8000-000000000006"]').count(),1);
   // Closing while the fresh catalogue is loading must cancel the addition.
   catalogParts.push({id:'a0000000-0000-4000-8000-000000000007',name:'Поздний ответ',barcode:'FGP-00000007',quantity:4,retail_price:200,active:true});
   holdCatalog=true;const catalogHeld=new Promise(resolve=>notifyCatalogHeld=resolve);
