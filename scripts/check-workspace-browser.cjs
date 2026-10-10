@@ -80,7 +80,7 @@ const server=createServer((req,res)=>{
  await page.goto(origin+'/workshop.html#stock');await page.getByRole('link',{name:'+ Приход списком'}).click();
  await page.getByLabel('Поставщик / накладная').fill('Поставка 15');
  await page.locator('[data-field="quantity"]').fill('15');
- await page.getByRole('button',{name:'+ Позиция',exact:true}).click();
+ await page.locator('#receipt-add').click();
  const row=page.locator('#receipt-lines section').nth(1);
  await row.locator('select').selectOption('');
  await row.getByLabel('Название',{exact:true}).fill('Камера');
