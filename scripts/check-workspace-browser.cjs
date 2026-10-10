@@ -231,7 +231,7 @@ const server=createServer((req,res)=>{
   return route.fulfill({json:{data},headers});
  });
  for(const width of [360,390,430]){
-  await page.setViewportSize({width,height:844});await page.goto(origin+'/workshop.html#cash');
+  await page.setViewportSize({width,height:844});await page.goto(origin+'/workshop.html?mobile-sale-fixture='+width+'#cash');
   await page.locator('#cash-sale').click();await page.locator('#sale-camera-panel').waitFor({state:'visible'});
   await page.waitForFunction(()=>window.cameraStarts>window.cameraStops);
   await page.locator('#sale-search-toggle').click();await page.locator('#sale-camera-panel').waitFor({state:'hidden'});
