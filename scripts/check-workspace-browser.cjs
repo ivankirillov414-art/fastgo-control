@@ -63,6 +63,8 @@ const server=createServer((req,res)=>{
   assert.deepEqual(errors,[]);await context.close();
  }
 
+ await require('./check-repair-scanner.cjs')({browser,origin,kind});
+
  // Phone uploads, compression, partial retry and cross-device gallery refresh.
  {
  const context=await browser.newContext(),page=await context.newPage(),errors=[];let paths=[],uploads=[],failSecond=true;
