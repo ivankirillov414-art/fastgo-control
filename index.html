@@ -4,15 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FastGo Control</title>
-  <meta name="theme-color" content="#0b0f14" />
+  <meta name="theme-color" content="#080c14" />
   <style>
     :root {
-      --bg:#0b0f14; --panel:#141b23; --panel2:#0e141b; --line:#26303b;
-      --text:#eef2f7; --muted:#91a0b1; --accent:#b8ff35; --danger:#ff6b6b;
+      --bg:#080c14; --panel:#111827; --panel2:#0c1320; --line:#26303b;
+      --text:#eef2f7; --muted:#91a0b1; --accent:#0873df; --danger:#ff6b6b;
     }
     * { box-sizing:border-box; }
     body { margin:0; font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
-    header { padding:22px 5%; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(11,15,20,.96); backdrop-filter:blur(12px); z-index:10; }
+    header { padding:22px 5%; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(8,12,20,.96); backdrop-filter:blur(12px); z-index:10; }
     .logo { font-size:25px; font-weight:900; letter-spacing:.3px; }
     .logo b { color:var(--accent); }
     main { max-width:1180px; margin:auto; padding:28px 5% 60px; }
@@ -21,10 +21,10 @@
     .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
     .item { padding:14px; background:var(--panel2); border:1px solid #202a34; border-radius:14px; }
     input, button, select {
-      padding:12px 13px; border-radius:11px; border:1px solid #344252; background:#0e141b; color:white; font:inherit;
+      padding:12px 13px; border-radius:11px; border:1px solid #344252; background:#0c1320; color:white; font:inherit;
     }
     input { min-width:230px; }
-    button { cursor:pointer; background:var(--accent); color:#10150b; font-weight:800; border:none; }
+    button { cursor:pointer; background:var(--accent); color:#ffffff; font-weight:800; border:none; }
     button.secondary { background:#202a34; color:var(--text); border:1px solid #344252; }
     button.danger { background:var(--danger); color:#fff; }
     .muted { color:var(--muted); }
@@ -38,7 +38,7 @@
     .section { display:none; }
     .section.active { display:block; }
     .error { color:#ff9a9a; }
-    .success { color:#b8ff35; }
+    .success { color:#0873df; }
     pre { white-space:pre-wrap; overflow:auto; }
     @media (max-width:640px) {
       header { align-items:flex-start; gap:12px; }
