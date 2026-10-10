@@ -227,7 +227,7 @@ const server=createServer((req,res)=>{
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
   const {action}=req.postDataJSON();
-  const data=({me:{role:'owner',name:'Тест',profile_id:'sale-fixture',active:true},catalog:{parts:[product],categories:[],services:[],staff:[]},cash_state:{selected:shift,shifts:[shift],sales:[],offset:0,totals:{count:0,total:0,cash:0,card:0,transfer:0,cashless:0,expected_cash:0}},part_by_barcode:product})[action]||{};
+  const data=({request_access:{active:true},me:{role:'owner',name:'Тест',profile_id:'sale-fixture',active:true},catalog:{parts:[product],categories:[],services:[],staff:[]},cash_state:{selected:shift,shifts:[shift],sales:[],offset:0,totals:{count:0,total:0,cash:0,card:0,transfer:0,cashless:0,expected_cash:0}},part_by_barcode:product})[action]||{};
   return route.fulfill({json:{data},headers});
  });
  for(const width of [360,390,430]){
