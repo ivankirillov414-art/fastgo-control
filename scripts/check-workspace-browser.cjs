@@ -71,7 +71,7 @@ const server=createServer((req,res)=>{
  const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
  const record=()=>({id:'photo-order',repair_number:9,status:'accepted',revision:1,brand:'Тест',model:'Тест',last_name:'Тест',first_name:'Клиент',phone:'+79991234567',created_at:'2026-10-10',works:[],parts:[],total_amount:0,paid_amount:0,fault_photo_paths:[...paths],signed_document_paths:[]});
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
+  const req=route.request();if(req.url().startsWith(origin)||req.url().startsWith('blob:'))return route.continue();if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
   const {action,params:p}=req.postDataJSON();let data={};
   if(action==='me')data={role:'mechanic',name:'Мастер',profile_id:'photo-fixture',active:true,status_permissions:{}};
@@ -89,7 +89,7 @@ const server=createServer((req,res)=>{
  const file={name:'phone.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')};
  await page.locator('#f-diagnostics_notes').fill('Несохранённый комментарий');
  await page.locator('#photos').setInputFiles([file,{...file,name:'second.png'}]);await page.locator('#photos-progress').filter({hasText:'Повторить'}).waitFor();
- assert.equal(uploads.length,2);assert.equal(uploads[0].content_type,'image/jpeg');
+ assert.equal(uploads.length,2,await page.locator('#photos-progress').innerText());assert.equal(uploads[0].content_type,'image/jpeg');
  const dimensions=await page.evaluate(async s=>{const i=new Image();await new Promise((r,j)=>{i.onload=r;i.onerror=j;i.src='data:image/jpeg;base64,'+s;});return [i.naturalWidth,i.naturalHeight];},uploads[0].content_base64);assert.deepEqual(dimensions,[1600,1200]);
  await page.locator('#upload-photos').click();await page.locator('#photos-progress').filter({hasText:'Файлы сохранены'}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('#photo-grid img').length===2);
  assert.equal(uploads.length,3);assert.equal(uploads[1].request_id,uploads[2].request_id);assert.equal(await page.locator('#f-diagnostics_notes').inputValue(),'Несохранённый комментарий');
