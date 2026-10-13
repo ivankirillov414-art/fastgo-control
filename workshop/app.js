@@ -40,7 +40,21 @@ body:has(.compact-panel-body.is-open){overflow:hidden}
 .workspace:has(.compact-panel) .pagehead h1{font-size:clamp(26px,5vw,38px)}
 @media(max-width:600px){.compact-panel-trigger{padding:18px;font-size:17px}.compact-panel-body.is-open{inset:16px 12px auto;max-height:calc(100dvh - 32px);padding:18px}.workspace:has(.compact-panel) .form-layout{display:block}.workspace:has(.compact-panel) .side-sticky{position:static}}
 `;document.head.append(style);}
+ const details=document.getElementById('repair-details-panel');
+ if(details){
+  const titles=new Set(['Фото и видео техники','Расчёт с клиентом','Подписанные документы','История заказа']);
+  document.querySelectorAll('#workspace .panel').forEach(panel=>{
+   if(panel===details||panel.closest('#repair-details-panel'))return;
+   const heading=panel.querySelector('h2');
+   if(heading&&titles.has(heading.textContent.trim())){
+    panel.classList.add('repair-details-section');
+    panel.style.marginTop='16px';
+    details.append(panel);
+   }
+  });
+ }
  document.querySelectorAll('#workspace .panel').forEach(panel=>{
+ if(panel.classList.contains('repair-details-section'))return;
  const heading=panel.querySelector('h2');if(!heading||heading.closest('.panel')!==panel)return;
  if(panel.closest('form')&&panel.closest('form').id!=='order-form')return;
  const title=heading.textContent.trim();if(!title)return;
