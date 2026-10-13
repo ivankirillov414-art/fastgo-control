@@ -168,11 +168,11 @@
 .workspace .order-detail-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:nowrap}
 .workspace .order-detail-head>div:first-child{flex-basis:auto;min-width:0}
 .workspace .order-detail-head>div:first-child::before{content:none}
-.workspace .order-detail-head h1{margin:0;font-size:28px;line-height:1.2}
+.workspace:has(#order-form) .order-detail-head h1{margin:0;font-size:28px;line-height:1.2}
 .workspace .order-detail-head>.actions{flex-wrap:nowrap;justify-content:flex-end}
 .workspace:has(#order-form)>.actions:empty{display:none;margin:0!important}
 @media(max-width:600px){
- .workspace .order-detail-head h1{font-size:22px;letter-spacing:-.5px}
+ .workspace:has(#order-form) .order-detail-head h1{font-size:22px;letter-spacing:-.5px}
  .workspace .order-detail-head>.actions{flex-direction:column;align-items:flex-end;gap:6px}
  .workspace .order-detail-head .btn{min-height:40px;padding:8px 14px;font-size:14px}
  .workspace .order-detail-head .badge{font-size:12px;padding:5px 8px}
