@@ -4,12 +4,12 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*\n/,'');
 const user='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
-function setup(role='mechanic'){
+function setup(role='mechanic',permissions={}){
  let handler;const writes=[];
  const record={id,revision:1,status:'accepted',assigned_master_id:'',works:[],parts:[],total_amount:0,paid_amount:0};
  const fetch=async url=>{
   if(url.endsWith('/auth/v1/user'))return Response.json({id:user,email:'master@example.invalid'});
-  if(url.includes('/workshop_members'))return Response.json([{profile_id:user,role,active:true}]);
+  if(url.includes('/workshop_members'))return Response.json([{profile_id:user,role,active:true,...permissions}]);
   if(url.includes('/workshop_backend_config'))return Response.json([{sheets_api_url:'https://script.google.com/macros/s/test/exec',sheets_api_secret:'test',storage_mode:'postgres'}]);
   throw Error('Unexpected request '+url);
  };
@@ -33,4 +33,13 @@ test('master and former receiver have the same repair status permissions',async(
 test('master can create intake but cannot manage employee accounts',async()=>{
  const s=setup(),r=await s.invoke('create',{kind:'repair',phone:'+79991234567',last_name:'Тест',first_name:'Мастер',brand:'Тест',model:'Тест'});assert.equal(r.status,200,await r.text());
  assert.equal((await s.invoke('staff_create')).status,403);
+});
+
+test('individual sales and catalogue rights are enforced without granting administrator access',async()=>{
+ const granted=setup('mechanic',{can_sell:true,can_edit_catalog:true});
+ assert.equal((await granted.invoke('cash_state')).status,200);
+ assert.equal((await granted.invoke('catalog_save',{id,title:'Работа',category:'Механика',labor_price:500})).status,200);
+ for(const action of ['part_save','staff_create','stock_receive','legal_save'])assert.equal((await granted.invoke(action)).status,403,action);
+ const denied=setup();assert.equal((await denied.invoke('cash_state')).status,403);assert.equal((await denied.invoke('catalog_save',{id,title:'Работа',labor_price:500})).status,403);
+ const forged=setup();assert.equal((await forged.invoke('cash_state',{can_sell:true})).status,403);
 });

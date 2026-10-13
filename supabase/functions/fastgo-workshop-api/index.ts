@@ -3,12 +3,14 @@ import {nativeClient} from '../_shared/native-client.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-single-master-2026-10-10';
+const RELEASE = 'workshop-member-access-2026-10-13';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||''));
 const admin=m=>['developer','owner','admin'].includes(m.role);
+const canSell=m=>['developer','owner','seller'].includes(m.role)||m.can_sell===true;
+const canEditCatalog=m=>admin(m)||m.can_edit_catalog===true;
 const manager=m=>['developer','owner','admin','receiver','manager','mechanic'].includes(m.role);
 const numeric=(v,label,min=0,max=1e9)=>{if(v===null||v===''||typeof v==='boolean')fail('Проверьте '+label);const n=Number(v);if(!Number.isFinite(n)||n<min||n>max)fail('Проверьте '+label);return n;};
 const integer=(v,label,min=1,max=100000)=>{const n=numeric(v,label,min,max);if(!Number.isInteger(n))fail('Укажите целое число: '+label);return n;};
@@ -149,7 +151,8 @@ async function main(req){
     }
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(me.role))fail('Доступ к мастерской не выдан',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
-    if(['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!['developer','owner','seller'].includes(me.role))fail('Касса доступна продажнику, владельцу и разработчику',403);
+    if(['stock_receive','stock_receipts'].includes(action)&&!['developer','owner','seller'].includes(me.role))fail('Нет права принимать товар на склад',403);
+    if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!canSell(me))fail('Касса доступна продажнику, владельцу и разработчику',403);
     if(me.role==='seller'&&!['me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(action==='owner_device_status'||action==='owner_device_enroll'){
@@ -249,11 +252,11 @@ async function main(req){
       try{await db('profiles','','POST',{id,full_name:name,role:'customer'},{Prefer:'resolution=ignore-duplicates'});await db('rpc/workshop_mutate','','POST',{p_actor:user.id,p_action:'member_update',p:{profile_id:id,name,role,active:true,tags}});}catch(e){await rest('/auth/v1/admin/users/'+id,'DELETE').catch(()=>{});throw e;}return out({data:{id}});
     }
     if(!readActions.has(action)&&!writeActions.has(action))fail(action==='part_photo_upload'?'Загрузка фото товара пока отключена: текущий скрипт делает их публичными. Фото приёмок работают.':'Неизвестная операция',400);
-    if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!admin(me))fail('Нет права изменять справочник',403);
+    if(managementActions.has(action)&&!manager(me))fail('Нет доступа',403);if(administrationActions.has(action)&&!(action==='catalog_save'?canEditCatalog(me):admin(me)))fail('Нет права изменять справочник',403);
     if(['legal','legal_save'].includes(action)&&!['developer','owner'].includes(me.role))fail('Реквизиты доступны только владельцу',403);
     if(['storage_close','storage_delete'].includes(action)&&!['developer','owner','receiver','manager','mechanic'].includes(me.role))fail('Действие доступно владельцу или мастеру-приёмщику',403);
     if(action==='create'&&p.kind==='repair'&&!p.auto_assign&&p.assigned_master_id)await requireActiveMechanic(p.assigned_master_id);
-    const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,...(status_permissions?{status_permissions}:{})};
+    const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,can_sell:canSell(me),can_edit_catalog:canEditCatalog(me),...(status_permissions?{status_permissions}:{})};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     if(['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action)&&c.storage_mode!=='postgres')fail('Касса требует рабочую базу FastGo. Обратитесь к разработчику.',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
@@ -406,4 +409,5 @@ async function main(req){
   }catch(e){return out({error:e.status?e.message:'Сервис временно недоступен. Повторите эту же операцию.'},e.status||503);}
 }
 Deno.serve(main);
+
 

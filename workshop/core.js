@@ -100,3 +100,7 @@ export async function api(action,params={},options={}){
   inFlight.set(op.key,promise);return promise;
 }
 export function csvDownload(name,headers,rows){const cell=v=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};const text='\ufeff'+[headers,...rows].map(row=>row.map(cell).join(';')).join('\r\n');const url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+
+export const canSell=member=>!!member&&(['developer','owner','seller'].includes(member.role)||member.can_sell===true);
+export const canEditCatalog=member=>!!member&&(['developer','owner','admin'].includes(member.role)||member.can_edit_catalog===true);
+

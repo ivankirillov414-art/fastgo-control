@@ -56,7 +56,7 @@ function routeUnlocked_(action,p,actor){
     case 'finance': requireManager_(actor); return finance_(p);
     case 'legacy': return [];
     case 'import_legacy': throw httpError_('Старые заказы уже перенесены в рабочую базу',409);
-    case 'catalog_save': requireAdmin_(actor); return catalogSave_(p);
+    case 'catalog_save': if(actor.can_edit_catalog!==true)requireAdmin_(actor); return catalogSave_(p);
     case 'legal': requireOwner_(actor); return legal_();
     case 'legal_save': requireOwner_(actor); return legalSave_(p);
     default: throw httpError_('Операция не поддерживается: '+action,400);
@@ -174,7 +174,7 @@ function stock_(p,actor){
   append_(SHEETS.movements,movement); return movement;
 }
 
-function requireCash_(actor){if(!['developer','owner','seller'].includes(role_(actor)))throw httpError_('Касса доступна продажнику, владельцу и разработчику',403);}
+function requireCash_(actor){if(!['developer','owner','seller'].includes(role_(actor))&&actor.can_sell!==true)throw httpError_('Касса доступна продажнику, владельцу и разработчику',403);}
 function cashMoney_(v){const n=Number(v);if(v===null||v===''||typeof v==='boolean'||!Number.isFinite(n)||n<0||n>100000000||Math.abs(n*100-Math.round(n*100))>0.00001)throw httpError_('Укажите сумму в рублях, не более двух знаков после запятой',400);return Math.round(n*100)/100;}
 function cashEvents_(){return rows_(SHEETS.events).filter(e=>e['Тип']==='cash').map(e=>{let details;try{details=JSON.parse(e['Детали']||'{}');}catch{throw httpError_('Повреждена запись кассовой смены',503);}return {...e,details};});}
 function cashShifts_(){const events=cashEvents_();return events.filter(e=>e['Действие']==='shift_open').map(e=>{const closed=events.find(c=>c.record_id===e.record_id&&c['Действие']==='shift_close');return {id:e.record_id,...e.details,opened_at:e['Дата'],opened_by:e.actor_id,status:closed?'closed':'open',closed_at:closed?.['Дата']||null,closed_by:closed?.actor_id||null,closing:closed?.details||null};}).sort((a,b)=>b.opened_at.localeCompare(a.opened_at));}
@@ -579,4 +579,5 @@ function migrationManifest_(actor){requireAdmin_(actor);return rows_(SHEETS.file
   return routeUnlocked_(action,p,actor);
  }};
 }
+
 

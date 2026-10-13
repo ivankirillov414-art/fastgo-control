@@ -1,13 +1,13 @@
 import {icon} from './icons.js';
-import {api} from './core.js';
-let role=null;
+import {api,canSell} from './core.js';
+let member=null;
 async function enhance(){
   const page=location.hash.slice(1).split('?')[0]||'home';
   if(page!=='home'){document.getElementById('inventory-sale-fab')?.remove();return;}
-  if(!document.querySelector('.shell')){role=null;document.getElementById('inventory-sale-fab')?.remove();return;}
-  if(!role){try{role=(await api('me')).role;}catch{return;}}
+  if(!document.querySelector('.shell')){member=null;document.getElementById('inventory-sale-fab')?.remove();return;}
+  if(!member){try{member=await api('me');}catch{return;}}
   if((location.hash.slice(1).split('?')[0]||'home')!=='home')return;
-  if(!['developer','owner','seller'].includes(role)){document.getElementById('inventory-sale-fab')?.remove();return;}
+  if(!canSell(member)){document.getElementById('inventory-sale-fab')?.remove();return;}
   const sales=document.querySelector('a[href="#cash"]');
   const loading=document.querySelector('#workspace>.panel')?.textContent==='Загружаем данные…';
   let b=document.getElementById('inventory-sale-fab');
@@ -18,5 +18,5 @@ async function enhance(){
 }
 const observer=new MutationObserver(()=>setTimeout(enhance,60));observer.observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('hashchange',()=>{if((location.hash.slice(1).split('?')[0]||'home')!=='home')document.getElementById('inventory-sale-fab')?.remove();enhance();});
-window.addEventListener('workshop-session-cleared',()=>{role=null;document.getElementById('inventory-sale-fab')?.remove();});
+window.addEventListener('workshop-session-cleared',()=>{member=null;document.getElementById('inventory-sale-fab')?.remove();});
 setTimeout(enhance,180);

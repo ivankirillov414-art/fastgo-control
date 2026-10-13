@@ -67,7 +67,7 @@ function routeUnlocked_(action,p,actor){
     case 'finance': requireManager_(actor); return finance_(p);
     case 'legacy': return [];
     case 'import_legacy': throw httpError_('Старые заказы уже перенесены в рабочую базу',409);
-    case 'catalog_save': requireAdmin_(actor); return catalogSave_(p);
+    case 'catalog_save': if(actor.can_edit_catalog!==true)requireAdmin_(actor); return catalogSave_(p);
     case 'legal': requireOwner_(actor); return legal_();
     case 'legal_save': requireOwner_(actor); return legalSave_(p);
     default: throw httpError_('Операция не поддерживается: '+action,400);
@@ -503,4 +503,5 @@ function finishStorage_(p,actor,deleting){
  addEvent_('storage',p.id,deleting?'storage_delete':'storage_close',actor,{number:r['Номер'],from_status:before,to_status:status,note:note,actor_name:actor.name||actor.email||actor.id});
  return {id:p.id,status:status,revision:rev+1};
 }
+
 

@@ -260,3 +260,14 @@ test('order videos persist privately and receive playable signed links',async()=
   const link=await h.call('signed_url',{id:created.id,path:uploaded.path});assert.ok(link.url.startsWith('signed:'));assert.equal(h.googleCalls(),0);
  }
 });
+
+test('explicit individual permissions enable cash and catalogue, while stock administration stays restricted',async()=>{
+ const h=harness(),actor={...manager,role:'mechanic',can_sell:true,can_edit_catalog:true};
+ const shift=await h.call('shift_open',{register:'Персональные права'},actor);
+ assert.equal((await h.call('cash_state',{shift_id:shift.id},actor)).selected.id,shift.id);
+ const service='88888888-8888-4888-8888-888888888888';h.seed('Прайс работ',{service_id:service,'Работа':'Тест','Работа, ₽':100});
+ await h.call('catalog_save',{id:service,title:'Новая работа',labor_price:500,category:'Механика'},actor);
+ assert.equal(h.sheets['Прайс работ'].rows[0]['Работа, ₽'],500);
+ await assert.rejects(h.call('part_save',{id:part,name:'Тест',retail_price:1},actor),/справочник/);
+ await assert.rejects(h.call('catalog_save',{id:service,title:'Нет',labor_price:1},{...actor,can_edit_catalog:false}),/справочник/);
+});

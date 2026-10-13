@@ -1,6 +1,6 @@
 import {createSaleCamera} from './sale-camera.js';
 import {equipmentTypes} from './equipment-core.js';
-import {api,esc,money,csvDownload} from './core.js';
+import {canSell,api,esc,money,csvDownload} from './core.js';
 import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.js';
 import {loadLibrary as loadScript} from './library-loader.js';
 import {loadProductIntake,startProductIntake,continueProductIntake} from './product-intake.js';
@@ -230,7 +230,7 @@ function addToCart(part){
 }
 
 export async function openSales(shiftId,partId){
-  if(!me)me=await api('me');restoreSale();if(!['developer','owner','seller'].includes(me.role))return notice('У вашей роли нет доступа к продажам','bad');
+  if(!me)me=await api('me');restoreSale();if(!canSell(me))return notice('У вашей роли нет доступа к продажам','bad');
   const state=await api('cash_state',shiftId?{shift_id:shiftId}:{},{fresh:true}),shift=state.selected;if(!pendingSale&&(!shift||shift.status!=='open')){location.hash='#cash';return notice('Откройте смену в разделе «Кассы и продажи»','bad');}
   const c=await getCatalog(true);const parts=(c.parts||[]).filter(x=>x.active!==false);
   const d=showDialog('Продажа · '+(shift?.register||'Проверка операции'),`<div class="sales-tools"><div class="sale-modes"><button type="button" class="btn secondary" id="sale-scan-toggle" aria-expanded="false" aria-controls="sale-camera-panel">Сканировать</button><button type="button" class="btn secondary" id="sale-search-toggle" aria-expanded="false" aria-controls="sale-search-panel">Поиск товара</button></div><section id="sale-camera-panel" hidden aria-label="Сканер штрих-кода"><div class="scan-box"><video id="sale-video" muted playsinline autoplay></video><div class="scan-line"></div></div><p id="sale-camera-status" role="status">Запускаем камеру…</p><button type="button" class="btn ghost" id="sale-camera-close">Закрыть камеру</button></section><div class="inv-search" id="sale-search-panel" hidden><div class="inv-inline"><input id="sale-search" type="search" aria-label="Название или штрих-код товара" autocomplete="off" placeholder="Название или штрих-код"><button type="button" class="btn secondary" id="sale-find">Найти</button></div><div id="sale-results"></div></div></div><div id="sales-cart"></div><div id="sale-checkout" hidden><fieldset><legend>Оплата</legend><label><input type="radio" name="sale-payment-choice" value="cash" checked> Наличные</label><label><input type="radio" name="sale-payment-choice" value="card"> Безналичные</label></fieldset><input id="sale-payment" type="hidden" value="cash"></div>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="sale-complete" hidden disabled>Провести продажу</button>`);
@@ -303,7 +303,7 @@ async function enhance(){
     if(location.hash.startsWith('#stock')){
       const head=document.querySelector('.workspace .pagehead');
       if(head&&!head.querySelector('[data-inv-tools]')){
-        const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button>${['developer','owner','seller'].includes(me.role)?'<button class="btn ghost" data-history>Продажи</button>':''}${['developer','owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
+        const box=document.createElement('div');box.dataset.invTools='1';box.className='inv-toolbar';box.innerHTML=`<button class="btn secondary" data-receive>▣ Приёмка сканером</button>${['developer','owner','admin'].includes(me.role)?'<button class="btn secondary" data-newpart>+ Новый товар</button>':''}<button class="btn ghost" data-labels>Этикетки</button><button class="btn ghost" data-export>Excel</button>${canSell(me)?'<button class="btn ghost" data-history>Продажи</button>':''}${['developer','owner','admin'].includes(me.role)?'<button class="btn ghost" data-maintenance>Копии и файлы</button>':''}`;
         head.appendChild(box);box.querySelector('[data-receive]').onclick=receiveByBarcode;box.querySelector('[data-newpart]')&&(box.querySelector('[data-newpart]').onclick=()=>newPartForm().catch(e=>notice(e.message,'bad')));box.querySelector('[data-labels]').onclick=()=>printAllLabels().catch(e=>notice(e.message,'bad'));box.querySelector('[data-export]').onclick=exportInventory;if(box.querySelector('[data-history]'))box.querySelector('[data-history]').onclick=showSalesHistory;const maintenance=box.querySelector('[data-maintenance]');if(maintenance)maintenance.onclick=async()=>{if(maintenance.disabled)return;maintenance.disabled=true;maintenance.textContent='Проверяем копии…';try{await maintenanceDialog();}catch(e){notice(e.message,'bad');}finally{maintenance.disabled=false;maintenance.textContent='Копии и файлы';}};
       }
       const table=document.querySelector('.workspace table.records');
@@ -339,3 +339,4 @@ export function bindProductPreviews(host,products){
   });
   const cleanup=new MutationObserver(()=>{if(!host.isConnected){observer.disconnect();cleanup.disconnect();queue=[];}});cleanup.observe(document.body,{childList:true,subtree:true});
 }
+
