@@ -174,3 +174,23 @@
  .workspace:has(#order-form) .order-detail-head h1{font-size:22px;letter-spacing:-.5px}
  .order-detail-status .badge{font-size:12px;padding:5px 8px}
 }
+
+/* Compact repair list controls. */
+.workspace:has(#filters):has(a[href^="#new?kind=repair"]){padding-top:8px}
+.workspace:has(#filters) .pagehead{margin-bottom:12px;gap:10px}
+.workspace:has(#filters) .pagehead>div:first-child::before{content:none}
+.workspace:has(#filters) .pagehead h1{margin:0;font-size:26px;line-height:1.2}
+.workspace:has(#filters) .pagehead p{margin:4px 0 0;font-size:12px}
+.workspace #filters{padding:10px;gap:8px;margin-bottom:12px}
+.workspace #filters input,.workspace #filters select,.workspace #filters .btn{min-height:40px;padding:8px 10px;font-size:14px}
+.workspace:has(#filters) .board-controls{margin:0 0 12px;gap:8px}
+.workspace:has(#filters) .view-switch a{padding:8px 12px;font-size:13px}
+@media(max-width:600px){
+ .workspace:has(#filters){padding-top:8px}
+ .workspace:has(#filters) .pagehead{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+ .workspace:has(#filters) .pagehead>.btn{width:auto;min-height:40px;padding:8px 12px;font-size:13px}
+ .workspace #filters{display:grid;grid-template-columns:minmax(0,1fr) auto}
+ .workspace #filters input{grid-column:1/-1;width:100%;min-width:0}
+ .workspace #filters select{width:100%;min-width:0}
+ .workspace:has(#filters) .board-controls>.muted{font-size:11px}
+}
