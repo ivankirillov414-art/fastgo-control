@@ -207,3 +207,11 @@
  .workspace:has(#intake-form) .panel h2{font-size:20px;margin:0 0 14px}
  .workspace:has(#intake-form) .grid{gap:12px}
 }
+
+.workspace #filters .repair-search-wrap{position:relative;grid-column:1/-1;min-width:0;width:100%;flex:1 1 100%}
+.workspace #filters .repair-search-wrap input{width:100%;font-size:16px}
+.repair-search-preview{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:20;max-height:240px;overflow:auto;background:#172133;border:1px solid #455564;border-radius:8px;box-shadow:0 8px 24px #0008}
+.repair-search-preview[hidden]{display:none}
+.repair-search-preview a{display:block;padding:10px 12px;border-bottom:1px solid #455564;color:#f1f5f9;text-decoration:none;font-size:14px}
+.repair-search-preview small{display:block;margin-top:4px;color:#aabac6;font-size:12px}
+.repair-search-preview p{padding:12px;margin:0;font-size:14px}
