@@ -47,7 +47,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  if(printBusy)throw Error('Принтер занят. Повторите после завершения текущего листа.');printBusy=true;
  let hidden,entry;try{
   const me=await remote('me',{}).catch(e=>{if(!transient(e))throw e;return store.read(account,'me');});
-  hidden=new BrowserWindow({show:false,width:1100,height:1400,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  hidden=new BrowserWindow({show:false,width:1100,height:1400,webPreferences:{backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   entry={local:!cloudRecord,cloud:cloudRecord,context:{kind:p.kind||'repair',id:p.id,me},resolve:null,reject:null};printWindows.set(hidden.webContents.id,entry);
   const ready=new Promise((resolve,reject)=>{entry.resolve=resolve;entry.reject=reject;});
   const deadline=setTimeout(()=>entry.reject(Error('Документ не успел загрузиться')),90000);
