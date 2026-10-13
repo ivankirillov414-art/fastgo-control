@@ -1,0 +1,47 @@
+{
+  "name": "fastgo-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FastGo workshop for Windows with offline database and remote printing",
+  "author": "FastGo",
+  "main": "main.cjs",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "start": "electron .",
+    "prepare-web": "node prepare-web.cjs",
+    "build": "node prepare-web.cjs && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "ru.fastgo.workshop",
+    "productName": "FastGo",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "store.cjs",
+      "sync.cjs",
+      "web/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "FastGo-Setup-${version}-Windows-x64.exe",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "FastGo"
+    },
+    "forceCodeSigning": false,
+    "npmRebuild": false
+  }
+}
