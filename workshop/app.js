@@ -18,9 +18,44 @@ function route(){let [page,qs]=(location.hash.slice(1)||'home').split('?');retur
 function href(page,p={}){const q=new URLSearchParams(Object.entries(p).filter(([,v])=>v!==undefined&&v!==null&&v!==''));return '#'+page+(q.size?'?'+q:'');}
 function go(page,p={}){const hash=href(page,p);if(location.hash===hash)render();else location.hash=hash;}
 function toast(s){$('toast').textContent=s;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),3500);}
-function mount(html,token=epoch){if(token!==epoch)return false;clearTimeout(loadingTimer);const vn=visibleNav(),mobile=vn.filter(([id])=>['home','repairs','storage','stock'].includes(id));app.innerHTML=`<div class="shell"><aside class="sidebar"><a class="brand" href="#home">Fast<span>Go</span><small>СЕРВИС ЭЛЕКТРОТРАНСПОРТА</small></a><nav class="nav" aria-label="Главное меню">${vn.map(([id,name,mark])=>`<a href="#${id}" class="${currentPage===id?'active':''}"><span class="nav-mark" aria-hidden="true">${icon(id)}</span>${name}</a>`).join('')}</nav><div class="sidebar-note"><span>СЕРВИС С ХАРАКТЕРОМ</span><p>Движение должно<br>продолжаться.</p></div><div class="profile"><b>${esc(me.name||me.email)}</b><div class="muted">${esc(roles[me.role]||'')}</div><button class="btn ghost small" data-logout>Выйти</button></div></aside><div class="content"><main class="workspace" id="workspace">${html}</main></div></div><nav class="mobile-nav" aria-label="Разделы" style="--nav-count:${mobile.length+1}">${mobile.map(([id,name,mark])=>`<a href="#${id}" class="${currentPage===id?'active':''}"><span aria-hidden="true">${icon(id)}</span>${name}</a>`).join('')}<button id="more-nav"><span aria-hidden="true">${icon('more')}</span>Ещё</button></nav>`;
- document.querySelectorAll('[data-logout]').forEach(b=>b.onclick=logout);$('more-nav').onclick=()=>modal('Разделы',`<nav class="nav" style="margin-top:0">${vn.filter(([id])=>!mobile.some(([m])=>m===id)).map(([id,n,mark])=>`<a href="#${id}" data-close><span>${icon(id)}</span>${n}</a>`).join('')}</nav><p class="muted">${esc(me.name||me.email)}${roles[me.role]?` · ${esc(roles[me.role])}`:''}</p><button type="button" class="btn ghost" id="logout-mobile">Выйти</button>`,null,()=>{$('logout-mobile').onclick=logout;document.querySelectorAll('[data-close]').forEach(a=>a.onclick=()=> $('dialog').close());});return true;
+function mount(html,token=epoch){closeCompactPanel?.();if(token!==epoch)return false;clearTimeout(loadingTimer);const vn=visibleNav(),mobile=vn.filter(([id])=>['home','repairs','storage','stock'].includes(id));app.innerHTML=`<div class="shell"><aside class="sidebar"><a class="brand" href="#home">Fast<span>Go</span><small>СЕРВИС ЭЛЕКТРОТРАНСПОРТА</small></a><nav class="nav" aria-label="Главное меню">${vn.map(([id,name,mark])=>`<a href="#${id}" class="${currentPage===id?'active':''}"><span class="nav-mark" aria-hidden="true">${icon(id)}</span>${name}</a>`).join('')}</nav><div class="sidebar-note"><span>СЕРВИС С ХАРАКТЕРОМ</span><p>Движение должно<br>продолжаться.</p></div><div class="profile"><b>${esc(me.name||me.email)}</b><div class="muted">${esc(roles[me.role]||'')}</div><button class="btn ghost small" data-logout>Выйти</button></div></aside><div class="content"><main class="workspace" id="workspace">${html}</main></div></div><nav class="mobile-nav" aria-label="Разделы" style="--nav-count:${mobile.length+1}">${mobile.map(([id,name,mark])=>`<a href="#${id}" class="${currentPage===id?'active':''}"><span aria-hidden="true">${icon(id)}</span>${name}</a>`).join('')}<button id="more-nav"><span aria-hidden="true">${icon('more')}</span>Ещё</button></nav>`;
+ document.querySelectorAll('[data-logout]').forEach(b=>b.onclick=logout);$('more-nav').onclick=()=>modal('Разделы',`<nav class="nav" style="margin-top:0">${vn.filter(([id])=>!mobile.some(([m])=>m===id)).map(([id,n,mark])=>`<a href="#${id}" data-close><span>${icon(id)}</span>${n}</a>`).join('')}</nav><p class="muted">${esc(me.name||me.email)}${roles[me.role]?` · ${esc(roles[me.role])}`:''}</p><button type="button" class="btn ghost" id="logout-mobile">Выйти</button>`,null,()=>{$('logout-mobile').onclick=logout;document.querySelectorAll('[data-close]').forEach(a=>a.onclick=()=> $('dialog').close());});compactPanels();return true;
 }
+
+let closeCompactPanel=null;
+function compactPanels(){
+ closeCompactPanel?.();closeCompactPanel=null;
+ if(['home','new','cash','repairs','storage','stock','clients'].includes(currentPage))return;
+ if(!document.getElementById('compact-panel-style')){
+ const style=document.createElement('style');style.id='compact-panel-style';style.textContent=`
+.workspace .panel.compact-panel{padding:0!important;margin-bottom:12px}
+.compact-panel-trigger{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;padding:20px;text-align:left;background:transparent;color:inherit;border:0;font:inherit;font-weight:650;font-size:18px;border-radius:12px}
+.compact-panel-trigger span:last-child{font-size:28px;color:#008cff}
+.compact-panel-body[hidden]{display:none!important}
+.compact-panel-body.is-open{position:fixed;inset:5vh max(16px,calc((100vw - 680px)/2)) auto;max-height:85dvh;overflow:auto;overscroll-behavior:contain;z-index:110;padding:22px;background:#172133;border:1px solid #455564;border-radius:16px;box-shadow:0 0 0 100vmax #000b}
+.compact-panel-close{display:block;margin:0 0 18px auto;min-height:44px;padding:8px 16px;background:#0c1522;color:#f1f5f9;border:1px solid #455564;border-radius:8px;font:inherit}
+.compact-panel-body .panelhead{flex-wrap:wrap}
+body:has(.compact-panel-body.is-open){overflow:hidden}
+.workspace:has(.compact-panel) .pagehead h1{font-size:clamp(26px,5vw,38px)}
+@media(max-width:600px){.compact-panel-trigger{padding:18px;font-size:17px}.compact-panel-body.is-open{inset:16px 12px auto;max-height:calc(100dvh - 32px);padding:18px}.workspace:has(.compact-panel) .form-layout{display:block}.workspace:has(.compact-panel) .side-sticky{position:static}}
+`;document.head.append(style);}
+ document.querySelectorAll('#workspace .panel').forEach(panel=>{
+ const heading=panel.querySelector('h2');if(!heading||heading.closest('.panel')!==panel)return;
+ if(panel.closest('form')&&panel.closest('form').id!=='order-form')return;
+ const title=heading.textContent.trim();if(!title)return;
+ const body=document.createElement('div');body.className='compact-panel-body';body.hidden=true;
+ while(panel.firstChild)body.append(panel.firstChild);
+ const trigger=document.createElement('button');trigger.type='button';trigger.className='compact-panel-trigger';trigger.setAttribute('aria-expanded','false');trigger.innerHTML='<span>'+esc(title)+'</span><span aria-hidden="true">›</span>';
+ const close=document.createElement('button');close.type='button';close.className='compact-panel-close';close.textContent='Закрыть';body.prepend(close);
+ const dismiss=()=>{body.hidden=true;body.classList.remove('is-open');body.removeAttribute('role');body.removeAttribute('aria-modal');trigger.setAttribute('aria-expanded','false');document.removeEventListener('keydown',keys);if(closeCompactPanel===dismiss)closeCompactPanel=null;trigger.focus();};
+ const keys=e=>{if(e.key==='Escape'&&!$('dialog').open){e.preventDefault();dismiss();}if(e.key==='Tab'&&!$('dialog').open){const elements=[...body.querySelectorAll('button,input,select,textarea,a[href]')].filter(x=>!x.disabled&&x.getClientRects().length);const first=elements[0],last=elements.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
+ const open=()=>{closeCompactPanel?.();body.hidden=false;body.classList.add('is-open');body.setAttribute('role','dialog');body.setAttribute('aria-modal','true');body.setAttribute('aria-label',title);trigger.setAttribute('aria-expanded','true');closeCompactPanel=dismiss;document.addEventListener('keydown',keys);close.focus();};
+ trigger.onclick=open;close.onclick=dismiss;
+ body.addEventListener('invalid',()=>{if(body.hidden)open();},true);
+ panel.classList.add('compact-panel');panel.append(trigger,body);
+ });
+}
+
 function modal(title,html,onSubmit,onOpen){const d=$('dialog');d.innerHTML=`<form id="modal-form"><div class="dialoghead"><h2>${esc(title)}</h2><button class="btn ghost small" type="button" data-close aria-label="Закрыть">✕</button></div>${html}<div id="modal-error" role="alert"></div>${onSubmit?'<div class="dialogfoot"><button class="btn secondary" type="button" data-close>Отмена</button><button class="btn" type="submit">Сохранить</button></div>':''}</form>`;d.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>d.close());if(!d.open)d.showModal();d.querySelector('form').onsubmit=async e=>{e.preventDefault();if(!onSubmit)return;const b=e.submitter;b.disabled=true;try{await onSubmit(Object.fromEntries(new FormData(e.target)),e.target);d.close();}catch(e){$('modal-error').innerHTML=`<p class="error">${esc(e.message)}</p>`;}finally{b.disabled=false;}};onOpen?.();}
 async function run(button,fn){if(button?.disabled)return;button&&(button.disabled=true);try{await fn();}catch(e){modal('Не удалось выполнить действие',`<p class="error">${esc(e.message)}</p>`);}finally{button&&(button.disabled=false);}}
 async function catalog(force=false){return api('catalog',{}, {fresh:force});}
