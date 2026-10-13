@@ -1,0 +1,20 @@
+name: Remote printing regression
+on:
+  push:
+    paths:
+      - 'workshop/print-*.js'
+      - 'tests/remote-print.test.mjs'
+      - 'print-station.html'
+      - '.github/workflows/remote-print.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  print:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check workshop/print-client.js && node --check workshop/print-station.js && node --check workshop/core.js && node --check workshop/orders.js && node --check workshop/app.js && node --test tests/remote-print.test.mjs

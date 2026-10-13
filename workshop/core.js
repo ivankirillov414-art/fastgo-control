@@ -104,3 +104,12 @@ export function csvDownload(name,headers,rows){const cell=v=>{let s=String(v??''
 export const canSell=member=>!!member&&(['developer','owner','seller'].includes(member.role)||member.can_sell===true);
 export const canEditCatalog=member=>!!member&&(['developer','owner','admin'].includes(member.role)||member.can_edit_catalog===true);
 
+
+export async function printApi(action,params={},retried=false){
+ if(!session?.access_token)throw new Error('Войдите в FastGo');
+ if(session?.expires_at&&session.expires_at*1000<Date.now()+45000)await refresh();
+ try{const response=await request('/functions/v1/fastgo-print-api',{action,params},session.access_token);
+  if(!response||!Object.prototype.hasOwnProperty.call(response,'data'))throw new Error('Очередь печати не подтвердила ответ');
+  return response.data;
+ }catch(e){if(e.status===401&&!retried&&await refresh())return printApi(action,params,true);throw e;}
+}
