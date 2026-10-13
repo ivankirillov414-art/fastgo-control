@@ -11,7 +11,7 @@ async function enhance(){
   if(!b){b=document.createElement('button');b.id='inventory-sale-fab';b.type='button';b.innerHTML=icon('sale')+' Продажа';b.onclick=()=>{location.hash='#cash';};document.body.appendChild(b);}
   const target=document.getElementById('home-sale-slot')||document.getElementById('workspace');
   if(target&&b.parentElement!==target)target.prepend(b);
-  b.hidden=!sales||loading||location.hash.startsWith('#cash');
+  b.hidden=!sales||loading||location.hash.startsWith('#cash')||location.hash.split('?')[0]==='#repairs';
 }
 const observer=new MutationObserver(()=>setTimeout(enhance,60));observer.observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('workshop-session-cleared',()=>{role=null;document.getElementById('inventory-sale-fab')?.remove();});
