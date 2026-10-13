@@ -25,7 +25,7 @@ function mount(html,token=epoch){closeCompactPanel?.();if(token!==epoch)return f
 let closeCompactPanel=null;
 function compactPanels(){
  closeCompactPanel?.();closeCompactPanel=null;
- if(['home','new','cash','repairs','storage','stock','clients'].includes(currentPage))return;
+ if(['home','new','cash','repairs','storage','stock','clients'].includes(route().page))return;
  if(!document.getElementById('compact-panel-style')){
  const style=document.createElement('style');style.id='compact-panel-style';style.textContent=`
 .workspace .panel.compact-panel{padding:0!important;margin-bottom:12px}
