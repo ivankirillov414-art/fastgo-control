@@ -194,3 +194,16 @@
  .workspace #filters select{width:100%;min-width:0}
  .workspace:has(#filters) .board-controls>.muted{font-size:11px}
 }
+
+/* Intake starts close to the top without the sale shortcut. */
+.workspace:has(#intake-form){padding-top:4px}
+.workspace:has(#intake-form)>#inventory-sale-fab{display:none!important}
+.workspace:has(#intake-form)>.back{display:inline-block;margin:0 0 8px;padding:4px 0;line-height:1.2}
+.workspace:has(#intake-form)>.pagehead{margin:0 0 14px;gap:8px}
+.workspace:has(#intake-form)>.pagehead>div:first-child::before{content:none}
+.workspace:has(#intake-form)>.pagehead h1{margin:0;font-size:26px;line-height:1.2}
+@media(max-width:600px){
+ .workspace:has(#intake-form) .panel{padding:16px;margin-bottom:12px}
+ .workspace:has(#intake-form) .panel h2{font-size:20px;margin:0 0 14px}
+ .workspace:has(#intake-form) .grid{gap:12px}
+}
