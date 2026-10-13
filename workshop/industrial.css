@@ -162,18 +162,15 @@
  #inventory-dialog.sale-dialog .empty{padding:20px 10px}
 }
 
-/* Compact order header on phones and desktops. */
-.workspace:has(#order-form){padding-top:12px}
-.workspace:has(#order-form)>.back{display:inline-block;margin:0 0 12px;padding:4px 0}
-.workspace .order-detail-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:nowrap}
-.workspace .order-detail-head>div:first-child{flex-basis:auto;min-width:0}
-.workspace .order-detail-head>div:first-child::before{content:none}
+/* Keep order title near the top, status beside it and print below. */
+.workspace:has(#order-form){padding-top:4px}
+.workspace:has(#order-form)>.back{display:inline-block;margin:0 0 8px;padding:4px 0;line-height:1.2}
+.workspace .order-detail-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 12px;margin:0 0 16px;padding:0}
 .workspace:has(#order-form) .order-detail-head h1{margin:0;font-size:28px;line-height:1.2}
-.workspace .order-detail-head>.actions{flex-wrap:nowrap;justify-content:flex-end}
+.order-detail-status{justify-self:end}
+.workspace .order-detail-print{grid-column:1;justify-self:start;min-height:40px;padding:8px 14px;font-size:14px}
 .workspace:has(#order-form)>.actions:empty{display:none;margin:0!important}
 @media(max-width:600px){
  .workspace:has(#order-form) .order-detail-head h1{font-size:22px;letter-spacing:-.5px}
- .workspace .order-detail-head>.actions{flex-direction:column;align-items:flex-end;gap:6px}
- .workspace .order-detail-head .btn{min-height:40px;padding:8px 14px;font-size:14px}
- .workspace .order-detail-head .badge{font-size:12px;padding:5px 8px}
+ .order-detail-status .badge{font-size:12px;padding:5px 8px}
 }
