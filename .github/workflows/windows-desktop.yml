@@ -19,6 +19,16 @@ jobs:
         working-directory: desktop
       - run: npm test
         working-directory: desktop
+      - run: npm run prepare-web
+        working-directory: desktop
+      - name: Install desktop smoke test driver
+        shell: pwsh
+        run: npm install --prefix "$env:RUNNER_TEMP/fastgo-playwright" playwright@1.62.1
+      - name: Exercise offline desktop UI and restart
+        shell: pwsh
+        run: |
+          $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
+          node desktop/tests/smoke.cjs
       - run: npm run build
         working-directory: desktop
       - uses: actions/upload-artifact@v4
