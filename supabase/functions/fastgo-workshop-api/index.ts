@@ -349,6 +349,7 @@ async function main(req){
     if(['storage_close','storage_delete'].includes(action)){if(p.kind!=='storage')fail('Выберите хранение');required(p,['note']);if(!Number.isInteger(Number(p.revision)))fail('Нужна версия карточки');}
     if(action==='legal_save'){required(p,['legal_name']);}
     if(action==='create'){
+      if(p.desktop_id&&(!uuid(p.desktop_id)||p.desktop_id!==p.request_id))fail('Неверный постоянный идентификатор офлайн-приёмки');
       required(p,['last_name','first_name','phone','brand','model']);if(!/^\+7\d{10}$/.test(p.phone))fail('Введите полный телефон');if(!uuid(p.request_id))fail('Неверный код приёмки');
       if(p.kind==='storage'){if(!['monthly','season'].includes(p.storage_tariff))fail('Неверный тариф');p.storage_months=integer(p.storage_months||1,'месяцы',1,12);p.wash=bool(p.wash);if(!/^\d{4}-\d{2}-\d{2}$/.test(p.starts_on||'')||!/^\d{4}-\d{2}-\d{2}$/.test(p.planned_return_date||'')||p.planned_return_date<p.starts_on)fail('Проверьте сроки хранения');}
       if(p.auto_assign){const staff=await db('workshop_members','active=eq.true&role=eq.mechanic&select=profile_id,tags');const tags=(p.tags||[]).map(x=>String(x).toLowerCase());const available=(staff||[]).filter(x=>!tags.length||(x.tags||[]).some(t=>tags.includes(String(t).toLowerCase())));p.assigned_master_id=available[0]?.profile_id||'';}

@@ -389,7 +389,9 @@ function createOrder_(p,actor){
     if(old) return kind==='storage'?mapStorage_(old):mapRepair_(old);
   }
   const intakeSeq=nextSeq_('next_intake_seq'), intakeNo='FGI-'+pad_(intakeSeq,4), orderSeq=nextSeq_(kind==='storage'?'next_storage_seq':'next_repair_seq');
-  const orderNo=(kind==='storage'?'FGST-':'FGR-')+pad_(orderSeq,4), id=uid_(), clientId=ensureClient_(p,intakeNo), client=fullName_(p);
+  const orderNo=(kind==='storage'?'FGST-':'FGR-')+pad_(orderSeq,4), id=String(p.desktop_id||uid_());
+  if(p.desktop_id&&find_(SHEETS.intakes,'intake_id',id))throw httpError_('Идентификатор приёмки уже занят',409);
+  const clientId=ensureClient_(p,intakeNo), client=fullName_(p);
   const root=DriveApp.getFolderById(String(setting_('intakes_folder_id'))), folder=root.createFolder(orderNo+' — '+client), folderUrl=folder.getUrl(), created=now_(); assertPrivate_(folder);
   append_(SHEETS.intakes,{intake_id:id,'Номер':intakeNo,'Создано':created,client_id:clientId,'Клиент':client,'Телефон':String(p.phone||''),'Тип услуги':kind==='storage'?'Зимнее хранение':'Ремонт','Тип техники':String(p.vehicle_type||'Электротранспорт'),'Бренд / модель':[p.brand,p.model].filter(Boolean).join(' '),'Серийный номер':String(p.serial_number||''),'Комплектность':String(p.accessories||''),'Описание неисправности':String(p.issue_description||''),'Состояние при приёмке':String(p.condition_notes||''),'Статус':'Принят','Ответственный':actor.email||actor.id||'','Предварительная стоимость':0,'Предоплата':0,'Итоговая сумма':0,'Статус оплаты':'Не оплачено','Папка фото':folderUrl,'Папка документов':folderUrl,'Плановая дата':String(p.promised_date||p.planned_return_date||''),'Закрыто':'','Примечание':'',updated_at:created,Email:String(p.email||''),request_id:requestId});
   if(kind==='storage'){

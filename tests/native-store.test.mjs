@@ -21,6 +21,7 @@ function harness(){
  return {call,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
+test('offline desktop intake retains a stable UUID and retries do not create duplicates',async()=>{const h=harness(),id=randomUUID(),p={...intake(),request_id:id,desktop_id:id};const a=await h.call('create',p),b=await h.call('create',p);assert.equal(a.id,id);assert.equal(b.id,id);assert.equal(h.sheets['Ремонты'].rows.length,1);});
 test('cash shift totals separate cash, card and transfer and freeze at close',async()=>{
  const h=harness(),seller={...manager,role:'seller'};h.sheets['Товары'].rows[0]['Остаток, шт.']=10;
  const shift=await h.call('shift_open',{register:'Касса 1',opening_cash:500},seller);

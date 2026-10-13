@@ -1,0 +1,19 @@
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),out=path.join(__dirname,'web');fs.rmSync(out,{recursive:true,force:true});fs.mkdirSync(out,{recursive:true});
+for(const folder of ['workshop','vendor'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true});
+for(const name of ['workshop.html','workshop.css','fastgo-logo.png'])if(fs.existsSync(path.join(root,name)))fs.copyFileSync(path.join(root,name),path.join(out,name));
+function modify(name,fn){const file=path.join(out,name);fs.writeFileSync(file,fn(fs.readFileSync(file,'utf8')));}
+modify('workshop/core.js',s=>{
+ s=s.replace("try{session=JSON.parse(localStorage.getItem(STORE)||'null');if(!session&&localStorage.getItem('fastgo_token'))session={access_token:localStorage.getItem('fastgo_token')};}catch{}","try{session=await window.fastgoDesktop.getSession();}catch{}");
+ s=s.replace('async function request(path,body,token){','async function request(path,body,token){const response=await window.fastgoDesktop.request(path,body);if(response?.__desktopError)throw Object.assign(new Error(response.message),{status:response.status});return response;}\nasync function browserRequestUnused(path,body,token){');
+ s=s.replace('localStorage.setItem(STORE,JSON.stringify(session));','window.fastgoDesktop.saveSession(session);');
+ s=s.replace('export function clearSession(){','export function clearSession(){window.fastgoDesktop.clearSession();');
+ s=s.replace(/if\(session\?\.expires_at\s*&&\s*session\.expires_at\*1000<Date\.now\(\)\+45000\)await refresh\(\);/g,'');
+ return s;
+});
+modify('workshop/orders.js',s=>s.replace("if(!saved&&!fs.some(f=>imageTypes.includes(videoType(f))))", "if(false&&!saved&&!fs.some(f=>imageTypes.includes(videoType(f))))").replace('Добавьте минимум одну фотографию техники. Видео не заменяет фотографию.','На ноутбуке фото и видео необязательны.').replace('Нужна минимум одна фотография техники. Видео можно добавить дополнительно.','На ноутбуке фото и видео необязательны.').replace('Фото и видео техники *</label>','Фото и видео техники · необязательно</label>').replace('Фото и видео техники</h2>','Фото и видео техники · необязательно</h2>'));
+modify('workshop/print-client.js',s=>s.replace('export async function enqueueIntake(kind,id,actor){','export async function enqueueIntake(kind,id,actor){return window.fastgoDesktop.printIntake({kind,id});}\nasync function webEnqueueUnused(kind,id,actor){').replace('export async function flushIntakePrints(actor){','export async function flushIntakePrints(actor){return;}\nasync function webFlushUnused(actor){').replace('export async function sendManualPrint(kind,id){','export async function sendManualPrint(kind,id){await window.fastgoDesktop.printManual({kind,id});return true;}\nasync function webPrintUnused(kind,id){').replace('export async function renderPrintSettings(ctx,token){','export async function renderPrintSettings(ctx,token){ctx.mount(ctx.head("Настройки печати")+"<section class=\\"panel\\"><p>Выберите принтер и приём заданий с телефона в настройках Windows-приложения.</p><button class=\\"btn\\" id=\\"desktop-print-settings\\">Настройки приложения</button></section>",token);document.getElementById("desktop-print-settings").onclick=()=>window.dispatchEvent(new Event("fastgo-desktop-settings"));return;}\nasync function webSettingsUnused(ctx,token){'));
+modify('workshop/documents.js',s=>s.replace("const url=new URL('workshop.html',location.href);","const url=new URL('https://ivankirillov414-art.github.io/fastgo-control/workshop.html');"));
+modify('workshop.html',s=>s.replace('</head>','<script type="module" src="desktop-ui.js"></script></head>'));
+for(const name of ['desktop-ui.js','document-host.html','document-host.js'])fs.copyFileSync(path.join(__dirname,'renderer',name),path.join(out,name));
+console.log('Prepared bundled offline FastGo interface');
