@@ -18,7 +18,7 @@ function server({member=null,confirmed=true}={}){
   if(url==='/rest/v1/profiles'){writes.push(JSON.parse(options.body));return Response.json(null);}
   throw new Error('Unexpected request '+url);
  }});
- vm.runInContext(edge.replace(/^import .*\n/,''),context);
+ vm.runInContext(edge.replace(/^import .*;\r?\n/gm,''),context);
  return {writes,call:(action='request_access',params={},authenticated=true)=>handler(new Request('https://test.invalid',{method:'POST',headers:authenticated?{Authorization:'Bearer test'}:{},body:JSON.stringify({action,params})}))};
 }
 test('registration cannot select role, identity or activate access',async()=>{

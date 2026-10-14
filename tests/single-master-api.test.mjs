@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
-const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*\n/,'');
+const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const user='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
 function setup(role='mechanic',permissions={}){
  let handler;const writes=[];
