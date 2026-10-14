@@ -22,6 +22,11 @@ class Store{
  record(actor,kind,id){const row=this.row(actor,kind,id);if(!row)throw Object.assign(Error('Эта карточка ещё не загружена на ноутбук. Подключитесь к сети для загрузки.'),{status:404});return JSON.parse(row.local);}
  pending(actor){return this.db.prepare("SELECT * FROM outbox WHERE actor=? AND status NOT IN ('done','discarded') ORDER BY seq").all(actor).map(r=>({...r,params:JSON.parse(r.params),base:JSON.parse(r.base||'null'),patch:JSON.parse(r.patch||'{}'),sent:r.sent?JSON.parse(r.sent):null}));}
  all(actor,kind){return this.db.prepare('SELECT local FROM records WHERE actor=? AND kind=?').all(actor,kind).map(r=>JSON.parse(r.local));}
+ homeData(actor){
+  const fields=['id','repair_number','storage_number','brand','model','first_name','last_name','middle_name','status','promised_date','planned_return_date','created_at','total_amount','approved_amount','diagnostics_notes'];
+  const rows=kind=>this.all(actor,kind).filter(r=>!final.has(r.status)).map(r=>Object.fromEntries(fields.filter(key=>Object.hasOwn(r,key)).map(key=>[key,r[key]])));
+  return {repairs:rows('repair'),storage:rows('storage')};
+ }
  remember(actor,kind,record){if(!record?.id)return;this.db.prepare('INSERT INTO records VALUES(?,?,?,?,?,1) ON CONFLICT(actor,kind,id) DO UPDATE SET base=excluded.base,clouded=1').run(actor,kind,record.id,stable(record),stable(record));this.rebuild(actor,kind,record.id);}
  pruneSnapshot(actor,kind,ids,candidates){const keep=new Set(ids),pending=new Set(this.pending(actor).filter(x=>x.kind===kind).map(x=>x.record_id));let changed=false;for(const row of this.db.prepare('SELECT id FROM records WHERE actor=? AND kind=? AND clouded=1').all(actor,kind)){if(!candidates?.has(row.id)||keep.has(row.id)||pending.has(row.id))continue;this.db.prepare('DELETE FROM records WHERE actor=? AND kind=? AND id=?').run(actor,kind,row.id);this.db.prepare('DELETE FROM cache WHERE actor=? AND key=?').run(actor,'get:'+stable({kind,id:row.id}));changed=true;}return changed;}
  rebuild(actor,kind,id){const row=this.row(actor,kind,id);if(!row)return;let record=JSON.parse(row.base);for(const op of this.pending(actor).filter(x=>x.kind===kind&&x.record_id===id))record=this.apply(record,op.action,op.patch,op.params);this.db.prepare('UPDATE records SET local=? WHERE actor=? AND kind=? AND id=?').run(stable(record),actor,kind,id);return record;}

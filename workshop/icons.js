@@ -1,4 +1,9 @@
 const paths={
+ search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+ arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
+ bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+ sync:'<path d="M20 7a9 9 0 0 0-15-2L3 8m0-5v5h5M4 17a9 9 0 0 0 15 2l2-3m0 5v-5h-5"/>',
+ history:'<path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/>',
  equipment:'<circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="M5 18h9l3-13h-4M17 5h3M9 18l-3-8H3"/>',
  cash:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h2m3 0h2m3 0h1M7 16h2m3 0h6"/>',
  home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',

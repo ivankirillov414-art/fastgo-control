@@ -1,3 +1,4 @@
+import {renderPrioritiesHome,usePrioritiesHome} from './home-priorities.js';
 import {enhanceHome,renderHistory,renderOwnerAnalytics,renderAppDiagnostics,operationsStyle,isOwner} from './operations.js';
 import {renderPrintSettings,flushIntakePrints} from './print-client.js';
 import {installSuggestions} from './autocomplete.js';
@@ -155,6 +156,7 @@ function pendingAccess(access={},error=''){
 async function logout(){if(dirty&&!confirm('Есть несохранённые изменения. Выйти?'))return;dirty=false;$('dialog').close();cache=null;await signOut();epoch++;login();}
 async function home(token){
  operationsStyle();
+ if(usePrioritiesHome())return renderPrioritiesHome(ctx,token);
  if(!mount('<div class="home-title-row"><h2 class="home-main-title">Главное</h2><button class="ops-bell" id="home-repair-alerts" type="button" aria-label="Уведомления по ремонтам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button></div>'+head('Заявки и хранение', 'Ремонт. Хранение. Всё под контролем.',manager()?`<div class="home-actions"><a class="btn" href="#new?kind=repair">${icon('repairs')} Принять в ремонт</a><a class="btn secondary storage-action" href="#new?kind=storage">${icon('storage')} Зимнее хранение</a><div id="home-sale-slot"></div></div>`:'')+`<section id="home-next-action" aria-live="polite"></section><section id="home-stats" aria-live="polite"><div class="panel muted">Загружаем сводку…</div></section><div class="panelhead"><h2>Последние активные ремонты</h2><a class="btn ghost small" href="#repairs">Все ремонты</a></div><section id="home-orders" aria-live="polite"><div class="panel muted">Загружаем ремонты…</div></section>`,token))return;
  const fill=async(id,load,view)=>{
   const host=$(id);if(!host||token!==epoch)return;
@@ -310,5 +312,5 @@ window.addEventListener('workshop-auth-required',()=>{epoch++;cache=null;login('
 }
 startAuthentication();
 
-window.addEventListener('workshop-data-changed',()=>{const before=epoch;setTimeout(()=>{if(me&&epoch===before&&!dirty&&['equipment','cash','home','stock','repairs','storage','finance'].includes(route().page)&&!document.querySelector('dialog[open]'))render();},100);});
+window.addEventListener('workshop-data-changed',()=>{const before=epoch;setTimeout(()=>{if(me&&epoch===before&&!dirty&&['equipment','cash','home','stock','repairs','storage','finance'].includes(route().page)&&!document.querySelector('dialog[open]')){if(route().page==='home'&&document.querySelector('.priorities-home'))window.dispatchEvent(new Event('fastgo-home-data-changed'));else render();}},100);});
 
