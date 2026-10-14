@@ -1,7 +1,7 @@
 name: FastGo Windows
 on:
   push:
-    paths: ['desktop/**', '.github/workflows/windows-desktop.yml']
+    paths: ['desktop/**', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,6 +19,8 @@ jobs:
         working-directory: desktop
       - run: npm test
         working-directory: desktop
+      - name: Verify incremental sync metadata and access checks
+        run: node --test tests/native-sync.test.mjs
       - run: npm run prepare-web
         working-directory: desktop
       - name: Install desktop smoke test driver

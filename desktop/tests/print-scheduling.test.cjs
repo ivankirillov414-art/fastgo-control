@@ -14,3 +14,15 @@ test('printing runs while database synchronization remains pending',async()=>{
  for(let i=0;i<3;i++)timers.find(x=>x.ms===1000).fn();
  assert.deepEqual(calls,{sync:1,local:3,remote:3});
 });
+test('an update drains existing print polling and resumes it when the user opens a form',async()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../main.cjs'),'utf8');
+ const electron={app:{setName(){},requestSingleInstanceLock:()=>true,whenReady:()=>({then(){}}),on(){}},protocol:{registerSchemesAsPrivileged(){}}};
+ const context=vm.createContext({require:name=>name==='electron'?electron:name==='./store.cjs'||name==='./sync.cjs'?{}:name==='./updates.cjs'?require('../updates.cjs'):require(name),__dirname:path.resolve(__dirname,'..')});
+ vm.runInContext(source,context);
+ vm.runInContext("win={isDestroyed:()=>false,webContents:{executeJavaScript:async()=>true}};store={db:{prepare:()=>({get:()=>false})}};sync={busy:false};remoteBusy=true;",context);
+ const start=source.indexOf('canInstall:async immediate=>')+'canInstall:'.length,end=source.indexOf(',prepare:()=>',start);
+ const canInstall=vm.runInContext('('+source.slice(start,end)+')',context);
+ assert.equal(await canInstall(true),false);assert.equal(vm.runInContext('updateDraining',context),true);
+ vm.runInContext('remoteBusy=false',context);assert.equal(await canInstall(true),true);
+ vm.runInContext('win.webContents.executeJavaScript=async()=>false',context);assert.equal(await canInstall(true),false);assert.equal(vm.runInContext('updateDraining',context),false);
+});

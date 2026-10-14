@@ -6,7 +6,7 @@ const BASE='https://oqgpjfikjpcplnxueoki.supabase.co',KEY='sb_publishable_-aVkOp
 app.setName('FastGo');
 protocol.registerSchemesAsPrivileged([{scheme:'fastgo',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
 if(!app.requestSingleInstanceLock())app.quit();
-let win,store,sync,credentials=null,actor='',online=false,warming=false,lastError='',refreshing,printBusy=false,remoteBusy=false,nextProbe=0,updates,updateInstalling=false,activeRequests=0;
+let win,store,sync,credentials=null,actor='',online=false,warming=false,lastError='',refreshing,printBusy=false,remoteBusy=false,nextProbe=0,updates,updateInstalling=false,updateDraining=false,activeRequests=0,warmPromise;
 const printWindows=new Map(),webRoot=path.join(__dirname,'web');
 const credentialFile=()=>path.join(app.getPath('userData'),'credentials.bin');
 function notify({dataChanged=false}={}){if(win&&!win.isDestroyed())win.webContents.send('fg-changed',{dataChanged});}
@@ -20,7 +20,7 @@ const remote=async(action,params,expectedActor=actor)=>{if(actor!==expectedActor
 const remotePrint=async(action,params={})=>(await cloud('/functions/v1/fastgo-print-api',{action,params})).data;
 function wrapError(error){return {__desktopError:true,message:error.message,status:error.status||0};}
 function handle(channel,fn){ipcMain.handle(channel,async(event,...args)=>{try{if(!String(event.senderFrame?.url||'').startsWith('fastgo://app/'))throw Error('Недоверенное окно');if(updateInstalling)throw Error('FastGo обновляется. Приложение сейчас откроется снова.');activeRequests++;try{return await fn(event,...args);}finally{activeRequests--;}}catch(e){return wrapError(e);}});}
-async function warm(){if(updateInstalling||warming||!actor)return;warming=true;const account=actor;try{await sync.warm(account);online=true;lastError='';}catch(e){online=false;lastError=e.message;}finally{warming=false;notify();}}
+function warm(options={}){if(updateInstalling||updateDraining||!actor)return;if(warmPromise)return warmPromise;warming=true;const account=actor;warmPromise=(async()=>{try{await sync.warm(account,options);online=true;lastError='';}catch(e){online=false;lastError=e.message;}finally{warming=false;warmPromise=null;notify();}})();return warmPromise;}
 async function request(event,{path:pathname,body={}}){
  if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
  if(pathname.startsWith('/auth/'))return cloud(pathname,body);
@@ -63,7 +63,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  finally{if(hidden){printWindows.delete(hidden.webContents.id);hidden.destroy();}printBusy=false;notify();}
 }
 async function localPrints(){if(updateInstalling||printBusy||!actor||!store.setting('printer'))return;const row=store.db.prepare("SELECT * FROM print_jobs WHERE actor=? AND state='queued' ORDER BY created_at LIMIT 1").get(actor);if(!row)return;try{await printRecord({kind:row.kind,id:row.record_id},{key:row.key});}catch(e){lastError=e.message;notify();}}
-async function pollPrint(){if(updateInstalling||remoteBusy||printBusy||!actor||!store?.setting('remote_print'))return;remoteBusy=true;let job;
+async function pollPrint(){if(updateInstalling||updateDraining||remoteBusy||printBusy||!actor||!store?.setting('remote_print'))return;remoteBusy=true;let job;
  try{// Claim validates the active station and owner atomically on the server.
   const result=await remotePrint('claim',{station_id:store.setting('station_id'),request_id:store.setting('claim_token')});job=result.job;if(!job)return;
   await printRecord({kind:job.kind,id:job.record_id},{cloudRecord:true,key:job.id});
@@ -82,9 +82,10 @@ app.whenReady().then(()=>{
  handle('fg-session-save',(_e,s)=>{if(!s?.access_token||!s.user_id)throw Error('Неверная сессия');persistSession(s);notify();return true;});
  handle('fg-session-clear',()=>{persistSession(null);notify();return true;});
  handle('fg-request',request);
- handle('fg-state',()=>({version:app.getVersion(),update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
+ handle('fg-state',()=>({version:app.getVersion(),update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
  handle('fg-update-check',async()=>{await updates?.check();return updates?.state;});
- handle('fg-sync',async()=>{nextProbe=0;await sync.run(actor);await warm();return true;});
+ handle('fg-update-now',()=>{if(!updates)throw Error('Обновления доступны в установленной версии FastGo');setTimeout(()=>updates.now(),0);return true;});
+ handle('fg-sync',async()=>{nextProbe=0;await sync.run(actor);await warm({force:true});return true;});
  handle('fg-printers',()=>win.webContents.getPrintersAsync());
  handle('fg-configure',async(_e,p)=>{const printers=await win.webContents.getPrintersAsync();if(!printers.some(x=>x.name===p.printer))throw Error('Выберите установленный принтер');store.setting('printer',p.printer);if(p.remotePrint){await remotePrint('activate',{station_id:store.setting('station_id')});store.setting('remote_print',true);}else if(store.setting('remote_print')){await remotePrint('deactivate');store.setting('remote_print',false);}notify();return true;});
  handle('fg-conflicts',()=>store.conflicts(actor).map(x=>({seq:x.seq,kind:x.kind,id:x.record_id,action:x.action,patch:x.patch,base:x.base,error:x.error})));
@@ -97,18 +98,21 @@ app.whenReady().then(()=>{
  win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('fastgo://app/')){event.preventDefault();if(url.startsWith('https://'))shell.openExternal(url);}});
  win.loadURL('fastgo://app/workshop.html#home');
  // Never put printing behind a database upload or its network timeout.
- setInterval(()=>{if(actor&&!updateInstalling)sync.run(actor).catch(()=>{});},5000);
+ setInterval(()=>{if(actor&&!updateInstalling&&!updateDraining)sync.run(actor).catch(()=>{});},5000);
  setInterval(()=>{if(actor){localPrints();pollPrint();}},1000);
- setInterval(()=>{if(actor&&!warming)warm();},120000);
+ setInterval(()=>{if(actor&&!warming)warm();},15000);
  if(app.isPackaged){
-  updates=new Updates({updater:require('electron-updater').autoUpdater,changed:()=>{if(updates?.state.status==='error')updateInstalling=false;if(win&&!win.isDestroyed())win.webContents.send('fg-update-changed');},
-   canInstall:async()=>{
-    if(!win||win.isDestroyed())return false;
-    const idle=await win.webContents.executeJavaScript('window.fastgoUpdateSafe?.() === true');
+  updates=new Updates({updater:require('electron-updater').autoUpdater,changed:()=>{if(updates?.state.status==='error'){updateInstalling=false;updateDraining=false;}if(win&&!win.isDestroyed())win.webContents.send('fg-update-changed');},
+   canInstall:async immediate=>{
+    if(!win||win.isDestroyed()){updateDraining=false;return false;}
+    const idle=await win.webContents.executeJavaScript('window.fastgoUpdateSafe?.('+Boolean(immediate)+') === true');
+    // Stop starting new polls while existing requests drain. One-second print polling
+    // must not starve installation forever, but any claimed print must finish first.
+    updateDraining=idle;
     return idle&&!printBusy&&!remoteBusy&&!sync.busy&&!warming&&!activeRequests&&!store.db.prepare("SELECT 1 FROM print_jobs WHERE state='queued' LIMIT 1").get();
    },prepare:()=>{store.backup('before-update-'+Date.now());updateInstalling=true;}});
   setTimeout(()=>updates.check(),15000);
-  setInterval(()=>updates.check(),15*60*1000);
+  setInterval(()=>updates.check(),60000);
   setInterval(()=>updates.tick(),5000);
  }
 

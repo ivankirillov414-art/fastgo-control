@@ -1,9 +1,10 @@
 import {nativeClient} from '../_shared/native-client.js';
+import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // FastGo storage adapter: Google during staging, Postgres after verified cutover.
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-member-access-2026-10-13';
+const RELEASE = 'workshop-incremental-sync-2026-10-14';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -155,6 +156,9 @@ async function main(req){
     if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!canSell(me))fail('Касса доступна продажнику, владельцу и разработчику',403);
     if(me.role==='seller'&&!['me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
+    // Reuse the same verified user and active workshop membership as card reads.
+    if(action==='sync_status')return out({data:await nativeSyncStatus(db,me,await rolePermission(me.role),RELEASE)});
+    if(action==='sync_changes')return out({data:await nativeSyncChanges(db,p)});
     if(action==='owner_device_status'||action==='owner_device_enroll'){
       if(!['developer','owner'].includes(me.role))fail('Доступно только привилегированной учётной записи',403);
       if(me.role==='owner'){

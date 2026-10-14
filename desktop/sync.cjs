@@ -25,11 +25,56 @@ class Synchronizer{
    }catch(e){if(transient(e)){this.online=false;this.lastError=e.message;break;}this.store.mark(op.seq,e.status===409?'conflict':'failed',{error:JSON.stringify({message:e.message})});this.changed({dataChanged:true});}
   }
  }finally{this.busy=false;}}
- async warm(actor){let dataChanged=false;const cache=(action,params,data)=>{if(this.store.cacheResponse(actor,action,params,data))dataChanged=true;};try{for(const action of ['request_access','me','catalog','legal','overview']){const d=await this.remote(action,{},actor);cache(action,{},d);}for(const kind of ['repair','storage']){
-  let offset=0;while(true){const page=await this.remote('list',{kind,status:'all',limit:100,offset},actor);cache('list',{kind,status:'all',limit:100,offset},page);
-   for(let i=0;i<(page.items||[]).length;i+=4)await Promise.all(page.items.slice(i,i+4).map(async r=>{const d=await this.remote('get',{kind,id:r.id},actor);cache('get',{kind,id:r.id},d);}));
-   offset+=page.items.length;if(!page.items.length||offset>=Number(page.count??page.total))break;
+ warm(actor,options={}){if(this.warming)return this.warming;this.warming=this.pull(actor,options).finally(()=>{this.warming=null;});return this.warming;}
+ async pull(actor,{force=false}={}){
+  const previous=this.store.cache(actor,'sync_checkpoint'),day=new Date().toISOString().slice(0,10);
+  let status;
+  try{status=await this.remote('sync_status',{},actor);}catch(e){if(e.status!==400)throw e;}
+  const incremental=status?.protocol===1&&status.incremental===true;
+  // Older servers remain usable, without repeatedly downloading their entire database.
+  if(!incremental&&!force&&previous?.legacyAt>Date.now()-120000)return;
+  const full=!incremental||!previous?.incremental||previous.epoch!==status.epoch||previous.access!==status.access||Number(previous.version)>Number(status.version);
+  let manifest={reset:full,records:[],catalog:previous?.catalog!==status?.catalog,overview:previous?.day!==day};
+  if(!full&&previous.version!==status.version){
+   const delta=await this.remote('sync_changes',{since:previous.version,until:status.version,epoch:status.epoch},actor);
+   if(delta.version!==status.version||(!delta.reset&&!Array.isArray(delta.records)))throw Error('Неполный список изменений базы');
+   manifest={...delta,catalog:manifest.catalog||delta.catalog,overview:manifest.overview||delta.overview};
   }
- }this.online=true;this.store.backup();}finally{this.changed({dataChanged});}}
+  const staged=[],snapshots=new Map();
+  const read=async(action,params={})=>{const data=await this.remote(action,params,actor);staged.push({action,params,data});return data;};
+  const cards=async targets=>{for(let i=0;i<targets.length;i+=4)await Promise.all(targets.slice(i,i+4).map(p=>read('get',p)));};
+  if(manifest.reset){
+   await read('request_access');const me=await read('me');await read('catalog');
+   if(['developer','owner'].includes(me.role))await read('legal');
+   await read('overview');
+   for(const kind of ['repair','storage']){
+    const ids=[];let offset=0;
+    while(true){const page=await read('list',{kind,status:'all',limit:100,offset});
+     if(!Array.isArray(page.items)||!Number.isFinite(Number(page.count??page.total)))throw Error('Неполный список карточек');
+     await cards(page.items.map(r=>({kind,id:r.id})));ids.push(...page.items.map(r=>r.id));offset+=page.items.length;
+     if(offset>=Number(page.count??page.total))break;
+     if(!page.items.length)throw Error('Загрузка карточек прервалась');
+    }
+    snapshots.set(kind,ids);
+   }
+  }else{
+   const targets=new Map(manifest.records.map(r=>[r.kind+':'+r.id,r]));
+   // Refresh an old storage link as well when a repair was detached or relinked.
+   const repairIds=new Set(manifest.records.filter(r=>r.kind==='repair').map(r=>r.id));
+   if(repairIds.size)for(const storage of this.store.all(actor,'storage'))if((this.store.cache(actor,'get:'+stable({kind:'storage',id:storage.id}))?.linked||[]).some(r=>repairIds.has(r.id)))targets.set('storage:'+storage.id,{kind:'storage',id:storage.id});
+   await cards([...targets.values()]);
+   if(manifest.catalog)await read('catalog');
+   if(manifest.overview)await read('overview');
+  }
+  let dataChanged=false;
+  // Commit the cursor only after every read succeeded; retry safely after a dropped connection.
+  // The cursor is captured BEFORE reads, so simultaneous phone edits cannot be skipped.
+  this.store.transaction(()=>{
+   for(const {action,params,data} of staged){if(this.store.cacheResponse(actor,action,params,data))dataChanged=true;if(action==='get'&&data.legal)this.store.cache(actor,'legal',data.legal);}
+   for(const [kind,ids] of snapshots)if(this.store.pruneSnapshot(actor,kind,ids))dataChanged=true;
+   this.store.cache(actor,'sync_checkpoint',incremental?{...status,day}:{legacyAt:Date.now(),day});
+  });
+  this.online=true;this.lastError='';if(dataChanged)this.store.backup();this.changed({dataChanged});
+ }
 }
 module.exports={Synchronizer,conflictFields,transient};

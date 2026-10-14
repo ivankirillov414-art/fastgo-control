@@ -4,6 +4,8 @@ test('identical background sync does not report changed data; real edits still d
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-refresh-')),store=new Store(path.join(dir,'db.sqlite')),events=[];
  let record={id:'repair-1',revision:1,status:'accepted',model:'Max Speed'},reorder=false;
  const remote=async(action,p)=>{
+  if(action==='sync_status')return {protocol:1,incremental:true,version:String(record.revision),epoch:'test',access:'owner',catalog:'catalog'};
+  if(action==='sync_changes')return {version:p.until,reset:false,records:[{kind:'repair',id:record.id}]};
   if(action==='list')return {items:p.kind==='repair'?[record]:[],count:p.kind==='repair'?1:0};
   if(action==='get')return {record:reorder?Object.fromEntries(Object.entries(record).reverse()):record,legal:{name:'FastGo'}};
   return {value:action};
