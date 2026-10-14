@@ -19,25 +19,25 @@ jobs:
     steps:
       - name: Verify tested build
         run: |
-          gh api repos/"$GH_REPO"/actions/runs/38416738334 > /tmp/fastgo-build.json
-          jq -e '.conclusion == "success" and .head_sha == "3bd405f480c5c7b68132246b779180ac2c52a79d"' /tmp/fastgo-build.json
+          gh api repos/"$GH_REPO"/actions/runs/38574695471 > /tmp/fastgo-build.json
+          jq -e '.conclusion == "success" and .head_sha == "82de23784dc970e7a90fd730c1b5e0751c00467a"' /tmp/fastgo-build.json
       - uses: actions/download-artifact@v4
         with:
           name: FastGo-Windows
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: 38416738334
+          run-id: 38574695471
           path: release
       - name: Package installer and instructions
         run: |
-          test -s release/dist/FastGo-Setup-1.0.0-Windows-x64.exe
-          zip -j release/FastGo-Windows-1.0.0.zip release/dist/FastGo-Setup-1.0.0-Windows-x64.exe release/README.md
+          test -s release/dist/FastGo-Setup-1.0.1-Windows-x64.exe
+          zip -j release/FastGo-Windows-1.0.1.zip release/dist/FastGo-Setup-1.0.1-Windows-x64.exe release/README.md
           cd release
-          sha256sum dist/FastGo-Setup-1.0.0-Windows-x64.exe FastGo-Windows-1.0.0.zip > SHA256SUMS.txt
+          sha256sum dist/FastGo-Setup-1.0.1-Windows-x64.exe FastGo-Windows-1.0.1.zip > SHA256SUMS.txt
       - name: Publish download links
         run: |
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          FastGo для Windows 10/11, x64.
+          FastGo для Windows 10/11, x64. Версия 1.0.1: очередь печати проверяется каждую секунду независимо от синхронизации базы; убраны лишние запросы перед печатью.
           
           Для установки скачайте EXE. Также доступен ZIP-архив с установщиком и инструкцией.
           
@@ -45,4 +45,4 @@ jobs:
           
           Проверена приёмка без фотографий и без сети, восстановление после перезапуска, подготовка документа и вызов печати без подтверждения. Физическая печать зависит от установленного драйвера принтера.
           NOTES
-          gh release create fastgo-windows-v1.0.0 --target 3bd405f480c5c7b68132246b779180ac2c52a79d --title "FastGo для Windows 1.0.0" --notes-file /tmp/fastgo-release-notes.txt release/dist/FastGo-Setup-1.0.0-Windows-x64.exe release/FastGo-Windows-1.0.0.zip release/README.md release/SHA256SUMS.txt
+          gh release create fastgo-windows-v1.0.1 --target 82de23784dc970e7a90fd730c1b5e0751c00467a --title "FastGo для Windows 1.0.1" --notes-file /tmp/fastgo-release-notes.txt release/dist/FastGo-Setup-1.0.1-Windows-x64.exe release/FastGo-Windows-1.0.1.zip release/README.md release/SHA256SUMS.txt
