@@ -82,6 +82,7 @@ app.whenReady().then(()=>{
  handle('fg-session-save',(_e,s)=>{if(!s?.access_token||!s.user_id)throw Error('Неверная сессия');persistSession(s);notify();return true;});
  handle('fg-session-clear',()=>{persistSession(null);notify();return true;});
  handle('fg-request',request);
+ handle('fg-diagnostics',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(!['owner','developer'].includes(member?.role))throw Error('Доступно только владельцу');return store.diagnostics(actor);});
  handle('fg-state',()=>({version:app.getVersion(),update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
  handle('fg-update-check',async()=>{await updates?.check();return updates?.state;});
  handle('fg-update-now',()=>{if(!updates)throw Error('Обновления доступны в установленной версии FastGo');setTimeout(()=>updates.now(),0);return true;});
