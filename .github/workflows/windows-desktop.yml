@@ -1,7 +1,7 @@
 name: FastGo Windows
 on:
   push:
-    paths: ['desktop/**', '.github/workflows/windows-desktop.yml']
+    paths: ['desktop/**', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
   workflow_dispatch:
 permissions:
   contents: read
