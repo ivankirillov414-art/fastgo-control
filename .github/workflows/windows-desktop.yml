@@ -19,6 +19,8 @@ jobs:
         working-directory: desktop
       - run: npm test
         working-directory: desktop
+      - name: Verify incremental sync metadata and access checks
+        run: node --test tests/native-sync.test.mjs
       - run: npm run prepare-web
         working-directory: desktop
       - name: Install desktop smoke test driver

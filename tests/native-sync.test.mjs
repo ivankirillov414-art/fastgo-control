@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {nativeSyncStatus,nativeSyncChanges} from '../supabase/functions/_shared/native-sync.js';
+const repair='11111111-1111-4111-8111-111111111111',storage='22222222-2222-4222-8222-222222222222',client='33333333-3333-4333-8333-333333333333';
+function fixture(){
+ const calls=[],state={version:3,mode:'active',imported_at:'epoch'},journal=[{version:3,changes:[{sheet:'Ремонты',row:2,values:{'Диагностика':'changed'}}]}];
+ const rows=[{sheet:'Ремонты',row_no:2,data:{repair_id:repair,intake_id:repair,storage_id:storage}},{sheet:'Зимнее хранение',row_no:2,data:{storage_id:storage,intake_id:storage}},{sheet:'Приёмки',row_no:2,data:{intake_id:repair,client_id:client}},{sheet:'Клиенты',row_no:2,data:{client_id:client}},{sheet:'Оплаты',row_no:2,data:{record_id:repair}}];
+ const db=async(table,q)=>{calls.push({table,q});if(table==='workshop_native_state')return [{...state}];if(table==='workshop_backend_config')return [{storage_mode:'postgres'}];if(table==='workshop_members')return [{profile_id:client,name:'Test'}];if(table==='workshop_native_outbox')return journal;
+  if(table==='workshop_native_rows'){const params=new URLSearchParams(q);return rows.filter(r=>r.sheet===params.get('sheet').slice(3)&&[...params].every(([key,value])=>{if(key==='row_no')return value.slice(4,-1).split(',').includes(String(r.row_no));if(key.startsWith('data->>'))return value.slice(4,-1).split(',').includes(r.data[key.slice(7)]);return true;}));}throw Error(table);};
+ return {db,calls,state,journal,rows,params:{since:'2',until:'3',epoch:'epoch'}};
+}
+test('status reads metadata only and ignores mirror heartbeats',async()=>{const f=fixture();const a=await nativeSyncStatus(f.db,{role:'owner'},{can_issue:true},'release');f.state.mirror_seen_at='later';assert.deepEqual(await nativeSyncStatus(f.db,{role:'owner'},{can_issue:true},'release'),a);assert.equal(a.version,'3');assert.equal(a.access.length,64);assert(!f.calls.some(c=>/snapshot|rows|outbox/.test(c.table)));assert.notEqual((await nativeSyncStatus(f.db,{role:'manager'},{},'release')).access,a.access);});
+test('a patch with no record id resolves the changed row and its linked storage',async()=>{const f=fixture();const result=await nativeSyncChanges(f.db,f.params);assert.deepEqual(result.records,[{kind:'repair',id:repair},{kind:'storage',id:storage}]);assert.equal(result.reset,false);assert.equal(JSON.stringify(result).includes('Диагностика'),false);});
+test('payments and client changes refresh affected cards even without a status edit',async()=>{for(const sheet of ['Оплаты','Клиенты','Приёмки']){const f=fixture();f.journal[0].changes=[{sheet,row:2,values:{}}];const r=await nativeSyncChanges(f.db,f.params);assert(r.records.some(x=>x.id===repair),sheet);}});
+test('a new intake and its number counters produce a delta instead of a full reload',async()=>{const f=fixture();f.rows.push({sheet:'Настройки',row_no:2,data:{Ключ:'next_repair_seq',Значение:2}});f.journal[0].changes=['Клиенты','Приёмки','Ремонты','Настройки'].map(sheet=>({sheet,row:2,values:{}}));const result=await nativeSyncChanges(f.db,f.params);assert.equal(result.reset,false);assert(result.records.some(r=>r.id===repair));f.rows.at(-1).data.Ключ='schema_version';assert.equal((await nativeSyncChanges(f.db,f.params)).reset,true);});
+test('missing journal versions, oversized gaps, unknown domains and changed epochs reset safely',async()=>{const f=fixture();f.journal.length=0;assert.equal((await nativeSyncChanges(f.db,f.params)).reset,true);assert.equal((await nativeSyncChanges(f.db,{...f.params,epoch:'other'})).reset,true);f.state.version=500;assert.equal((await nativeSyncChanges(f.db,{...f.params,until:'500'})).reset,true);f.journal.push({version:3,changes:[{sheet:'Future domain',row:2}]});assert.equal((await nativeSyncChanges(f.db,f.params)).reset,true);});
+test('catalog edits do not reload all cards and malformed cursors are rejected',async()=>{const f=fixture();f.journal[0].changes=[{sheet:'Товары',row:2,values:{}}];const result=await nativeSyncChanges(f.db,f.params);assert.equal(result.catalog,true);assert.deepEqual(result.records,[]);await assert.rejects(nativeSyncChanges(f.db,{...f.params,since:'2&select=*'}),e=>e.status===400);});
+test('new metadata endpoints enforce JWT, active membership and seller restrictions before any sync reads',async()=>{
+ const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+ for(const action of ['sync_status','sync_changes'])for(const scenario of ['anonymous','invalid','inactive','seller','owner']){
+  let handler,syncCalls=0;
+  const context={Deno:{env:{get:()=>''},serve:fn=>handler=fn},Request,Response,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,AbortSignal,crypto:globalThis.crypto,fetch:async url=>url.includes('/auth/v1/user')?Response.json({id:client},{status:scenario==='invalid'?401:200}):Response.json(scenario==='inactive'?[]:[{profile_id:client,active:true,role:scenario==='seller'?'seller':'owner'}]),nativeSyncStatus:async()=>{syncCalls++;return {};},nativeSyncChanges:async()=>{syncCalls++;return {};}};
+  vm.runInNewContext(source,context);const response=await handler(new Request('https://test.invalid',{method:'POST',headers:scenario==='anonymous'?{}:{Authorization:'Bearer test-token'},body:JSON.stringify({action})}));
+  assert.equal(response.status,scenario==='owner'?200:['anonymous','invalid'].includes(scenario)?401:403,scenario);assert.equal(syncCalls,scenario==='owner'?1:0,scenario);
+ }
+});
