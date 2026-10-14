@@ -13,6 +13,7 @@ import {renderDocument} from './documents.js';
 import {renderQa} from './qa.js';
 installSuggestions();
 const $=id=>document.getElementById(id),app=$('app');let me=null,epoch=0,cache=null,dirty=false,loadingTimer=null;
+window.fastgoHasUnsavedChanges=()=>dirty;
 const nav=[['home','Главная','◈'],['repairs','Ремонты','⚒'],['storage','Хранение','▣'],['clients','Клиенты','♙'],['history','История техники','♙'],['owner-analytics','Аналитика владельца','₽'],['app-diagnostics','Настройки приложения','⚙'],['stock','Склад','▤'],['equipment','Техника','▤'],['cash','Кассы и продажи','₽'],['finance','Оплаты','₽'],['catalog','Прайс работ','≡'],['staff','Сотрудники','♧'],['qa','Проверка','✓'],['printing','Печать на ноутбуке','▤'],['account','Аккаунт','●'],['settings','Реквизиты','⚙']];
 const admin=()=>['developer','owner','admin'].includes(me?.role),manager=()=>['developer','owner','admin','receiver','manager','mechanic'].includes(me?.role),privileged=()=>['developer','owner'].includes(me?.role);
 let currentPage='home';

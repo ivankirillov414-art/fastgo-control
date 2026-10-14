@@ -1,9 +1,9 @@
 import './workshop/version-status.js';
 import {invalidateReads} from './workshop/core.js';
+import {installUpdateSafety} from './workshop/update-safety.js';
 const native=window.fastgoDesktop;
-let lastInteraction=Date.now();
-for(const event of ['pointerdown','keydown','input','change','wheel','hashchange'])window.addEventListener(event,()=>{lastInteraction=Date.now();},true);
-window.fastgoUpdateSafe=(immediate=false)=>(immediate||Date.now()-lastInteraction>=120000)&&['home','repairs','storage'].includes((location.hash.slice(1)||'home').split('?')[0])&&!document.querySelector('dialog[open],.modal')&&!document.activeElement?.matches('input,textarea,select,[contenteditable]');
+installUpdateSafety({window,document});
+native.onUpdate(async()=>{try{if((await native.state()).update?.status==='error')window.fastgoReleaseUpdateLock();}catch{window.fastgoReleaseUpdateLock();}});
 const updateText=s=>{const u=s.update||{};return u.status==='downloading'?'Загрузка обновления: '+u.progress+'%':u.status==='ready'?(u.immediate?'Обновление '+u.version+' готово. Завершите ввод и откройте главную — установим сразу после печати и синхронизации':'Обновление '+u.version+' готово. Перезапуск после 2 минут бездействия на главной или в списке ремонтов/хранения'):u.status==='installing'?'Устанавливаем обновление…':u.status==='checking'?'Проверяем обновления…':u.status==='current'?'Установлена актуальная версия':u.status==='error'?'Не удалось проверить или загрузить обновление. Повторим автоматически.':'Автообновление включено';};
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

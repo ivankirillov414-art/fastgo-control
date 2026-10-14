@@ -22,5 +22,11 @@ app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'cre
  await app.evaluate(()=>{globalThis.fakeOffline=true;});await page.evaluate(()=>window.fastgoDesktop.sync());await page.waitForTimeout(2200);
  assert(await page.evaluate(()=>window.currentIntake.isConnected));assert.equal(await page.evaluate(()=>window.dataEvents),1);
  await page.evaluate(()=>{location.hash='new?kind=repair';});await page.locator('input').first().waitFor();assert.equal(await page.evaluate(()=>window.fastgoUpdateSafe(true)),false);
+ await page.locator('#f-phone').fill('+79991234567');
+ assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),true);
+ await page.locator('#f-phone').blur();
+ assert.equal(await page.evaluate(()=>window.fastgoLockForUpdate(true)),false);
+ assert.equal(await page.evaluate(()=>document.body.inert),false);
+ assert.equal(await page.locator('#f-phone').inputValue(),'+79991234567');
  console.log('PASS: empty print polling, unchanged sync and network failure preserve home buttons; real data change refreshes once');
  }catch(e){console.error(await page.locator('body').innerText());throw e;}finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

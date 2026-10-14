@@ -111,7 +111,13 @@ app.whenReady().then(()=>{
     // Stop starting new polls while existing requests drain. One-second print polling
     // must not starve installation forever, but any claimed print must finish first.
     updateDraining=idle;
-    return idle&&!printBusy&&!remoteBusy&&!sync.busy&&!warming&&!activeRequests&&!store.db.prepare("SELECT 1 FROM print_jobs WHERE state='queued' LIMIT 1").get();
+    const busy=()=>printBusy||remoteBusy||sync.busy||warming||activeRequests||store.db.prepare("SELECT 1 FROM print_jobs WHERE state='queued' LIMIT 1").get();
+    if(!idle||busy())return false;
+    // Recheck on the renderer thread and block new input atomically before quitting.
+    const locked=await win.webContents.executeJavaScript('window.fastgoLockForUpdate?.('+Boolean(immediate)+') === true');
+    if(!locked){updateDraining=false;return false;}
+    if(busy()){await win.webContents.executeJavaScript('window.fastgoReleaseUpdateLock?.()');updateDraining=false;return false;}
+    return true;
    },prepare:()=>{store.backup('before-update-'+Date.now());updateInstalling=true;}});
   setTimeout(()=>updates.check(),15000);
   setInterval(()=>updates.check(),60000);

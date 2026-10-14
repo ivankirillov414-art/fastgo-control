@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+globalThis.window={addEventListener(){}};globalThis.localStorage={getItem(){return null;}};
+const {ownerOverview}=await import('../workshop/owner-overview.js');
+const data={totals:{labor:3500,revenue:4900,cost:900,wage:1400,missing_cost:0,missing_wage:0},details:[{id:'a',number:'0016',vehicle:'<script>',date:'2026-10-13',labor:3500,cost:900,wage:1400,margin:2600}],days:[{label:'2026-10-13',labor:3500}],purchases:[],coverage_days:7};
+test('overview uses real totals and zero days, escapes vehicle names, and avoids fake profit when data is missing',()=>{const options={from:'2026-10-01',to:'2026-10-14',href:()=> '#order?id=a'};const html=ownerOverview(data,options);assert.match(html,/2\s600/);assert.match(html,/&lt;script&gt;/);assert.match(html,/height:0%/);assert.match(html,/height:100%/);const unknown=ownerOverview({...data,totals:{...data.totals,missing_cost:1,missing_wage:1}},options);assert.match(unknown,/Недостаточно данных/);assert.match(unknown,/Не все цены известны/);assert.match(unknown,/Не настроены полностью/);});
+test('empty period displays no repairs and no invented average',()=>{const html=ownerOverview({...data,details:[],days:[],totals:{labor:0,revenue:0,cost:0,wage:0}}, {from:'2026-10-14',to:'2026-10-14',href:()=>''});assert.match(html,/выданных ремонтов нет/);assert.match(html,/Средняя выручка ремонта<\/span><strong>—/);assert.equal((html.match(/class="owner-chart-column"/g)||[]).length,1);});
