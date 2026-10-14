@@ -31,11 +31,15 @@ jobs:
           node desktop/tests/smoke.cjs
       - run: npm run build
         working-directory: desktop
+      - name: Verify packaged update support
+        run: node desktop/tests/check-package.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: FastGo-Windows
           path: |
             desktop/dist/FastGo-Setup-*-Windows-x64.exe
+            desktop/dist/FastGo-Setup-*-Windows-x64.exe.blockmap
+            desktop/dist/latest.yml
             desktop/README.md
           if-no-files-found: error
           retention-days: 90

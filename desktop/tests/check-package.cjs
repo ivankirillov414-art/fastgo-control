@@ -1,0 +1,11 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const yaml=require('js-yaml'),asar=require('@electron/asar');
+const root=path.resolve(__dirname,'..'),pkg=require('../package.json'),dist=path.join(root,'dist');
+const metadata=yaml.load(fs.readFileSync(path.join(dist,'latest.yml'),'utf8'));
+const name=`FastGo-Setup-${pkg.version}-Windows-x64.exe`,file=metadata.files.find(f=>f.url===name);
+assert(file);assert.equal(metadata.version,pkg.version);assert.equal(crypto.createHash('sha512').update(fs.readFileSync(path.join(dist,name))).digest('base64'),file.sha512);
+assert(fs.existsSync(path.join(dist,name+'.blockmap')));
+const resources=path.join(dist,'win-unpacked/resources'),feed=yaml.load(fs.readFileSync(path.join(resources,'app-update.yml'),'utf8'));
+assert.equal(feed.provider,'generic');assert.equal(feed.url,pkg.build.publish.url);
+const archive=path.join(resources,'app.asar');assert.match(asar.extractFile(archive,'updates.cjs').toString(),/quitAndInstall/);assert.equal(JSON.parse(asar.extractFile(archive,path.join('node_modules','electron-updater','package.json')).toString()).version,pkg.dependencies['electron-updater']);
+console.log('PASS: packaged updater, public update feed, installer checksum and blockmap');
