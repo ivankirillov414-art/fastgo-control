@@ -1,48 +1,63 @@
 name: Publish tested FastGo Windows installer
 on:
-  push:
+  workflow_run:
+    workflows: ['FastGo Windows']
+    types: [completed]
     branches: [main]
-    paths: ['.github/workflows/publish-windows-installer.yml']
-  workflow_dispatch:
 permissions:
   contents: write
   actions: read
 concurrency:
-  group: fastgo-windows-v1-release
+  group: fastgo-windows-release
   cancel-in-progress: false
 jobs:
   publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Verify tested build
-        run: |
-          gh api repos/"$GH_REPO"/actions/runs/38574695471 > /tmp/fastgo-build.json
-          jq -e '.conclusion == "success" and .head_sha == "82de23784dc970e7a90fd730c1b5e0751c00467a"' /tmp/fastgo-build.json
       - uses: actions/download-artifact@v4
         with:
           name: FastGo-Windows
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: 38574695471
+          run-id: ${{ github.event.workflow_run.id }}
           path: release
-      - name: Package installer and instructions
+      - name: Verify and package tested installer
+        id: version
         run: |
-          test -s release/dist/FastGo-Setup-1.0.1-Windows-x64.exe
-          zip -j release/FastGo-Windows-1.0.1.zip release/dist/FastGo-Setup-1.0.1-Windows-x64.exe release/README.md
+          python3 - <<'PY'
+          import pathlib, re, hashlib, base64, os
+          text = pathlib.Path('release/dist/latest.yml').read_text()
+          version = re.search(r'^version: (\d+\.\d+\.\d+)$', text, re.M).group(1)
+          name = f'FastGo-Setup-{version}-Windows-x64.exe'
+          data = pathlib.Path('release/dist', name).read_bytes()
+          assert name in text and base64.b64encode(hashlib.sha512(data).digest()).decode() in text
+          assert pathlib.Path('release/dist', name+'.blockmap').is_file()
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out: out.write('value='+version+'\n')
+          PY
+          version=$(sed -n 's/^version: //p' release/dist/latest.yml)
+          zip -j "release/FastGo-Windows-$version.zip" "release/dist/FastGo-Setup-$version-Windows-x64.exe" release/README.md
           cd release
-          sha256sum dist/FastGo-Setup-1.0.1-Windows-x64.exe FastGo-Windows-1.0.1.zip > SHA256SUMS.txt
-      - name: Publish download links
+          sha256sum dist/*.exe FastGo-Windows-*.zip > SHA256SUMS.txt
+      - name: Publish complete update atomically
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
         run: |
+          tag="fastgo-windows-v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'This version already exists; never overwrite an installed release.'
+            exit 0
+          fi
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          FastGo для Windows 10/11, x64. Версия 1.0.1: очередь печати проверяется каждую секунду независимо от синхронизации базы; убраны лишние запросы перед печатью.
-          
-          Для установки скачайте EXE. Также доступен ZIP-архив с установщиком и инструкцией.
-          
-          При первом запуске подключитесь к интернету, войдите, загрузите базу и выберите принтер в настройках приложения. Ремонты и приёмки сохраняются без сети; фотографии на ноутбуке необязательны. Синхронизация выполняется после подключения. Для автоматической печати запросов с телефона включите приём заданий и оставляйте приложение открытым.
-          
-          Проверена приёмка без фотографий и без сети, восстановление после перезапуска, подготовка документа и вызов печати без подтверждения. Физическая печать зависит от установленного драйвера принтера.
+          FastGo для Windows 10/11, x64. Автоматическая печать после приёмки, независимая очередь печати и автообновление приложения.
+
+          Версии 1.0.0 и 1.0.1 нужно один раз обновить вручную, установив новую версию поверх прежней. База и настройки сохраняются. Следующие версии загружаются автоматически; приложение перезапускается после двух минут бездействия на главной или в списке ремонтов/хранения, когда печать и синхронизация завершены. При открытой заявке перезапуск откладывается.
+
+          Для пересылки доступен ZIP-архив с установщиком. Подробнее — README.md.
           NOTES
-          gh release create fastgo-windows-v1.0.1 --target 82de23784dc970e7a90fd730c1b5e0751c00467a --title "FastGo для Windows 1.0.1" --notes-file /tmp/fastgo-release-notes.txt release/dist/FastGo-Setup-1.0.1-Windows-x64.exe release/FastGo-Windows-1.0.1.zip release/README.md release/SHA256SUMS.txt
+          gh release create "$tag" --draft --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
+          gh release edit "$tag" --draft=false --latest

@@ -1,6 +1,6 @@
 {
   "name": "fastgo-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "FastGo workshop for Windows with offline database and remote printing",
   "author": "FastGo",
@@ -26,6 +26,7 @@
       "preload.cjs",
       "store.cjs",
       "sync.cjs",
+      "updates.cjs",
       "web/**/*",
       "package.json"
     ],
@@ -39,9 +40,17 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "FastGo"
+      "shortcutName": "FastGo",
+      "perMachine": false
     },
     "forceCodeSigning": false,
-    "npmRebuild": false
+    "npmRebuild": false,
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/ivankirillov414-art/fastgo-control/releases/latest/download/"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
   }
 }

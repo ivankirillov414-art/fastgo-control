@@ -70,6 +70,6 @@ class Store{
  printState(actor,key,state,kind,id,error){this.db.prepare('INSERT INTO print_jobs VALUES(?,?,?,?,?,?,?) ON CONFLICT(actor,key) DO UPDATE SET state=excluded.state,error=excluded.error').run(actor,key,kind,id,state,error||null,new Date().toISOString());}
  printExists(actor,key){return this.db.prepare('SELECT state FROM print_jobs WHERE actor=? AND key=?').get(actor,key);}
  stats(actor){return {pending:this.pending(actor).filter(x=>!['conflict','failed'].includes(x.status)).length,conflicts:this.conflicts(actor).length,records:this.db.prepare('SELECT count(*) AS n FROM records WHERE actor=?').get(actor).n};}
- backup(){const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+new Date().toISOString().slice(0,10)+'.sqlite');if(!fs.existsSync(target))this.db.exec("VACUUM INTO '"+target.replace(/'/g,"''")+"'");return target;}
+ backup(label=new Date().toISOString().slice(0,10)){const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+String(label).replace(/[^a-zA-Z0-9-]/g,'')+'.sqlite');if(!fs.existsSync(target))this.db.exec("VACUUM INTO '"+target.replace(/'/g,"''")+"'");return target;}
 }
 module.exports={Store,writes,stable};
