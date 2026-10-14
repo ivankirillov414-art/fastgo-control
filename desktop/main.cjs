@@ -46,7 +46,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  if(p.intake&&store.printExists(account,key))return {enabled:true,duplicate:true};
  if(printBusy)throw Error('Принтер занят. Повторите после завершения текущего листа.');printBusy=true;
  let hidden,entry;try{
-  const me=await remote('me',{}).catch(e=>{if(!transient(e))throw e;return store.read(account,'me');});
+  const me=store.cache(account,'me')||await remote('me',{}).catch(e=>{if(!transient(e))throw e;return store.read(account,'me');});
   hidden=new BrowserWindow({show:false,width:1100,height:1400,webPreferences:{backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   entry={local:!cloudRecord,cloud:cloudRecord,context:{kind:p.kind||'repair',id:p.id,me},resolve:null,reject:null};printWindows.set(hidden.webContents.id,entry);
   const ready=new Promise((resolve,reject)=>{entry.resolve=resolve;entry.reject=reject;});
@@ -63,7 +63,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
 }
 async function localPrints(){if(printBusy||!actor||!store.setting('printer'))return;const row=store.db.prepare("SELECT * FROM print_jobs WHERE actor=? AND state='queued' ORDER BY created_at LIMIT 1").get(actor);if(!row)return;try{await printRecord({kind:row.kind,id:row.record_id},{key:row.key});}catch(e){lastError=e.message;notify();}}
 async function pollPrint(){if(remoteBusy||printBusy||!actor||!store?.setting('remote_print'))return;remoteBusy=true;let job;
- try{const state=await remotePrint('status');if(!state.enabled||state.station_id!==store.setting('station_id')||state.owner_id!==actor){store.setting('remote_print',false);return;}
+ try{// Claim validates the active station and owner atomically on the server.
   const result=await remotePrint('claim',{station_id:store.setting('station_id'),request_id:store.setting('claim_token')});job=result.job;if(!job)return;
   await printRecord({kind:job.kind,id:job.record_id},{cloudRecord:true,key:job.id});
   await remotePrint('complete',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),job_id:job.id});
@@ -94,7 +94,9 @@ app.whenReady().then(()=>{
  win.webContents.setWindowOpenHandler(({url})=>{if(url.startsWith('https://'))shell.openExternal(url);return {action:'deny'};});
  win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('fastgo://app/')){event.preventDefault();if(url.startsWith('https://'))shell.openExternal(url);}});
  win.loadURL('fastgo://app/workshop.html#home');
- setInterval(async()=>{if(actor){await sync.run(actor).catch(()=>{});await localPrints();pollPrint();}},5000);
+ // Never put printing behind a database upload or its network timeout.
+ setInterval(()=>{if(actor)sync.run(actor).catch(()=>{});},5000);
+ setInterval(()=>{if(actor){localPrints();pollPrint();}},1000);
  setInterval(()=>{if(actor&&!warming)warm();},120000);
 });
 app.on('second-instance',()=>{if(win){win.restore();win.focus();}});
