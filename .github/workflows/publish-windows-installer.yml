@@ -1,0 +1,48 @@
+name: Publish tested FastGo Windows installer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-windows-installer.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: fastgo-windows-v1-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Verify tested build
+        run: |
+          gh api repos/"$GH_REPO"/actions/runs/38416738334 > /tmp/fastgo-build.json
+          jq -e '.conclusion == "success" and .head_sha == "3bd405f480c5c7b68132246b779180ac2c52a79d"' /tmp/fastgo-build.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: FastGo-Windows
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 38416738334
+          path: release
+      - name: Package installer and instructions
+        run: |
+          test -s release/dist/FastGo-Setup-1.0.0-Windows-x64.exe
+          zip -j release/FastGo-Windows-1.0.0.zip release/dist/FastGo-Setup-1.0.0-Windows-x64.exe release/README.md
+          cd release
+          sha256sum dist/FastGo-Setup-1.0.0-Windows-x64.exe FastGo-Windows-1.0.0.zip > SHA256SUMS.txt
+      - name: Publish download links
+        run: |
+          cat > /tmp/fastgo-release-notes.txt <<'NOTES'
+          FastGo для Windows 10/11, x64.
+          
+          Для установки скачайте EXE. Также доступен ZIP-архив с установщиком и инструкцией.
+          
+          При первом запуске подключитесь к интернету, войдите, загрузите базу и выберите принтер в настройках приложения. Ремонты и приёмки сохраняются без сети; фотографии на ноутбуке необязательны. Синхронизация выполняется после подключения. Для автоматической печати запросов с телефона включите приём заданий и оставляйте приложение открытым.
+          
+          Проверена приёмка без фотографий и без сети, восстановление после перезапуска, подготовка документа и вызов печати без подтверждения. Физическая печать зависит от установленного драйвера принтера.
+          NOTES
+          gh release create fastgo-windows-v1.0.0 --target 3bd405f480c5c7b68132246b779180ac2c52a79d --title "FastGo для Windows 1.0.0" --notes-file /tmp/fastgo-release-notes.txt release/dist/FastGo-Setup-1.0.0-Windows-x64.exe release/FastGo-Windows-1.0.0.zip release/README.md release/SHA256SUMS.txt
