@@ -1,3 +1,4 @@
+import './workshop/version-status.js';
 import {invalidateReads} from './workshop/core.js';
 const native=window.fastgoDesktop;
 let lastInteraction=Date.now();
