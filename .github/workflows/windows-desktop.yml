@@ -29,6 +29,11 @@ jobs:
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/smoke.cjs
+      - name: Verify stable screen during background polling
+        shell: pwsh
+        run: |
+          $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
+          node desktop/tests/ui-stability.cjs
       - run: npm run build
         working-directory: desktop
       - name: Verify packaged update support

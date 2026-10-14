@@ -9,7 +9,7 @@ if(!app.requestSingleInstanceLock())app.quit();
 let win,store,sync,credentials=null,actor='',online=false,warming=false,lastError='',refreshing,printBusy=false,remoteBusy=false,nextProbe=0,updates,updateInstalling=false,activeRequests=0;
 const printWindows=new Map(),webRoot=path.join(__dirname,'web');
 const credentialFile=()=>path.join(app.getPath('userData'),'credentials.bin');
-function notify(){if(win&&!win.isDestroyed())win.webContents.send('fg-changed');}
+function notify({dataChanged=false}={}){if(win&&!win.isDestroyed())win.webContents.send('fg-changed',{dataChanged});}
 function persistSession(s){credentials=s;actor=s?.user_id||'';if(!s){try{fs.unlinkSync(credentialFile());}catch{}return;}if(!safeStorage.isEncryptionAvailable())throw Error('Windows не предоставил защищённое хранилище входа');fs.writeFileSync(credentialFile(),safeStorage.encryptString(JSON.stringify(s)));}
 async function validToken(){if(!credentials?.access_token)throw Object.assign(Error('Войдите в FastGo'),{status:401});if(credentials.expires_at*1000<Date.now()+45000&&credentials.refresh_token){
  if(!refreshing)refreshing=fetch(BASE+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:credentials.refresh_token}),signal:AbortSignal.timeout(15000)}).then(async r=>{const j=await r.json();if(!r.ok)throw Object.assign(Error('Войдите в FastGo снова'),{status:r.status});persistSession({access_token:j.access_token,refresh_token:j.refresh_token,user_id:j.user.id,expires_at:Math.floor(Date.now()/1000)+j.expires_in});}).finally(()=>refreshing=null);
@@ -30,7 +30,7 @@ async function request(event,{path:pathname,body={}}){
  if(writes.has(action)){
   const me=store.cache(account,'me')||await remote('me',{},account);if(!['developer','owner','admin','receiver','manager','mechanic'].includes(me.role)||store.cache(account,'request_access')?.active===false)throw Object.assign(Error('Нет доступа к приёмкам мастерской'),{status:403});
   if(action==='payment'&&Number(p.amount)<0&&!['developer','owner','admin'].includes(me.role))throw Object.assign(Error('Возврат доступен администратору'),{status:403});
-  const result=store.localWrite(account,action,p);notify();sync.run(account).catch(e=>{lastError=e.message;notify();});return {data:result,desktop:true};
+  const result=store.localWrite(account,action,p);notify({dataChanged:true});sync.run(account).catch(e=>{lastError=e.message;notify();});return {data:result,desktop:true};
  }
  if(action==='get'&&printWindows.get(event.sender.id)?.local)return {data:store.read(account,action,p)};
  // A dirty local card is displayed from SQLite, never replaced by a cloud read.
@@ -88,7 +88,7 @@ app.whenReady().then(()=>{
  handle('fg-printers',()=>win.webContents.getPrintersAsync());
  handle('fg-configure',async(_e,p)=>{const printers=await win.webContents.getPrintersAsync();if(!printers.some(x=>x.name===p.printer))throw Error('Выберите установленный принтер');store.setting('printer',p.printer);if(p.remotePrint){await remotePrint('activate',{station_id:store.setting('station_id')});store.setting('remote_print',true);}else if(store.setting('remote_print')){await remotePrint('deactivate');store.setting('remote_print',false);}notify();return true;});
  handle('fg-conflicts',()=>store.conflicts(actor).map(x=>({seq:x.seq,kind:x.kind,id:x.record_id,action:x.action,patch:x.patch,base:x.base,error:x.error})));
- handle('fg-resolve',async(_e,{seq,choice})=>{const op=store.pending(actor).find(x=>x.seq===seq);if(!op)throw Error('Изменение не найдено');const {record}=await remote('get',{kind:op.kind,id:op.record_id});store.resolve(actor,seq,choice,record);await sync.run(actor);notify();return true;});
+ handle('fg-resolve',async(_e,{seq,choice})=>{const op=store.pending(actor).find(x=>x.seq===seq);if(!op)throw Error('Изменение не найдено');const {record}=await remote('get',{kind:op.kind,id:op.record_id});store.resolve(actor,seq,choice,record);await sync.run(actor);notify({dataChanged:true});return true;});
  handle('fg-print',(_e,p)=>{if(!actor)throw Error('Войдите в FastGo');if(!p.intake)return printRecord(p);const key='intake:'+p.kind+':'+p.id;if(!store.printExists(actor,key))store.printState(actor,key,'queued',p.kind,p.id);localPrints();return {enabled:true};});
  handle('fg-print-context',event=>{const context=printWindows.get(event.sender.id)?.context;if(!context)throw Error('Не печатное окно');return context;});
  handle('fg-print-ready',event=>{const job=printWindows.get(event.sender.id);if(!job)throw Error('Не печатное окно');job.resolve();return true;});
