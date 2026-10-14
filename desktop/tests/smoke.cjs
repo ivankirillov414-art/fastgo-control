@@ -6,7 +6,7 @@ const store=new Store(path.join(data,'FastGo.sqlite'));
 for(const [key,value] of Object.entries({request_access:{active:true},me:{profile_id:actor,role:'owner',name:'Тест',can_sell:true,can_edit_catalog:true},catalog:{services:[],works:[],parts:[],staff:[],categories:[]},legal:{legal_name:'FastGo'}}))store.cache(actor,key,value);
 store.close();
 const wrapper=path.join(data,'launch.cjs');fs.writeFileSync(wrapper,`const {app,net,safeStorage}=require('electron');const fs=require('node:fs'),path=require('node:path');app.setPath('userData',${JSON.stringify(data)});net.isOnline=()=>false;app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'credentials.bin'),safeStorage.encryptString(JSON.stringify({access_token:'offline-smoke-token',refresh_token:'offline-smoke-refresh',user_id:${JSON.stringify(actor)},expires_at:4102444800}))));require(${JSON.stringify(path.join(root,'main.cjs'))});`);
-async function launch(){const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});const page=await app.firstWindow();page.on('pageerror',e=>console.error('Renderer:',e.message));await page.locator('#desktop-state-text').waitFor();return {app,page};}
+async function launch(){const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});const page=await app.firstWindow();page.on('pageerror',e=>console.error('Renderer:',e.message));await page.locator('#desktop-state-text').waitFor({state:'attached'});return {app,page};}
 (async()=>{let opened=await launch();try{
  await opened.page.waitForFunction(()=>document.querySelector('#desktop-state-text')?.textContent.includes('Работа без сети'));
  await opened.page.evaluate(()=>location.hash='#new?kind=repair');
