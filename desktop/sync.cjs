@@ -40,10 +40,11 @@ class Synchronizer{
    if(delta.version!==status.version||(!delta.reset&&!Array.isArray(delta.records)))throw Error('Неполный список изменений базы');
    manifest={...delta,catalog:manifest.catalog||delta.catalog,overview:manifest.overview||delta.overview};
   }
-  const staged=[],snapshots=new Map();
+  const staged=[],snapshots=new Map(),candidates=new Map();
   const read=async(action,params={})=>{const data=await this.remote(action,params,actor);staged.push({action,params,data});return data;};
   const cards=async targets=>{for(let i=0;i<targets.length;i+=4)await Promise.all(targets.slice(i,i+4).map(p=>read('get',p)));};
   if(manifest.reset){
+   for(const kind of ['repair','storage'])candidates.set(kind,new Set(this.store.db.prepare('SELECT id FROM records WHERE actor=? AND kind=? AND clouded=1').all(actor,kind).map(r=>r.id)));
    await read('request_access');const me=await read('me');await read('catalog');
    if(['developer','owner'].includes(me.role))await read('legal');
    await read('overview');
@@ -56,6 +57,14 @@ class Synchronizer{
      if(!page.items.length)throw Error('Загрузка карточек прервалась');
     }
     snapshots.set(kind,ids);
+   }
+   if(incremental){
+    const ending=await this.remote('sync_status',{},actor);
+    if(!ending.incremental||['version','epoch','access','catalog'].some(k=>ending[k]!==status[k])){
+     // Offset pages are not a transaction: concurrent inserts/deletions may shift
+     // unchanged rows between pages. Retry a full snapshot without accepting gaps.
+     this.online=true;this.changed({dataChanged:false});return;
+    }
    }
   }else{
    const targets=new Map(manifest.records.map(r=>[r.kind+':'+r.id,r]));
@@ -71,7 +80,7 @@ class Synchronizer{
   // The cursor is captured BEFORE reads, so simultaneous phone edits cannot be skipped.
   this.store.transaction(()=>{
    for(const {action,params,data} of staged){if(this.store.cacheResponse(actor,action,params,data))dataChanged=true;if(action==='get'&&data.legal)this.store.cache(actor,'legal',data.legal);}
-   for(const [kind,ids] of snapshots)if(this.store.pruneSnapshot(actor,kind,ids))dataChanged=true;
+   for(const [kind,ids] of snapshots)if(this.store.pruneSnapshot(actor,kind,ids,candidates.get(kind)))dataChanged=true;
    this.store.cache(actor,'sync_checkpoint',incremental?{...status,day}:{legacyAt:Date.now(),day});
   });
   this.online=true;this.lastError='';if(dataChanged)this.store.backup();this.changed({dataChanged});
