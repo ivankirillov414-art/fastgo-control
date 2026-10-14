@@ -71,6 +71,13 @@ class Store{
  resolve(actor,seq,choice,remote){const op=this.pending(actor).find(x=>x.seq===seq);if(!op||!['conflict','failed'].includes(op.status))throw Error('Конфликт уже изменён');if(choice==='remote')this.mark(seq,'discarded',{error:'Выбрана серверная версия'});else if(choice==='local'){if(op.action==='create')throw Error('Создание не может перезаписать другую карточку');this.db.prepare("UPDATE outbox SET status='queued',base=?,sent=NULL,error=NULL WHERE seq=? AND actor=?").run(stable(remote),seq,actor);}else throw Error('Выберите версию');if(remote)this.remember(actor,op.kind,remote);this.rebuild(actor,op.kind,op.record_id);}
  printState(actor,key,state,kind,id,error){this.db.prepare('INSERT INTO print_jobs VALUES(?,?,?,?,?,?,?) ON CONFLICT(actor,key) DO UPDATE SET state=excluded.state,error=excluded.error').run(actor,key,kind,id,state,error||null,new Date().toISOString());}
  printExists(actor,key){return this.db.prepare('SELECT state FROM print_jobs WHERE actor=? AND key=?').get(actor,key);}
+ diagnostics(actor){
+  const printPending=this.db.prepare("SELECT count(*) AS n FROM print_jobs WHERE actor=? AND state='queued'").get(actor).n;
+  const printErrors=this.db.prepare("SELECT kind,record_id,state,error,created_at FROM print_jobs WHERE actor=? AND state IN ('failed','dispatched') ORDER BY created_at DESC LIMIT 10").all(actor);
+  const folder=path.join(path.dirname(this.filename),'backups');let backup=null;
+  if(fs.existsSync(folder))for(const name of fs.readdirSync(folder).filter(n=>n.endsWith('.sqlite'))){const stat=fs.statSync(path.join(folder,name));if(!backup||stat.mtimeMs>backup.time)backup={name,time:stat.mtimeMs,bytes:stat.size};}
+  return {...this.stats(actor),printPending,printErrors,backup};
+ }
  stats(actor){return {pending:this.pending(actor).filter(x=>!['conflict','failed'].includes(x.status)).length,conflicts:this.conflicts(actor).length,records:this.db.prepare('SELECT count(*) AS n FROM records WHERE actor=?').get(actor).n};}
  backup(label=new Date().toISOString().slice(0,10)){const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+String(label).replace(/[^a-zA-Z0-9-]/g,'')+'.sqlite');if(!fs.existsSync(target))this.db.exec("VACUUM INTO '"+target.replace(/'/g,"''")+"'");return target;}
 }
