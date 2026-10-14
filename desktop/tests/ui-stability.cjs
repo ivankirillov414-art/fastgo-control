@@ -30,7 +30,8 @@ app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'cre
  assert.equal(await page.locator('#f-phone').inputValue(),'+79991234567');
  console.log('PASS: empty print polling, unchanged sync and network failure preserve home buttons; real data change refreshes once');
  }catch(e){console.error(await page.locator('body').innerText());throw e;}finally{
- // The scenario intentionally leaves an unsaved intake open. Disable only the
- // unload confirmation during test teardown, after proving the input survived.
- await page.evaluate(()=>window.addEventListener('beforeunload',e=>e.stopImmediatePropagation(),true)).catch(()=>{});
+ // Explicitly discard the test-only intake after proving its data survived.
+ // Closing Electron with a beforeunload dialog races Playwright's shutdown.
+ await page.evaluate(()=>{window.confirm=()=>true;location.hash='home';}).catch(()=>{});
+ await page.waitForFunction(()=>!window.fastgoHasUnsavedChanges()).catch(()=>{});
  await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
