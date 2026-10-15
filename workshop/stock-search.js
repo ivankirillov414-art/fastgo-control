@@ -110,6 +110,9 @@ export function attachStockSearch(input, source, onSelect) {
   }
   input.addEventListener('input', schedule);
   input.addEventListener('focus', show);
+  // Safari may keep focus after a tap on non-focusable text outside the field.
+  // A second tap on the input must reopen suggestions even without a focus event.
+  input.addEventListener('click', () => { if (box.hidden) show(); });
   input.addEventListener('blur', () => {
     clearTimeout(timer);
     timer = setTimeout(() => { if (!touching && !field.contains(document.activeElement)) close(); }, 120);
