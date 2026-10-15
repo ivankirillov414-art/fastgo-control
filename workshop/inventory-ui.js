@@ -1,4 +1,5 @@
 import {preparePartPhoto,fileBase64} from './photo-upload.js';
+import {displayPrivatePhoto} from './private-photo.js';
 import {uploadStatus,holdUpload} from './upload-ui.js';
 import {createSaleCamera} from './sale-camera.js';
 import {equipmentTypes} from './equipment-core.js';
@@ -170,7 +171,8 @@ export async function photoDialog(part){
       if(file){result=await uploadPartPhoto(part,file,category.checked,undefined,text=>status.busy(text));url=URL.createObjectURL(result.file);}
       else{status.busy('Сохраняем основную фотографию…');result=await api('part_photo_primary',{part_id:part.id,photo_id:photo.id,primary_for_category:category.checked});url=photo.url;}
       part.primary_photo_path=result.path;updateProductPhoto(part,url);
-      if(file)setTimeout(()=>URL.revokeObjectURL(url),300000);
+      // The preview owns this blob until its card leaves the page. Revoking it
+      // on a timer breaks restored/evicted images on mobile Safari.
       status.done('Фото сохранено');release();if(host.isConnected)dialog.close();notice('Фото сохранено');
     }catch(e){status.error(e.message+' Нажмите «Повторить загрузку».');button.textContent='Повторить загрузку';}
     finally{busy=false;release();host.querySelectorAll('button').forEach(b=>b.disabled=false);}
@@ -183,7 +185,7 @@ export async function photoDialog(part){
     await Promise.allSettled(photos.map(async p=>{
       const card=document.createElement('div'),img=document.createElement('img');img.alt=part.name;img.loading='lazy';card.append(img);host.append(card);
       if(editable){const primary=document.createElement('button');primary.className='btn secondary small';primary.textContent=p.primary?'Основное фото':'Сделать основным';primary.disabled=busy;primary.onclick=()=>save(null,{...p,url:img.src});card.append(primary);}
-      try{const result=await api('part_photo_url',{part_id:part.id,photo_id:p.id});if(host.isConnected)img.src=result.url;}catch{img.alt='Фото не загрузилось';}
+      displayPrivatePhoto(img,{getUrl:async()=>(await api('part_photo_url',{part_id:part.id,photo_id:p.id},{fresh:true})).url,onError:()=>{img.alt='Фото не загрузилось';}});
     }));
   }catch(e){if(host.isConnected)host.textContent=e.message;}
 }
@@ -354,21 +356,39 @@ setTimeout(enhance,120);
 export function bindProductPreviews(host,products){
   const byId=new Map(products.map(p=>[String(p.id),p]));
   let running=0,queue=[];
-  const versions=new WeakMap();
-  const load=async (button,url)=>{
+  const versions=new WeakMap(),stops=new Map(),blobUrls=new Set();
+  const load=(button,url)=>new Promise(resolve=>{
     const version=(versions.get(button)||0)+1;versions.set(button,version);
-    const p=byId.get(button.dataset.productPhoto);if(!p||!button.isConnected)return;
-    try{const result=url?{url}:await api('part_photo_url',{part_id:p.id});if(!button.isConnected||versions.get(button)!==version)return;const img=document.createElement('img');img.alt=p.name;img.loading='lazy';img.src=result.url;img.onerror=()=>{button.textContent='Фото';};button.replaceChildren(img);}catch{if(button.isConnected&&versions.get(button)===version)button.textContent='Фото';}
-  };
+    stops.get(button)?.();
+    const p=byId.get(button.dataset.productPhoto);if(!p||!button.isConnected){resolve();return;}
+    if(url?.startsWith('blob:'))blobUrls.add(url);
+    const img=document.createElement('img');img.alt=p.name;
+    let settled=false;
+    const finish=()=>{if(!settled){settled=true;clearTimeout(timeout);resolve();}};
+    // A stalled image must not block every card behind it in the queue.
+    const timeout=setTimeout(()=>{stops.get(button)?.();button.dataset.photoState='error';finish();},30000);
+    button.dataset.photoState='loading';
+    const stop=displayPrivatePhoto(img,{
+      url,
+      isCurrent:()=>button.isConnected&&versions.get(button)===version,
+      getUrl:async()=>(await api('part_photo_url',{part_id:p.id},{fresh:true})).url,
+      onLoad:()=>{button.dataset.photoState='ready';if(img.parentNode!==button)button.replaceChildren(img);finish();},
+      onError:()=>{button.dataset.photoState='error';const previous=button.querySelector('img');if(!previous||previous===img||!previous.naturalWidth)button.textContent='Повторить';finish();}
+    });
+    stops.set(button,()=>{stop();finish();});
+  });
   const drain=()=>{while(running<3&&queue.length){const b=queue.shift();running++;load(b).finally(()=>{running--;drain();});}};
   const observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting){observer.unobserve(e.target);queue.push(e.target);}drain();},{rootMargin:'100px'});
   host.querySelectorAll('[data-product-photo]').forEach(button=>{
     const p=byId.get(button.dataset.productPhoto);if(!p)return;
-    button.onclick=()=>photoDialog(p).catch(e=>notice(e.message,'bad'));
+    button.onclick=()=>{if(button.dataset.photoState==='error'){queue.push(button);drain();}else photoDialog(p).catch(e=>notice(e.message,'bad'));};
     if(p.primary_photo_path)observer.observe(button);
   });
   const update=e=>{const detail=e.detail;if(!detail?.part_id||detail.local)return;host.querySelectorAll('[data-product-photo]').forEach(button=>{if(button.dataset.productPhoto===detail.part_id){observer.unobserve(button);queue=queue.filter(x=>x!==button);load(button,detail.url);}});};
   window.addEventListener('workshop-data-changed',update);window.addEventListener('workshop-photo-preview',update);
-  const cleanup=new MutationObserver(()=>{if(!host.isConnected){observer.disconnect();cleanup.disconnect();queue=[];window.removeEventListener('workshop-data-changed',update);window.removeEventListener('workshop-photo-preview',update);}});cleanup.observe(document.body,{childList:true,subtree:true});
+  const recover=()=>{if(document.hidden)return;host.querySelectorAll('[data-product-photo]').forEach(button=>{if(button.dataset.photoState!=='error'||queue.includes(button))return;const r=button.getBoundingClientRect();if(r.bottom>=0&&r.top<=innerHeight)queue.push(button);});drain();};
+  for(const event of ['online','pageshow','focus'])window.addEventListener(event,recover);
+  document.addEventListener('visibilitychange',recover);
+  const cleanup=new MutationObserver(()=>{if(!host.isConnected){observer.disconnect();cleanup.disconnect();queue=[];for(const stop of stops.values())stop();for(const url of blobUrls)URL.revokeObjectURL(url);window.removeEventListener('workshop-data-changed',update);window.removeEventListener('workshop-photo-preview',update);for(const event of ['online','pageshow','focus'])window.removeEventListener(event,recover);document.removeEventListener('visibilitychange',recover);}});cleanup.observe(document.body,{childList:true,subtree:true});
 }
 
