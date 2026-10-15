@@ -15,7 +15,7 @@ export async function preparePhoto(file){
   }finally{URL.revokeObjectURL(url);}
  })();prepared.set(file,task);return task;
 }
-const base64=file=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Не удалось прочитать файл'));reader.readAsDataURL(file);});
+export const fileBase64=file=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Не удалось прочитать файл'));reader.readAsDataURL(file);});
 export async function uploadOrderFiles(api,kind,id,files,slot,progress){
  const key=kind+':'+id+':'+slot;
  for(let i=0;i<files.length;i++){
@@ -26,7 +26,7 @@ export async function uploadOrderFiles(api,kind,id,files,slot,progress){
   if(file.size>10*1024*1024)throw new Error('Файл '+file.name+' больше 10 МБ');
   if(!['image/jpeg','image/png','image/webp',...(slot==='signed'?['application/pdf']:['video/mp4','video/quicktime','video/webm'])].includes(videoType(file)))throw new Error('Выберите JPG, PNG, WebP'+(slot==='signed'?' или PDF':', MP4, MOV или WebM'));
   progress?.(`Отправка ${i+1} из ${files.length}: ${file.name} · ${Math.ceil(file.size/1024)} КБ`);
-  const result=await api('upload',{kind,id,slot,content_type:videoType(file),file_name:file.name,content_base64:await base64(file)});
+  const result=await api('upload',{kind,id,slot,content_type:videoType(file),file_name:file.name,content_base64:await fileBase64(file)});
   if(!result?.path)throw new Error('Сервер не подтвердил загрузку '+file.name);
   if(!completed.has(original))completed.set(original,new Set());completed.get(original).add(key);
  }

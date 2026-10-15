@@ -17,3 +17,12 @@
 }
 
 .photo-grid .media-video{min-width:0}.photo-grid video{display:block;width:100%;max-height:280px;border-radius:10px;background:#080d14}
+
+/* Photo progress stays readable on a phone, without hiding the saved card. */
+.photo-upload-status{display:grid;gap:10px;padding:14px 16px;margin:14px 0;border:1px solid #386994;border-radius:12px;background:#102c45;color:#e4f3ff;line-height:1.45;overflow-wrap:anywhere}
+.photo-upload-status[hidden]{display:none}
+.photo-upload-status progress{display:block;width:100%;height:6px;accent-color:#158aff}
+.photo-upload-status progress[hidden]{display:none}
+.photo-upload-status[data-state="error"]{background:#3a2028;border-color:#a44b61;color:#ffe4e8}
+.photo-upload-status[data-state="done"]{background:#15352c;border-color:#367e61;color:#dbfff0}
+[aria-busy="true"] label.btn{pointer-events:none;opacity:.6}

@@ -1,3 +1,4 @@
+import {mediaChange,mediaReadMatches} from './media-change.js';
 import {createReadCache} from './read-cache.js';
 import {mutations,operation,canonical} from './pending.js';
 export const BASE='https://oqgpjfikjpcplnxueoki.supabase.co';
@@ -6,9 +7,10 @@ let session=null,refreshing=null;
 const reads=createReadCache();
 const cachedReads=new Set(['me','catalog','list','overview','customers','finance','legacy','legal','sales','stock_history']);
 export function invalidateReads(){reads.clear();}
-function changed(){reads.clear();window.dispatchEvent(new Event('workshop-data-changed'));try{localStorage.setItem('fastgo_workshop_data_changed',String(Date.now())+Math.random());}catch{}}
+function invalidateChange(detail){if(detail?.scope==='media')reads.invalidate(key=>mediaReadMatches(key,detail));else reads.clear();}
+function changed(detail=null){invalidateChange(detail);window.dispatchEvent(new CustomEvent('workshop-data-changed',{detail:{...detail,local:true}}));try{localStorage.setItem('fastgo_workshop_data_changed',JSON.stringify({...detail,nonce:String(Date.now())+Math.random()}));}catch{}}
 if(typeof window!=='undefined'){
- window.addEventListener('storage',e=>{if(e.key==='fastgo_workshop_data_changed'){reads.clear();window.dispatchEvent(new Event('workshop-data-changed'));}});
+ window.addEventListener('storage',e=>{if(e.key==='fastgo_workshop_data_changed'){let detail;try{detail=JSON.parse(e.newValue);}catch{}invalidateChange(detail);window.dispatchEvent(new CustomEvent('workshop-data-changed',{detail}));}});
  window.addEventListener('focus',invalidateReads);
 }
 try{session=JSON.parse(localStorage.getItem(STORE)||'null');if(!session&&localStorage.getItem('fastgo_token'))session={access_token:localStorage.getItem('fastgo_token')};}catch{}
@@ -95,8 +97,10 @@ export async function api(action,params={},options={}){
   if(!actor){try{actor=JSON.parse(atob(session.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub;}catch{throw new Error('Войдите в приложение снова');}}
   const op=await operation(localStorage,actor,action,params);
   if(inFlight.has(op.key))return inFlight.get(op.key);
-  const end=reads.beginWrite();
-  const promise=apiRequest(action,op.params).then(data=>{op.finish();return data}).catch(e=>{if([400,403,404,409,413,422].includes(e.status))op.finish();throw e}).finally(()=>{inFlight.delete(op.key);end();changed();});
+  const change=mediaChange(action,params);
+  if(change)invalidateChange(change);
+  const end=change?()=>invalidateChange(change):reads.beginWrite();
+  const promise=apiRequest(action,op.params).then(data=>{op.finish();return data}).catch(e=>{if([400,403,404,409,413,422].includes(e.status))op.finish();throw e}).finally(()=>{inFlight.delete(op.key);end();changed(change);});
   inFlight.set(op.key,promise);return promise;
 }
 export function csvDownload(name,headers,rows){const cell=v=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};const text='\ufeff'+[headers,...rows].map(row=>row.map(cell).join(';')).join('\r\n');const url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}

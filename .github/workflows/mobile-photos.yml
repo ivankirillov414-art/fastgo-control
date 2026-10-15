@@ -1,0 +1,31 @@
+name: Mobile parts photo upload
+on:
+  push:
+    paths: ['workshop/**', 'workshop.html', 'workshop.css', 'tests/media-change.test.mjs', 'scripts/check-mobile-photos.cjs', '.github/workflows/mobile-photos.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify cache isolation and retry safety
+        run: node --test tests/media-change.test.mjs tests/read-cache.test.mjs tests/video-upload.test.mjs tests/pending.test.mjs tests/product-intake.test.mjs tests/update-safety.test.mjs
+      - name: Install browser fixtures
+        run: |
+          npm install --prefix "$RUNNER_TEMP/fastgo-playwright" playwright@1.62.1
+          "$RUNNER_TEMP/fastgo-playwright/node_modules/.bin/playwright" install --with-deps chromium webkit
+      - name: Exercise phone uploads in Chromium and WebKit
+        env:
+          FASTGO_PLAYWRIGHT: ${{ runner.temp }}/fastgo-playwright
+        run: node scripts/check-mobile-photos.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-parts-photo-checks
+          path: browser-results/
