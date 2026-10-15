@@ -1,3 +1,4 @@
+import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {createNativeEngine} from '../_shared/native-engine.js';
 import {masterIssue,masterHoldings,items,id,fail} from './model.js';
@@ -15,6 +16,20 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(action==='holdings'){if(!owner)fail('Только для владельца',403);const snapshot=await db('rpc/workshop_native_snapshot','','POST',{});return out({data:masterHoldings(snapshot.sheets)});}
  if(!cash)fail('Нет доступа к складу и оплатам',403);
  const actor={id:user.id,email:user.email||'',name:member.name||'',role:member.role,can_sell:cash};
+ // All connections still require a verified user and an active cash-enabled member.
+ // This project contains one shared workshop; only public station labels are listed.
+ if(action==='stations')return out({data:(await db('workshop_warehouse_devices','kind=eq.station&active=eq.true&select=id,name,created_at&order=created_at.desc')).map(x=>({id:x.id,name:x.name,created_at:x.created_at}))});
+ if(action==='connect_terminal'){
+  if(!id(p.station_id)||!id(p.terminal_id)||typeof p.token!=='string'||!(/^[a-f0-9-]{72}$/.test(p.token)))fail('Неверные данные подключения');
+  const destination=(await db('workshop_warehouse_devices','id=eq.'+p.station_id+'&kind=eq.station&active=eq.true&select=id,name'))[0];
+  if(!destination)fail('Складской ноутбук недоступен',404);
+  const hash=await digest(p.token),existing=(await db('workshop_warehouse_devices','id=eq.'+p.terminal_id))[0];
+  const result={id:p.terminal_id,token:p.token,station_id:destination.id,name:destination.name};
+  if(existing){if(existing.kind!=='terminal'||!existing.active||existing.created_by!==user.id||existing.token_hash!==hash||existing.station_id!==destination.id)fail('Подключение уже используется',409);return out({data:result});}
+  try{await db('workshop_warehouse_devices','','POST',{id:p.terminal_id,kind:'terminal',station_id:destination.id,name:'iData / терминал',token_hash:hash,created_by:user.id});}
+  catch(e){if(e.status!==409)throw e;const retry=(await db('workshop_warehouse_devices','id=eq.'+p.terminal_id))[0];if(!retry||retry.kind!=='terminal'||!retry.active||retry.created_by!==user.id||retry.token_hash!==hash||retry.station_id!==destination.id)throw e;}
+  return out({data:result});
+ }
  if(action==='register'){const token=crypto.randomUUID()+crypto.randomUUID(),device={id:crypto.randomUUID(),kind:'station',name:String(p.name||'Складской ноутбук').slice(0,80),token_hash:await digest(token),created_by:user.id,pair_code:crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase(),pair_expires:new Date(Date.now()+600000).toISOString()};await db('workshop_warehouse_devices','','POST',device);return out({data:{id:device.id,token,pair_code:device.pair_code,name:device.name}});}
  if(action==='pair'){const token=crypto.randomUUID()+crypto.randomUUID(),device_id=crypto.randomUUID();const station=await db('rpc/warehouse_pair','','POST',{p_code:String(p.code||'').trim().toUpperCase(),p_id:device_id,p_token_hash:await digest(token),p_actor:user.id,p_name:'iData / терминал'});return out({data:{id:device_id,token,station_id:station,name:'Терминал'}});}
  if(!id(p.device_id)||typeof p.device_token!=='string')fail('Привяжите устройство',403);
@@ -27,14 +42,53 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},member:{name:member.name,role:member.role}}});
  if(action==='pair_code'){station();const code=crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase();await db('workshop_warehouse_devices','id=eq.'+device.id,'PATCH',{pair_code:code,pair_expires:new Date(Date.now()+600000).toISOString()});return out({data:{code}});}
  if(action==='catalog'){const c=await g('catalog');return out({data:{parts:c.parts.filter(x=>x.active!==false),staff:device.kind==='station'?c.staff.filter(x=>x.active&&x.role==='mechanic'):[]}});}
- if(action==='enqueue'){if(!id(p.request_id))fail('Неверный код корзины');const payload={items:items(p.items)},old=(await db('workshop_warehouse_queue','id=eq.'+p.request_id))[0];if(old){if(old.terminal_id!==device.id||JSON.stringify(items(old.payload.items))!==JSON.stringify(payload.items))fail('Код корзины уже использован',409);return out({data:{id:old.id,state:old.state}});}await db('workshop_warehouse_queue','','POST',{id:p.request_id,station_id:stationId,terminal_id:device.id,created_by:user.id,payload});return out({data:{id:p.request_id,state:'queued'}});}
+ if(action==='repair_quote'){
+  const repairId=p.code?await repairIdFromCode(p.code,key):p.repair_id;
+  return out({data:repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),repairId,actor)});
+ }
+ if(action==='enqueue_repair'){
+  if(!id(p.request_id)||!id(p.repair_id))fail('Неверный код ремонта');
+  const old=(await db('workshop_warehouse_queue','id=eq.'+p.request_id))[0];
+  if(old){if(old.terminal_id!==device.id||old.payload.kind!=='repair'||old.payload.repair_id!==p.repair_id)fail('Код документа уже использован',409);return out({data:{id:old.id,state:old.state}});}
+  const quote=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),p.repair_id,actor);
+  if(!quote.payable)fail(quote.due<=0?'Ремонт уже оплачен или сумма не назначена':'Ремонт закрыт',409);
+  await db('workshop_warehouse_queue','','POST',{id:p.request_id,station_id:stationId,terminal_id:device.id,created_by:user.id,payload:{kind:'repair',repair_id:quote.id,repair:quote,items:[]}});
+  return out({data:{id:p.request_id,state:'queued'}});
+ }
+ if(action==='enqueue'){if(!id(p.request_id))fail('Неверный код корзины');const payload={items:items(p.items)},old=(await db('workshop_warehouse_queue','id=eq.'+p.request_id))[0];if(old){if(old.terminal_id!==device.id||old.payload.kind==='repair'||JSON.stringify(items(old.payload.items))!==JSON.stringify(payload.items))fail('Код корзины уже использован',409);return out({data:{id:old.id,state:old.state}});}await db('workshop_warehouse_queue','','POST',{id:p.request_id,station_id:stationId,terminal_id:device.id,created_by:user.id,payload});return out({data:{id:p.request_id,state:'queued'}});}
  if(action==='queue'){station();return out({data:await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=neq.done&order=created_at.asc&limit=100')});}
- if(action==='job'){if(!id(p.id))fail('Неверная корзина');return out({data:(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId+(device.kind==='terminal'?'&terminal_id=eq.'+device.id:'')))[0]||null});}
+ if(action==='job'){if(!id(p.id))fail('Неверная корзина');const job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId+(device.kind==='terminal'?'&terminal_id=eq.'+device.id:'')))[0]||null;if(job?.payload.kind==='repair'&&job.state!=='done')job.repair=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),job.payload.repair_id,actor);return out({data:job});}
  if(action==='receipt'){if(!['owner','developer','seller'].includes(member.role))fail('Нет права принимать товар',403);if(!String(p.note||'').trim())fail('Укажите поставщика / документ');return out({data:await mutate('stock_receive',{request_id:p.request_id,note:String(p.note).slice(0,500),items:items(p.items)})});}
  if(action==='cash_state'){station();return out({data:await g('cash_state')});}
  if(action==='shift_open'){station();return out({data:await mutate('shift_open',{request_id:p.request_id,register:String(p.register||device.name).slice(0,80),opening_cash:Number(p.opening_cash)})});}
  if(action==='checkout'){
  station();if(!id(p.id))fail('Неверная корзина');let job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId))[0];if(!job)fail('Корзина не найдена',404);if(job.state==='done')return out({data:job.result});
+ if(job.payload.kind==='repair'){
+  if(!job.checkout){
+   const c={mode:'repair',actor_id:user.id,repair_id:job.payload.repair_id,amount:p.amount,method:p.payment_method,expected_revision:p.expected_revision};
+   prepareRepairPayment(await db('rpc/workshop_native_snapshot','','POST',{}),{...c,request_id:job.id},actor);
+   const changed=await db('workshop_warehouse_queue','id=eq.'+job.id+'&state=eq.queued&checkout=is.null','PATCH',{checkout:c,state:'processing'},'return=representation');
+   job=changed[0]||(await db('workshop_warehouse_queue','id=eq.'+job.id))[0];
+  }
+  const c=job.checkout;if(c?.actor_id!==user.id)fail('Эту оплату завершает другой кассир',409);
+  const params={request_id:job.id,repair_id:c.repair_id,amount:c.amount,method:c.method,expected_revision:c.expected_revision},fp=await digest(JSON.stringify(params));
+  const receipt=async()=>{const old=(await db('workshop_native_receipts','request_id=eq.'+job.id))[0];if(!old)return null;if(old.actor_id!==user.id||old.action!=='warehouse_repair_payment'||old.fingerprint!==fp)fail('Конфликт операции',409);return old.result;};
+  let result=await receipt();
+  if(!result){for(let i=0;i<4;i++){
+   const snapshot=await db('rpc/workshop_native_snapshot','','POST',{});let prepared;
+   try{prepared=prepareRepairPayment(snapshot,params,actor);}catch(e){
+    result=await receipt();if(result)break;
+    // A known validation failure happened before any commit. Let the cashier
+    // see the new balance; unknown network/commit failures retain frozen data.
+    if(e.status===409)await db('workshop_warehouse_queue','id=eq.'+job.id+'&state=eq.processing','PATCH',{checkout:null,state:'queued'});
+    throw e;
+   }
+   const commit=await db('rpc/workshop_native_commit','','POST',{p_actor:user.id,p_action:'warehouse_repair_payment',p_request_id:job.id,p_fingerprint:fp,p_version:snapshot.version,p_changes:prepared.changes,p_result:prepared.result});
+   if(!commit.retry){result=commit.result;break;}
+  }}
+  if(!result)fail('Данные изменились. Повторите эту оплату',409);
+  await db('workshop_warehouse_queue','id=eq.'+job.id,'PATCH',{state:'done',result,completed_at:new Date().toISOString()});return out({data:result});
+ }
  if(!job.checkout){const checkout={actor_id:user.id,mode:p.mode==='master'?'master':'sale',master_id:p.master_id||'',shift_id:p.shift_id||'',payment_method:p.payment_method||'',items:items(job.payload.items).map(x=>{const chosen=(p.items||[]).find(a=>a.part_id===x.part_id);const price=Number(chosen?.unit_price);if(!Number.isFinite(price)||price<0||price>1e8||Math.abs(price*100-Math.round(price*100))>0.00001)fail('Проверьте цену');return {...x,price_mode:'free',unit_price:price};})};if(checkout.mode==='sale'&&(!id(checkout.shift_id)||!['cash','card'].includes(checkout.payment_method)))fail('Выберите смену и способ оплаты');if(checkout.mode==='sale'&&checkout.items.reduce((n,x)=>n+x.unit_price*x.quantity,0)<=0)fail('Для 0 ₽ выберите выдачу мастеру');if(checkout.mode==='master'&&(!id(checkout.master_id)||!(await db('workshop_members','profile_id=eq.'+checkout.master_id+'&active=eq.true&role=eq.mechanic&select=profile_id')).length))fail('Выберите активного мастера');const validationSnapshot=await db('rpc/workshop_native_snapshot','','POST',{});if(checkout.mode==='master')masterIssue(validationSnapshot,{request_id:job.id,master_id:checkout.master_id,items:checkout.items},actor);else createNativeEngine(validationSnapshot.sheets).run('sale',{request_id:job.id,shift_id:checkout.shift_id,payment_method:checkout.payment_method,items:checkout.items,discount:0},actor);const changed=await db('workshop_warehouse_queue','id=eq.'+job.id+'&state=eq.queued&checkout=is.null','PATCH',{checkout,state:'processing'},'return=representation');job=changed[0]||(await db('workshop_warehouse_queue','id=eq.'+job.id))[0];}
  if(job.checkout.actor_id!==user.id)fail('Эту оплату завершает другой кассир',409);const c=job.checkout;let result;
  if(c.mode==='sale')result=await mutate('sale',{request_id:job.id,shift_id:c.shift_id,payment_method:c.payment_method,items:c.items,discount:0,note:'Терминал · '+job.id});

@@ -17,3 +17,19 @@ test('cash sale retries only once and master assignments are owner-only',async()
 test('invalid master is rejected before freezing a basket and revocation stops a paired terminal',async()=>{const h=await harness(),request_id=randomUUID();await h.request('enqueue',{request_id,items:[{part_id:part,quantity:1}]},'terminal');assert.equal((await h.request('checkout',{id:request_id,mode:'master',master_id:randomUUID(),items:[{part_id:part,unit_price:0}]})).status,400);assert.equal(h.queue[0].state,'queued');h.devices[0].active=false;assert.equal((await h.request('catalog',{},'terminal')).status,403);});
 
 test('station registration accepts a real empty PostgREST 201 and returns usable binding',async()=>{const h=await harness();const r=await h.request('register',{name:'Склад тест'});assert.equal(r.status,200);assert.ok(r.data.token);const device=h.devices.find(d=>d.id===r.data.id);assert.equal(device.name,'Склад тест');assert.equal(device.token_hash,await digest(r.data.token));const info=await h.request('info',{device_id:r.data.id,device_token:r.data.token});assert.equal(info.status,200);assert.equal(info.data.device.name,'Склад тест');const code=await h.request('pair_code',{device_id:r.data.id,device_token:r.data.token});assert.equal(code.status,200);assert.ok(code.data.code);});
+
+test('code-free terminal connection requires membership, exposes only station labels and retries once',async()=>{
+ const h=await harness(),r=await h.request('stations');assert.equal(r.status,200);assert.equal(r.data.length,1);assert.equal(r.data[0].id,station);assert.equal(r.data[0].token_hash,undefined);
+ const p={station_id:station,terminal_id:randomUUID(),token:randomUUID()+randomUUID()};
+ const connected=await h.request('connect_terminal',p);assert.equal(connected.status,200);assert.equal(connected.data.station_id,station);assert.equal((await h.request('connect_terminal',p)).status,200);assert.equal(h.devices.filter(x=>x.id===p.terminal_id).length,1);
+ const request_id=randomUUID();assert.equal((await h.request('enqueue',{device_id:p.terminal_id,device_token:p.token,request_id,items:[{part_id:part,quantity:1}]})).status,200);assert.equal(h.queue[0].station_id,station);
+ assert.equal((await h.request('connect_terminal',{...p,token:randomUUID()+randomUUID()})).status,409);
+ assert.equal((await h.request('connect_terminal',{...p,terminal_id:station})).status,409);
+ assert.equal((await h.request('connect_terminal',{...p,station_id:terminal})).status,404);
+ h.devices[0].active=false;assert.equal((await h.request('connect_terminal',{...p,terminal_id:randomUUID()})).status,404);
+ h.member.role='mechanic';assert.equal((await h.request('stations')).status,403);assert.equal((await h.request('connect_terminal',p)).status,403);
+});
+test('code-free connection never accepts a request without a user session',async()=>{
+ const handler=createHandler({base:'https://test.invalid',key:'test',fetcher:async()=>{throw Error('must not reach database');}});
+ const r=await handler(new Request('https://test.invalid',{method:'POST',body:JSON.stringify({action:'connect_terminal'})}));assert.equal(r.status,401);
+});
