@@ -1,4 +1,73 @@
 (() => {
+  // warehouse/usb-client.js
+  function bindUSBInbox({ key: key2, label, container, enabled, add, error, bridge = window.warehouseDesktop }) {
+    if (!(bridge == null ? void 0 : bridge.usbTarget)) {
+      container.hidden = true;
+      return () => {
+      };
+    }
+    let stopped = false, working = false, rendered = "";
+    const live = () => !stopped && container.isConnected && enabled();
+    function render(unassigned, blocked) {
+      const signature = JSON.stringify([unassigned, blocked == null ? void 0 : blocked.id]);
+      if (signature === rendered) return;
+      rendered = signature;
+      container.replaceChildren();
+      const caption = document.createElement("span");
+      caption.textContent = blocked ? "USB: \u043A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u2014 " + blocked.code : "USB-\u0441\u043A\u0430\u043D\u0435\u0440: \u0433\u043E\u0442\u043E\u0432 \u043A \u043F\u0440\u0438\u0451\u043C\u0443";
+      container.append(caption);
+      const button = (text, action) => {
+        const b = document.createElement("button");
+        b.textContent = text;
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await action();
+          } catch (e) {
+            error(e.message);
+          } finally {
+            b.disabled = false;
+          }
+        };
+        container.append(b);
+      };
+      if (unassigned) button("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043A\u0430\u043D\u044B (" + unassigned + ")", () => bridge.usbClaim(key2));
+      if (blocked) button("\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0441\u043A\u0430\u043D", () => bridge.usbAck(key2, [blocked.id]));
+    }
+    async function poll2() {
+      if (!live() || working) return;
+      working = true;
+      try {
+        await bridge.usbTarget({ key: key2, label });
+        if (!live()) return;
+        const batch = await bridge.usbBatch(key2);
+        if (!live()) return;
+        let blocked;
+        for (const item of batch.items) {
+          if (!live()) break;
+          if (!add(item)) {
+            blocked = item;
+            break;
+          }
+          await bridge.usbAck(key2, [item.id]);
+        }
+        if (live()) render(batch.unassigned, blocked);
+      } catch (e) {
+        if (live()) error(e.message);
+      } finally {
+        working = false;
+      }
+    }
+    void poll2();
+    const timer = setInterval(poll2, 400);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      void bridge.usbTarget(null).catch(() => {
+      });
+    };
+  }
+
   // warehouse/scanner.js
   function bindScanner(input, form, enabled) {
     let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
@@ -152,6 +221,7 @@
   var memberRole = "";
   var lastActivity = Date.now();
   var stopScanner;
+  var stopUSB;
   var key = (n) => "fgwarehouse:" + userId() + ":" + n;
   var load = (n) => {
     try {
@@ -191,6 +261,10 @@
     }
   });
   function shell(html) {
+    if (stopUSB) {
+      stopUSB();
+      stopUSB = null;
+    }
     if (stopScanner) {
       stopScanner();
       stopScanner = null;
@@ -286,29 +360,12 @@
       draft = { id: uuid(), kind, items: [], note: "" };
       save2("draft:" + document.body.dataset.mode, draft);
     }
-    shell(nav() + "<h1>" + (kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u2014 \u0441\u0431\u043E\u0440 \u043A\u043E\u0440\u0437\u0438\u043D\u044B") + '</h1><form id="scan"><label>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 / \u0430\u0440\u0442\u0438\u043A\u0443\u043B<input id="barcode" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></label><button>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C</button></form><div id="basket" class="panel ' + (kind === "receipt" ? "receipt" : "") + '"></div>' + (kind === "receipt" ? '<label>\u041F\u043E\u0441\u0442\u0430\u0432\u0449\u0438\u043A / \u043D\u043E\u043C\u0435\u0440 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430<input id="note" value="' + esc(draft.note) + '"></label>' : "") + '<div class="actions"><button class="primary" id="send">' + (kind === "receipt" ? "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0435\u0440\u0435\u0434\u0430\u0442\u044C \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A") + '</button><button id="discard">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442</button></div>');
+    shell(nav() + "<h1>" + (kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u2014 \u0441\u0431\u043E\u0440 \u043A\u043E\u0440\u0437\u0438\u043D\u044B") + '</h1><form id="scan"><label>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 / \u0430\u0440\u0442\u0438\u043A\u0443\u043B<input id="barcode" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></label><button>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C</button></form><div id="usb-inbox" class="actions"></div><div id="basket" class="panel ' + (kind === "receipt" ? "receipt" : "") + '"></div>' + (kind === "receipt" ? '<label>\u041F\u043E\u0441\u0442\u0430\u0432\u0449\u0438\u043A / \u043D\u043E\u043C\u0435\u0440 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430<input id="note" value="' + esc(draft.note) + '"></label>' : "") + '<div class="actions"><button class="primary" id="send">' + (kind === "receipt" ? "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0435\u0440\u0435\u0434\u0430\u0442\u044C \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A") + '</button><button id="discard">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442</button></div>');
     bindNav();
     drawBasket();
     $("scan").onsubmit = (e) => {
       e.preventDefault();
-      if (busy) return;
-      const code = $("barcode").value.trim();
-      if (!code) return;
-      const found = matchBarcode(parts, code);
-      if (found.length !== 1) {
-        message(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D. \u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : "\u041A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435 FastGo.", true);
-        $("barcode").focus();
-        $("barcode").select();
-        return;
-      }
-      const old = draft.items.find((x) => x.part_id === found[0].id);
-      if (old) old.quantity++;
-      else draft.items.push({ part_id: found[0].id, quantity: 1 });
-      persist();
-      $("barcode").value = "";
-      drawBasket();
-      message("\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name + " \xB7 " + draft.items.find((x) => x.part_id === found[0].id).quantity + " \u0448\u0442.");
-      $("barcode").focus();
+      if (!busy) addCode($("barcode").value.trim());
     };
     if ($("note")) $("note").oninput = (e) => {
       draft.note = e.target.value;
@@ -316,13 +373,52 @@
     };
     $("send").onclick = () => run(send);
     $("discard").onclick = () => {
+      var _a;
       if (confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442? \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) {
+        if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
         draft = null;
         save2("draft:" + document.body.dataset.mode, null);
         home();
       }
     };
     stopScanner = bindScanner($("barcode"), $("scan"), () => !busy && screen === "basket");
+    stopUSB = bindUSBInbox({ key: usbKey(), label: kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430", container: $("usb-inbox"), enabled: () => !busy && screen === "basket" && !document.activeElement.hasAttribute("data-qty"), add: (item) => addCode(item.code, item.id), error: (v) => message(v, true) });
+  }
+  function usbKey() {
+    return userId() + ":" + draft.id;
+  }
+  function addCode(code, usbId) {
+    var _a;
+    if (!code) return false;
+    if (usbId && ((_a = draft.usb_ids) == null ? void 0 : _a.includes(usbId))) return true;
+    const found = matchBarcode(parts, code);
+    if (found.length !== 1) {
+      message(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D. \u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : "\u041A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435 FastGo.", true);
+      if (!usbId) {
+        $("barcode").focus();
+        $("barcode").select();
+      }
+      return false;
+    }
+    const before = JSON.stringify(draft), old = draft.items.find((x) => x.part_id === found[0].id);
+    if (old) old.quantity++;
+    else draft.items.push({ part_id: found[0].id, quantity: 1 });
+    if (usbId) (draft.usb_ids || (draft.usb_ids = [])).push(usbId);
+    try {
+      persist();
+    } catch (e) {
+      draft = JSON.parse(before);
+      throw e;
+    }
+    if (!usbId) $("barcode").value = "";
+    drawBasket();
+    message("\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name + " \xB7 " + draft.items.find((x) => x.part_id === found[0].id).quantity + " \u0448\u0442.");
+    if (!usbId || !document.activeElement.matches("input,textarea,select")) $("barcode").focus();
+    return true;
+  }
+  async function finishUSB() {
+    var _a;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
   }
   function persist() {
     save2("draft:" + document.body.dataset.mode, draft);
@@ -351,10 +447,16 @@
     });
   }
   async function send() {
+    var _a;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbTarget) {
+      await window.warehouseDesktop.usbTarget(null);
+      if ((await window.warehouseDesktop.usbBatch(usbKey())).items.length) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F USB-\u0441\u043A\u0430\u043D\u043E\u0432 \u0438\u043B\u0438 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434.");
+    }
     if (!draft.items.length) throw Error("\u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u0432\u0430\u0440\u044B");
     if (draft.kind === "receipt") {
       if (!draft.note.trim()) throw Error("\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u043E\u0441\u0442\u0430\u0432\u0449\u0438\u043A\u0430 / \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       await call("receipt", { request_id: draft.id, items: draft.items, note: draft.note });
+      await finishUSB();
       draft = null;
       save2("draft:" + document.body.dataset.mode, null);
       await catalog();
@@ -364,6 +466,7 @@
     }
     const queued = await call("enqueue", { request_id: draft.id, items: draft.items });
     const queuedId = queued.id;
+    await finishUSB();
     draft = null;
     save2("draft:" + document.body.dataset.mode, null);
     if (terminal) {
@@ -458,6 +561,11 @@
     shell(nav() + '<h1>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</h1><div class="panel tablewrap"><table><thead><tr><th>\u041C\u0430\u0441\u0442\u0435\u0440</th><th>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C</th><th>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E</th><th>\u0421\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C</th><th>\u0412\u044B\u0434\u0430\u043D\u043E</th></tr></thead><tbody>' + rows.map((x) => "<tr><td>" + esc(x.master_name) + "</td><td>" + esc(x.name) + "</td><td>" + x.quantity + "</td><td>" + money(x.unit_cost * x.quantity) + "</td><td>" + new Date(x.created_at).toLocaleString("ru-RU") + "</td></tr>").join("") + "</tbody></table>" + (rows.length ? "" : "\u041F\u043E\u043A\u0430 \u0432\u044B\u0434\u0430\u0447 \u043D\u0435\u0442.") + "</div>");
     bindNav();
   }
+  if ($("usb-scanner")) $("usb-scanner").onclick = () => {
+    var _a;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
+    else message("\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E USB \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u0432 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0435 FastGo \u0421\u043A\u043B\u0430\u0434 \u0432\u0435\u0440\u0441\u0438\u0438 1.0.4 \u0438 \u043D\u043E\u0432\u0435\u0435.");
+  };
   if ($("terminal-update")) $("terminal-update").onclick = async () => {
     var _a;
     try {
