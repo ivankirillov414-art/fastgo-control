@@ -1,0 +1,28 @@
+name: Package warehouse installer ZIP
+on:
+ push:
+  branches: [main]
+  paths: ['.github/workflows/warehouse-installer-zip.yml']
+ workflow_dispatch:
+permissions:
+ contents: write
+jobs:
+ zip:
+  runs-on: ubuntu-latest
+  steps:
+   - name: Package published installer without rebuilding
+     env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+     run: |
+      set -euo pipefail
+      tag=fastgo-warehouse-v1.0.2
+      file=FastGo-Warehouse-Setup-1.0.2-Windows-x64.exe
+      archive=FastGo-Warehouse-Setup-1.0.2-Windows-x64.zip
+      gh release download "$tag" --pattern "$file"
+      expected=$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq ".assets[] | select(.name == \"$file\") | .digest")
+      test "${expected#sha256:}" != "$expected"
+      echo "${expected#sha256:}  $file" | sha256sum -c -
+      zip -9 "$archive" "$file"
+      unzip -t "$archive"
+      gh release upload "$tag" "$archive" --clobber
