@@ -1,4 +1,10 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
- openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open')
+ openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open'),
+ openUSBScanner:()=>ipcRenderer.invoke('warehouse-usb:open'),
+ usbTarget:value=>ipcRenderer.invoke('warehouse-usb:target',value),
+ usbBatch:key=>ipcRenderer.invoke('warehouse-usb:batch',key),
+ usbClaim:key=>ipcRenderer.invoke('warehouse-usb:claim',key),
+ usbAck:(key,ids)=>ipcRenderer.invoke('warehouse-usb:ack',key,ids),
+ usbRelease:key=>ipcRenderer.invoke('warehouse-usb:release',key)
 }));

@@ -17,6 +17,7 @@ jobs:
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
  windows:
   needs: test
   runs-on: windows-latest
@@ -73,5 +74,6 @@ jobs:
         exit 0
       fi
       mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Отдельное складское рабочее место Windows и тестовый Android APK. APK требует проверки клавиатурного режима сканера на iData. Учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
+      (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Сканирование с iData по USB без интернета на терминале. Локальное сохранение сканов на ноутбуке, повторная отправка без дублей и подключение к текущему документу. В меню: Терминал iData → Сканировать по USB. Один раз разрешите USB-отладку и выберите устройство; нужен браузер на iData. APK менять не требуется. Полный цикл на физическом iData требует проверки. Проведение операций требует связи с базой; учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       python3 scripts/publish-warehouse-feed.py
