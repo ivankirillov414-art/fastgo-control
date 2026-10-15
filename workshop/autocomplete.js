@@ -1,4 +1,5 @@
 import {api} from './core.js';
+import {attachStockSearch} from './stock-search.js';
 export const normalize=v=>String(v??'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ').trim();
 export function matches(items,query){const words=normalize(query).split(' ').filter(Boolean);return items.filter(x=>words.every(w=>normalize(x.search||x.label||x.value).includes(w))).slice(0,12);}
 export function phoneQuery(value){const digits=String(value??'').replace(/\D/g,'');return digits.startsWith('8')?'7'+digits.slice(1):digits;}
@@ -29,7 +30,7 @@ export function installSuggestions(){
    const n=input.name||input.dataset.field;if(input.matches(':disabled')||input.closest('.login-card'))return;
    if(['category','model','sku','unit'].includes(n)&&!input.closest('#intake-form')&& !input.closest('#modal-form')?.querySelector('[name=brand]'))suggest(input,()=>catalogValues(n));
    if(n==='name'&&(input.closest('#new-part-form')||input.closest('#modal-form')?.querySelector('[name=retail_price]')))suggest(input,()=>catalogValues('name'));
-   if(n==='search'&&input.closest('#stock-search'))suggest(input,async()=>partChoices((await api('catalog')).parts),x=>{input.value=x.item.name;input.form.requestSubmit();});
+   if(n==='search'&&input.closest('#stock-search'))attachStockSearch(input,async q=>matches(partChoices((await api('catalog')).parts),q),x=>{input.value=x.item.name;input.form.requestSubmit();});
    if(n==='search'&&input.closest('#client-search'))suggest(input,async q=>q.trim().length<2?[]:(await api('customers',{search:q,limit:12})).items.map(x=>({value:x.phone,label:x.full_name+' · '+x.phone,search:x.full_name+' '+x.phone})),x=>{input.value=x.value;input.form.requestSubmit();});
    if(n==='search'&&input.closest('#filters'))suggest(input,async q=>{if(q.trim().length<2)return [];const kind=location.hash.startsWith('#storage')?'storage':'repair';const d=await api('list',{kind,search:q,status:'all',limit:12});return d.items.map(r=>({value:r.phone,label:[r.last_name,r.first_name,r.phone,r.brand,r.model,r.serial_number].filter(Boolean).join(' · '),search:[r.last_name,r.first_name,r.phone,r.brand,r.model,r.serial_number].filter(Boolean).join(' ')}));},x=>{input.value=x.value;input.form.requestSubmit();});
    if(['brand','model','storage_location'].includes(n)&&(input.closest('#intake-form')||input.closest('#order-form')||input.closest('#modal-form')?.querySelector('[name=brand]')))suggest(input,async q=>{if(q.trim().length<2)return [];const d=await Promise.all(['repair','storage'].map(kind=>api('list',{kind,search:q,status:'all',limit:50})));return [...new Set(d.flatMap(x=>x.items).map(r=>r[n]).filter(Boolean))].map(value=>({value}));});
