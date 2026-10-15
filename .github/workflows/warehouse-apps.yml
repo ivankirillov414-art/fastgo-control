@@ -26,6 +26,11 @@ jobs:
      with: {node-version: '24'}
    - run: npm ci
      working-directory: warehouse-desktop
+   - name: Bundle official Android USB tools
+     shell: pwsh
+     run: |
+      Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile adb.zip
+      Expand-Archive adb.zip -DestinationPath warehouse-desktop
    - run: npm run build
      working-directory: warehouse-desktop
    - uses: actions/upload-artifact@v4
@@ -40,14 +45,13 @@ jobs:
   runs-on: ubuntu-latest
   steps:
    - uses: actions/checkout@v4
-   - uses: actions/setup-java@v4
-     with: {distribution: temurin, java-version: '17'}
-   - uses: android-actions/setup-android@v4
-     with: {packages: platform-tools}
-   - uses: gradle/actions/setup-gradle@v4
-     with: {gradle-version: '8.9'}
-   - run: gradle --no-daemon assembleDebug
-     working-directory: warehouse-android
+   - name: Reuse verified signed terminal APK
+     env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
+     run: |
+      mkdir -p warehouse-android/app/build/outputs/apk/debug
+      gh release download fastgo-warehouse-v1.0.1 --pattern FastGo-Terminal-1.0.1-test.apk --dir /tmp/terminal
+      echo '2f4059cab05592dbd84e98908e646944ee8728c913510a080858347e4e345d31  /tmp/terminal/FastGo-Terminal-1.0.1-test.apk' | sha256sum -c -
+      cp /tmp/terminal/FastGo-Terminal-1.0.1-test.apk warehouse-android/app/build/outputs/apk/debug/app-debug.apk
    - uses: actions/upload-artifact@v4
      with: {name: warehouse-android, path: warehouse-android/app/build/outputs/apk/debug/app-debug.apk}
  publish:
@@ -68,6 +72,6 @@ jobs:
         echo "This tested version is already published; keep its original binaries and feed."
         exit 0
       fi
-      mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-$version-test.apk"
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Отдельное складское рабочее место Windows и тестовый Android APK. APK требует проверки клавиатурного режима сканера на iData. Учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-$version-test.apk"
+      mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Отдельное складское рабочее место Windows и тестовый Android APK. APK требует проверки клавиатурного режима сканера на iData. Учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       python3 scripts/publish-warehouse-feed.py
