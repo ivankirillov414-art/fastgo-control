@@ -56,7 +56,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
   if(actor!==account)throw Error('Учётная запись изменилась. Печать остановлена.');
   if(cloudRecord)await remotePrint('dispatch',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),job_id:key});
   store.printState(account,key,'dispatched',p.kind,p.id);
-  await new Promise((resolve,reject)=>hidden.webContents.print({silent:true,printBackground:true,deviceName:printer,pageSize:'A4',copies:1},(success,reason)=>success?resolve():reject(Error('Принтер не принял задание: '+reason))));
+  await new Promise((resolve,reject)=>hidden.webContents.print({silent:true,printBackground:true,deviceName:printer,pageSize:'A4',copies:1,...(p.kind!=='storage'?{landscape:false,margins:{marginType:'custom',top:38,bottom:38,left:38,right:38}}:{})},(success,reason)=>success?resolve():reject(Error('Принтер не принял задание: '+reason))));
   store.printState(account,key,'submitted',p.kind,p.id);
   return {enabled:true};
  }catch(e){if(!store.printExists(account,key))store.printState(account,key,'failed',p.kind,p.id,e.message);throw e;}

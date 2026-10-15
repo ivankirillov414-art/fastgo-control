@@ -25,12 +25,17 @@ jobs:
         working-directory: desktop
       - name: Install desktop smoke test driver
         shell: pwsh
-        run: npm install --prefix "$env:RUNNER_TEMP/fastgo-playwright" playwright@1.62.1
+        run: npm install --prefix "$env:RUNNER_TEMP/fastgo-playwright" playwright@1.62.1 pdf-lib@1.17.1
       - name: Exercise offline desktop UI and restart
         shell: pwsh
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/smoke.cjs
+      - name: Verify repair receipt fits one A4 page
+        shell: pwsh
+        run: |
+          $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
+          node desktop/tests/print-layout.cjs
       - name: Verify stable screen during background polling
         shell: pwsh
         run: |
