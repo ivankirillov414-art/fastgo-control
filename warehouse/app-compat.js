@@ -1,4 +1,80 @@
 (() => {
+  // warehouse/scanner.js
+  function bindScanner(input, form, enabled) {
+    let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
+    const editable = (el) => el && (el.matches("input,textarea,select") || el.isContentEditable);
+    const reset = () => {
+      clearTimeout(timer);
+      previous = "";
+      lastAt = 0;
+      burst = 0;
+    };
+    const live = () => !disposed && input.isConnected && enabled();
+    const focus = () => {
+      if (live() && (!editable(document.activeElement) || document.activeElement === input)) input.focus();
+    };
+    const submit = () => {
+      reset();
+      if (live() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    };
+    const onInput = (e) => {
+      clearTimeout(timer);
+      if (!live() || e.isComposing) return reset();
+      const value = input.value, now = performance.now();
+      const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
+      if (added <= 0) {
+        reset();
+        previous = value;
+        return;
+      }
+      burst = appended && now - lastAt <= 65 ? burst + added : added;
+      previous = value;
+      lastAt = now;
+      if (added >= 4 || burst >= 4) timer = setTimeout(() => {
+        if (live() && document.activeElement === input && input.value === value) submit();
+      }, 200);
+    };
+    const onKey = (e) => {
+      if (!live() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.target === input && (e.key === "Enter" || e.key === "Tab") && input.value.trim()) {
+        e.preventDefault();
+        submit();
+        return;
+      }
+      if (!editable(e.target) && e.key && e.key.length === 1) {
+        e.preventDefault();
+        input.focus();
+        input.setRangeText(e.key, input.selectionStart, input.selectionEnd, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    const onVisible = () => {
+      if (!document.hidden) focus();
+    };
+    const onClick = (e) => {
+      if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
+    };
+    input.addEventListener("input", onInput);
+    form.addEventListener("submit", reset, true);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onClick);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", onVisible);
+    focus();
+    const paint = requestAnimationFrame(focus);
+    return () => {
+      disposed = true;
+      reset();
+      cancelAnimationFrame(paint);
+      input.removeEventListener("input", onInput);
+      form.removeEventListener("submit", reset, true);
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }
+
   // warehouse/client.js
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
@@ -75,6 +151,7 @@
   var polling = false;
   var memberRole = "";
   var lastActivity = Date.now();
+  var stopScanner;
   var key = (n) => "fgwarehouse:" + userId() + ":" + n;
   var load = (n) => {
     try {
@@ -114,6 +191,10 @@
     }
   });
   function shell(html) {
+    if (stopScanner) {
+      stopScanner();
+      stopScanner = null;
+    }
     $("app").innerHTML = html;
     message("");
   }
@@ -210,11 +291,14 @@
     drawBasket();
     $("scan").onsubmit = (e) => {
       e.preventDefault();
+      if (busy) return;
       const code = $("barcode").value.trim();
       if (!code) return;
       const found = matchBarcode(parts, code);
       if (found.length !== 1) {
         message(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D. \u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : "\u041A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435 FastGo.", true);
+        $("barcode").focus();
+        $("barcode").select();
         return;
       }
       const old = draft.items.find((x) => x.part_id === found[0].id);
@@ -223,6 +307,7 @@
       persist();
       $("barcode").value = "";
       drawBasket();
+      message("\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name + " \xB7 " + draft.items.find((x) => x.part_id === found[0].id).quantity + " \u0448\u0442.");
       $("barcode").focus();
     };
     if ($("note")) $("note").oninput = (e) => {
@@ -237,7 +322,7 @@
         home();
       }
     };
-    $("barcode").focus();
+    stopScanner = bindScanner($("barcode"), $("scan"), () => !busy && screen === "basket");
   }
   function persist() {
     save2("draft:" + document.body.dataset.mode, draft);
@@ -248,7 +333,7 @@
       var _a;
       const p = parts.find((p2) => p2.id === x.part_id);
       return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a = p == null ? void 0 : p.quantity) != null ? _a : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
-    }).join("") : "\u0421\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u043C \u0441\u043A\u0430\u043D\u0435\u0440\u043E\u043C. \u041F\u043E\u0441\u043B\u0435 \u043A\u043E\u0434\u0430 \u043D\u0443\u0436\u0435\u043D Enter.";
+    }).join("") : terminal ? "\u041D\u0430\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \u0437\u0435\u043B\u0451\u043D\u0443\u044E \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435. \u0422\u043E\u0432\u0430\u0440 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0412\u0440\u0443\u0447\u043D\u0443\u044E \u043A\u043E\u0434 \u043C\u043E\u0436\u043D\u043E \u0432\u0432\u0435\u0441\u0442\u0438 \u0432 \u043F\u043E\u043B\u0435 \u0432\u044B\u0448\u0435." : "\u0421\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0438\u043B\u0438 \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 / \u0430\u0440\u0442\u0438\u043A\u0443\u043B \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C\xBB.";
     target.querySelectorAll("[data-qty]").forEach((el) => el.onchange = () => {
       const n = Number(el.value);
       if (!Number.isInteger(n) || n < 1 || n > 1e3) {
@@ -262,6 +347,7 @@
       draft.items = draft.items.filter((x) => x.part_id !== b.dataset.remove);
       persist();
       drawBasket();
+      $("barcode").focus();
     });
   }
   async function send() {
