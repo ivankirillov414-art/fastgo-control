@@ -1,7 +1,7 @@
 name: Mobile parts photo upload
 on:
   push:
-    paths: ['workshop/**', 'workshop.html', 'workshop.css', 'tests/media-change.test.mjs', 'scripts/check-mobile-photos.cjs', '.github/workflows/mobile-photos.yml']
+    paths: ['workshop/**', 'workshop.html', 'workshop.css', 'tests/media-change.test.mjs', 'scripts/check-mobile-photos.cjs', 'scripts/check-stock-search.cjs', '.github/workflows/mobile-photos.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +24,10 @@ jobs:
         env:
           FASTGO_PLAYWRIGHT: ${{ runner.temp }}/fastgo-playwright
         run: node scripts/check-mobile-photos.cjs
+      - name: Check compact stock search in Chromium and WebKit
+        env:
+          FASTGO_PLAYWRIGHT: ${{ runner.temp }}/fastgo-playwright
+        run: node scripts/check-stock-search.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
