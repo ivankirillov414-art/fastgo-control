@@ -1,3 +1,5 @@
+import {preparePartPhoto,fileBase64} from './photo-upload.js';
+import {uploadStatus,holdUpload} from './upload-ui.js';
 import {createSaleCamera} from './sale-camera.js';
 import {equipmentTypes} from './equipment-core.js';
 import {canSell,api,esc,money,csvDownload} from './core.js';
@@ -43,7 +45,6 @@ function notice(text,type='ok'){
   n.className='inventory-notice '+type;n.textContent=text;requestAnimationFrame(()=>n.classList.add('show'));setTimeout(()=>n.classList.remove('show'),3200);
 }
 function paymentLabel(v){return({cash:'Наличные',card:'Карта',transfer:'Перевод'})[v]||v;}
-function fileToBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]||'');r.onerror=()=>reject(new Error('Не удалось прочитать фото'));r.readAsDataURL(file);});}
 
 async function scanCode(title='Сканировать штрих-код'){
   return new Promise(async resolve=>{
@@ -138,26 +139,53 @@ async function receiveByBarcode(){
   $('receipt-save').onclick=async()=>{const f=new FormData($('receipt-form'));const q=Number(f.get('quantity'));if(!Number.isInteger(q)||q<1)return notice('Укажите количество','bad');try{$('receipt-save').disabled=true;await api('stock',{part_id:part.id,movement_type:'receipt',quantity:q,note:String(f.get('note')||'Приёмка по штрих-коду'),request_id:receiptId});catalogCache=null;showDialog('Приход сохранён',`<p>${esc(part.name)} · принято: ${q} ${esc(part.unit||'шт')}</p>`,`<button class="btn ghost" id="receipt-done">На склад</button><button class="btn" id="receipt-labels">Напечатать этикетки</button>`);$('receipt-labels').onclick=()=>printPartLabel(part,q).catch(e=>notice(e.message,'bad'));$('receipt-done').onclick=()=>location.reload();notice(`Принято: ${part.name} +${q}`);}catch(e){notice(e.message,'bad');$('receipt-save').disabled=false;}};
 }
 
-async function uploadPartPhoto(part,file,categoryPrimary,requestId){
+async function uploadPartPhoto(part,file,categoryPrimary,requestId,onProgress=()=>{}){
   if(!file)return;
-  if(file.size>5*1024*1024)throw new Error('Фото должно быть не больше 5 МБ');
-  const base64=await fileToBase64(file);
-  await api('part_photo_upload',{part_id:part.id,content_type:file.type,content_base64:base64,primary_for_category:categoryPrimary,...(requestId?{request_id:requestId}:{})});
+  onProgress('Подготавливаем фотографию…');
+  const photo=await preparePartPhoto(file);
+  if(photo.size>5*1024*1024)throw new Error('Фото после сжатия должно быть не больше 5 МБ');
+  onProgress('Отправляем фото · '+Math.ceil(photo.size/1024)+' КБ. Дождитесь подтверждения…');
+  const result=await api('part_photo_upload',{part_id:part.id,content_type:photo.type,content_base64:await fileBase64(photo),primary_for_category:categoryPrimary,...(requestId?{request_id:requestId}:{})});
+  if(!result?.path)throw new Error('Сервер не подтвердил сохранение фото. Повторите загрузку.');
+  return {...result,file:photo};
 }
 
+function updateProductPhoto(part,url){
+  window.dispatchEvent(new CustomEvent('workshop-photo-preview',{detail:{part_id:part.id,url}}));
+}
 export async function photoDialog(part){
   if(!me)me=await api('me');
-  const photos=await api('part_photos',{part_id:part.id});
   const editable=['developer','owner','admin'].includes(me.role);
-  showDialog('Фотографии: '+part.name,`<p>${esc(part.model||'')} · ${money(part.retail_price)} · ${Number(part.quantity)||0} шт.</p><div id="part-photo-list" class="photo-grid"></div>${editable?'<label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label><input id="part-photo-category" type="checkbox"> Основное фото категории</label>':''}`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
-  const host=$('part-photo-list');
-  if(!photos.length)host.textContent='Фотографий пока нет.';
-  for(const p of photos){
-    const card=document.createElement('div'),img=document.createElement('img');img.alt=part.name;card.appendChild(img);host.appendChild(card);
-    if(editable){const button=document.createElement('button');button.className='btn secondary small';button.textContent=p.primary?'Основное фото · выбрать для категории':'Сделать основным';button.onclick=async()=>{try{button.disabled=true;await api('part_photo_primary',{part_id:part.id,photo_id:p.id,primary_for_category:$('part-photo-category').checked});catalogCache=null;ownDialog().addEventListener('close',()=>window.dispatchEvent(new Event('workshop-data-changed')),{once:true});await photoDialog(part);}catch(e){notice(e.message,'bad');button.disabled=false;}};card.appendChild(button);}
-    try{const result=await api('part_photo_url',{part_id:part.id,photo_id:p.id});if(host.isConnected)img.src=result.url;}catch{img.alt='Фото не загрузилось';}
-  }
-  if(editable)$('part-photo-upload').onclick=async()=>{const button=$('part-photo-upload');try{const file=$('part-photo-file').files[0];if(!file)throw new Error('Выберите фотографию');button.disabled=true;await uploadPartPhoto(part,file,$('part-photo-category').checked);catalogCache=null;ownDialog().addEventListener('close',()=>window.dispatchEvent(new Event('workshop-data-changed')),{once:true});await photoDialog(part);}catch(e){notice(e.message,'bad');button.disabled=false;}};
+  const dialog=showDialog('Фотографии: '+part.name,`<p>${esc(part.model||'')} · ${money(part.retail_price)} · ${Number(part.quantity)||0} шт.</p>${editable?'<label><input id="part-photo-category" type="checkbox"> Основное фото категории</label><label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="btn secondary" for="part-photo-camera">Сделать снимок</label><input id="part-photo-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="muted">Выберите фото или сделайте снимок — он сохранится автоматически.</p><div id="part-photo-progress" hidden></div>':''}<div id="part-photo-list" class="photo-grid">Загружаем фотографии…</div>`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
+  const host=$('part-photo-list'),input=$('part-photo-file'),button=$('part-photo-upload'),category=$('part-photo-category');
+  const status=editable?uploadStatus($('part-photo-progress')):null;
+  let busy=false,pendingFile=null,pendingPhoto=null;
+  const save=async(file,photo)=>{
+    if(busy)return;
+    if(!file&&!photo){status.error('Сначала выберите фотографию');return;}
+    if(file||photo){pendingFile=file||null;pendingPhoto=photo||null;}
+    busy=true;const release=holdUpload(dialog);status.busy('Подготавливаем фотографию…');
+    try{
+      let url,result;
+      if(file){result=await uploadPartPhoto(part,file,category.checked,undefined,text=>status.busy(text));url=URL.createObjectURL(result.file);}
+      else{status.busy('Сохраняем основную фотографию…');result=await api('part_photo_primary',{part_id:part.id,photo_id:photo.id,primary_for_category:category.checked});url=photo.url;}
+      part.primary_photo_path=result.path;updateProductPhoto(part,url);
+      if(file)setTimeout(()=>URL.revokeObjectURL(url),300000);
+      status.done('Фото сохранено');release();if(host.isConnected)dialog.close();notice('Фото сохранено');
+    }catch(e){status.error(e.message+' Нажмите «Повторить загрузку».');button.textContent='Повторить загрузку';}
+    finally{busy=false;release();host.querySelectorAll('button').forEach(b=>b.disabled=false);}
+  };
+  if(editable){button.onclick=()=>save(pendingFile||input.files[0],pendingPhoto);input.onchange=()=>{if(input.files.length)save(input.files[0]);};const camera=$('part-photo-camera');camera.onchange=()=>{if(camera.files.length)save(camera.files[0]);};}
+  // Bind upload immediately; old previews must not hold up a new camera shot.
+  try{
+    const photos=await api('part_photos',{part_id:part.id});if(!host.isConnected)return;
+    host.textContent=photos.length?'':'Фотографий пока нет.';
+    await Promise.allSettled(photos.map(async p=>{
+      const card=document.createElement('div'),img=document.createElement('img');img.alt=part.name;img.loading='lazy';card.append(img);host.append(card);
+      if(editable){const primary=document.createElement('button');primary.className='btn secondary small';primary.textContent=p.primary?'Основное фото':'Сделать основным';primary.disabled=busy;primary.onclick=()=>save(null,{...p,url:img.src});card.append(primary);}
+      try{const result=await api('part_photo_url',{part_id:part.id,photo_id:p.id});if(host.isConnected)img.src=result.url;}catch{img.alt='Фото не загрузилось';}
+    }));
+  }catch(e){if(host.isConnected)host.textContent=e.message;}
 }
 
 async function maintenanceDialog(){
@@ -193,12 +221,12 @@ export async function newPartForm(prefill='',{equipment=false}={}){
     if(!form.reportValidity())return;
     try{
       button.disabled=true;const f=new FormData(form),file=form.elements.photo.files[0];let photo=null;
-      if(file?.size){if(file.size>5*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Выберите JPG, PNG или WebP не больше 5 МБ.');const hash=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());photo={sha256:[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join(''),type:file.type,primary:form.elements.category_primary.checked};}
+      if(file?.size){if(file.size>25*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Выберите JPG, PNG или WebP не больше 25 МБ. Снимок будет сжат перед отправкой.');const hash=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());photo={sha256:[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join(''),type:file.type,primary:form.elements.category_primary.checked};}
       let state=loadProductIntake(localStorage,actor);
       if(!state)state=startProductIntake(localStorage,actor,{product:{name:f.get('name'),category:f.get('category'),model:f.get('model'),sku:f.get('sku'),unit_cost:Number(f.get('unit_cost')||0),retail_price:Number(f.get('retail_price')||0),unit:f.get('unit')||'шт'},quantity:Number(f.get('initial_quantity')||0),photo});
       restore();
       if(state.photo&&!state.photoSaved&&(!photo||photo.sha256!==state.photo.sha256||photo.type!==state.photo.type))throw new Error('Для продолжения выберите то же фото. Товар и приход не будут созданы повторно.');
-      const part=await continueProductIntake(localStorage,actor,{api,onProgress:text=>{progress.textContent=text;},uploadPhoto:(part,metadata,id)=>uploadPartPhoto(part,file,metadata.primary,id)});
+      const part=await continueProductIntake(localStorage,actor,{api,onProgress:text=>{progress.textContent=text;},uploadPhoto:(part,metadata,id)=>uploadPartPhoto(part,file,metadata.primary,id,text=>{progress.textContent=text;})});
       catalogCache=null;window.dispatchEvent(new Event('workshop-data-changed'));
       showDialog('Приёмка завершена',`<p>${esc(part.name)}</p><p>Штрих-код: <strong>${esc(part.barcode)}</strong></p><p>Товар, приход и выбранное фото сохранены.</p>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="new-part-print">Напечатать этикетку</button>`);
       $('new-part-print').onclick=()=>printPartLabel(part,Number(state.quantity)||1).catch(e=>notice(e.message,'bad'));
@@ -326,9 +354,11 @@ setTimeout(enhance,120);
 export function bindProductPreviews(host,products){
   const byId=new Map(products.map(p=>[String(p.id),p]));
   let running=0,queue=[];
-  const load=async button=>{
+  const versions=new WeakMap();
+  const load=async (button,url)=>{
+    const version=(versions.get(button)||0)+1;versions.set(button,version);
     const p=byId.get(button.dataset.productPhoto);if(!p||!button.isConnected)return;
-    try{const result=await api('part_photo_url',{part_id:p.id});if(!button.isConnected)return;const img=document.createElement('img');img.alt=p.name;img.loading='lazy';img.src=result.url;img.onerror=()=>{button.textContent='Фото';};button.replaceChildren(img);}catch{if(button.isConnected)button.textContent='Фото';}
+    try{const result=url?{url}:await api('part_photo_url',{part_id:p.id});if(!button.isConnected||versions.get(button)!==version)return;const img=document.createElement('img');img.alt=p.name;img.loading='lazy';img.src=result.url;img.onerror=()=>{button.textContent='Фото';};button.replaceChildren(img);}catch{if(button.isConnected&&versions.get(button)===version)button.textContent='Фото';}
   };
   const drain=()=>{while(running<3&&queue.length){const b=queue.shift();running++;load(b).finally(()=>{running--;drain();});}};
   const observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting){observer.unobserve(e.target);queue.push(e.target);}drain();},{rootMargin:'100px'});
@@ -337,6 +367,8 @@ export function bindProductPreviews(host,products){
     button.onclick=()=>photoDialog(p).catch(e=>notice(e.message,'bad'));
     if(p.primary_photo_path)observer.observe(button);
   });
-  const cleanup=new MutationObserver(()=>{if(!host.isConnected){observer.disconnect();cleanup.disconnect();queue=[];}});cleanup.observe(document.body,{childList:true,subtree:true});
+  const update=e=>{const detail=e.detail;if(!detail?.part_id||detail.local)return;host.querySelectorAll('[data-product-photo]').forEach(button=>{if(button.dataset.productPhoto===detail.part_id){observer.unobserve(button);queue=queue.filter(x=>x!==button);load(button,detail.url);}});};
+  window.addEventListener('workshop-data-changed',update);window.addEventListener('workshop-photo-preview',update);
+  const cleanup=new MutationObserver(()=>{if(!host.isConnected){observer.disconnect();cleanup.disconnect();queue=[];window.removeEventListener('workshop-data-changed',update);window.removeEventListener('workshop-photo-preview',update);}});cleanup.observe(document.body,{childList:true,subtree:true});
 }
 

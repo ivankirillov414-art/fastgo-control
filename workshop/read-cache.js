@@ -4,6 +4,7 @@ export function createReadCache({now=Date.now,ttl=20000,max=80}={}){
  const clear=()=>{generation++;values.clear();pending.clear();};
  return {
   clear,
+  invalidate(matches){for(const key of new Set([...values.keys(),...pending.keys()]))if(matches(key)){values.delete(key);pending.delete(key);}},
   beginWrite(){writes++;clear();let ended=false;return()=>{if(ended)return;ended=true;writes--;clear();};},
   async read(key,load,{fresh=false,retain=true}={}){
    if(fresh){values.delete(key);}
@@ -12,7 +13,7 @@ export function createReadCache({now=Date.now,ttl=20000,max=80}={}){
    if(!pending.has(key)){
     const revision=generation;const cacheable=!writes&&retain;
     const promise=Promise.resolve().then(load).then(data=>{
-     if(cacheable&&!writes&&revision===generation){values.delete(key);values.set(key,{data:structuredClone(data),expires:now()+ttl});while(values.size>max)values.delete(values.keys().next().value);}
+     if(cacheable&&!writes&&revision===generation&&pending.get(key)===promise){values.delete(key);values.set(key,{data:structuredClone(data),expires:now()+ttl});while(values.size>max)values.delete(values.keys().next().value);}
      return data;
     }).finally(()=>{if(pending.get(key)===promise)pending.delete(key);});
     pending.set(key,promise);
