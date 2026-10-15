@@ -1,0 +1,68 @@
+name: FastGo Warehouse Apps
+on:
+ push:
+  branches: [main]
+  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','tests/warehouse*.mjs','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+ workflow_dispatch:
+permissions:
+ contents: write
+jobs:
+ test:
+  runs-on: ubuntu-latest
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-node@v4
+     with: {node-version: '24'}
+   - run: node --test tests/warehouse*.mjs tests/native-store.test.mjs
+   - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
+   - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
+ windows:
+  needs: test
+  runs-on: windows-latest
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-node@v4
+     with: {node-version: '24'}
+   - run: npm ci
+     working-directory: warehouse-desktop
+   - run: npm run build
+     working-directory: warehouse-desktop
+   - uses: actions/upload-artifact@v4
+     with:
+      name: warehouse-windows
+      path: |
+       warehouse-desktop/dist/*.exe
+       warehouse-desktop/dist/*.exe.blockmap
+       warehouse-desktop/dist/latest.yml
+ android:
+  needs: test
+  runs-on: ubuntu-latest
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-java@v4
+     with: {distribution: temurin, java-version: '17'}
+   - uses: android-actions/setup-android@v3
+   - uses: gradle/actions/setup-gradle@v4
+     with: {gradle-version: '8.9'}
+   - run: gradle --no-daemon assembleDebug
+     working-directory: warehouse-android
+   - uses: actions/upload-artifact@v4
+     with: {name: warehouse-android, path: warehouse-android/app/build/outputs/apk/debug/app-debug.apk}
+ publish:
+  needs: [windows,android]
+  runs-on: ubuntu-latest
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/download-artifact@v4
+     with: {name: warehouse-windows, path: warehouse-release}
+   - uses: actions/download-artifact@v4
+     with: {name: warehouse-android, path: warehouse-release}
+   - name: Publish separate warehouse release without replacing workshop updater
+     env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
+     run: |
+      mv warehouse-release/app-debug.apk warehouse-release/FastGo-Terminal-1.0.0-test.apk
+      if ! gh release view fastgo-warehouse-v1.0.0 >/dev/null 2>&1; then
+        gh release create fastgo-warehouse-v1.0.0 --target "$GITHUB_SHA" --latest=false --title 'FastGo Склад и Терминал 1.0.0' --notes 'Отдельное складское рабочее место Windows и тестовый Android APK. APK требует проверки клавиатурного режима сканера на iData. Учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.exe.blockmap warehouse-release/FastGo-Terminal-1.0.0-test.apk
+      fi
+      python3 scripts/publish-warehouse-feed.py

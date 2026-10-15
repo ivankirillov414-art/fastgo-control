@@ -1,3 +1,4 @@
+import {masterHoldings} from '../_shared/warehouse-holdings.js';
 export const defaults={stale_days:3,long_days:14,coverage_days:7,rates:{}};
 const num=x=>Number(x)||0;
 const parse=x=>{try{return Array.isArray(x)?x:JSON.parse(x||'[]');}catch{return [];}};
@@ -32,5 +33,5 @@ export function analytics(sheets,p,config={}){
  for(const m of movements){if(Date.parse(m['Дата'])<weekStart||Date.parse(m['Дата'])>now||!Number.isFinite(Date.parse(m['Дата'])))continue;const sign=['Расход','Продажа','issue'].includes(m['Тип'])?1:['Возврат','return'].includes(m['Тип'])?-1:0;if(sign)usage.set(m.product_id,(usage.get(m.product_id)||0)+sign*num(m['Количество']));}
  const purchases=products.filter(x=>x['Активен']!==false).map(x=>{const used=Math.max(0,usage.get(x.product_id)||0),stock=num(x['Остаток, шт.']),recommended=Math.max(0,Math.ceil(used*c.coverage_days/7)-stock);return {id:x.product_id,name:x['Модель / название'],sku:x['Артикул / SKU']||'',used,stock,recommended};}).filter(x=>x.used>0||x.recommended>0).sort((a,b)=>b.recommended-a.recommended||b.used-a.used);
  const totals=details.reduce((t,r)=>{for(const k of ['revenue','labor','cost','missing_cost'])t[k]+=r[k];if(r.wage===null)t.missing_wage++;else t.wage+=r.wage;return t;},{revenue:0,labor:0,cost:0,wage:0,missing_cost:0,missing_wage:0});
- return {details,days:aggregate('date'),months:aggregate('month'),employees:aggregate('master'),totals,purchases,coverage_days:c.coverage_days,staff:rows('Сотрудники').map(x=>({id:x.employee_id,name:x['ФИО']})).filter(x=>x.id)};
+ return {details,days:aggregate('date'),months:aggregate('month'),employees:aggregate('master'),totals,purchases,coverage_days:c.coverage_days,master_holdings:masterHoldings(sheets),staff:rows('Сотрудники').map(x=>({id:x.employee_id,name:x['ФИО']})).filter(x=>x.id)};
 }
