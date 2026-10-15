@@ -31,7 +31,7 @@ async function check(browser,origin,kind){
  await box.evaluate(el=>el.scrollTop=150);assert.ok(await box.evaluate(el=>el.scrollTop>0));
  await box.locator('button').nth(4).tap();
  await page.waitForFunction(()=>new URLSearchParams(location.hash.split('?')[1]).get('search')==='Амортизатор 5');
- await page.locator('table.records tbody tr').waitFor();
+ await page.waitForFunction(()=>document.querySelectorAll('table.records tbody tr').length===1&&document.querySelector('table.records tbody tr td b')?.textContent==='Амортизатор 5');
  assert.equal(await page.locator('table.records tbody tr').count(),1);
  assert.equal(await page.locator('#stock-search input').inputValue(),'Амортизатор 5');
  assert.equal(await page.locator('#stock-search .stock-suggestions').isHidden(),true);
@@ -43,7 +43,7 @@ async function check(browser,origin,kind){
  // Model/SKU matches remain usable through the picker.
  await input.fill('FGP-007');await box.waitFor({state:'visible'});assert.equal(await box.locator('button').count(),1);
  await input.press('ArrowDown');await input.press('Enter');
- await page.waitForFunction(()=>document.querySelector('#stock-search input')?.value==='Амортизатор 7');
+ await page.waitForFunction(()=>document.querySelector('table.records tbody tr td b')?.textContent==='Амортизатор 7'&&document.querySelector('#stock-search input')?.dataset.suggestions==='true');
  await input.fill('аморт');await box.waitFor({state:'visible'});
  await input.evaluate(e=>e.scrollIntoView({block:'center'}));
  // Model the visual viewport left by the phone keyboard; resize repositions
