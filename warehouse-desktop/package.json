@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -28,7 +28,9 @@
       "terminal-update.cjs",
       "terminal-preload.cjs",
       "terminal.html",
-      "terminal-ui.js"
+      "terminal-ui.js",
+      "warehouse-preload.cjs",
+      "warehouse-bridge.cjs"
     ],
     "win": {
       "target": "nsis",
