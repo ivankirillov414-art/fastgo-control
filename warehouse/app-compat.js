@@ -273,15 +273,11 @@
     message("");
   }
   function nav() {
-    return '<div class="subnav"><button id="back">\u2190 \u0413\u043B\u0430\u0432\u043D\u043E\u0435</button>' + (!terminal ? '<button id="inventory">\u041E\u0441\u0442\u0430\u0442\u043A\u0438</button><button id="pair-code">\u041F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B</button><button id="shift">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443</button>' + (["owner", "developer"].includes(memberRole) ? '<button id="master-stock">\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</button>' : "") : "") + "</div>";
+    return '<div class="subnav"><button id="back">\u2190 \u0413\u043B\u0430\u0432\u043D\u043E\u0435</button>' + (!terminal ? '<button id="inventory">\u041E\u0441\u0442\u0430\u0442\u043A\u0438</button><button id="shift">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443</button>' + (["owner", "developer"].includes(memberRole) ? '<button id="master-stock">\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</button>' : "") : "") + "</div>";
   }
   function bindNav() {
     if ($("back")) $("back").onclick = home;
     if ($("inventory")) $("inventory").onclick = () => run(inventory);
-    if ($("pair-code")) $("pair-code").onclick = () => run(async () => {
-      const r = await call("pair_code");
-      message("\u041A\u043E\u0434 \u0434\u043B\u044F \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430 (10 \u043C\u0438\u043D\u0443\u0442): " + r.code);
-    });
     if ($("shift")) $("shift").onclick = shift;
     if ($("master-stock")) $("master-stock").onclick = () => run(holdings);
   }
@@ -290,11 +286,24 @@
     parts = c.parts;
     staff = c.staff;
   }
-  async function start() {
-    if (!userId()) return signIn();
+  function terminalUSB() {
+    screen = "usb";
+    $("logout").hidden = true;
+    $("connection").textContent = "USB-\u0441\u043A\u0430\u043D\u0435\u0440";
+    let savedDevice;
+    try {
+      savedDevice = load("terminal");
+    } catch (e) {
+    }
+    shell('<h1>\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB</h1><section class="panel"><p>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 iData \u043A\u0430\u0431\u0435\u043B\u0435\u043C \u043A \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443 \u0441 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C FastGo \u0421\u043A\u043B\u0430\u0434. \u042D\u043A\u0440\u0430\u043D \u0441\u043A\u0430\u043D\u0435\u0440\u0430 \u043E\u0442\u043A\u0440\u043E\u0435\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p><p>\u041A\u043E\u0434 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0438 \u0432\u0445\u043E\u0434 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435 \u043D\u0435 \u043D\u0443\u0436\u043D\u044B. \u041D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041F\u0440\u0438\u0445\u043E\u0434\xBB \u0438\u043B\u0438 \xAB\u041E\u043F\u043B\u0430\u0442\u0430\xBB, \u0437\u0430\u0442\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0435\u043B\u0451\u043D\u043E\u0439 \u043A\u043D\u043E\u043F\u043A\u043E\u0439.</p><p class="muted">\u0415\u0441\u043B\u0438 \u044D\u043A\u0440\u0430\u043D \u043D\u0435 \u043E\u0442\u043A\u0440\u044B\u043B\u0441\u044F: \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u2192 \xAB\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435\xBB. \u041F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 USB-\u043E\u0442\u043B\u0430\u0434\u043A\u0443 \u043D\u0430 iData. \u0415\u0441\u043B\u0438 Android \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0438\u0442 \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0435\u0433\u043E.</p></section>' + (savedDevice && userId() ? '<details class="panel"><summary>\u041F\u0440\u0435\u0436\u043D\u0438\u0439 \u0440\u0435\u0436\u0438\u043C \u0447\u0435\u0440\u0435\u0437 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442</summary><p>\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B \u043E\u0441\u0442\u0430\u043B\u0438\u0441\u044C \u043D\u0430 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435. \u0414\u043B\u044F \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u044F \u043F\u0440\u0435\u0436\u043D\u0435\u0433\u043E \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430 \u043D\u0443\u0436\u043D\u0430 \u0441\u0432\u044F\u0437\u044C \u0441 \u0431\u0430\u0437\u043E\u0439.</p><button id="online-terminal">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B</button></details>' : ""));
+    if ($("online-terminal")) $("online-terminal").onclick = () => run(() => start(true));
+  }
+  async function start(online = false) {
+    if (terminal && !online) return terminalUSB();
+    if (!userId()) return terminal ? terminalUSB() : signIn();
     device = load(terminal ? "terminal" : "station");
     $("logout").hidden = false;
-    if (!device) return setup();
+    if (!device) return terminal ? terminalUSB() : setup();
     try {
       const info = await call("info");
       memberRole = info.member.role;
@@ -303,12 +312,13 @@
       draft = load("draft:" + document.body.dataset.mode);
       home();
     } catch (e) {
-      shell('<h1>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0441\u043A\u043B\u0430\u0434\u0430</h1><button id="retry">\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C</button><button id="rebind">\u0421\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u0440\u0438\u0432\u044F\u0437\u043A\u0443</button>');
+      if (terminal) {
+        terminalUSB();
+        message("\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438 \u0441 \u043F\u0440\u0435\u0436\u043D\u0438\u043C \u0440\u0430\u0431\u043E\u0447\u0438\u043C \u043C\u0435\u0441\u0442\u043E\u043C. \u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0414\u043B\u044F USB-\u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u0441\u0432\u044F\u0437\u044C \u0441 \u0431\u0430\u0437\u043E\u0439 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435 \u043D\u0435 \u043D\u0443\u0436\u043D\u0430.", true);
+        return;
+      }
+      shell('<h1>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0441\u043A\u043B\u0430\u0434\u0430</h1><button id="retry">\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C</button>');
       $("retry").onclick = () => run(start);
-      $("rebind").onclick = () => {
-        device = null;
-        setup();
-      };
       message(e.message, true);
     }
   }
@@ -326,17 +336,16 @@
     };
   }
   function setup() {
+    if (terminal) return terminalUSB();
     screen = "setup";
-    shell("<h1>" + (terminal ? "\u041F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C \u043A \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C\u0443 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443" : "\u041D\u043E\u0432\u043E\u0435 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0435 \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E") + '</h1><form id="setup" class="panel"><label>' + (terminal ? "\u041A\u043E\u0434 \u0441 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430" : "\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043A\u0430\u0441\u0441\u044B / \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430") + '<input name="value" required autocomplete="off"></label><button class="primary">' + (terminal ? "\u041F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C" : "\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E") + "</button></form>");
+    shell('<h1>\u041D\u043E\u0432\u043E\u0435 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0435 \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E</h1><form id="setup" class="panel"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043A\u0430\u0441\u0441\u044B / \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430<input name="value" required autocomplete="off"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E</button></form>');
     $("setup").onsubmit = (e) => {
       e.preventDefault();
       const value = e.target.elements.value.value;
       run(async () => {
-        device = await api(terminal ? "pair" : "register", terminal ? { code: value } : { name: value });
-        save2(terminal ? "terminal" : "station", device);
-        const code = device.pair_code;
+        device = await api("register", { name: value });
+        save2("station", device);
         await start();
-        if (code) message("\u041A\u043E\u0434 \u043F\u0440\u0438\u0432\u044F\u0437\u043A\u0438 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430 (10 \u043C\u0438\u043D\u0443\u0442): " + code);
       });
     };
   }
