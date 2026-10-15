@@ -1,0 +1,21 @@
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+const driver=path.join(process.env.FASTGO_PLAYWRIGHT,'node_modules'),{_electron}=require(path.join(driver,'playwright')),{PDFDocument}=require(path.join(driver,'pdf-lib'));
+const fixtures=require('./print-fixtures.cjs'),root=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-print-layout-'));
+const preload=path.join(dir,'preload.cjs'),wrapper=path.join(dir,'launch.cjs');
+fs.writeFileSync(preload,`const {contextBridge,ipcRenderer}=require('electron');const invoke=(...args)=>ipcRenderer.invoke('print-fixture',...args);contextBridge.exposeInMainWorld('fastgoDesktop',{getSession:()=>invoke('session'),state:()=>invoke('state'),request:()=>invoke('record'),printContext:()=>invoke('context'),printReady:async()=>{document.documentElement.dataset.printReady='yes';}});`);
+fs.writeFileSync(wrapper,`const {app,BrowserWindow,ipcMain}=require('electron');app.setPath('userData',${JSON.stringify(path.join(dir,'user'))});globalThis.fixture=null;globalThis.fixtureOnline=true;ipcMain.handle('print-fixture',(_e,type)=>({session:{access_token:'fixture',expires_at:4102444800},state:{online:globalThis.fixtureOnline},record:{data:{record:globalThis.fixture,legal:{}}},context:{kind:'repair',id:globalThis.fixture.id,me:{role:'owner'}}})[type]);app.whenReady().then(()=>{globalThis.window=new BrowserWindow({width:1100,height:1400,show:false,webPreferences:{preload:${JSON.stringify(preload)},contextIsolation:true,nodeIntegration:false,sandbox:true}});globalThis.window.loadURL('about:blank');});`);
+(async()=>{const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});try{
+ const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await app.context().route('**/functions/v1/fastgo-repair-status',route=>{const {id}=route.request().postDataJSON();return route.fulfill({json:{data:{token:id+'.'+'a'.repeat(64)}},headers:{'Access-Control-Allow-Origin':'*'}});});
+ for(const [name,record] of Object.entries(fixtures)){
+  await app.evaluate((_electron,{record,online})=>{globalThis.fixture=record;globalThis.fixtureOnline=online;},{record,online:name!=='offline'});
+  await page.goto(require('node:url').pathToFileURL(path.join(root,'web','document-host.html')).href);await page.waitForFunction(()=>document.documentElement.dataset.printReady==='yes');
+  const encoded=await app.evaluate(async()=>Buffer.from(await globalThis.window.webContents.printToPDF({pageSize:'A4',printBackground:true,preferCSSPageSize:true})).toString('base64'));
+  const bytes=Buffer.from(encoded,'base64'),pdf=await PDFDocument.load(bytes);fs.writeFileSync(path.join(dir,name+'.pdf'),bytes);
+  assert.equal(pdf.getPageCount(),1,name+' must print on one page');const size=pdf.getPage(0).getSize();assert(Math.abs(size.width-595.28)<1&&Math.abs(size.height-841.89)<1,'A4 dimensions');
+  const geometry=await page.evaluate(()=>{const sheet=document.querySelector('.fg-repair-print'),content=sheet.querySelector('.fg-print-content');return {scale:Number(sheet.dataset.printScale),height:content.getBoundingClientRect().height,rows:sheet.querySelectorAll('tbody tr').length,codes:sheet.querySelectorAll('.fg-qrcode svg').length,overflow:[...sheet.querySelectorAll('td,.fg-print-grid>div,.fg-workshop-copy>div,.fg-customer-qr>div')].filter(e=>e.scrollWidth>e.clientWidth+1).length,staff:sheet.querySelector('.fg-workshop-copy').textContent,background:getComputedStyle(document.body).backgroundColor,scheme:getComputedStyle(document.documentElement).colorScheme};});
+  assert.equal(geometry.rows,record.works.length+record.parts.length);assert.equal(geometry.codes,name==='offline'?1:2);assert.equal(geometry.overflow,0);assert(geometry.scale>=.9,'fixture must remain legible');assert(geometry.height<=1000);assert(geometry.staff.includes(record.model));assert.equal(geometry.background,'rgb(255, 255, 255)');assert.equal(geometry.scheme,'light');
+  console.log('PASS: '+name+' — one A4, all rows, no horizontal overflow, scale '+geometry.scale);
+ }
+ assert.deepEqual(errors,[]);
+ }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
