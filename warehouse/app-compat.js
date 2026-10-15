@@ -174,8 +174,8 @@
     return j;
   }
   function save(j) {
-    var _a;
-    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a = j.user) == null ? void 0 : _a.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
+    var _a2;
+    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a2 = j.user) == null ? void 0 : _a2.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
     localStorage.setItem(STORE, JSON.stringify(session));
   }
   async function login(email, password) {
@@ -251,8 +251,8 @@
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = () => {
-    var _a;
-    return !busy && screen === "home" && !draft && !job && !((_a = $("terminal-help")) == null ? void 0 : _a.open) && Date.now() - lastActivity > 12e4;
+    var _a2;
+    return !busy && screen === "home" && !draft && !job && !((_a2 = $("terminal-help")) == null ? void 0 : _a2.open) && Date.now() - lastActivity > 12e4;
   };
   window.addEventListener("beforeunload", (e) => {
     if (busy || screen === "basket" || screen === "checkout") {
@@ -285,47 +285,92 @@
     const c = await call("catalog");
     parts = c.parts;
     staff = c.staff;
-  }
-  function terminalUSB() {
-    screen = "usb";
-    $("logout").hidden = true;
-    $("connection").textContent = "USB-\u0441\u043A\u0430\u043D\u0435\u0440";
-    let savedDevice;
-    try {
-      savedDevice = load("terminal");
+    if (terminal) try {
+      save2("catalog:terminal", { device_id: device.id, parts, staff, role: memberRole });
     } catch (e) {
+      message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B \u0431\u0435\u0437 \u0441\u0435\u0442\u0438.", true);
     }
-    shell('<h1>\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB</h1><section class="panel"><p>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 iData \u043A\u0430\u0431\u0435\u043B\u0435\u043C \u043A \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443 \u0441 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C FastGo \u0421\u043A\u043B\u0430\u0434. \u042D\u043A\u0440\u0430\u043D \u0441\u043A\u0430\u043D\u0435\u0440\u0430 \u043E\u0442\u043A\u0440\u043E\u0435\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p><p>\u041A\u043E\u0434 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0438 \u0432\u0445\u043E\u0434 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435 \u043D\u0435 \u043D\u0443\u0436\u043D\u044B. \u041D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041F\u0440\u0438\u0445\u043E\u0434\xBB \u0438\u043B\u0438 \xAB\u041E\u043F\u043B\u0430\u0442\u0430\xBB, \u0437\u0430\u0442\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0435\u043B\u0451\u043D\u043E\u0439 \u043A\u043D\u043E\u043F\u043A\u043E\u0439.</p><p class="muted">\u0415\u0441\u043B\u0438 \u044D\u043A\u0440\u0430\u043D \u043D\u0435 \u043E\u0442\u043A\u0440\u044B\u043B\u0441\u044F: \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u2192 \xAB\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435\xBB. \u041F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 USB-\u043E\u0442\u043B\u0430\u0434\u043A\u0443 \u043D\u0430 iData. \u0415\u0441\u043B\u0438 Android \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0438\u0442 \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0435\u0433\u043E.</p></section>' + (savedDevice && userId() ? '<details class="panel"><summary>\u041F\u0440\u0435\u0436\u043D\u0438\u0439 \u0440\u0435\u0436\u0438\u043C \u0447\u0435\u0440\u0435\u0437 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442</summary><p>\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B \u043E\u0441\u0442\u0430\u043B\u0438\u0441\u044C \u043D\u0430 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435. \u0414\u043B\u044F \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u044F \u043F\u0440\u0435\u0436\u043D\u0435\u0433\u043E \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430 \u043D\u0443\u0436\u043D\u0430 \u0441\u0432\u044F\u0437\u044C \u0441 \u0431\u0430\u0437\u043E\u0439.</p><button id="online-terminal">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B</button></details>' : ""));
-    if ($("online-terminal")) $("online-terminal").onclick = () => run(() => start(true));
   }
-  async function start(online = false) {
-    if (terminal && !online) return terminalUSB();
-    if (!userId()) return terminal ? terminalUSB() : signIn();
+  function usbHelp() {
+    return '<details class="panel"><summary>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043F\u043E USB</summary><p>\u041D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435\xBB. \u041D\u0430 iData \u0434\u043E\u043B\u0436\u0435\u043D \u043E\u0442\u043A\u0440\u044B\u0442\u044C\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D \xABFastGo \xB7 USB\xBB \u0441 \u043F\u043E\u043B\u0435\u043C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u0430.</p><p>\u0414\u043B\u044F USB \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435 \u043D\u0435 \u043D\u0443\u0436\u0435\u043D. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 USB-\u043E\u0442\u043B\u0430\u0434\u043A\u0443 \u0438 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0431\u0440\u0430\u0443\u0437\u0435\u0440, \u0435\u0441\u043B\u0438 Android \u0435\u0433\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0438\u0442.</p></details>';
+  }
+  async function connectTerminal() {
+    screen = "connect";
+    shell('<h1>\u0412\u044B\u0431\u043E\u0440 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430</h1><p>\u0418\u0449\u0435\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u0438\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043C\u0435\u0441\u0442\u0430\u2026</p><button id="connect-retry">\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A</button>' + usbHelp());
+    $("connect-retry").onclick = () => run(connectTerminal);
+    const stations = await api("stations");
+    const connect = async (station) => {
+      let pending = load("terminal-connection");
+      if (!pending || pending.station_id !== station.id) {
+        pending = { station_id: station.id, terminal_id: uuid(), token: uuid() + uuid() };
+        save2("terminal-connection", pending);
+      }
+      device = await api("connect_terminal", pending);
+      save2("terminal", device);
+      save2("terminal-connection", null);
+      await start();
+    };
+    if (stations.length === 1) return connect(stations[0]);
+    shell("<h1>\u0412\u044B\u0431\u043E\u0440 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430</h1><p>" + (stations.length ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E, \u043D\u0430 \u043A\u043E\u0442\u043E\u0440\u043E\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u0432\u0430\u0442\u044C \u043A\u043E\u0440\u0437\u0438\u043D\u044B. \u041A\u043E\u0434 \u043D\u0435 \u043D\u0443\u0436\u0435\u043D." : "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo \u0421\u043A\u043B\u0430\u0434 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u0438 \u0441\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E.") + '</p><div id="stations" class="panel"></div><button id="connect-retry">\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A</button>' + usbHelp());
+    for (const station of stations) {
+      const button = document.createElement("button");
+      button.textContent = station.name + (stations.filter((x) => x.name === station.name).length > 1 ? " \xB7 " + new Date(station.created_at).toLocaleString("ru-RU") : "");
+      button.onclick = () => run(() => connect(station));
+      $("stations").append(button);
+    }
+    $("connect-retry").onclick = () => run(connectTerminal);
+  }
+  async function start() {
+    if (!userId()) return signIn();
     device = load(terminal ? "terminal" : "station");
+    draft = load("draft:" + document.body.dataset.mode);
     $("logout").hidden = false;
-    if (!device) return terminal ? terminalUSB() : setup();
+    if (!device) {
+      if (!terminal) return setup();
+      try {
+        return await connectTerminal();
+      } catch (e) {
+        return connectionError(e);
+      }
+    }
     try {
       const info = await call("info");
       memberRole = info.member.role;
-      $("connection").textContent = info.device.name;
+      $("connection").textContent = info.device.name + " \xB7 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442";
       await catalog();
-      draft = load("draft:" + document.body.dataset.mode);
       home();
     } catch (e) {
-      if (terminal) {
-        terminalUSB();
-        message("\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438 \u0441 \u043F\u0440\u0435\u0436\u043D\u0438\u043C \u0440\u0430\u0431\u043E\u0447\u0438\u043C \u043C\u0435\u0441\u0442\u043E\u043C. \u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0414\u043B\u044F USB-\u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u0441\u0432\u044F\u0437\u044C \u0441 \u0431\u0430\u0437\u043E\u0439 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435 \u043D\u0435 \u043D\u0443\u0436\u043D\u0430.", true);
+      if (e.status === 401) {
+        signIn();
+        message("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0441\u043D\u043E\u0432\u0430. \u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0430 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435.", true);
         return;
       }
-      shell('<h1>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0441\u043A\u043B\u0430\u0434\u0430</h1><button id="retry">\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C</button>');
-      $("retry").onclick = () => run(start);
-      message(e.message, true);
+      if (terminal && e.status !== 403) {
+        const cached = load("catalog:terminal");
+        if ((cached == null ? void 0 : cached.device_id) === device.id && Array.isArray(cached.parts)) {
+          parts = cached.parts;
+          staff = cached.staff || [];
+          memberRole = cached.role || "";
+          home();
+          $("connection").textContent = "\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438 \xB7 \u0441\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F";
+          message("\u041C\u043E\u0436\u043D\u043E \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u0442\u044C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u0442\u044C. \u041F\u0435\u0440\u0435\u0434\u0430\u0439\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u043E\u0441\u043B\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0432\u044F\u0437\u0438.", true);
+          return;
+        }
+      }
+      connectionError(e);
     }
+  }
+  function connectionError(e) {
+    screen = "connection";
+    shell('<h1>\u041D\u0435\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u043A \u0441\u043A\u043B\u0430\u0434\u0443</h1><p>\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B \u043E\u0441\u0442\u0430\u044E\u0442\u0441\u044F \u043D\u0430 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435.</p><button id="retry">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C\u0441\u044F \u0441\u043D\u043E\u0432\u0430</button>' + (terminal ? '<button id="choose-station">\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043D\u043E\u0443\u0442\u0431\u0443\u043A</button>' : "") + usbHelp());
+    $("retry").onclick = () => run(start);
+    if ($("choose-station")) $("choose-station").onclick = () => run(connectTerminal);
+    message(e.message, true);
   }
   function signIn() {
     screen = "login";
     $("logout").hidden = true;
-    shell("<h1>" + (terminal ? "\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B FastGo" : "FastGo \u0421\u043A\u043B\u0430\u0434") + '</h1><form id="login" class="panel" style="max-width:420px"><label>\u041F\u043E\u0447\u0442\u0430 \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430<input name="email" type="email" autocomplete="username" required></label><label>\u041F\u0430\u0440\u043E\u043B\u044C<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">\u0412\u043E\u0439\u0442\u0438</button></form>');
+    shell("<h1>" + (terminal ? "\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B FastGo" : "FastGo \u0421\u043A\u043B\u0430\u0434") + '</h1><form id="login" class="panel" style="max-width:420px"><label>\u041F\u043E\u0447\u0442\u0430 \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430<input name="email" type="email" autocomplete="username" required></label><label>\u041F\u0430\u0440\u043E\u043B\u044C<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">\u0412\u043E\u0439\u0442\u0438</button></form>' + (terminal ? usbHelp() : ""));
     $("login").onsubmit = (e) => {
       e.preventDefault();
       const p = formValues(e.target);
@@ -336,7 +381,7 @@
     };
   }
   function setup() {
-    if (terminal) return terminalUSB();
+    if (terminal) return connectTerminal();
     screen = "setup";
     shell('<h1>\u041D\u043E\u0432\u043E\u0435 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0435 \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E</h1><form id="setup" class="panel"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043A\u0430\u0441\u0441\u044B / \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430<input name="value" required autocomplete="off"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E</button></form>');
     $("setup").onsubmit = (e) => {
@@ -352,7 +397,7 @@
   function home() {
     screen = "home";
     job = null;
-    shell(nav() + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><h2>\u041A\u043E\u0440\u0437\u0438\u043D\u044B \u0441 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430</h2><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div></section>' : ""));
+    shell(nav() + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><h2>\u041A\u043E\u0440\u0437\u0438\u043D\u044B \u0441 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430</h2><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div></section>' : usbHelp()));
     bindNav();
     $("receipt").onclick = () => basket("receipt");
     $("pay").onclick = () => basket("sale");
@@ -382,9 +427,9 @@
     };
     $("send").onclick = () => run(send);
     $("discard").onclick = () => {
-      var _a;
+      var _a2;
       if (confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442? \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) {
-        if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
+        if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
         draft = null;
         save2("draft:" + document.body.dataset.mode, null);
         home();
@@ -397,9 +442,9 @@
     return userId() + ":" + draft.id;
   }
   function addCode(code, usbId) {
-    var _a;
+    var _a2;
     if (!code) return false;
-    if (usbId && ((_a = draft.usb_ids) == null ? void 0 : _a.includes(usbId))) return true;
+    if (usbId && ((_a2 = draft.usb_ids) == null ? void 0 : _a2.includes(usbId))) return true;
     const found = matchBarcode(parts, code);
     if (found.length !== 1) {
       message(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D. \u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : "\u041A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435 FastGo.", true);
@@ -426,8 +471,8 @@
     return true;
   }
   async function finishUSB() {
-    var _a;
-    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
+    var _a2;
+    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
   }
   function persist() {
     save2("draft:" + document.body.dataset.mode, draft);
@@ -435,9 +480,9 @@
   function drawBasket() {
     const target = $("basket");
     target.innerHTML = draft.items.length ? draft.items.map((x) => {
-      var _a;
+      var _a2;
       const p = parts.find((p2) => p2.id === x.part_id);
-      return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a = p == null ? void 0 : p.quantity) != null ? _a : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
+      return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a2 = p == null ? void 0 : p.quantity) != null ? _a2 : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
     }).join("") : terminal ? "\u041D\u0430\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \u0437\u0435\u043B\u0451\u043D\u0443\u044E \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435. \u0422\u043E\u0432\u0430\u0440 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0412\u0440\u0443\u0447\u043D\u0443\u044E \u043A\u043E\u0434 \u043C\u043E\u0436\u043D\u043E \u0432\u0432\u0435\u0441\u0442\u0438 \u0432 \u043F\u043E\u043B\u0435 \u0432\u044B\u0448\u0435." : "\u0421\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0438\u043B\u0438 \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 / \u0430\u0440\u0442\u0438\u043A\u0443\u043B \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C\xBB.";
     target.querySelectorAll("[data-qty]").forEach((el) => el.onchange = () => {
       const n = Number(el.value);
@@ -456,8 +501,8 @@
     });
   }
   async function send() {
-    var _a;
-    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbTarget) {
+    var _a2;
+    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbTarget) {
       await window.warehouseDesktop.usbTarget(null);
       if ((await window.warehouseDesktop.usbBatch(usbKey())).items.length) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F USB-\u0441\u043A\u0430\u043D\u043E\u0432 \u0438\u043B\u0438 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434.");
     }
@@ -509,8 +554,8 @@
     screen = "checkout";
     const state = await call("cash_state"), fixed = job.checkout;
     shell(nav() + "<h1>\u041E\u043F\u043B\u0430\u0442\u0430 \xB7 " + esc(job.id.slice(0, 8)) + '</h1><div class="twocol"><section class="panel"><h2>\u0422\u043E\u0432\u0430\u0440\u044B</h2>' + job.payload.items.map((x) => {
-      var _a, _b, _c;
-      const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
+      var _a2, _b, _c;
+      const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a2 = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a2.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
       return "<label>" + esc((p == null ? void 0 : p.name) || x.part_id) + " \xB7 " + x.quantity + ' \u0448\u0442.<input type="number" min="0" step="0.01" value="' + price + '" data-price="' + x.part_id + '" ' + (fixed ? "disabled" : "") + "></label>";
     }).join("") + '<div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="total"></b></div></section><section class="panel"><label>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F<select id="mode" ' + (fixed ? "disabled" : "") + '><option value="sale">\u041F\u0440\u043E\u0434\u0430\u0436\u0430</option><option value="master">\u0412\u044B\u0434\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \xB7 0 \u20BD</option></select></label><div id="sale-fields"><label>\u0421\u043C\u0435\u043D\u0430<select id="cash-shift">' + state.shifts.filter((x) => x.status === "open").map((x) => '<option value="' + x.id + '">' + esc(x.register) + " \xB7 \u2116 " + x.number + "</option>").join("") + '</select></label><label>\u041E\u043F\u043B\u0430\u0442\u0430<select id="method"><option value="cash">\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option><option value="card">\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option></select></label><p class="muted">\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u043C \u0443\u0447\u0451\u0442 \u043F\u0440\u043E\u0434\u0430\u0436\u0438. \u0411\u0430\u043D\u043A\u043E\u0432\u0441\u043A\u0438\u0439 \u043F\u043B\u0430\u0442\u0451\u0436 \u0438 \u0444\u0438\u0441\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0447\u0435\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0441\u0441\u0435.</p></div><label id="master-fields" hidden>\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0430<select id="master">' + staff.map((x) => '<option value="' + x.profile_id + '">' + esc(x.name) + "</option>").join("") + '</select></label><button class="primary" id="checkout">\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438</button><p class="muted">\u0412\u044B\u0434\u0430\u0447\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u0443\u043C\u0435\u043D\u044C\u0448\u0430\u0435\u0442 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A \u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430, \u0431\u0435\u0437 \u0434\u0435\u043D\u0435\u0436\u043D\u043E\u0439 \u0432\u044B\u0440\u0443\u0447\u043A\u0438.</p></section></div>');
     bindNav();
@@ -570,15 +615,47 @@
     shell(nav() + '<h1>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</h1><div class="panel tablewrap"><table><thead><tr><th>\u041C\u0430\u0441\u0442\u0435\u0440</th><th>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C</th><th>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E</th><th>\u0421\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C</th><th>\u0412\u044B\u0434\u0430\u043D\u043E</th></tr></thead><tbody>' + rows.map((x) => "<tr><td>" + esc(x.master_name) + "</td><td>" + esc(x.name) + "</td><td>" + x.quantity + "</td><td>" + money(x.unit_cost * x.quantity) + "</td><td>" + new Date(x.created_at).toLocaleString("ru-RU") + "</td></tr>").join("") + "</tbody></table>" + (rows.length ? "" : "\u041F\u043E\u043A\u0430 \u0432\u044B\u0434\u0430\u0447 \u043D\u0435\u0442.") + "</div>");
     bindNav();
   }
+  async function desktopStatus() {
+    var _a2;
+    const el = $("desktop-status");
+    if (!el) return;
+    if (!((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.desktopStatus)) {
+      el.textContent = window.warehouseDesktop ? "USB: \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." : "\u041E\u0442\u043A\u0440\u044B\u0442\u0430 \u0432\u0435\u0431-\u0432\u0435\u0440\u0441\u0438\u044F. \u0414\u043B\u044F USB \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0443 FastGo \u0421\u043A\u043B\u0430\u0434 \u043D\u0430 Windows.";
+      return;
+    }
+    try {
+      const s = await window.warehouseDesktop.desktopStatus(), update = s.update || {};
+      let note = "";
+      if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
+      if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0438 \u043E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C";
+      if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
+      const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
+      if (el.textContent !== value) el.textContent = value;
+    } catch (e) {
+      el.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C USB: " + e.message;
+    }
+  }
+  var _a;
+  if (!terminal) {
+    void desktopStatus();
+    setInterval(desktopStatus, 2500);
+    if (((_a = window.warehouseDesktop) == null ? void 0 : _a.checkUpdates) && $("desktop-update")) {
+      $("desktop-update").hidden = false;
+      $("desktop-update").onclick = () => run(async () => {
+        await window.warehouseDesktop.checkUpdates();
+        await desktopStatus();
+      });
+    }
+  }
   if ($("usb-scanner")) $("usb-scanner").onclick = () => {
-    var _a;
-    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
+    var _a2;
+    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
     else message("\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E USB \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u0432 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0435 FastGo \u0421\u043A\u043B\u0430\u0434 \u0432\u0435\u0440\u0441\u0438\u0438 1.0.4 \u0438 \u043D\u043E\u0432\u0435\u0435.");
   };
   if ($("terminal-update")) $("terminal-update").onclick = async () => {
-    var _a;
+    var _a2;
     try {
-      if ((_a = window.warehouseDesktop) == null ? void 0 : _a.openTerminalUpdater) await window.warehouseDesktop.openTerminalUpdater();
+      if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.openTerminalUpdater) await window.warehouseDesktop.openTerminalUpdater();
       else $("terminal-help").showModal();
     } catch (e) {
       message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430: " + e.message, true);
@@ -600,6 +677,9 @@
     signIn();
   });
   setInterval(() => void poll(), 3e3);
-  window.addEventListener("online", () => void poll());
+  window.addEventListener("online", () => {
+    if (terminal && screen === "connection") void run(start);
+    else void poll();
+  });
   void start();
 })();

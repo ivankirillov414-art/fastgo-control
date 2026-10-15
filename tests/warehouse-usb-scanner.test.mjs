@@ -31,3 +31,9 @@ test('1.0.4 state migration preserves scans and remembered terminal; explicit ol
 test('disabling during discovery prevents a delayed USB launch',async t=>{
  const {scanner:s,terminal,devices,commands}=await fixture(t);devices([{serial:'i3',state:'device',model:'Android'}]);let finish;terminal.command=async args=>{commands.push(args);if(args.includes('path'))return await new Promise(r=>finish=r);return '';};const discovery=s.tick();while(!finish)await new Promise(r=>setImmediate(r));await s.disable();finish('package:/data/app/fastgo/base.apk');await discovery;assert.equal(s.state.enabled,false);assert.equal(commands.some(c=>c.includes('start')),false);
 });
+
+test('USB ready status requires terminal heartbeat, not just successful adb launch',async t=>{
+ const {scanner:s}=await fixture(t);await s.enable('chosen');assert.equal(s.snapshot().connected,true);assert.equal(s.snapshot().ready,false);assert.match(s.snapshot().status,/Ожидаем/);
+ const url='http://127.0.0.1:'+s.port+'/'+s.state.token+'/';await fetch(url);assert.equal(s.snapshot().ready,false);await fetch(url+'status');assert.equal(s.snapshot().ready,true);assert.match(s.snapshot().status,/отвечает/);
+ s.lastContact=Date.now()-15000;s.launchedAt=Date.now()-15000;assert.equal(s.snapshot().ready,false);assert.match(s.snapshot().status,/не отвечает/);await s.disable();assert.equal(s.snapshot().ready,false);
+});
