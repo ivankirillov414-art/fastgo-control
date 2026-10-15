@@ -1,7 +1,7 @@
 {
- "name":"fastgo-warehouse-desktop","version":"1.0.0","private":true,
+ "name":"fastgo-warehouse-desktop","version":"1.0.1","private":true,
  "description":"FastGo standalone warehouse and terminal checkout station","author":"FastGo","main":"main.cjs",
  "scripts":{"build":"node prepare.cjs && electron-builder --win nsis --x64 --publish never"},
  "dependencies":{"electron-updater":"6.8.10"},"devDependencies":{"electron":"44.7.0","electron-builder":"26.15.3"},
- "build":{"appId":"ru.fastgo.warehouse","productName":"FastGo Склад","directories":{"output":"dist"},"files":["main.cjs","updates.cjs","package.json"],"win":{"target":"nsis","artifactName":"FastGo-Warehouse-Setup-${version}-Windows-x64.exe","signAndEditExecutable":false},"nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"deleteAppDataOnUninstall":false,"shortcutName":"FastGo Склад","perMachine":false},"forceCodeSigning":false,"npmRebuild":false,"publish":{"provider":"generic","url":"https://ivankirillov414-art.github.io/fastgo-control/warehouse/update/"}}
+ "build":{"appId":"ru.fastgo.warehouse","productName":"FastGo Склад","directories":{"output":"dist"},"files":["main.cjs","updates.cjs","package.json"],"win":{"target":"nsis","artifactName":"FastGo-Warehouse-Setup-${version}-Windows-x64.exe","signAndEditExecutable":false},"nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"deleteAppDataOnUninstall":false,"shortcutName":"FastGo Склад","perMachine":false},"forceCodeSigning":false,"npmRebuild":false,"publish":{"provider":"generic","url":"https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/update/"}}
 }

@@ -62,8 +62,12 @@ jobs:
    - name: Publish separate warehouse release without replacing workshop updater
      env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
      run: |
-      mv warehouse-release/app-debug.apk warehouse-release/FastGo-Terminal-1.0.0-test.apk
-      if ! gh release view fastgo-warehouse-v1.0.0 >/dev/null 2>&1; then
-        gh release create fastgo-warehouse-v1.0.0 --target "$GITHUB_SHA" --latest=false --title 'FastGo Склад и Терминал 1.0.0' --notes 'Отдельное складское рабочее место Windows и тестовый Android APK. APK требует проверки клавиатурного режима сканера на iData. Учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.exe.blockmap warehouse-release/FastGo-Terminal-1.0.0-test.apk
+      version=$(node -p "require('./warehouse-desktop/package.json').version")
+      tag="fastgo-warehouse-v$version"
+      if gh release view "$tag" >/dev/null 2>&1; then
+        echo "This tested version is already published; keep its original binaries and feed."
+        exit 0
       fi
+      mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-$version-test.apk"
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Отдельное складское рабочее место Windows и тестовый Android APK. APK требует проверки клавиатурного режима сканера на iData. Учёт оплат не заменяет фискальный чек / банковский платёж.' warehouse-release/*.exe warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-$version-test.apk"
       python3 scripts/publish-warehouse-feed.py
