@@ -1,4 +1,4 @@
-import {preparePhoto,fileBase64} from './photo-upload.js';
+import {preparePartPhoto,fileBase64} from './photo-upload.js';
 import {uploadStatus,holdUpload} from './upload-ui.js';
 import {createSaleCamera} from './sale-camera.js';
 import {equipmentTypes} from './equipment-core.js';
@@ -142,7 +142,7 @@ async function receiveByBarcode(){
 async function uploadPartPhoto(part,file,categoryPrimary,requestId,onProgress=()=>{}){
   if(!file)return;
   onProgress('Подготавливаем фотографию…');
-  const photo=await preparePhoto(file);
+  const photo=await preparePartPhoto(file);
   if(photo.size>5*1024*1024)throw new Error('Фото после сжатия должно быть не больше 5 МБ');
   onProgress('Отправляем фото · '+Math.ceil(photo.size/1024)+' КБ. Дождитесь подтверждения…');
   const result=await api('part_photo_upload',{part_id:part.id,content_type:photo.type,content_base64:await fileBase64(photo),primary_for_category:categoryPrimary,...(requestId?{request_id:requestId}:{})});

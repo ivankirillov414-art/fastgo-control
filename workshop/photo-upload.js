@@ -1,7 +1,9 @@
 export const videoType=file=>file.type||({'mp4':'video/mp4','mov':'video/quicktime','webm':'video/webm'}[file.name.split('.').pop().toLowerCase()]||'');
-const prepared=new WeakMap(),completed=new WeakMap();
-export async function preparePhoto(file){
- if(prepared.has(file))return prepared.get(file);
+const prepared=new WeakMap(),preparedParts=new WeakMap(),completed=new WeakMap();
+export const preparePhoto=file=>prepareImage(file,prepared);
+export const preparePartPhoto=file=>prepareImage(file,preparedParts,true);
+async function prepareImage(file,cache,compact=false){
+ if(cache.has(file))return cache.get(file);
  const task=(async()=>{
   if(file.size>25*1024*1024)throw new Error('Фото '+file.name+' больше 25 МБ');
   const url=URL.createObjectURL(file),img=new Image();
@@ -9,11 +11,15 @@ export async function preparePhoto(file){
    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('Не удалось прочитать '+file.name+'. Выберите снимок в JPG, PNG или WebP.'));img.src=url;});
    const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
    const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
-   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.82));if(!blob)throw new Error('Не удалось подготовить фото '+file.name);
+   let blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.82));
+   // WebKit and Chromium encode JPEG quality differently. Bound large parts
+   // photos by measured bytes, while keeping 1600 px for labels and markings.
+   if(compact)for(const quality of [.72,.62,.52]){if(!blob||blob.size<=750*1024)break;blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));}
+   if(!blob)throw new Error('Не удалось подготовить фото '+file.name);
    if(blob.size>=file.size&&['image/jpeg','image/png','image/webp'].includes(videoType(file))&&scale===1)return file;
    return new File([blob],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg',lastModified:file.lastModified});
   }finally{URL.revokeObjectURL(url);}
- })();prepared.set(file,task);return task;
+ })();cache.set(file,task);return task;
 }
 export const fileBase64=file=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Не удалось прочитать файл'));reader.readAsDataURL(file);});
 export async function uploadOrderFiles(api,kind,id,files,slot,progress){
