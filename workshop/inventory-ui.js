@@ -159,11 +159,11 @@ export async function photoDialog(part){
   const dialog=showDialog('Фотографии: '+part.name,`<p>${esc(part.model||'')} · ${money(part.retail_price)} · ${Number(part.quantity)||0} шт.</p>${editable?'<label><input id="part-photo-category" type="checkbox"> Основное фото категории</label><label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="btn secondary" for="part-photo-camera">Сделать снимок</label><input id="part-photo-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="muted">Выберите фото или сделайте снимок — он сохранится автоматически.</p><div id="part-photo-progress" hidden></div>':''}<div id="part-photo-list" class="photo-grid">Загружаем фотографии…</div>`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
   const host=$('part-photo-list'),input=$('part-photo-file'),button=$('part-photo-upload'),category=$('part-photo-category');
   const status=editable?uploadStatus($('part-photo-progress')):null;
-  let busy=false,pendingFile=null;
+  let busy=false,pendingFile=null,pendingPhoto=null;
   const save=async(file,photo)=>{
     if(busy)return;
     if(!file&&!photo){status.error('Сначала выберите фотографию');return;}
-    if(file)pendingFile=file;
+    if(file||photo){pendingFile=file||null;pendingPhoto=photo||null;}
     busy=true;const release=holdUpload(dialog);status.busy('Подготавливаем фотографию…');
     try{
       let url,result;
@@ -175,7 +175,7 @@ export async function photoDialog(part){
     }catch(e){status.error(e.message+' Нажмите «Повторить загрузку».');button.textContent='Повторить загрузку';}
     finally{busy=false;release();host.querySelectorAll('button').forEach(b=>b.disabled=false);}
   };
-  if(editable){button.onclick=()=>save(pendingFile||input.files[0]);input.onchange=()=>{if(input.files.length)save(input.files[0]);};const camera=$('part-photo-camera');camera.onchange=()=>{if(camera.files.length)save(camera.files[0]);};}
+  if(editable){button.onclick=()=>save(pendingFile||input.files[0],pendingPhoto);input.onchange=()=>{if(input.files.length)save(input.files[0]);};const camera=$('part-photo-camera');camera.onchange=()=>{if(camera.files.length)save(camera.files[0]);};}
   // Bind upload immediately; old previews must not hold up a new camera shot.
   try{
     const photos=await api('part_photos',{part_id:part.id});if(!host.isConnected)return;

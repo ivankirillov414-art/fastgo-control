@@ -18,6 +18,7 @@ async function check(browser,origin,kind){
   else if(action==='catalog')data={parts,services:[],staff:[],categories:[{name:'Тормоза'}],capabilities:{private_product_photos:true,atomic_writes:true}};
   else if(action==='part_photos')data=[{id:'old',path:'native:'+p.part_id,primary:true}];
   else if(['part_photo_url','signed_url'].includes(action))data={url:png};
+  else if(action==='part_photo_primary'){if(failNext){failNext=false;return route.fulfill({status:503,headers,json:{error:'Связь прервалась'}});}data={path:'native:'+p.part_id,photo_id:p.photo_id};}
   else if(action==='get')data={record,events:[],payments:[],linked:[]};
   else if(action==='list')data={items:[],count:0};
   else if(['part_photo_upload','upload'].includes(action)){
@@ -55,6 +56,10 @@ async function check(browser,origin,kind){
  await page.locator('[data-product-photo="one"]').click();failNext=true;await page.locator('#part-photo-file').setInputFiles({...file,name:'retry.jpg'});
  await page.locator('#part-photo-progress[data-state="error"]').waitFor();assert.equal(await page.locator('#inventory-dialog').evaluate(e=>e.open),true);
  const failedId=uploads.at(-1).p.request_id;await page.locator('#part-photo-upload').click();await page.locator('#inventory-dialog[open]').waitFor({state:'hidden'});assert.equal(uploads.at(-1).p.request_id,failedId);
+ // Choosing an existing primary photo has the same retry and close behavior.
+ await page.locator('[data-product-photo="one"]').click();await page.locator('#part-photo-list img').waitFor();failNext=true;await page.locator('#part-photo-list button').click();
+ await page.locator('#part-photo-progress[data-state="error"]').waitFor();await page.locator('#part-photo-upload').click();await page.locator('#inventory-dialog[open]').waitFor({state:'hidden'});
+ const primaryCalls=calls.filter(x=>x.action==='part_photo_primary');assert.equal(primaryCalls.length,2);assert.equal(primaryCalls[0].p.request_id,primaryCalls[1].p.request_id);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({browser:kind,originalBytes:file.buffer.length,uploadedBytes:compressed.length,reduction:Math.round((1-compressed.length/file.buffer.length)*100)+'%',stableCards:true,automaticClose:true,retryWithoutDuplicates:true}));
