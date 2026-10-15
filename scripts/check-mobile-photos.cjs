@@ -8,6 +8,13 @@ async function check(browser,origin,kind){
  const parts=['one','two'].map((id,i)=>({id,name:'Тормозная колодка '+id,category:'Тормоза',quantity:2,retail_price:100,active:true,primary_photo_path:'native:'+id,barcode:'FGP-0000000'+i}));
  const record={id:'order-one',repair_number:9,storage_number:9,status:'accepted',revision:1,brand:'Kugoo',model:'M4',last_name:'Тест',first_name:'Клиент',phone:'+70000000000',approved_amount:null,works:[],parts:[],fault_photo_paths:['native:old-photo'],signed_document_paths:[],paid_amount:0,total_amount:0};
  let hold=null,failNext=false,failSecond=false;
+ const photoVersions=new Map(),unavailablePhotos=new Set();
+ await page.route('**/fixture-part-photo/**',route=>{
+  const u=new URL(route.request().url()),id=u.pathname.split('/').pop();
+  const expired=u.searchParams.has('expired')||(id==='one'&&u.searchParams.get('version')==='1');
+  if(expired||unavailablePhotos.has(id))return route.fulfill({status:400,json:{message:'Token has expired'}});
+  return route.fulfill({contentType:'image/png',body:Buffer.from(png.split(',')[1],'base64')});
+ });
  await page.route('https://**/*',async route=>{
   if(!route.request().url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
@@ -17,7 +24,8 @@ async function check(browser,origin,kind){
   else if(action==='me')data={role:'owner',name:'Тест',profile_id:'photo-fixture',active:true,status_permissions:{}};
   else if(action==='catalog')data={parts,services:[],staff:[],categories:[{name:'Тормоза'}],capabilities:{private_product_photos:true,atomic_writes:true}};
   else if(action==='part_photos')data=[{id:'old',path:'native:'+p.part_id,primary:true}];
-  else if(['part_photo_url','signed_url'].includes(action))data={url:png};
+  else if(action==='part_photo_url'){const version=(photoVersions.get(p.part_id)||0)+1;photoVersions.set(p.part_id,version);data={url:origin+'/fixture-part-photo/'+p.part_id+'?version='+version};}
+  else if(action==='signed_url')data={url:png};
   else if(action==='part_photo_primary'){if(failNext){failNext=false;return route.fulfill({status:503,headers,json:{error:'Связь прервалась'}});}data={path:'native:'+p.part_id,photo_id:p.photo_id};}
   else if(action==='get')data={record,events:[],payments:[],linked:[]};
   else if(action==='list')data={items:[],count:0};
@@ -29,7 +37,21 @@ async function check(browser,origin,kind){
   }
   return route.fulfill({json:{data},headers});
  });
- await page.goto(origin+'/workshop.html#stock');await page.locator('[data-product-photo="two"] img').waitFor();
+ await page.goto(origin+'/workshop.html#stock');await page.locator('[data-product-photo="two"][data-photo-state="ready"] img').waitFor();
+ await page.locator('[data-product-photo="one"][data-photo-state="ready"] img').waitFor();
+ assert.equal(photoVersions.get('one'),2,'an expired first URL must be replaced automatically');
+ const catalogBeforeRecovery=calls.filter(x=>x.action==='catalog').length;
+ await page.evaluate(()=>{window.unchangedPhoto=document.querySelector('[data-product-photo="two"] img');const img=document.querySelector('[data-product-photo="one"] img');window.expiredPhotoUrl=img.src;img.src+='&expired=1';});
+ await page.waitForFunction(()=>{const img=document.querySelector('[data-product-photo="one"] img');return img?.complete&&img.naturalWidth>0&&!img.src.includes('expired=')&&img.src!==window.expiredPhotoUrl;});
+ assert.equal(photoVersions.get('one'),3,'restore after onload must also renew the URL');
+ // A persistent image error stops retrying, then recovers when the connection returns.
+ unavailablePhotos.add('one');await page.locator('[data-product-photo="one"] img').evaluate(img=>img.src+='&expired=1');
+ await page.locator('[data-product-photo="one"][data-photo-state="error"]').waitFor();
+ const failedVersion=photoVersions.get('one');await page.waitForTimeout(200);assert.equal(photoVersions.get('one'),failedVersion);
+ unavailablePhotos.delete('one');await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await page.locator('[data-product-photo="one"][data-photo-state="ready"] img').waitFor();
+ assert.equal(calls.filter(x=>x.action==='catalog').length,catalogBeforeRecovery);
+ assert.equal(await page.evaluate(()=>window.unchangedPhoto===document.querySelector('[data-product-photo="two"] img')),true);
  const source=await page.evaluate(async()=>{
   const c=document.createElement('canvas');c.width=4032;c.height=3024;const ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height);let seed=17;
   for(let i=0;i<pixels.data.length;i+=4){seed=(seed*1664525+1013904223)>>>0;pixels.data[i]=seed&255;pixels.data[i+1]=(seed>>>8)&255;pixels.data[i+2]=(seed>>>16)&255;pixels.data[i+3]=255;}
@@ -62,7 +84,7 @@ async function check(browser,origin,kind){
  const primaryCalls=calls.filter(x=>x.action==='part_photo_primary');assert.equal(primaryCalls.length,2);assert.equal(primaryCalls[0].p.request_id,primaryCalls[1].p.request_id);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  assert.deepEqual(errors,[]);
- console.log(JSON.stringify({browser:kind,originalBytes:file.buffer.length,uploadedBytes:compressed.length,reduction:Math.round((1-compressed.length/file.buffer.length)*100)+'%',stableCards:true,automaticClose:true,retryWithoutDuplicates:true}));
+ console.log(JSON.stringify({browser:kind,originalBytes:file.buffer.length,uploadedBytes:compressed.length,reduction:Math.round((1-compressed.length/file.buffer.length)*100)+'%',stableCards:true,automaticClose:true,retryWithoutDuplicates:true,expiredPhotoRecovery:true,offlinePhotoRecovery:true}));
  await context.close();
 }
 (async()=>{
