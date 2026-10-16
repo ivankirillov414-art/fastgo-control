@@ -108,3 +108,10 @@ test('repair transfer payment writes the existing ledger exactly once',async()=>
  assert.equal((await h.request('checkout',p)).status,503);assert.equal((await h.request('checkout',p)).status,200);
  assert.equal(h.snap.sheets['Оплаты'].rows.length,1);assert.equal(h.snap.sheets['Оплаты'].rows[0]['Способ оплаты'],'transfer');assert.equal(h.snap.sheets['Ремонты'].rows[0]['Оплачено'],1500);
 });
+
+
+test('completed history cannot hide an older active scan document',async()=>{
+ const h=await harness(),id=randomUUID();await h.request('draft_sync',{request_id:id,kind:'receipt',revision:1,items:[{part_id:part,quantity:1}]},'terminal');
+ for(let i=0;i<35;i++)h.queue.push({id:randomUUID(),station_id:station,terminal_id:terminal,state:'done',payload:{live:true,kind:'sale',revision:1,items:[]}});
+ const result=await h.request('live_jobs');assert.equal(result.status,200);assert.deepEqual(result.data.map(x=>x.id),[id]);
+});

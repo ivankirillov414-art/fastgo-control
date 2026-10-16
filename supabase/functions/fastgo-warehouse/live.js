@@ -5,7 +5,7 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
  if(!['draft_sync','draft_close','live_jobs','live_pay','live_receive'].includes(action))return undefined;
  if(action==='live_jobs'){
   if(device.kind!=='station')fail('Только для ноутбука',403);
-  return await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&payload->>live=eq.true&order=created_at.desc&limit=30');
+  return await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&payload->>live=eq.true&state=neq.done&order=created_at.desc&limit=30');
  }
  const requestId=p.request_id||p.id;if(!id(requestId))fail('Неверный документ');
  const read=async()=> (await db('workshop_warehouse_queue','id=eq.'+requestId+'&station_id=eq.'+stationId))[0];
