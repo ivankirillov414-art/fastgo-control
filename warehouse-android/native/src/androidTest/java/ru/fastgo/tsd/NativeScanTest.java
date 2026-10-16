@@ -13,6 +13,7 @@ import android.widget.EditText;import android.view.inputmethod.*;import org.json
    final String[] id={""};
    scenario.onActivity(a->{try{LocalStore s=(LocalStore)field(a,"store");s.catalog(new JSONArray().put(new JSONObject().put("id","native-fixture-part").put("name","Камера 10×2.5").put("barcode","FGP-NATIVE-TEST").put("retail_price",400).put("quantity",30)));invoke(a,"open",new Class[]{String.class},"receipt");id[0]=(String)field(a,"documentId");EditText editor=(EditText)field(a,"scanner");assertFalse(editor.getShowSoftInputOnFocus());assertTrue(editor.hasFocus());InputConnection connection=editor.onCreateInputConnection(new EditorInfo());assertNotNull(connection);assertTrue(connection.commitText("FGP-NATIVE-TEST",1));}catch(Exception e){throw new AssertionError(e);}});
    Thread.sleep(600);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.recreate();Thread.sleep(400);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
    scenario.onActivity(a->{try{LocalStore s=(LocalStore)field(a,"store");JSONObject d=s.doc(id[0]);assertEquals(1,ScanDocument.items(d).getJSONObject(0).getInt("quantity"));assertEquals("Камера 10×2.5",ScanDocument.last(d).getString("name"));invoke(a,"home",new Class[]{});invoke(a,"open",new Class[]{String.class},"receipt");assertEquals(id[0],field(a,"documentId"));invoke(a,"undo",new Class[]{});assertEquals(0,ScanDocument.count(s.doc(id[0])));}catch(Exception e){throw new AssertionError(e);}});
   }
  }
