@@ -40,7 +40,7 @@ try {
  if (!(Test-Path $exe)) { throw 'Initial installer did not create FastGo.exe' }
  # Exercise the exact command used by older apps: /S is upgraded to visible progress,
  # while user/directory/finish pages are skipped and the new app starts itself.
- $update = Start-Process -FilePath $installer -ArgumentList @('/S','--updated','--force-run','/currentuser',"/D=$installDir") -PassThru
+ $update = Start-Process -FilePath $installer -ArgumentList @('/S','--updated','--force-run') -PassThru
  $deadline = (Get-Date).AddSeconds(120);$seenProgress = $false
  while (!$update.HasExited -and (Get-Date) -lt $deadline) {
   if ([FastGoInstallerUI]::FindProgress() -ge 0) { $seenProgress = $true }
