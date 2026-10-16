@@ -115,3 +115,24 @@ test('completed history cannot hide an older active scan document',async()=>{
  for(let i=0;i<35;i++)h.queue.push({id:randomUUID(),station_id:station,terminal_id:terminal,state:'done',payload:{live:true,kind:'sale',revision:1,items:[]}});
  const result=await h.request('live_jobs');assert.equal(result.status,200);assert.deepEqual(result.data.map(x=>x.id),[id]);
 });
+
+test('warehouse pencil sets zero stock with an audited correction and idempotent retry',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),part_id:part,field:'quantity',expected:5,value:0};
+ const saved=await h.request('inventory_edit',p);assert.equal(saved.status,200,saved.error);assert.equal(saved.data.quantity,0);
+ assert.equal((await h.request('inventory_edit',p)).status,200);assert.equal(h.snap.sheets['Движения склада'].rows.length,1);assert.equal(h.snap.sheets['Движения склада'].rows[0]['Тип'],'Корректировка');assert.equal(h.snap.sheets['Движения склада'].rows[0]['Остаток после'],0);
+ assert.equal((await h.request('inventory_edit',{...p,request_id:randomUUID(),value:9})).status,409);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],0);
+});
+test('price pencil changes only retail price and records an audit event',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),part_id:part,field:'retail_price',expected:300,value:1250.50};
+ const saved=await h.request('inventory_edit',p);assert.equal(saved.status,200,saved.error);assert.equal(saved.data.retail_price,1250.5);
+ const row=h.snap.sheets['Товары'].rows[0];assert.equal(row['Остаток, шт.'],5);assert.equal(row['Цена закупки, ₽'],100);assert.equal(row['Штрих-код'],'FGP-00000001');
+ assert.equal(h.snap.sheets['События'].rows[0]['Действие'],'price_update');assert.equal((await h.request('inventory_edit',p)).status,200);assert.equal(h.snap.sheets['События'].rows.length,1);
+ assert.equal((await h.request('inventory_edit',{...p,value:1300})).status,409);
+});
+test('inventory edits preserve permissions and reject malformed or stale values before writes',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),part_id:part,field:'quantity',expected:5,value:2};
+ assert.equal((await h.request('inventory_edit',p,'terminal')).status,403);h.member.role='seller';assert.equal((await h.request('inventory_edit',p)).status,403);h.member.role='owner';
+ for(const value of [-1,1.5,'3',null,1000001])assert.equal((await h.request('inventory_edit',{...p,value})).status,400);
+ assert.equal((await h.request('inventory_edit',{...p,field:'retail_price',expected:300,value:0.001})).status,400);
+ assert.equal((await h.request('inventory_edit',{...p,expected:4})).status,409);assert.equal(h.receipts.length,0);
+});

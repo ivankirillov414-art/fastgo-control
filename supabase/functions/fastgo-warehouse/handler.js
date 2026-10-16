@@ -1,3 +1,4 @@
+import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
 import {nativeClient} from '../_shared/native-client.js';
@@ -41,6 +42,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
  const mutate=async(a,params)=>{if(!id(params.request_id))fail('Неверный код операции');const body={...params};delete body.__request_fingerprint;const fingerprint=await digest(JSON.stringify({action:a,params:body}));const old=await g('operation_retry',{request_id:params.request_id,action:a,fingerprint});if(old.status==='committed')return old.result;return g(a,{...params,__request_fingerprint:fingerprint});};
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
+ if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
  if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},member:{name:member.name,role:member.role}}});
  if(action==='pair_code'){station();const code=crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase();await db('workshop_warehouse_devices','id=eq.'+device.id,'PATCH',{pair_code:code,pair_expires:new Date(Date.now()+600000).toISOString()});return out({data:{code}});}
  if(action==='catalog'){const c=await g('catalog');return out({data:{parts:c.parts.filter(x=>x.active!==false),staff:device.kind==='station'?c.staff.filter(x=>x.active&&x.role==='mechanic'):[]}});}
