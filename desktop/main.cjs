@@ -1,4 +1,4 @@
-const {app,BrowserWindow,ipcMain,protocol,net,shell,safeStorage}=require('electron');
+const {app,BrowserWindow,Menu,ipcMain,protocol,net,shell,safeStorage}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
 const {Updates}=require('./updates.cjs');
@@ -95,7 +95,9 @@ app.whenReady().then(()=>{
  handle('fg-print',(_e,p)=>{if(!actor)throw Error('Войдите в FastGo');if(!p.intake)return printRecord(p);const key='intake:'+p.kind+':'+p.id;if(!store.printExists(actor,key))store.printState(actor,key,'queued',p.kind,p.id);localPrints();return {enabled:true};});
  handle('fg-print-context',event=>{const context=printWindows.get(event.sender.id)?.context;if(!context)throw Error('Не печатное окно');return context;});
  handle('fg-print-ready',event=>{const job=printWindows.get(event.sender.id);if(!job)throw Error('Не печатное окно');job.resolve();return true;});
- win=new BrowserWindow({width:1380,height:900,minWidth:800,minHeight:600,title:'FastGo',webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ Menu.setApplicationMenu(null);
+ win=new BrowserWindow({width:1380,height:900,minWidth:800,minHeight:600,title:'FastGo',backgroundColor:'#0b1726',autoHideMenuBar:true,titleBarStyle:'hidden',titleBarOverlay:{color:'#0c1522',symbolColor:'#dce8f5',height:47},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ win.setMenu(null);
  win.webContents.setWindowOpenHandler(({url})=>{if(url.startsWith('https://'))shell.openExternal(url);return {action:'deny'};});
  win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('fastgo://app/')){event.preventDefault();if(url.startsWith('https://'))shell.openExternal(url);}});
  win.loadURL('fastgo://app/workshop.html#home');
