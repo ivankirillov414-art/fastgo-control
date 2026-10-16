@@ -65,3 +65,20 @@ body[data-mode=station][data-screen=login] .warehouse-sidebar,body[data-mode=sta
 @media(max-width:440px){.product-metrics{grid-template-columns:1fr}.product-metric strong{font-size:28px;white-space:nowrap}.product-barcode svg{max-height:120px}}
 
 .scanner-compatible{margin:12px 0}.scanner-compatible input{width:100%;min-height:48px}#scanner-compat{font-size:13px;margin-top:12px}#scan-received{display:block;overflow-wrap:anywhere;margin-top:8px}
+
+/* Concept 5 (last full-window preview): one unified application bar. */
+body[data-mode=station] header{position:relative;margin-left:0;min-height:64px;padding:10px 20px;gap:12px;background:#091827;z-index:6}
+body[data-mode=station] header>b.warehouse-top-brand{display:block;white-space:nowrap;font-size:23px;letter-spacing:-.5px;flex-shrink:0}
+.warehouse-top-brand em{font-style:normal;font-weight:400;color:#d6e4f3;margin-left:4px}
+body[data-mode=station] #warehouse-section{margin:0 auto 0 8px;padding-left:18px;border-left:1px solid #29435b;color:#afc4db;white-space:nowrap}
+body[data-mode=station] #warehouse-section:empty{display:none}
+body[data-mode=station] header>#connection{margin-left:auto;margin-right:0}
+body[data-mode=station] header button{min-height:36px;padding:7px 10px;font-size:12px;white-space:nowrap}
+body[data-mode=station] .warehouse-sidebar{top:64px;padding-top:20px}
+body[data-mode=station] .warehouse-brand{display:none}
+body[data-mode=station] #desktop-status:empty{display:none}
+body.warehouse-native-window header{-webkit-app-region:drag;padding-right:calc(148px + 16px);min-height:64px}
+body.warehouse-native-window header button{-webkit-app-region:no-drag}
+@media(max-width:1100px){body[data-mode=station] header{gap:8px}body[data-mode=station] #warehouse-section{display:none}body[data-mode=station] header>b.warehouse-top-brand{font-size:20px}body[data-mode=station] header button{font-size:11px;padding:6px 8px}}
+@media(max-width:900px){body.warehouse-native-window header{padding-top:70px}body.warehouse-native-window header>b.warehouse-top-brand{position:absolute;top:17px;left:20px}body.warehouse-native-window .warehouse-sidebar{top:120px}}
+@media(max-width:700px){body[data-mode=station] header{padding:12px;gap:8px}body[data-mode=station] .warehouse-sidebar{padding-top:12px}body[data-mode=station] header>b.warehouse-top-brand{font-size:22px}body[data-mode=station] header>#connection{font-size:12px}body[data-mode=station] header{order:-1}body[data-mode=station]{display:flex;flex-direction:column}body[data-mode=station] main{width:100%}body[data-mode=station] header button{font-size:12px}}

@@ -1037,6 +1037,8 @@
   });
   function shell(html) {
     document.body.dataset.screen = screen;
+    const section = document.getElementById("warehouse-section");
+    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
     if (stopUSB) {
       stopUSB();
       stopUSB = null;

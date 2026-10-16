@@ -12,3 +12,5 @@ contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
  usbAck:(key,ids)=>ipcRenderer.invoke('warehouse-usb:ack',key,ids),
  usbRelease:key=>ipcRenderer.invoke('warehouse-usb:release',key)
 }));
+
+window.addEventListener('DOMContentLoaded',()=>{document.body.classList.add('warehouse-native-window');});
