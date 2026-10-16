@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
  desktopStatus:()=>ipcRenderer.invoke('warehouse-usb:status'),
  checkUpdates:()=>ipcRenderer.invoke('warehouse-usb:checkUpdates'),
  openUSBScanner:()=>ipcRenderer.invoke('warehouse-usb:open'),
+ usbInbox:()=>ipcRenderer.invoke('warehouse-usb:inbox'),
+ usbResult:(id,result)=>ipcRenderer.invoke('warehouse-usb:result',id,result),
  usbTarget:value=>ipcRenderer.invoke('warehouse-usb:target',value),
  usbBatch:key=>ipcRenderer.invoke('warehouse-usb:batch',key),
  usbClaim:key=>ipcRenderer.invoke('warehouse-usb:claim',key),

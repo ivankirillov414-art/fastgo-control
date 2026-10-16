@@ -1,6 +1,6 @@
 (() => {
   // warehouse/scanner.js
-  function bindScanner(input2, form2, enabled) {
+  function bindScanner(input2, form2, enabled, { silent = false } = {}) {
     let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
     const editable = (el) => el && (el.matches("input,textarea,select") || el.isContentEditable);
     const reset = () => {
@@ -11,16 +11,25 @@
     };
     const live = () => !disposed && input2.isConnected && enabled();
     const focus = () => {
-      if (live() && (!editable(document.activeElement) || document.activeElement === input2)) input2.focus();
+      if (live() && (!editable(document.activeElement) || document.activeElement === input2)) {
+        if (silent) input2.readOnly = true;
+        input2.focus({ preventScroll: true });
+        if (silent) input2.readOnly = false;
+      }
     };
+    if (silent) {
+      input2.setAttribute("inputmode", "none");
+      input2.tabIndex = -1;
+    }
     const submit = () => {
       reset();
       if (live() && input2.value.trim()) form2.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     };
     const onInput = (e) => {
-      clearTimeout(timer);
       if (!live() || e.isComposing) return reset();
       const value = input2.value, now = performance.now();
+      if (value === previous) return;
+      clearTimeout(timer);
       const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
       if (added <= 0) {
         reset();
@@ -43,10 +52,15 @@
       }
       if (!editable(e.target) && e.key && e.key.length === 1) {
         e.preventDefault();
-        input2.focus();
+        focus();
         input2.setRangeText(e.key, input2.selectionStart, input2.selectionEnd, "end");
         input2.dispatchEvent(new Event("input", { bubbles: true }));
       }
+    };
+    const onPaste = () => {
+      setTimeout(() => {
+        if (live()) onInput({ isComposing: false });
+      }, 0);
     };
     const onVisible = () => {
       if (!document.hidden) focus();
@@ -55,6 +69,9 @@
       if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
     };
     input2.addEventListener("input", onInput);
+    input2.addEventListener("change", onInput);
+    input2.addEventListener("compositionend", onInput);
+    input2.addEventListener("paste", onPaste);
     form2.addEventListener("submit", reset, true);
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("click", onClick);
@@ -67,6 +84,9 @@
       reset();
       cancelAnimationFrame(paint);
       input2.removeEventListener("input", onInput);
+      input2.removeEventListener("change", onInput);
+      input2.removeEventListener("compositionend", onInput);
+      input2.removeEventListener("paste", onPaste);
       form2.removeEventListener("submit", reset, true);
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("click", onClick);
@@ -76,15 +96,20 @@
   }
 
   // warehouse-desktop/usb-phone-source.js
-  var input = document.getElementById("barcode");
-  var form = document.getElementById("scan");
-  var status = document.getElementById("state");
-  var error = document.getElementById("error");
+  var $ = (id) => document.getElementById(id);
+  var input = $("barcode");
+  var form = $("scan");
+  var status = $("state");
+  var error = $("error");
   var base = location.pathname.replace(/\/?$/, "/");
   var store = "fastgo-usb-outbox:" + base;
   var queue = [];
   var sending = false;
   var healthy = true;
+  var kind = "";
+  var stop = null;
+  var lastSeen = "";
+  var modePending = false;
   try {
     queue = JSON.parse(localStorage.getItem(store) || "[]");
     if (!Array.isArray(queue)) throw Error();
@@ -94,7 +119,7 @@
   }
   function persist() {
     localStorage.setItem(store, JSON.stringify(queue));
-    document.getElementById("pending").textContent = queue.length ? "\u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0438: " + queue.length : "\u0412\u0441\u0435 \u0441\u043A\u0430\u043D\u044B \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A";
+    $("pending").textContent = queue.length ? "\u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0438: " + queue.length : "";
   }
   async function request(route, data) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
@@ -112,6 +137,10 @@
     if (sending || !healthy) return;
     sending = true;
     try {
+      if (modePending) {
+        await request("mode", { kind });
+        modePending = false;
+      }
       while (queue.length) {
         const item = queue[0];
         await request("scan", item);
@@ -122,22 +151,52 @@
           queue.unshift(item);
           throw e;
         }
-        document.getElementById("last").textContent = "\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043E: " + item.code;
       }
       const s = await request("status");
-      status.textContent = !s.enabled ? "USB-\u0441\u043A\u0430\u043D\u0435\u0440 \u0432\u044B\u043A\u043B\u044E\u0447\u0435\u043D" : s.target ? "USB \xB7 " + s.target : "USB \xB7 \u0441\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
-      error.textContent = "";
+      status.textContent = kind ? "" : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043F\u043E USB";
+      if (s.last && s.last.id !== lastSeen && s.last.kind === kind) {
+        lastSeen = s.last.id;
+        if (s.last.error) {
+          error.textContent = s.last.error;
+          $("last").textContent = "";
+        } else {
+          error.textContent = "";
+          $("last").textContent = s.last.name + (s.last.quantity ? " \xB7 " + s.last.quantity + " \u0448\u0442." : "");
+        }
+      }
     } catch (e) {
       status.textContent = "\u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430";
-      error.textContent = e.message === "Failed to fetch" ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 USB-\u043A\u0430\u0431\u0435\u043B\u044C. \u0421\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435." : e.message;
+      error.textContent = e.message === "Failed to fetch" ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 USB-\u043A\u0430\u0431\u0435\u043B\u044C. \u0421\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B." : e.message;
     } finally {
       sending = false;
     }
   }
+  function open(value) {
+    kind = value;
+    $("home").hidden = true;
+    $("work").hidden = false;
+    $("title").textContent = value === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430";
+    $("last").textContent = "";
+    error.textContent = "";
+    stop == null ? void 0 : stop();
+    stop = bindScanner(input, form, () => healthy && !!kind, { silent: true });
+    modePending = true;
+    void flush();
+  }
+  for (const button of document.querySelectorAll("[data-kind]")) button.onclick = () => open(button.dataset.kind);
+  $("back").onclick = () => {
+    stop == null ? void 0 : stop();
+    stop = null;
+    kind = "";
+    modePending = false;
+    $("home").hidden = false;
+    $("work").hidden = true;
+  };
   form.onsubmit = (e) => {
     e.preventDefault();
-    if (!healthy) return;
+    if (!healthy || !kind) return;
     const code = input.value.trim();
+    input.value = "";
     if (!code) return;
     if (code.length > 256 || /[\x00-\x1f\x7f]/.test(code)) {
       error.textContent = "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434";
@@ -147,22 +206,21 @@
       error.textContent = "\u041D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043E 1000 \u0441\u043A\u0430\u043D\u043E\u0432. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u043D\u043E\u0443\u0442\u0431\u0443\u043A.";
       return;
     }
-    const item = { id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2) + "-" + Math.random().toString(36).slice(2), code };
+    const item = { id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2) + "-" + Math.random().toString(36).slice(2), code, kind };
     queue.push(item);
     try {
       persist();
-      input.value = "";
-      input.focus();
+      error.textContent = "";
+      status.textContent = "\u0421\u043A\u0430\u043D \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u2026";
       void flush();
     } catch (e2) {
       queue.pop();
       error.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0441\u043A\u0430\u043D. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 \u043E\u0441\u0432\u043E\u0431\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u043C\u0435\u0441\u0442\u0430.";
     }
   };
-  bindScanner(input, form, () => healthy);
   if (healthy) {
     persist();
     void flush();
-    setInterval(flush, 1500);
+    setInterval(flush, 400);
   }
 })();

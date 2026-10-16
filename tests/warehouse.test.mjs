@@ -71,3 +71,40 @@ test('live base price, receipt, cancellation and terminal isolation',async()=>{
 });
 
 test('seller can commit live sale and receipt through the database action allowlist',async()=>{const h=await harness();h.member.role='seller';for(const kind of ['sale','receipt']){const request_id=randomUUID();await h.request('draft_sync',{request_id,kind,revision:1,items:[{part_id:part,quantity:1}]},'terminal');const r=await h.request(kind==='sale'?'live_pay':'live_receive',{id:request_id,revision:1,payment_method:'cash'},'terminal');assert.equal(r.status,200,r.error);}});
+
+test('laptop can own USB scans but cannot overwrite a terminal snapshot',async()=>{
+ const h=await harness(),usb=randomUUID(),remote=randomUUID();
+ assert.equal((await h.request('draft_sync',{request_id:usb,kind:'receipt',revision:1,items:[{part_id:part,quantity:1}]})).status,200);
+ assert.equal(h.queue[0].terminal_id,station);
+ await h.request('draft_sync',{request_id:remote,kind:'receipt',revision:1,items:[{part_id:part,quantity:1}]},'terminal');
+ assert.equal((await h.request('draft_sync',{request_id:remote,kind:'receipt',revision:2,items:[{part_id:part,quantity:99}]})).status,403);
+ assert.equal((await h.request('draft_close',{id:remote})).status,403);
+ assert.equal((await h.request('draft_close',{id:usb})).status,200);
+});
+test('laptop receipt quantities are committed once, with a frozen retry after a lost response',async()=>{
+ const h=await harness(),id=randomUUID();await h.request('draft_sync',{request_id:id,kind:'receipt',revision:2,items:[{part_id:part,quantity:2}]},'terminal');h.loseCompletion();
+ const p={id,revision:2,items:[{part_id:part,quantity:6}]};assert.equal((await h.request('live_receive',p)).status,503);
+ assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],11);
+ assert.equal((await h.request('live_receive',{...p,items:[{part_id:part,quantity:99}]})).status,200);
+ assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],11);assert.equal(h.receipts.length,1);assert.equal(h.queue[0].checkout.items[0].quantity,6);
+});
+test('receipt rejects stale scans, replaced goods, invalid quantities and terminal overrides before mutation',async()=>{
+ const h=await harness(),id=randomUUID();await h.request('draft_sync',{request_id:id,kind:'receipt',revision:3,items:[{part_id:part,quantity:2}]},'terminal');
+ for(const [payload,status,kind] of [
+  [{id,revision:2,items:[{part_id:part,quantity:5}]},409,'station'],
+  [{id,revision:3,items:[{part_id:randomUUID(),quantity:5}]},409,'station'],
+  [{id,revision:3,items:[{part_id:part,quantity:0}]},400,'station'],
+  [{id,revision:3,items:[{part_id:part,quantity:5}]},403,'terminal']
+ ])assert.equal((await h.request('live_receive',payload,kind)).status,status);
+ assert.equal(h.queue[0].state,'queued');assert.equal(h.receipts.length,0);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+});
+
+test('repair transfer payment writes the existing ledger exactly once',async()=>{
+ const h=await harness(),repairId=randomUUID(),request_id=randomUUID();
+ h.snap.sheets['Ремонты'].rows.push({__row:2,repair_id:repairId,'Номер ремонта':26,'Статус':'В ремонте','Итого':1500,'Оплачено':500,revision:2});
+ const q=await h.request('repair_quote',{repair_id:repairId});assert.equal(q.status,200,q.error);assert.equal(q.data.due,1000);
+ assert.equal((await h.request('enqueue_repair',{request_id,repair_id:repairId},'terminal')).status,200);
+ const p={id:request_id,payment_method:'transfer',amount:1000,expected_revision:q.data.revision};h.loseCompletion();
+ assert.equal((await h.request('checkout',p)).status,503);assert.equal((await h.request('checkout',p)).status,200);
+ assert.equal(h.snap.sheets['Оплаты'].rows.length,1);assert.equal(h.snap.sheets['Оплаты'].rows[0]['Способ оплаты'],'transfer');assert.equal(h.snap.sheets['Ремонты'].rows[0]['Оплачено'],1500);
+});

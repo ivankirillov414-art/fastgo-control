@@ -34,7 +34,7 @@ export function repairQuote(snapshot,repairId,actor){
  return{id:r.id,number:String(r.repair_number).padStart(4,'0'),vehicle:[r.brand,r.model].filter(Boolean).join(' '),total,paid,due,status:r.status,revision:r.revision,payable:!closed&&due>0};
 }
 export function prepareRepairPayment(snapshot,p,actor){
- cashActor(actor);if(!id(p.request_id)||!['cash','card'].includes(p.method))fail('Выберите способ оплаты');
+ cashActor(actor);if(!id(p.request_id)||!['cash','card','transfer'].includes(p.method))fail('Выберите способ оплаты');
  const quote=repairQuote(snapshot,p.repair_id,actor);
  if(!quote.payable)fail(quote.due<=0?'Ремонт уже оплачен или сумма не назначена':'Ремонт закрыт',409);
  if(p.expected_revision!==quote.revision||p.amount!==quote.due)fail('Сумма или данные ремонта изменились. Обновите сумму и подтвердите оплату снова.',409);
