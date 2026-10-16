@@ -1,0 +1,153 @@
+// Native business rules retained independently of the older Google adapter.
+function requireManager_(a){ if(!['developer','owner','admin','receiver','manager','mechanic'].includes(role_(a))) throw httpError_('Нет доступа',403); }
+
+function requireOwner_(a){if(!['developer','owner'].includes(role_(a)))throw httpError_('Реквизиты доступны только владельцу',403);}
+
+function requireAdmin_(a){ if(!['developer','owner','admin'].includes(role_(a))) throw httpError_('Нет права изменять справочник',403); }
+
+function mapStaff_(r){ return {profile_id:r.employee_id,name:r['ФИО'],email:r['Email'],role:({'Разработчик':'developer','Владелец':'owner','Администратор':'admin','Мастер-приёмщик':'receiver','Механик':'mechanic','Менеджер':'manager','Кассир':'manager'})[r['Роль']]||r['Роль'],active:r['Активен']!==false,tags:[]}; }
+
+function requireCash_(actor){if(!['developer','owner','seller'].includes(role_(actor))&&actor.can_sell!==true)throw httpError_('Касса доступна продажнику, владельцу и разработчику',403);}
+
+function isManager_(a){ return ['developer','owner','admin','receiver','manager','mechanic'].includes(role_(a)); }
+
+function mapRepair_(r){
+  const intake=find_(SHEETS.intakes,'intake_id',r.intake_id)||{};
+  const client=find_(SHEETS.clients,'client_id',intake.client_id)||{};
+  const n=splitName_(intake['Клиент']);
+  const vehicle=String(intake['Бренд / модель']||'').trim().split(/\s+/);
+  return {
+    id:r.repair_id,repair_number:Number(String(r['Номер ремонта']).replace(/\D/g,''))||r['Номер ремонта'],
+    last_name:n.last_name,first_name:n.first_name,middle_name:n.middle_name,phone:intake['Телефон'],email:intake['Email']||client['Email']||'',
+    vehicle_type:intake['Тип техники']||'Электротранспорт',brand:vehicle[0]||'',model:vehicle.slice(1).join(' '),serial_number:intake['Серийный номер']||'',
+    issue_description:intake['Описание неисправности']||'',accessories:intake['Комплектность']||'',condition_notes:intake['Состояние при приёмке']||'',
+    status:normStatus_(r['Статус'],'repair'),paid_amount:num_(r['Оплачено']),created_at:r['Создано'],issued_at:r['Выдано']||'',total_amount:num_(r['Итого']),
+    assigned_master:r['Мастер'],assigned_master_id:r.master_id||'',promised_date:r['Плановая дата']||intake['Плановая дата']||'',
+    quality_checked:bool_(r['Контроль качества']),storage_id:r.storage_id||'',diagnostics_notes:r['Диагностика']||'',
+    works:parseJson_(r['Работы'],[]),parts:parseJson_(r['Строки запчастей'],[]),discount:num_(r['Скидка']),
+    warranty_days:num_(r['Гарантия, дней']),revision:Math.max(1,num_(r.revision)||1),note:r['Примечание']||'',handover_notes:r['Примечание']||'',
+    approved_amount:r['Согласовано, ₽']===''||r['Согласовано, ₽']===null?null:num_(r['Согласовано, ₽']),approval_note:r['Примечание согласования']||'',
+    scooter_photo_path:'',display_photo_path:'',motor_photo_path:'',fault_photo_paths:orderFiles_(r.repair_id).filter(x=>x.slot==='photos').map(x=>x.url),signed_document_paths:orderFiles_(r.repair_id).filter(x=>x.slot==='signed').map(x=>x.url)
+  };
+}
+
+function createOrder_(p,actor){
+  const kind=p.kind==='storage'?'storage':'repair', requestId=String(p.request_id||'');
+  if(requestId){
+    const old=kind==='storage'?find_(SHEETS.storage,'request_id',requestId):find_(SHEETS.repairs,'request_id',requestId);
+    if(old) return kind==='storage'?mapStorage_(old):mapRepair_(old);
+  }
+  const intakeSeq=nextSeq_('next_intake_seq'), intakeNo='FGI-'+pad_(intakeSeq,4), orderSeq=nextSeq_(kind==='storage'?'next_storage_seq':'next_repair_seq');
+  const orderNo=(kind==='storage'?'FGST-':'FGR-')+pad_(orderSeq,4), id=String(p.desktop_id||uid_());
+  if(p.desktop_id&&find_(SHEETS.intakes,'intake_id',id))throw httpError_('Идентификатор приёмки уже занят',409);
+  const clientId=ensureClient_(p,intakeNo), client=fullName_(p);
+  const folderUrl='', created=now_();
+  append_(SHEETS.intakes,{intake_id:id,'Номер':intakeNo,'Создано':created,client_id:clientId,'Клиент':client,'Телефон':String(p.phone||''),'Тип услуги':kind==='storage'?'Зимнее хранение':'Ремонт','Тип техники':String(p.vehicle_type||'Электротранспорт'),'Бренд / модель':[p.brand,p.model].filter(Boolean).join(' '),'Серийный номер':String(p.serial_number||''),'Комплектность':String(p.accessories||''),'Описание неисправности':String(p.issue_description||''),'Состояние при приёмке':String(p.condition_notes||''),'Статус':'Принят','Ответственный':actor.email||actor.id||'','Предварительная стоимость':0,'Предоплата':0,'Итоговая сумма':0,'Статус оплаты':'Не оплачено','Папка фото':folderUrl,'Папка документов':folderUrl,'Плановая дата':String(p.promised_date||p.planned_return_date||''),'Закрыто':'','Примечание':'',updated_at:created,Email:String(p.email||''),request_id:requestId});
+  if(kind==='storage'){
+    const months=Math.max(1,Math.floor(num_(p.storage_months)||1)), tariff=String(p.storage_tariff||'monthly'), amount=(tariff==='season'?7990:months*1990)+(bool_(p.wash)?500:0);
+    append_(SHEETS.storage,{storage_id:id,'Номер':orderNo,intake_id:id,client_id:clientId,'Клиент':client,'Телефон':String(p.phone||''),'Техника':[p.brand,p.model].filter(Boolean).join(' '),'Создано':created,'Дата начала':String(p.starts_on||''),'План возврата':String(p.planned_return_date||''),'Тариф':tariff,'Сумма':amount,'Оплачено':0,'Статус оплаты':'Не оплачено','Мойка +500':bool_(p.wash),'Ячейка / место':String(p.storage_location||''),'Статус':'Принят','Папка фото':folderUrl,'Папка документов':folderUrl,'Выдано':'','Примечание':'',updated_at:created,revision:1,request_id:requestId});
+    addEvent_(kind,id,'create',actor,{to_status:'accepted'});
+    return mapStorage_(find_(SHEETS.storage,'storage_id',id));
+  }
+  const masterId=String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null;
+  if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
+  append_(SHEETS.repairs,{repair_id:id,'Номер ремонта':orderNo,intake_id:id,'Создано':created,'Статус':'Принят','Мастер':staff?staff['ФИО']:'','Диагностика':'','Работы':'[]','Стоимость работ':0,'Запчасти':0,'Скидка':0,'Итого':0,'Гарантия, дней':0,'Начато':'','Завершено':'','Выдано':'','Примечание':'',updated_at:created,'Строки запчастей':'[]','Оплачено':0,master_id:masterId,'Контроль качества':false,'Плановая дата':String(p.promised_date||''),storage_id:String(p.storage_id||''),revision:1,request_id:requestId,'Согласовано, ₽':'','Примечание согласования':''});
+  addEvent_(kind,id,'create',actor,{to_status:'accepted'});
+  return mapRepair_(find_(SHEETS.repairs,'repair_id',id));
+}
+
+function updateOrder_(p,actor){
+  validateOrderUpdate_(p,actor);
+  const kind=p.kind==='storage'?'storage':'repair';
+  if(kind==='storage'){
+    const r=find_(SHEETS.storage,'storage_id',p.id); if(!r) throw httpError_('Хранение не найдено',404);
+    requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
+    const fromStatus=normStatus_(r['Статус'],'storage'), toStatus=String(p.status||fromStatus);
+    patchRow_(SHEETS.storage,r.__row,{'Статус':humanStatus_(toStatus,'storage'),'Ячейка / место':p.storage_location===undefined?r['Ячейка / место']:p.storage_location,'План возврата':p.planned_return_date===undefined?r['План возврата']:p.planned_return_date,'Примечание':p.handover_notes===undefined?r['Примечание']:p.handover_notes,'Выдано':toStatus==='returned'?now_():r['Выдано'],updated_at:now_(),revision:rev+1});
+    addEvent_(kind,p.id,'update',actor,{from_status:fromStatus,to_status:toStatus,note:String(p.reopen_reason||p.handover_notes||'')});
+    return mapStorage_(find_(SHEETS.storage,'storage_id',p.id));
+  }
+  const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
+  requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
+  const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
+  reconcileMasterParts_(parts,oldParts,r,p,actor);
+  const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), total=Math.max(0,worksTotal+partsTotal-num_(p.discount));
+  const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
+  if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
+  const fromStatus=normStatus_(r['Статус'],'repair'), sameTotal=Math.abs(num_(r['Итого'])-total)<.005, approvalAmount=bool_(p.approve)?total:(sameTotal?r['Согласовано, ₽']:''), approvalNote=bool_(p.approve)?String(p.approval_note||''):(sameTotal?r['Примечание согласования']:'');
+  patchRow_(SHEETS.repairs,r.__row,{'Статус':humanStatus_(status,'repair'),'Мастер':staff?staff['ФИО']:String(p.assigned_master||r['Мастер']||''),'Диагностика':p.diagnostics_notes===undefined?r['Диагностика']:String(p.diagnostics_notes||''),'Работы':JSON.stringify(works),'Стоимость работ':worksTotal,'Запчасти':partsTotal,'Скидка':num_(p.discount),'Итого':total,'Гарантия, дней':num_(p.warranty_days),'Начато':!r['Начато']&&['diagnostics','repair','waiting_parts'].includes(status)?now_():r['Начато'],'Завершено':status==='ready'?now_():r['Завершено'],'Выдано':status==='issued'?now_():r['Выдано'],'Примечание':status==='issued'?String(p.handover_notes||r['Примечание']||''):status==='cancelled'?String(p.note||r['Примечание']||''):(p.note===undefined?r['Примечание']:String(p.note||'')),updated_at:now_(),'Строки запчастей':JSON.stringify(parts),master_id:masterId,'Контроль качества':['diagnostics','waiting_parts','repair'].includes(status)?false:(p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked)),'Плановая дата':p.promised_date===undefined?r['Плановая дата']:String(p.promised_date||''),revision:rev+1,'Согласовано, ₽':approvalAmount,'Примечание согласования':approvalNote});
+  addEvent_(kind,p.id,'update',actor,{from_status:fromStatus,to_status:status,note:String(p.reopen_reason||p.handover_notes||p.note||'')});
+  return mapRepair_(find_(SHEETS.repairs,'repair_id',p.id));
+}
+
+function finishStorage_(p,actor,deleting){
+ if(!['developer','owner','receiver','manager','mechanic'].includes(role_(actor)))throw httpError_('Действие доступно владельцу или мастеру-приёмщику',403);
+ if(p.kind!=='storage')throw httpError_('Выберите хранение',400);
+ const r=find_(SHEETS.storage,'storage_id',p.id);
+ if(!r)throw httpError_('Хранение не найдено',404);
+ if(p.revision===undefined||!Number.isInteger(Number(p.revision)))throw httpError_('Нужна версия карточки',400);
+ const rev=assertRevision_(r,p),before=normStatus_(r['Статус'],'storage'),note=String(p.note||'').trim();
+ if(before==='deleted')throw httpError_('Приёмка уже удалена',409);
+ if(!note)throw httpError_('Укажите причину или отметку о выдаче',400);
+ const linked=rows_(SHEETS.repairs).filter(x=>x.storage_id===p.id);
+ if(!deleting&&(num_(r['Оплачено'])<num_(r['Сумма'])||linked.some(x=>!['issued','cancelled'].includes(normStatus_(x['Статус'],'repair')))))throw httpError_('Сначала оплатите хранение и завершите связанные ремонты',409);
+ if(!deleting&&['returned','cancelled'].includes(before))throw httpError_('Хранение уже закрыто',409);
+ const status=deleting?'deleted':'returned',stamp=now_();
+ patchRow_(SHEETS.storage,r.__row,{'Статус':deleting?'deleted':humanStatus_(status,'storage'),'Выдано':deleting?r['Выдано']:stamp,'Примечание':note,updated_at:stamp,revision:rev+1});
+ addEvent_('storage',p.id,deleting?'storage_delete':'storage_close',actor,{number:r['Номер'],from_status:before,to_status:status,note:note,actor_name:actor.name||actor.email||actor.id});
+ return {id:p.id,status:status,revision:rev+1};
+}
+
+function validateOrderUpdate_(p,actor){
+  const kind=p.kind==='storage'?'storage':'repair',r=find_(kind==='storage'?SHEETS.storage:SHEETS.repairs,kind==='storage'?'storage_id':'repair_id',p.id);
+  if(!r)throw httpError_('Заказ не найден',404);requireOrderAccess_(actor,kind,r);assertRevision_(r,p);
+  const before=normStatus_(r['Статус'],kind),status=p.status||before,closed=['issued','returned','cancelled'];
+  if(closed.includes(before)&&!['developer','owner','admin'].includes(role_(actor))||closed.includes(before)&&(!String(p.reopen_reason||'').trim()||status!==(kind==='storage'?'stored':'accepted')))throw httpError_('Закрытый заказ может открыть администратор с причиной',409);
+  if(kind==='storage'){
+    if(before==='deleted')throw httpError_('Приёмка удалена',409);
+    if(status==='returned'&&status!==before&&!['developer','owner','receiver','manager','mechanic'].includes(role_(actor)))throw httpError_('Закрыть хранение может владелец или мастер-приёмщик',403);
+    if(!['accepted','stored','ready_return','returned','cancelled'].includes(status))throw httpError_('Неверный статус',400);
+    if(status==='returned'&&(before!=='ready_return'||num_(r['Оплачено'])<num_(r['Сумма'])||rows_(SHEETS.repairs).some(x=>x.storage_id===p.id&&!closed.includes(normStatus_(x['Статус'],'repair')))))throw httpError_('Для выдачи нужны готовность, полная оплата и завершённые ремонты',409);
+    return;
+  }
+  if(!REPAIR_TRANSITIONS_[status])throw httpError_('Неверный статус',400);
+  requireRepairTransition_(before,status);
+  if(status!==before&&['ready','issued','cancelled'].includes(status)&&!canSetRepairStatus_(actor,status))throw httpError_('У вашей роли нет права на этот статус ремонта',403);
+  const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||'');
+  const diagnostics=p.diagnostics_notes===undefined?String(r['Диагностика']||''):String(p.diagnostics_notes||'');
+  if(['waiting_parts','repair','ready','issued'].includes(status)&&!diagnostics.trim())throw httpError_('Сначала заполните результат диагностики',409);
+  const works=p.works||parseJson_(r['Работы'],[]),parts=p.parts||parseJson_(r['Строки запчастей'],[]);
+  for(const line of [...works,...parts])if(!Number.isInteger(Number(line.quantity))||Number(line.quantity)<1||!Number.isFinite(Number(line.price))||Number(line.price)<0)throw httpError_('Проверьте количество и цену',400);
+  const discount=num_(p.discount===undefined?r['Скидка']:p.discount),amount=[...works,...parts].reduce((s,x)=>s+Number(x.price)*Number(x.quantity),0)-discount;
+  if(amount<0||discount<0)throw httpError_('Неверная скидка',400);
+  if(!isManager_(actor)&&(p.approve||discount!==num_(r['Скидка'])))throw httpError_('Нет права согласования или скидки',403);
+  if(p.approve&&!String(p.approval_note||'').trim())throw httpError_('Укажите согласование',400);
+  const sameTotal=Math.abs(num_(r['Итого'])-amount)<.005,approved=p.approve?amount:(sameTotal?r['Согласовано, ₽']:null),quality=p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked);
+  if(['repair','ready','issued'].includes(status)&&amount>0&&(approved===''||approved===null||Math.abs(num_(approved)-amount)>=.005))throw httpError_('Сначала согласуйте текущую стоимость с клиентом',409);
+  if(['ready','issued'].includes(status)&&!quality)throw httpError_('Перед статусом «Готов» выполните контроль качества',409);
+  if(status==='issued'&&(before!=='ready'||num_(r['Оплачено'])<amount||!String(p.handover_notes||'').trim()))throw httpError_('Для выдачи нужны готовность, полная оплата и отметка о комплектности',409);
+  if(status==='cancelled'&&status!==before&&(num_(r['Оплачено'])!==0||parts.length>0||!String(p.note||'').trim()))throw httpError_('Перед отменой верните оплату, снимите установленные запчасти и укажите причину',409);
+}
+
+
+function canSetRepairStatus_(actor,status){
+  if(['developer','owner'].includes(role_(actor)))return true;
+  if(['receiver','manager','mechanic'].includes(role_(actor)))return true;
+  const p=actor?.status_permissions||{};
+  if(status==='ready')return p.can_mark_ready===true;
+  if(status==='issued')return p.can_issue===true;
+  if(status==='cancelled')return p.can_cancel===true;
+  return true;
+}
+
+const REPAIR_TRANSITIONS_={
+  accepted:new Set(['accepted','diagnostics','cancelled']),
+  diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),
+  waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),
+  repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),
+  ready:new Set(['ready','repair','issued','cancelled']),
+  issued:new Set(['issued']),
+  cancelled:new Set(['cancelled'])
+};
+
+function requireRepairTransition_(from,to){if(!REPAIR_TRANSITIONS_[from]?.has(to))throw httpError_('Сначала пройдите предыдущий этап ремонта',409);}

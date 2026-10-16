@@ -156,6 +156,7 @@ function stockReceive_(p,actor){
   });
   const result={id,created_at:now_(),note,items};addEvent_('stock_receipt',id,'stock_receive',actor,result);return result;
 }
+
 function stockReceipts_(p,actor){requireCash_(actor);return rows_(SHEETS.events).filter(x=>x['Тип']==='stock_receipt').sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,50).map(x=>JSON.parse(x['Детали']));}
 
 function stockHistory_(p){ if(!p.part_id) throw httpError_('Не указана запчасть',400); return rows_(SHEETS.movements).filter(r=>String(r.product_id)===String(p.part_id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,100).map(r=>({id:r.movement_id,part_id:r.product_id,movement_type:({'Приход':'receipt','Расход':'issue','Продажа':'issue','Возврат':'return','Корректировка':'adjustment'})[r['Тип']]||r['Тип'],quantity:num_(r['Количество']),note:r['Комментарий'],created_at:r['Дата']})); }
@@ -175,13 +176,21 @@ function stock_(p,actor){
 }
 
 function requireCash_(actor){if(!['developer','owner','seller'].includes(role_(actor))&&actor.can_sell!==true)throw httpError_('Касса доступна продажнику, владельцу и разработчику',403);}
+
 function cashMoney_(v){const n=Number(v);if(v===null||v===''||typeof v==='boolean'||!Number.isFinite(n)||n<0||n>100000000||Math.abs(n*100-Math.round(n*100))>0.00001)throw httpError_('Укажите сумму в рублях, не более двух знаков после запятой',400);return Math.round(n*100)/100;}
+
 function cashEvents_(){return rows_(SHEETS.events).filter(e=>e['Тип']==='cash').map(e=>{let details;try{details=JSON.parse(e['Детали']||'{}');}catch{throw httpError_('Повреждена запись кассовой смены',503);}return {...e,details};});}
+
 function cashShifts_(){const events=cashEvents_();return events.filter(e=>e['Действие']==='shift_open').map(e=>{const closed=events.find(c=>c.record_id===e.record_id&&c['Действие']==='shift_close');return {id:e.record_id,...e.details,opened_at:e['Дата'],opened_by:e.actor_id,status:closed?'closed':'open',closed_at:closed?.['Дата']||null,closed_by:closed?.actor_id||null,closing:closed?.details||null};}).sort((a,b)=>b.opened_at.localeCompare(a.opened_at));}
+
 function cashSales_(shiftId){const ids=new Set(cashEvents_().filter(e=>e['Действие']==='sale'&&e.details.shift_id===shiftId).map(e=>e.record_id));return rows_(SHEETS.sales).filter(s=>ids.has(s.sale_id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата'])));}
+
 function cashTotals_(shift){let cash=0,card=0,transfer=0;const sales=cashSales_(shift.id);for(const s of sales){const cents=Math.round(num_(s['Итого'])*100);if(s['Способ оплаты']==='Наличные')cash+=cents;else if(s['Способ оплаты']==='Карта')card+=cents;else if(s['Способ оплаты']==='Перевод')transfer+=cents;else throw httpError_('Неизвестный способ оплаты в смене',503);}return {cash:cash/100,card:card/100,transfer:transfer/100,cashless:(card+transfer)/100,total:(cash+card+transfer)/100,count:sales.length,expected_cash:(Math.round(shift.opening_cash*100)+cash)/100};}
+
 function cashState_(p,actor){requireCash_(actor);const all=cashShifts_(),selected=p.shift_id?all.find(s=>s.id===p.shift_id):all.find(s=>s.status==='open');if(p.shift_id&&!selected)throw httpError_('Смена не найдена',404);const offset=Math.max(0,Math.floor(num_(p.offset)));return {shifts:all.filter(s=>s.status==='open').concat(all.filter(s=>s.status==='closed').slice(0,100)),selected:selected||null,totals:selected?cashTotals_(selected):null,sales:selected?cashSales_(selected.id).slice(offset,offset+100).map(saleResponse_):[],offset,limit:100};}
+
 function shiftOpen_(p,actor){requireCash_(actor);const register=String(p.register||'Основная касса').trim().replace(/\s+/g,' ');if(!register||register.length>80)throw httpError_('Название кассы: от 1 до 80 символов',400);const shifts=cashShifts_();if(shifts.some(s=>s.status==='open'&&s.register.toLowerCase()===register.toLowerCase()))throw httpError_('На этой кассе уже открыта смена. Обновите раздел.',409);const id=uid_();addEvent_('cash',id,'shift_open',actor,{register,number:shifts.length+1,opening_cash:cashMoney_(p.opening_cash??0),cashier:actor.name||actor.email||actor.id});return {id};}
+
 function shiftClose_(p,actor){requireCash_(actor);const shift=cashShifts_().find(s=>s.id===p.shift_id);if(!shift||shift.status!=='open')throw httpError_('Смена уже закрыта или не найдена',409);const totals=cashTotals_(shift),counted=cashMoney_(p.counted_cash),difference=Math.round((counted-totals.expected_cash)*100)/100;addEvent_('cash',shift.id,'shift_close',actor,{...totals,counted_cash:counted,difference,note:String(p.note||'').trim().slice(0,500),cashier:actor.name||actor.email||actor.id});return {id:shift.id,...totals,counted_cash:counted,difference};}
 
 function sale_(p,actor){
@@ -284,26 +293,6 @@ function parseJson_(v,fallback){
 }
 
 function isManager_(a){ return ['developer','owner','admin','receiver','manager','mechanic'].includes(role_(a)); }
-function canSetRepairStatus_(actor,status){
-  if(['developer','owner'].includes(role_(actor)))return true;
-  if(['receiver','manager','mechanic'].includes(role_(actor)))return true;
-  const p=actor?.status_permissions||{};
-  if(status==='ready')return p.can_mark_ready===true;
-  if(status==='issued')return p.can_issue===true;
-  if(status==='cancelled')return p.can_cancel===true;
-  return true;
-}
-
-const REPAIR_TRANSITIONS_={
-  accepted:new Set(['accepted','diagnostics','cancelled']),
-  diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),
-  waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),
-  repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),
-  ready:new Set(['ready','repair','issued','cancelled']),
-  issued:new Set(['issued']),
-  cancelled:new Set(['cancelled'])
-};
-function requireRepairTransition_(from,to){if(!REPAIR_TRANSITIONS_[from]?.has(to))throw httpError_('Сначала пройдите предыдущий этап ремонта',409);}
 
 function assertRevision_(row,p){
   const current=Math.max(1,Math.floor(num_(row.revision)||1));
@@ -442,11 +431,8 @@ function updateOrder_(p,actor){
   }
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
-  const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?p.parts:parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
-  const totalsById=a=>a.reduce((m,x)=>{const id=String(x.part_id||'');if(id)m[id]=(m[id]||0)+Math.max(0,Math.floor(num_(x.quantity)||1));return m;},{});
-  const before=totalsById(oldParts), after=totalsById(parts), ids=[...new Set([...Object.keys(before),...Object.keys(after)])];
-  ids.forEach(id=>{const delta=(after[id]||0)-(before[id]||0);if(delta>0){const pr=find_(SHEETS.products,'product_id',id);if(!pr)throw httpError_('Запчасть со склада не найдена',404);if(num_(pr['Остаток, шт.'])<delta)throw httpError_('Недостаточно на складе: '+pr['Модель / название'],409);}});
-  ids.forEach(id=>{const delta=(after[id]||0)-(before[id]||0);if(delta>0)stock_({part_id:id,movement_type:'issue',quantity:delta,note:'Установлено в ремонт '+r['Номер ремонта'],reference_id:r.repair_id},actor);else if(delta<0)stock_({part_id:id,movement_type:'return',quantity:-delta,note:'Возврат из ремонта '+r['Номер ремонта'],reference_id:r.repair_id},actor);});
+  const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
+  reconcileMasterParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), total=Math.max(0,worksTotal+partsTotal-num_(p.discount));
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
   if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
@@ -515,6 +501,75 @@ function finishStorage_(p,actor,deleting){
  addEvent_('storage',p.id,deleting?'storage_delete':'storage_close',actor,{number:r['Номер'],from_status:before,to_status:status,note:note,actor_name:actor.name||actor.email||actor.id});
  return {id:p.id,status:status,revision:rev+1};
 }
+
+function masterStockRows_(){
+ const balances={};
+ rows_(SHEETS.events).forEach(e=>{
+  const action=e['Действие'];if(!['warehouse_master_issue','master_stock_consume','master_stock_restore','master_stock_return'].includes(action))return;
+  let d;try{d=JSON.parse(e['Детали']||'{}');}catch(_){throw httpError_('Повреждён журнал запчастей мастеров',503);}const sign=['warehouse_master_issue','master_stock_restore'].includes(action)?1:-1;
+  (d.items||[]).forEach(x=>{const key=d.master_id+':'+x.part_id;if(!balances[key])balances[key]={master_id:d.master_id,master_name:d.master_name||'',part_id:x.part_id,name:x.name||'',quantity:0,unit_cost:0,value:0,created_at:e['Дата'],issue_id:e.record_id};balances[key].quantity+=sign*num_(x.quantity);balances[key].value+=sign*num_(x.quantity)*num_(x.unit_cost);balances[key].unit_cost=balances[key].quantity>0?Math.max(0,balances[key].value/balances[key].quantity):0;});
+ });return Object.keys(balances).map(k=>balances[k]).filter(x=>x.quantity>0);
+}
+
+function masterStockEvent_(action,masterId,items,recordId,actor){
+ const prior=masterStockRows_().find(x=>x.master_id===masterId);
+ addEvent_('master_stock',recordId,action,actor,{master_id:masterId,master_name:prior?prior.master_name:'',items:items});
+}
+
+function returnMasterStock_(p,actor){
+ requireCash_(actor);
+ if(!p.master_id||!Number.isInteger(Number(p.quantity))||Number(p.quantity)<1||Number(p.quantity)>1000)throw httpError_('Укажите мастера и количество',400);
+ const holding=masterStockRows_().find(x=>x.master_id===p.master_id&&x.part_id===p.part_id),quantity=Number(p.quantity);
+ if(!holding||holding.quantity<quantity)throw httpError_('Недостаточно запчастей на мастере. Обновите остатки.',409);
+ stock_({part_id:p.part_id,movement_type:'return',quantity:quantity,reference_id:p.master_id,note:'Возврат от мастера '+holding.master_name},actor);
+ masterStockEvent_('master_stock_return',p.master_id,[{...holding,quantity:quantity}],p.request_id,actor);
+ return {ok:true,master_id:p.master_id,part_id:p.part_id,quantity:quantity};
+}
+
+function reconcileMasterParts_(parts,oldParts,repair,p,actor){
+ const totals=a=>a.reduce((m,x)=>{if(x.part_id)m[x.part_id]=(m[x.part_id]||0)+Math.max(1,Math.floor(num_(x.quantity)||1));return m;},{}),before=totals(oldParts),after=totals(parts);
+ const oldAlloc={};oldParts.forEach(x=>{if(!x.part_id)return;(x.master_allocations||[]).forEach(a=>{const key=x.part_id;oldAlloc[key]=oldAlloc[key]||[];oldAlloc[key].push({...a});});});
+ // A mechanic uses their own stock; managers use the assigned master's stock.
+ const masterId=role_(actor)==='mechanic'?String(actor.id):String(p.assigned_master_id===undefined?repair.master_id||'':p.assigned_master_id||'');
+ const holdings=masterStockRows_();
+ [...new Set([...Object.keys(before),...Object.keys(after)])].forEach(id=>{
+  const delta=(after[id]||0)-(before[id]||0),alloc=oldAlloc[id]||[],product=find_(SHEETS.products,'product_id',id);
+  if(!product)throw httpError_('Запчасть не найдена',404);
+  if(delta>0){
+   const held=holdings.find(x=>x.master_id===masterId&&x.part_id===id),use=Math.min(delta,held?held.quantity:0);
+   if(use){alloc.push({master_id:masterId,quantity:use,unit_cost:held.unit_cost});masterStockEvent_('master_stock_consume',masterId,[{...held,quantity:use}],repair.repair_id,actor);}
+   if(delta>use)stock_({part_id:id,movement_type:'issue',quantity:delta-use,note:'Установлено в ремонт '+repair['Номер ремонта'],reference_id:repair.repair_id},actor);
+  }else if(delta<0){
+   let remaining=-delta;
+   // First undo the most recent personal allocations; retain their original owner.
+   for(let i=alloc.length-1;i>=0&&remaining;i--){const a=alloc[i],q=Math.min(a.quantity,remaining);if(q){masterStockEvent_('master_stock_restore',a.master_id,[{part_id:id,name:product['Модель / название'],unit_cost:a.unit_cost===undefined?num_(product['Цена закупки, ₽']):a.unit_cost,quantity:q}],repair.repair_id,actor);a.quantity-=q;remaining-=q;}}
+   if(remaining)stock_({part_id:id,movement_type:'return',quantity:remaining,note:'Возврат из ремонта '+repair['Номер ремонта'],reference_id:repair.repair_id},actor);
+  }
+  const line=parts.find(x=>x.part_id===id);parts.filter(x=>x.part_id===id).forEach(x=>{delete x.master_allocations;});if(line)line.master_allocations=alloc.filter(x=>x.quantity>0);
+ });
+}
+
+function canSetRepairStatus_(actor,status){
+  if(['developer','owner'].includes(role_(actor)))return true;
+  if(['receiver','manager','mechanic'].includes(role_(actor)))return true;
+  const p=actor?.status_permissions||{};
+  if(status==='ready')return p.can_mark_ready===true;
+  if(status==='issued')return p.can_issue===true;
+  if(status==='cancelled')return p.can_cancel===true;
+  return true;
+}
+
+const REPAIR_TRANSITIONS_={
+  accepted:new Set(['accepted','diagnostics','cancelled']),
+  diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),
+  waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),
+  repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),
+  ready:new Set(['ready','repair','issued','cancelled']),
+  issued:new Set(['issued']),
+  cancelled:new Set(['cancelled'])
+};
+
+function requireRepairTransition_(from,to){if(!REPAIR_TRANSITIONS_[from]?.has(to))throw httpError_('Сначала пройдите предыдущий этап ремонта',409);}
 function assertOpen_(r,kind){if(['issued','returned','cancelled'].includes(normStatus_(r['Статус'],kind)))throw httpError_('Заказ закрыт',409);}
 
 function validateOrderUpdate_(p,actor){
@@ -575,11 +630,11 @@ function migrationManifest_(actor){requireAdmin_(actor);return rows_(SHEETS.file
  }
  return {sheets,changes:()=>[...changes.values()],run(action,p,actor){
   if(!actor.id||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(actor.role))throw httpError_('Нет доступа',403);
+  if(action==='master_holdings')return masterStockRows_().filter(x=>actor.role!=='mechanic'||x.master_id===actor.id);
+  if(action==='master_return')return returnMasterStock_(p,actor);
   if(action==='native_photo'){requireAdmin_(actor);return nativePhoto(p);}
   if(action==='native_document')return documents_(p,actor);
   if(action==='native_file_migration'){requireAdmin_(actor);const r=find_(SHEETS.files,'object_id',p.object_id);if(!r)throw httpError_('Файл не найден',404);patchRow_(SHEETS.files,r.__row,{'Google Drive URL':p.path,'Статус миграции':'Приватное хранилище',updated_at:now_()});return {object_id:p.object_id,migrated:true,path:p.path};}
   return routeUnlocked_(action,p,actor);
  }};
 }
-
-

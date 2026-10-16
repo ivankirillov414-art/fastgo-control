@@ -66,6 +66,7 @@ body[data-mode=station][data-screen=login] .warehouse-sidebar,body[data-mode=sta
 
 .scanner-compatible{margin:12px 0}.scanner-compatible input{width:100%;min-height:48px}#scanner-compat{font-size:13px;margin-top:12px}#scan-received{display:block;overflow-wrap:anywhere;margin-top:8px}
 
+dialog{color:var(--text,#eef4ff);background:#142438;border:1px solid #35506b;border-radius:16px;max-width:min(480px,90vw);padding:24px}dialog::backdrop{background:#0009}dialog h2{margin-top:0}dialog input{width:100%;box-sizing:border-box}dialog .actions{margin-top:18px}
 /* Concept 5 (last full-window preview): one unified application bar. */
 body[data-mode=station] header{position:relative;margin-left:0;min-height:64px;padding:10px 20px;gap:12px;background:#091827;z-index:6}
 body[data-mode=station] header>b.warehouse-top-brand{display:block;white-space:nowrap;font-size:23px;letter-spacing:-.5px;flex-shrink:0}

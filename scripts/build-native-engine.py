@@ -4,6 +4,8 @@ root=Path(__file__).resolve().parents[1]
 def functions(path):
  text=path.read_text();matches=list(re.finditer(r'^function (\w+)\(',text,re.M));return {m.group(1):text[m.start():matches[i+1].start() if i+1<len(matches) else len(text)].strip() for i,m in enumerate(matches)}
 a=functions(root/'google-apps-script/Code.gs');b=functions(root/'google-apps-script/Reliability.gs')
+a.update({k:v for k,v in functions(root/'scripts/native-engine-overrides.gs').items() if k not in b})
+b.update({k:v for k,v in functions(root/'scripts/native-engine-overrides.gs').items() if k in b})
 excluded={'doGet','doPost','route_','ss_','sh_','rows_','headers_','append_','patchRow_','uid_','now_','json_','upload_','documents_','signedUrl_'}
 code='\n\n'.join(v for k,v in a.items() if k not in excluded)
 code=re.sub(r"  const root=DriveApp.getFolderById.*?assertPrivate_\(folder\);", "  const folderUrl='', created=now_();",code)

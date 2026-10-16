@@ -418,11 +418,8 @@ function updateOrder_(p,actor){
   }
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
-  const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?p.parts:parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
-  const totalsById=a=>a.reduce((m,x)=>{const id=String(x.part_id||'');if(id)m[id]=(m[id]||0)+Math.max(0,Math.floor(num_(x.quantity)||1));return m;},{});
-  const before=totalsById(oldParts), after=totalsById(parts), ids=[...new Set([...Object.keys(before),...Object.keys(after)])];
-  ids.forEach(id=>{const delta=(after[id]||0)-(before[id]||0);if(delta>0){const pr=find_(SHEETS.products,'product_id',id);if(!pr)throw httpError_('Запчасть со склада не найдена',404);if(num_(pr['Остаток, шт.'])<delta)throw httpError_('Недостаточно на складе: '+pr['Модель / название'],409);}});
-  ids.forEach(id=>{const delta=(after[id]||0)-(before[id]||0);if(delta>0)stock_({part_id:id,movement_type:'issue',quantity:delta,note:'Установлено в ремонт '+r['Номер ремонта'],reference_id:r.repair_id},actor);else if(delta<0)stock_({part_id:id,movement_type:'return',quantity:-delta,note:'Возврат из ремонта '+r['Номер ремонта'],reference_id:r.repair_id},actor);});
+  const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
+  reconcileMasterParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), total=Math.max(0,worksTotal+partsTotal-num_(p.discount));
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
   const fromStatus=normStatus_(r['Статус'],'repair'), approvalAmount=bool_(p.approve)?total:r['Согласовано, ₽'], approvalNote=bool_(p.approve)?String(p.approval_note||''):r['Примечание согласования'];
@@ -507,3 +504,50 @@ function finishStorage_(p,actor,deleting){
 }
 
 
+
+
+// Personal inventory is an event ledger. Repair allocations are server-authored;
+// client-supplied allocation metadata is never trusted.
+function masterStockRows_(){
+ const balances={};
+ rows_(SHEETS.events).forEach(e=>{
+  const action=e['Действие'];if(!['warehouse_master_issue','master_stock_consume','master_stock_restore','master_stock_return'].includes(action))return;
+  let d;try{d=JSON.parse(e['Детали']||'{}');}catch(_){throw httpError_('Повреждён журнал запчастей мастеров',503);}const sign=['warehouse_master_issue','master_stock_restore'].includes(action)?1:-1;
+  (d.items||[]).forEach(x=>{const key=d.master_id+':'+x.part_id;if(!balances[key])balances[key]={master_id:d.master_id,master_name:d.master_name||'',part_id:x.part_id,name:x.name||'',quantity:0,unit_cost:0,value:0,created_at:e['Дата'],issue_id:e.record_id};balances[key].quantity+=sign*num_(x.quantity);balances[key].value+=sign*num_(x.quantity)*num_(x.unit_cost);balances[key].unit_cost=balances[key].quantity>0?Math.max(0,balances[key].value/balances[key].quantity):0;});
+ });return Object.keys(balances).map(k=>balances[k]).filter(x=>x.quantity>0);
+}
+function masterStockEvent_(action,masterId,items,recordId,actor){
+ const prior=masterStockRows_().find(x=>x.master_id===masterId);
+ addEvent_('master_stock',recordId,action,actor,{master_id:masterId,master_name:prior?prior.master_name:'',items:items});
+}
+function returnMasterStock_(p,actor){
+ requireCash_(actor);
+ if(!p.master_id||!Number.isInteger(Number(p.quantity))||Number(p.quantity)<1||Number(p.quantity)>1000)throw httpError_('Укажите мастера и количество',400);
+ const holding=masterStockRows_().find(x=>x.master_id===p.master_id&&x.part_id===p.part_id),quantity=Number(p.quantity);
+ if(!holding||holding.quantity<quantity)throw httpError_('Недостаточно запчастей на мастере. Обновите остатки.',409);
+ stock_({part_id:p.part_id,movement_type:'return',quantity:quantity,reference_id:p.master_id,note:'Возврат от мастера '+holding.master_name},actor);
+ masterStockEvent_('master_stock_return',p.master_id,[{...holding,quantity:quantity}],p.request_id,actor);
+ return {ok:true,master_id:p.master_id,part_id:p.part_id,quantity:quantity};
+}
+function reconcileMasterParts_(parts,oldParts,repair,p,actor){
+ const totals=a=>a.reduce((m,x)=>{if(x.part_id)m[x.part_id]=(m[x.part_id]||0)+Math.max(1,Math.floor(num_(x.quantity)||1));return m;},{}),before=totals(oldParts),after=totals(parts);
+ const oldAlloc={};oldParts.forEach(x=>{if(!x.part_id)return;(x.master_allocations||[]).forEach(a=>{const key=x.part_id;oldAlloc[key]=oldAlloc[key]||[];oldAlloc[key].push({...a});});});
+ // A mechanic uses their own stock; managers use the assigned master's stock.
+ const masterId=role_(actor)==='mechanic'?String(actor.id):String(p.assigned_master_id===undefined?repair.master_id||'':p.assigned_master_id||'');
+ const holdings=masterStockRows_();
+ [...new Set([...Object.keys(before),...Object.keys(after)])].forEach(id=>{
+  const delta=(after[id]||0)-(before[id]||0),alloc=oldAlloc[id]||[],product=find_(SHEETS.products,'product_id',id);
+  if(!product)throw httpError_('Запчасть не найдена',404);
+  if(delta>0){
+   const held=holdings.find(x=>x.master_id===masterId&&x.part_id===id),use=Math.min(delta,held?held.quantity:0);
+   if(use){alloc.push({master_id:masterId,quantity:use,unit_cost:held.unit_cost});masterStockEvent_('master_stock_consume',masterId,[{...held,quantity:use}],repair.repair_id,actor);}
+   if(delta>use)stock_({part_id:id,movement_type:'issue',quantity:delta-use,note:'Установлено в ремонт '+repair['Номер ремонта'],reference_id:repair.repair_id},actor);
+  }else if(delta<0){
+   let remaining=-delta;
+   // First undo the most recent personal allocations; retain their original owner.
+   for(let i=alloc.length-1;i>=0&&remaining;i--){const a=alloc[i],q=Math.min(a.quantity,remaining);if(q){masterStockEvent_('master_stock_restore',a.master_id,[{part_id:id,name:product['Модель / название'],unit_cost:a.unit_cost===undefined?num_(product['Цена закупки, ₽']):a.unit_cost,quantity:q}],repair.repair_id,actor);a.quantity-=q;remaining-=q;}}
+   if(remaining)stock_({part_id:id,movement_type:'return',quantity:remaining,note:'Возврат из ремонта '+repair['Номер ремонта'],reference_id:repair.repair_id},actor);
+  }
+  const line=parts.find(x=>x.part_id===id);parts.filter(x=>x.part_id===id).forEach(x=>{delete x.master_allocations;});if(line)line.master_allocations=alloc.filter(x=>x.quantity>0);
+ });
+}

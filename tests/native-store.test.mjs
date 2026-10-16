@@ -7,6 +7,7 @@ function harness(){
  const seed=(name,obj)=>sheets[name].rows.push({...Object.fromEntries(sheets[name].headers.map(k=>[k,''])),...obj,__row:sheets[name].rows.length+2});
  seed('Товары',{product_id:part,'Модель / название':'Тест','Категория':'Тест','Штрих-код':'FGP-00000001','Остаток, шт.':1,'Цена продажи, ₽':100,'Активен':true});seed('Категории',{'Категория (ключ)':'Тест'});seed('Сотрудники',{employee_id:mechanicId,'ФИО':'Тестовый мастер','Email':'mechanic@example.invalid','Роль':'Механик','Активен':true});
  const db=async(table,q,method,p)=>{
+  if(table==='workshop_members')return new URLSearchParams(q).get('profile_id')==='eq.'+mechanicId?[{profile_id:mechanicId,name:'Тестовый мастер',role:'mechanic',active:true}]:[];
   if(table==='rpc/workshop_native_snapshot')return structuredClone({version,sheets});
   if(table==='workshop_native_receipts'){const id=new URLSearchParams(q).get('request_id').slice(3);return receipts.has(id)?[receipts.get(id)]:[];}
   if(table!=='rpc/workshop_native_commit')throw Error(table);
