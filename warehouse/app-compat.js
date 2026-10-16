@@ -663,7 +663,7 @@
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>' + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
+      return '<div class="live-heading"><button id="live-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>' + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
     }
     function mount() {
       render(markup(kind));
@@ -677,10 +677,34 @@
         e.preventDefault();
         const code = $2("live-code").value.trim();
         if (!code) return;
+        if ($2("scan-received")) $2("scan-received").textContent = "\u041F\u043E\u043B\u0443\u0447\u0435\u043D \u043A\u043E\u0434: " + code;
         $2("live-code").value = "";
         void add(code).catch((e2) => feedback(e2.message, true));
       };
       stop = bindScanner($2("live-code"), $2("live-scan"), () => active && !locked, { silent: true });
+      function compatible(enabled, focus = false) {
+        stop == null ? void 0 : stop();
+        const form = $2("live-scan"), input = $2("live-code");
+        form.className = enabled ? "scanner-compatible" : "scanner-sink";
+        form.setAttribute("aria-hidden", String(!enabled));
+        input.setAttribute("inputmode", enabled ? "text" : "none");
+        input.tabIndex = enabled ? 0 : -1;
+        input.setAttribute("aria-label", "\u041A\u043E\u0434 \u0430\u043F\u043F\u0430\u0440\u0430\u0442\u043D\u043E\u0433\u043E \u0441\u043A\u0430\u043D\u0435\u0440\u0430");
+        input.placeholder = "\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440";
+        stop = bindScanner(input, form, () => active && !locked, { silent: !enabled });
+        $2("scanner-compat").textContent = enabled ? "\u0421\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u043B\u0435 \u0441\u043A\u0430\u043D\u0435\u0440\u0430" : "\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?";
+        if (enabled) feedback("\u041E\u0431\u044B\u0447\u043D\u044B\u0439 \u0432\u0432\u043E\u0434 \u0432\u043A\u043B\u044E\u0447\u0451\u043D. \u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440.");
+        if (focus) input.focus();
+      }
+      if (terminal2) {
+        let enabled = load2("scanner:compat") === true;
+        if (enabled) compatible(true);
+        $2("scanner-compat").onclick = () => {
+          enabled = !enabled;
+          save3("scanner:compat", enabled);
+          compatible(enabled, true);
+        };
+      }
       if (!terminal2) $2("live-submit").onclick = () => run2(finish);
       pollTimer = setInterval(() => void poll2().catch((e) => {
         if (active && $2("live-sync")) $2("live-sync").textContent = e.message;
@@ -1491,6 +1515,7 @@
         }
       }
       await (webUpdater == null ? void 0 : webUpdater.now());
+      message("");
     } catch (e) {
       message("\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + e.message, true);
     } finally {
