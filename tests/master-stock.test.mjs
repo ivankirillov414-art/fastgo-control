@@ -1,4 +1,4 @@
-import test from 'node:test';import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
+import test from 'node:test';import {analytics} from '../supabase/functions/fastgo-operations/model.js';import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {createNativeEngine} from '../supabase/functions/_shared/native-engine.js';
 import {nativeClient} from '../supabase/functions/_shared/native-client.js';
 import {editInventory} from '../supabase/functions/fastgo-warehouse/inventory.js';
@@ -47,3 +47,6 @@ await check('При назначении пользователь мастера
 await check('Два ремонта не могут потратить один личный остаток повторно',async f=>{f.issue(1);const a=await f.repair(),b=await f.repair();await Promise.all([f.update(a,[f.line]),f.update(b,[f.line])]);assert.equal(f.stock(),3);assert.equal(f.holdings().length,0);});
 await check('Недостаток обоих запасов не сохраняет расход мастера',async f=>{f.issue(1);const r=await f.repair(),version=f.state.version;await assert.rejects(f.update(r,[{...f.line,quantity:6}]),e=>e.status===409);assert.equal(f.state.version,version);assert.equal(f.holdings()[0].quantity,1);assert.equal(f.stock(),4);});
 await check('Каталог показывает мастеру только его личный запас',async f=>{f.issue(2);const own=await f.call('catalog',{},f.master),other=await f.call('catalog',{},{id:randomUUID(),role:'mechanic'});assert.equal(own.master_holdings[0].quantity,2);assert.equal(other.master_holdings.length,0);});
+
+await check('Личный расход учитывается в себестоимости ремонта без второго складского движения',async f=>{const product=f.state.sheets['Товары'].rows[0];product['Цена закупки, ₽']=100;f.issue(2);const r=await f.repair();await f.update(r,[f.line]);const raw=f.state.sheets['Ремонты'].rows[0];raw['Статус']='Выдан';raw['Выдано']='2026-10-16';const report=analytics(f.state.sheets,{from:'2026-01-01',to:'2026-12-31'});assert.equal(report.details[0].cost,100);assert.equal(report.details[0].missing_cost,0);assert.equal(f.stock(),3);});
+await check('Себестоимость личного запаса сохраняется при изменении закупочной цены',async f=>{const product=f.state.sheets['Товары'].rows[0];product['Цена закупки, ₽']=100;f.issue(1);product['Цена закупки, ₽']=200;f.issue(1);assert.equal(f.holdings()[0].unit_cost,150);let r=await f.repair();r=await f.update(r,[f.line]);product['Цена закупки, ₽']=999;await f.update(r,[]);assert.equal(f.holdings()[0].unit_cost,150);assert.equal(f.holdings()[0].quantity,2);});

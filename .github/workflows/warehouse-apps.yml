@@ -2,9 +2,9 @@ name: FastGo Warehouse Apps
 on:
  push:
   branches: [main]
-  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -16,7 +16,7 @@ jobs:
    - uses: actions/setup-node@v4
      with: {node-version: '24'}
    - run: node scripts/build-warehouse-web.cjs --check
-   - run: node --test tests/warehouse*.mjs tests/native-store.test.mjs tests/master-stock.test.mjs
+   - run: node --test tests/warehouse*.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
