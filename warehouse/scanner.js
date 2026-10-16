@@ -7,11 +7,9 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
   const live = () => !disposed && input.isConnected && enabled();
   const focus = () => {
     if (live() && (!editable(document.activeElement) || document.activeElement === input)) {
-      // Focus a readonly sink first so older Android WebViews do not open the IME.
-      // Restore text input afterwards for scanner services that inject decoded text.
-      if(silent){input.readOnly=true;input.blur();}
+      // Android scanner IMEs need a writable editor when focus is acquired.
+      // inputmode suppresses the screen keyboard without invalidating that editor.
       input.focus({preventScroll:true});
-      if(silent)input.readOnly=false;
     }
   };
   if(silent){input.setAttribute('inputmode','none');input.tabIndex=-1;}
@@ -48,7 +46,7 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
     }
   };
   const onPaste = () => { setTimeout(()=>{if(live())onInput({isComposing:false});},0); };
-  const suspend = () => { if(silent){reset();input.readOnly=true;input.blur();} };
+  const suspend = () => { if(silent){reset();input.blur();} };
   const onVisible = () => { if (document.hidden) suspend();else focus(); };
   const onClick = e => {
     if (!editable(e.target) && !e.target.closest('button,a,label')) focus();

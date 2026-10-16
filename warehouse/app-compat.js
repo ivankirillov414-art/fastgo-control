@@ -322,12 +322,7 @@
     const live2 = () => !disposed && input.isConnected && enabled();
     const focus = () => {
       if (live2() && (!editable(document.activeElement) || document.activeElement === input)) {
-        if (silent) {
-          input.readOnly = true;
-          input.blur();
-        }
         input.focus({ preventScroll: true });
-        if (silent) input.readOnly = false;
       }
     };
     if (silent) {
@@ -378,7 +373,6 @@
     const suspend = () => {
       if (silent) {
         reset();
-        input.readOnly = true;
         input.blur();
       }
     };
