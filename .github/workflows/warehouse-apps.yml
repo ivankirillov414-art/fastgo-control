@@ -3,6 +3,8 @@ on:
  push:
   branches: [main]
   paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','tests/warehouse*.mjs','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+ pull_request:
+  paths: ['warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','tests/warehouse*.mjs','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -18,7 +20,9 @@ jobs:
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-live-browser.cjs
  windows:
+  if: github.event_name != 'pull_request'
   needs: test
   runs-on: windows-latest
   steps:
@@ -42,6 +46,7 @@ jobs:
        warehouse-desktop/dist/*.exe.blockmap
        warehouse-desktop/dist/latest.yml
  android:
+  if: github.event_name != 'pull_request'
   needs: test
   runs-on: ubuntu-latest
   steps:

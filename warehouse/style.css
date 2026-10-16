@@ -14,3 +14,21 @@ body[data-mode=terminal][data-screen=home] .homebuttons button{min-height:72px;f
 body[data-mode=terminal][data-screen=home] details.panel{margin:0;padding:12px;font-size:15px}
 body[data-mode=terminal][data-screen=home] details summary{min-height:24px;cursor:pointer}
 body[data-mode=terminal] #message:empty{display:none}
+
+body[data-mode=terminal] header{display:none}
+.live-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.live-heading h1,.live-heading h2{margin:0;font-size:22px}
+#live-scan{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+.scan-empty{color:#adbed4;text-align:center;padding:44px 8px}
+.scan-product{padding:12px;margin:10px 0;background:#152238;border:1px solid #354862;border-radius:10px}
+.scan-product>small{display:block;margin:4px 0}
+.scan-product-line{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.scan-product-line input{width:64px;padding:8px}
+.own-price,.payment-options label{display:flex;align-items:center;gap:10px}
+.own-price input,.payment-options input{width:20px;min-height:20px;height:20px;margin:0;flex:none}
+.payment-options{border:1px solid #354862;border-radius:10px;padding:8px 12px;margin:12px 0}
+.payment-options label{margin:4px 0;min-height:36px}
+#live-submit{width:100%;font-size:21px;margin:12px 0;min-height:52px}
+.live-cancel{display:block;margin:4px auto;font-size:13px;background:transparent}
+#live-sync{display:block;min-height:20px}
+#live-terminal-panel .scan-product{margin:8px 0}
