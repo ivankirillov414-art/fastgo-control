@@ -3,3 +3,14 @@
 header{flex-wrap:wrap}#terminal-update{border-color:#259cff;background:#173656;font-size:14px}dialog{color:#e9f1fb;background:#152238;border:1px solid #425571;border-radius:12px;padding:24px;max-width:560px;width:calc(100% - 32px)}dialog::backdrop{background:rgba(0,0,0,.7)}dialog h2{margin-top:0}dialog form{text-align:right}
 
 .desktop-status{font-size:13px;color:#bbcade;padding:8px 22px;background:#152238;overflow-wrap:anywhere}#stations{display:grid;gap:10px}
+
+/* Compact iData home; document screens keep their navigation. */
+body[data-mode=terminal] #logout{display:none!important}
+body[data-mode=terminal][data-screen=home] header{display:none}
+body[data-mode=terminal][data-screen=home] main{padding:16px 12px 8px;max-width:480px}
+body[data-mode=terminal][data-screen=home] h1{font-size:22px;line-height:1.2;margin:0 0 16px}
+body[data-mode=terminal][data-screen=home] .homebuttons{gap:12px;margin:0 0 14px}
+body[data-mode=terminal][data-screen=home] .homebuttons button{min-height:72px;font-size:25px}
+body[data-mode=terminal][data-screen=home] details.panel{margin:0;padding:12px;font-size:15px}
+body[data-mode=terminal][data-screen=home] details summary{min-height:24px;cursor:pointer}
+body[data-mode=terminal] #message:empty{display:none}
