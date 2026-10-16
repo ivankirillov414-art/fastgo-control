@@ -9,7 +9,7 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
     if (live() && (!editable(document.activeElement) || document.activeElement === input)) {
       // Focus a readonly sink first so older Android WebViews do not open the IME.
       // Restore text input afterwards for scanner services that inject decoded text.
-      if(silent)input.readOnly=true;
+      if(silent){input.readOnly=true;input.blur();}
       input.focus({preventScroll:true});
       if(silent)input.readOnly=false;
     }
@@ -48,7 +48,8 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
     }
   };
   const onPaste = () => { setTimeout(()=>{if(live())onInput({isComposing:false});},0); };
-  const onVisible = () => { if (!document.hidden) focus(); };
+  const suspend = () => { if(silent){reset();input.readOnly=true;input.blur();} };
+  const onVisible = () => { if (document.hidden) suspend();else focus(); };
   const onClick = e => {
     if (!editable(e.target) && !e.target.closest('button,a,label')) focus();
   };
@@ -60,6 +61,7 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('click', onClick);
   window.addEventListener('focus', focus);
+  window.addEventListener('blur', suspend);
   document.addEventListener('visibilitychange', onVisible);
   focus();
   // Older WebViews may not honour focus until the new screen has painted.
@@ -74,6 +76,7 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('click', onClick);
     window.removeEventListener('focus', focus);
+    window.removeEventListener('blur', suspend);
     document.removeEventListener('visibilitychange', onVisible);
   };
 }
