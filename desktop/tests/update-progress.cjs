@@ -33,9 +33,10 @@ require(${JSON.stringify(path.join(root,'main.cjs'))});`);
  await page.locator('#f-last_name').fill('Тест');await page.locator('#f-first_name').fill('Обновление');await page.locator('#f-equipment_name').fill('Kugoo M4');await page.locator('#f-intake_amount').fill('500');
  await page.locator('#intake-save').click();await page.locator('#repair-save').waitFor();
  // The original manual request remains active. A queued receipt without a printer is durable, not a permanent update block.
- await page.waitForFunction(async()=>(await window.fastgoDesktop.state()).update.status==='installing');
- assert.deepEqual(await app.evaluate(()=>updateInstalls),[[true,true]]);assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),false);
- const final=await page.evaluate(()=>window.fastgoDesktop.state());assert.ok(final.pending>=2);assert.ok(fs.readdirSync(path.join(data,'backups')).some(name=>name.includes('before-update')));
+ for(let attempt=0;attempt<150&&!(await app.evaluate(()=>updateInstalls.length));attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+ const final=await page.evaluate(()=>window.fastgoDesktop.state());
+ assert.deepEqual(await app.evaluate(()=>updateInstalls),[[true,true]],JSON.stringify(final.update));assert.equal(final.update.status,'installing');assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),false);
+ assert.ok(final.pending>=2);assert.ok(fs.readdirSync(path.join(data,'backups')).some(name=>name.includes('before-update')));
  assert.deepEqual(errors,[]);console.log('PASS: immediate update dialog, real progress, retry/current states, dirty form protection, clean-card install and durable pending receipt');
  }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{
  await page.evaluate(()=>{window.confirm=()=>true;location.hash='home';}).catch(()=>{});

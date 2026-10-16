@@ -1,80 +1,4 @@
 (() => {
-  // warehouse/scanner.js
-  function bindScanner(input, form, enabled) {
-    let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
-    const editable = (el) => el && (el.matches("input,textarea,select") || el.isContentEditable);
-    const reset = () => {
-      clearTimeout(timer);
-      previous = "";
-      lastAt = 0;
-      burst = 0;
-    };
-    const live2 = () => !disposed && input.isConnected && enabled();
-    const focus = () => {
-      if (live2() && (!editable(document.activeElement) || document.activeElement === input)) input.focus();
-    };
-    const submit = () => {
-      reset();
-      if (live2() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    };
-    const onInput = (e) => {
-      clearTimeout(timer);
-      if (!live2() || e.isComposing) return reset();
-      const value = input.value, now = performance.now();
-      const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
-      if (added <= 0) {
-        reset();
-        previous = value;
-        return;
-      }
-      burst = appended && now - lastAt <= 65 ? burst + added : added;
-      previous = value;
-      lastAt = now;
-      if (added >= 4 || burst >= 4) timer = setTimeout(() => {
-        if (live2() && document.activeElement === input && input.value === value) submit();
-      }, 200);
-    };
-    const onKey = (e) => {
-      if (!live2() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
-      if (e.target === input && (e.key === "Enter" || e.key === "Tab") && input.value.trim()) {
-        e.preventDefault();
-        submit();
-        return;
-      }
-      if (!editable(e.target) && e.key && e.key.length === 1) {
-        e.preventDefault();
-        input.focus();
-        input.setRangeText(e.key, input.selectionStart, input.selectionEnd, "end");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    };
-    const onVisible = () => {
-      if (!document.hidden) focus();
-    };
-    const onClick = (e) => {
-      if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
-    };
-    input.addEventListener("input", onInput);
-    form.addEventListener("submit", reset, true);
-    document.addEventListener("keydown", onKey, true);
-    document.addEventListener("click", onClick);
-    window.addEventListener("focus", focus);
-    document.addEventListener("visibilitychange", onVisible);
-    focus();
-    const paint = requestAnimationFrame(focus);
-    return () => {
-      disposed = true;
-      reset();
-      cancelAnimationFrame(paint);
-      input.removeEventListener("input", onInput);
-      form.removeEventListener("submit", reset, true);
-      document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("click", onClick);
-      window.removeEventListener("focus", focus);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }
-
   // warehouse/client.js
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
@@ -133,8 +57,160 @@
     return parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code);
   }
 
-  // warehouse/live-basket.js
-  function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh }) {
+  // warehouse/repair-payment.js?v=20261016-scan-2
+  function repairPayment({ call: call2, render, home: home2, run: run2, message: message2, load: load2, save: save3 }) {
+    const $2 = (id) => document.getElementById(id);
+    const summary = (q) => '<section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + "</p><p>\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C: " + money(q.total) + "<br>\u041E\u043F\u043B\u0430\u0447\u0435\u043D\u043E: " + money(q.paid) + '</p><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b>' + money(q.due) + "</b></div></section>";
+    async function terminal2(q) {
+      let pending = load2("repair:terminal");
+      if (!pending || pending.repair_id !== q.id) {
+        pending = { request_id: uuid(), repair_id: q.id };
+        save3("repair:terminal", pending);
+      }
+      render('<button id="repair-back">\u2190 \u0413\u043B\u0430\u0432\u043D\u043E\u0435</button>' + summary(q) + '<p id="repair-status" role="status">\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u043C \u0440\u0435\u043C\u043E\u043D\u0442 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u2026</p><button id="repair-retry">\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0443</button><button id="repair-check">\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button>');
+      $2("repair-back").onclick = home2;
+      const send2 = async () => {
+        const r = await call2("enqueue_repair", pending);
+        if (!$2("repair-status")) return;
+        $2("repair-status").textContent = r.state === "done" ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430" : "\u0420\u0435\u043C\u043E\u043D\u0442 \u043F\u0435\u0440\u0435\u0434\u0430\u043D. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.";
+        $2("repair-retry").hidden = true;
+      };
+      $2("repair-retry").onclick = () => run2(send2);
+      $2("repair-check").onclick = () => run2(async () => {
+        const r = await call2("job", { id: pending.request_id });
+        if ((r == null ? void 0 : r.state) === "done") {
+          save3("repair:terminal", null);
+          home2();
+          message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
+        } else $2("repair-status").textContent = "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.";
+      });
+      try {
+        await send2();
+      } catch (e) {
+        $2("repair-status").textContent = e.message;
+      }
+    }
+    async function checkout2(job2) {
+      const latest = await call2("job", { id: job2.id });
+      if (!latest) throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
+      if (latest.state === "done") {
+        home2();
+        message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
+        return;
+      }
+      const q = latest.repair || await call2("repair_quote", { repair_id: latest.payload.repair_id });
+      const fixed = latest.checkout;
+      render('<button id="repair-back">\u2190 \u0413\u043B\u0430\u0432\u043D\u043E\u0435</button>' + summary(q) + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend><label><input type="radio" name="repair-method" value="cash">\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</label><label><input type="radio" name="repair-method" value="card">\u041A\u0430\u0440\u0442\u0430</label></fieldset><button class="primary" id="repair-pay">\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442</button><button id="repair-refresh">\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u0443\u043C\u043C\u0443</button>');
+      $2("repair-back").onclick = home2;
+      $2("repair-refresh").onclick = () => run2(() => checkout2(latest));
+      if (fixed) {
+        const selected = document.querySelector('input[name="repair-method"][value="' + fixed.method + '"]');
+        if (selected) selected.checked = true;
+        document.querySelectorAll('input[name="repair-method"]').forEach((el) => el.disabled = true);
+      }
+      $2("repair-pay").disabled = !q.payable && !fixed;
+      $2("repair-pay").onclick = () => run2(async () => {
+        var _a2, _b, _c;
+        const method = (fixed == null ? void 0 : fixed.method) || ((_a2 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a2.value);
+        if (!method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
+        await call2("checkout", { id: latest.id, payment_method: method, amount: (_b = fixed == null ? void 0 : fixed.amount) != null ? _b : q.due, expected_revision: (_c = fixed == null ? void 0 : fixed.expected_revision) != null ? _c : q.revision });
+        home2();
+        message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u2116 " + q.number + " \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u0430.");
+      });
+    }
+    return { terminal: terminal2, checkout: checkout2 };
+  }
+
+  // warehouse/scanner.js
+  function bindScanner(input, form, enabled) {
+    let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
+    const editable = (el) => el && (el.matches("input,textarea,select") || el.isContentEditable);
+    const reset = () => {
+      clearTimeout(timer);
+      previous = "";
+      lastAt = 0;
+      burst = 0;
+    };
+    const live2 = () => !disposed && input.isConnected && enabled();
+    const focus = () => {
+      if (live2() && (!editable(document.activeElement) || document.activeElement === input)) input.focus();
+    };
+    const submit = () => {
+      reset();
+      if (live2() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    };
+    const onInput = (e) => {
+      if (!live2() || e.isComposing) return reset();
+      const value = input.value, now = performance.now();
+      if (value === previous) return;
+      clearTimeout(timer);
+      const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
+      if (added <= 0) {
+        reset();
+        previous = value;
+        return;
+      }
+      burst = appended && now - lastAt <= 65 ? burst + added : added;
+      previous = value;
+      lastAt = now;
+      if (added >= 4 || burst >= 4) timer = setTimeout(() => {
+        if (live2() && document.activeElement === input && input.value === value) submit();
+      }, 200);
+    };
+    const onKey = (e) => {
+      if (!live2() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.target === input && (e.key === "Enter" || e.key === "Tab") && input.value.trim()) {
+        e.preventDefault();
+        submit();
+        return;
+      }
+      if (!editable(e.target) && e.key && e.key.length === 1) {
+        e.preventDefault();
+        input.focus();
+        input.setRangeText(e.key, input.selectionStart, input.selectionEnd, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    const onPaste = () => {
+      setTimeout(() => {
+        if (live2()) onInput({ isComposing: false });
+      }, 0);
+    };
+    const onVisible = () => {
+      if (!document.hidden) focus();
+    };
+    const onClick = (e) => {
+      if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
+    };
+    input.addEventListener("input", onInput);
+    input.addEventListener("change", onInput);
+    input.addEventListener("compositionend", onInput);
+    input.addEventListener("paste", onPaste);
+    form.addEventListener("submit", reset, true);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onClick);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", onVisible);
+    focus();
+    const paint = requestAnimationFrame(focus);
+    return () => {
+      disposed = true;
+      reset();
+      cancelAnimationFrame(paint);
+      input.removeEventListener("input", onInput);
+      input.removeEventListener("change", onInput);
+      input.removeEventListener("compositionend", onInput);
+      input.removeEventListener("paste", onPaste);
+      form.removeEventListener("submit", reset, true);
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }
+
+  // warehouse/live-basket.js?v=20261016-scan-2
+  function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh, repair: repair2 }) {
     let draft2 = null, stop = null, timer = null, syncing = null, active = false, mirrorTimer = null, mirror = null, locked = false;
     const $2 = (id) => document.getElementById(id);
     const storeKey = (kind) => "live:" + kind;
@@ -170,7 +246,7 @@
         if (r.state !== "queued") throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0443\u0436\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D \u0438\u043B\u0438 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0435\u0433\u043E \u0437\u0430\u043D\u043E\u0432\u043E.");
         current.acked = Math.max(current.acked || 0, r.payload.revision);
         save3(storeKey(current.kind), current);
-        if (active && $2("live-sync")) $2("live-sync").textContent = "\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A";
+        if (active && $2("live-sync")) $2("live-sync").textContent = body.items.length ? "\u041A\u043E\u0440\u0437\u0438\u043D\u0430 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u0430" : "\u0421\u0432\u044F\u0437\u044C \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u043E\u043C \u0435\u0441\u0442\u044C \xB7 \u0436\u0434\u0451\u043C \u0441\u043A\u0430\u043D";
       }).catch((e) => {
         if (active && $2("live-sync")) $2("live-sync").textContent = "\u041D\u0435\u0442 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438 \xB7 \u0441\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B";
         throw e;
@@ -242,9 +318,33 @@
     }
     function add(code) {
       if (locked || !code) return;
+      const feedback = $2("scan-feedback");
+      feedback.textContent = "\u041A\u043E\u0434 \u043F\u043E\u043B\u0443\u0447\u0435\u043D, \u0438\u0449\u0435\u043C\u2026";
+      if (/^https?:\/\//i.test(code)) {
+        void run2(async () => {
+          try {
+            if (draft2.kind !== "sale") throw Error("QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u0432 \xAB\u041E\u043F\u043B\u0430\u0442\u0435\xBB");
+            if (draft2.items.length) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440\u044B \u043F\u0435\u0440\u0435\u0434 \u043E\u043F\u043B\u0430\u0442\u043E\u0439 \u0440\u0435\u043C\u043E\u043D\u0442\u0430");
+            const quote = await call2("repair_quote", { code });
+            if (!quote.payable) throw Error(quote.due <= 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D \u0438\u043B\u0438 \u0441\u0443\u043C\u043C\u0430 \u043D\u0435 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0430" : "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442");
+            await sync();
+            await call2("draft_close", { id: draft2.id });
+            save3(storeKey(draft2.kind), null);
+            draft2 = null;
+            cleanup();
+            await repair2(quote);
+          } catch (e) {
+            feedback.textContent = e.message;
+            throw e;
+          }
+        }).catch(() => {
+        });
+        return;
+      }
       const found = matchBarcode(parts2(), code);
       if (found.length !== 1) {
-        message2(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0435\u0433\u043E \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.", true);
+        feedback.textContent = found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u041A\u043E\u0434 \u043F\u043E\u043B\u0443\u0447\u0435\u043D, \u043D\u043E \u0442\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D: " + code;
+        $2("live-code").select();
         return;
       }
       const old = draft2.items.find((x) => x.part_id === found[0].id);
@@ -262,7 +362,7 @@
       draw();
       $2("live-code").value = "";
       $2("live-code").focus();
-      message2("\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name);
+      feedback.textContent = "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name;
     }
     async function finish() {
       var _a2;
@@ -306,7 +406,7 @@
       if (!draft2) draft2 = { id: uuid(), kind, revision: 1, acked: 0, items: [], note: "" };
       cache();
       active = true;
-      render('<div class="live-heading"><button id="live-back">\u2190</button><h1>' + (kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0435\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u2026</small><form id="live-scan"><input id="live-code" inputmode="none" autocomplete="off" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434"><button type="submit" hidden>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C</button></form><div id="live-items"></div><section id="live-payment"><div class="total">\u0418\u0442\u043E\u0433\u043E <b id="live-total"></b></div>' + payment() + '</section><button class="primary" id="live-submit">' + (kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C" : "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434") + '</button><button class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442</button>');
+      render('<div class="live-heading"><button id="live-back">\u2190</button><h1>' + (kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0435\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u2026</small><form id="live-scan"><label for="live-code">\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430 / QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430</label><div class="scan-entry"><input id="live-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="\u041D\u0430\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043A\u0430\u043D\u0435\u0440 \u0438\u043B\u0438 \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u043A\u043E\u0434" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434"><button type="submit">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C</button></div></form><p id="scan-feedback" role="status">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u043A\u043E\u0434 \u043E\u0442 \u0441\u043A\u0430\u043D\u0435\u0440\u0430</p><div id="live-items"></div><section id="live-payment"><div class="total">\u0418\u0442\u043E\u0433\u043E <b id="live-total"></b></div>' + payment() + '</section><button class="primary" id="live-submit">' + (kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C" : "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434") + '</button><button class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442</button>');
       draw();
       $2("live-back").onclick = () => {
         cleanup();
@@ -492,10 +592,14 @@
     }
   };
   var save2 = (n, v) => localStorage.setItem(key(n), JSON.stringify(v));
+  var repair = repairPayment({ call: (a, p) => call(a, p), render: (html) => {
+    screen = "repair";
+    shell(html);
+  }, home, run, message, load, save: save2 });
   var live = liveBasket({ terminal, call: (a, p) => call(a, p), parts: () => parts, render: (html) => {
     screen = "live";
     shell(html);
-  }, home, run, message, load, save: save2, refresh: catalog });
+  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q) });
   var call = (action, p = {}) => api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
   function message(v, error = false) {
     $("message").textContent = v;
@@ -520,7 +624,7 @@
     return !busy && screen === "home" && !draft && !job && !live.hasDraft() && !((_a2 = $("terminal-help")) == null ? void 0 : _a2.open) && Date.now() - lastActivity > 12e4;
   };
   window.addEventListener("beforeunload", (e) => {
-    if (busy || screen === "basket" || screen === "checkout" || screen === "live") {
+    if (busy || screen === "basket" || screen === "checkout" || screen === "live" || screen === "repair") {
       e.preventDefault();
       e.returnValue = "";
     }
@@ -801,6 +905,7 @@
       });
     } else await checkout(await call("job", { id: queuedId }));
   }
+  var autoRepairSeen = null;
   async function poll() {
     if (terminal || screen !== "home" || polling || busy || !device) return;
     polling = true;
@@ -808,7 +913,13 @@
       await live.pollMirror();
       const jobs = await call("queue");
       if (screen !== "home" || !$("queue")) return;
-      $("queue").innerHTML = jobs.length ? jobs.map((x) => '<div class="job"><span>\u041A\u043E\u0440\u0437\u0438\u043D\u0430 ' + esc(x.id.slice(0, 8)) + " \xB7 " + x.payload.items.reduce((n, i) => n + i.quantity, 0) + ' \u0448\u0442.<small style="display:block">' + new Date(x.created_at).toLocaleString("ru-RU") + " \xB7 " + (x.state === "processing" ? "\u0422\u0440\u0435\u0431\u0443\u0435\u0442 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043E\u043F\u043B\u0430\u0442\u044B") + '</small></span><button data-job="' + x.id + '">\u041E\u0442\u043A\u0440\u044B\u0442\u044C</button></div>').join("") : "\u041D\u043E\u0432\u044B\u0445 \u043A\u043E\u0440\u0437\u0438\u043D \u043D\u0435\u0442";
+      const repairJob = jobs.find((x) => x.payload.kind === "repair");
+      if (repairJob && repairJob.id !== autoRepairSeen) {
+        autoRepairSeen = repairJob.id;
+        await repair.checkout(repairJob);
+        return;
+      }
+      $("queue").innerHTML = jobs.length ? jobs.map((x) => '<div class="job"><span>' + (x.payload.kind === "repair" ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 " + esc(x.payload.repair.number) + " \xB7 " + money(x.payload.repair.due) : "\u041A\u043E\u0440\u0437\u0438\u043D\u0430 " + esc(x.id.slice(0, 8)) + " \xB7 " + x.payload.items.reduce((n, i) => n + i.quantity, 0) + " \u0448\u0442.") + '<small style="display:block">' + new Date(x.created_at).toLocaleString("ru-RU") + " \xB7 " + (x.state === "processing" ? "\u0422\u0440\u0435\u0431\u0443\u0435\u0442 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043E\u043F\u043B\u0430\u0442\u044B") + '</small></span><button data-job="' + x.id + '">\u041E\u0442\u043A\u0440\u044B\u0442\u044C</button></div>').join("") : "\u041D\u043E\u0432\u044B\u0445 \u043A\u043E\u0440\u0437\u0438\u043D \u043D\u0435\u0442";
       $("queue").querySelectorAll("[data-job]").forEach((b) => b.onclick = () => run(async () => checkout(jobs.find((x) => x.id === b.dataset.job))));
       $("connection").textContent = device.name + " \xB7 \u0435\u0441\u0442\u044C \u0441\u0432\u044F\u0437\u044C";
     } catch (e) {
@@ -819,6 +930,7 @@
     }
   }
   async function checkout(value) {
+    if (value.payload.kind === "repair") return repair.checkout(value);
     job = value;
     screen = "checkout";
     const state = await call("cash_state"), fixed = job.checkout;
@@ -951,4 +1063,13 @@
     else void poll();
   });
   void start();
+  if ($("screen-refresh")) $("screen-refresh").onclick = () => {
+    if (busy || screen !== "home") {
+      message("\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0438 \u0432\u0435\u0440\u043D\u0438\u0442\u0435\u0441\u044C \u043D\u0430 \u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D.");
+      return;
+    }
+    const url = new URL(location.href);
+    url.searchParams.set("refresh", Date.now());
+    location.replace(url.href);
+  };
 })();

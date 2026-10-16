@@ -13,9 +13,10 @@ export function bindScanner(input, form, enabled) {
     if (live() && input.value.trim()) form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
   };
   const onInput = e => {
-    clearTimeout(timer);
     if (!live() || e.isComposing) return reset();
     const value = input.value, now = performance.now();
+    if(value===previous)return;
+    clearTimeout(timer);
     const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
     if (added <= 0) { reset(); previous = value; return; }
     burst = appended && now - lastAt <= 65 ? burst + added : added;
@@ -39,11 +40,15 @@ export function bindScanner(input, form, enabled) {
       input.dispatchEvent(new Event('input', {bubbles: true}));
     }
   };
+  const onPaste = () => { setTimeout(()=>{if(live())onInput({isComposing:false});},0); };
   const onVisible = () => { if (!document.hidden) focus(); };
   const onClick = e => {
     if (!editable(e.target) && !e.target.closest('button,a,label')) focus();
   };
   input.addEventListener('input', onInput);
+  input.addEventListener('change', onInput);
+  input.addEventListener('compositionend', onInput);
+  input.addEventListener('paste', onPaste);
   form.addEventListener('submit', reset, true);
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('click', onClick);
@@ -55,6 +60,9 @@ export function bindScanner(input, form, enabled) {
   return () => {
     disposed = true; reset(); cancelAnimationFrame(paint);
     input.removeEventListener('input', onInput);
+    input.removeEventListener('change', onInput);
+    input.removeEventListener('compositionend', onInput);
+    input.removeEventListener('paste', onPaste);
     form.removeEventListener('submit', reset, true);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('click', onClick);
