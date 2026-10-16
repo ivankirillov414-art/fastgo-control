@@ -8,6 +8,13 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  await t.locator('#receipt').click();await t.locator('.scan-empty').waitFor();
  assert.equal(await t.locator('#live-items').innerText(),'');assert.equal(await t.locator('#live-submit,#live-payment').count(),0);assert.equal(await t.getByRole('button',{name:'Добавить',exact:true}).count(),0);
  assert.equal(await t.locator('#live-code').getAttribute('inputmode'),'none');assert.equal(await t.locator('#live-code').evaluate(el=>getComputedStyle(el.closest('form')).opacity),'0');
+ // Backgrounded WebViews must not retain an editable scan field for Android IME restoration.
+ await t.evaluate(()=>window.dispatchEvent(new Event('blur')));
+ assert.equal(await t.locator('#live-code').evaluate(el=>el.readOnly),true);
+ assert.equal(await t.locator('#live-code').evaluate(el=>document.activeElement===el),false);
+ await t.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ assert.equal(await t.locator('#live-code').evaluate(el=>el.readOnly),false);
+ assert.equal(await t.locator('#live-code').evaluate(el=>document.activeElement===el),true);
  await t.screenshot({path:'/tmp/fastgo-tsd-waiting.png'});
  // Android IME insertion emits composition/change, while keyboard scanners use Enter/Tab or a fast burst.
  await t.evaluate(()=>{const el=document.getElementById('live-code');el.value='FGP-00000001';el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});

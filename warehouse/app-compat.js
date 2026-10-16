@@ -322,7 +322,10 @@
     const live2 = () => !disposed && input.isConnected && enabled();
     const focus = () => {
       if (live2() && (!editable(document.activeElement) || document.activeElement === input)) {
-        if (silent) input.readOnly = true;
+        if (silent) {
+          input.readOnly = true;
+          input.blur();
+        }
         input.focus({ preventScroll: true });
         if (silent) input.readOnly = false;
       }
@@ -372,8 +375,16 @@
         if (live2()) onInput({ isComposing: false });
       }, 0);
     };
+    const suspend = () => {
+      if (silent) {
+        reset();
+        input.readOnly = true;
+        input.blur();
+      }
+    };
     const onVisible = () => {
-      if (!document.hidden) focus();
+      if (document.hidden) suspend();
+      else focus();
     };
     const onClick = (e) => {
       if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
@@ -386,6 +397,7 @@
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("click", onClick);
     window.addEventListener("focus", focus);
+    window.addEventListener("blur", suspend);
     document.addEventListener("visibilitychange", onVisible);
     focus();
     const paint = requestAnimationFrame(focus);
@@ -401,6 +413,7 @@
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("click", onClick);
       window.removeEventListener("focus", focus);
+      window.removeEventListener("blur", suspend);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }
