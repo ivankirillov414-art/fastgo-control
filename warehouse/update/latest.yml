@@ -1,8 +1,8 @@
-version: 1.0.6
+version: 1.0.7
 files:
-  - url: https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-warehouse-v1.0.6/FastGo-Warehouse-Setup-1.0.6-Windows-x64.exe
-    sha512: TLoBZDn52R/l1sYCf8rKULf9Q34kfWkpiW3eNPQZ+MCOm81mfxhXSDMqjvMV8/XY5AL/yMNaJraoemVr5jjytg==
-    size: 117639706
-path: https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-warehouse-v1.0.6/FastGo-Warehouse-Setup-1.0.6-Windows-x64.exe
-sha512: TLoBZDn52R/l1sYCf8rKULf9Q34kfWkpiW3eNPQZ+MCOm81mfxhXSDMqjvMV8/XY5AL/yMNaJraoemVr5jjytg==
-releaseDate: '2026-10-15T15:00:15.519Z'
+  - url: https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-warehouse-v1.0.7/FastGo-Warehouse-Setup-1.0.7-Windows-x64.exe
+    sha512: gygQOlGkZmDEmxNWxDmiqW7EeTeJtHGbgyOcAHFqJXQ7Su9DbhvS7C2oarSpP/N1dEDNtGZAZFRXb+j3l8/0Iw==
+    size: 117639674
+path: https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-warehouse-v1.0.7/FastGo-Warehouse-Setup-1.0.7-Windows-x64.exe
+sha512: gygQOlGkZmDEmxNWxDmiqW7EeTeJtHGbgyOcAHFqJXQ7Su9DbhvS7C2oarSpP/N1dEDNtGZAZFRXb+j3l8/0Iw==
+releaseDate: '2026-10-16T13:25:17.939Z'
