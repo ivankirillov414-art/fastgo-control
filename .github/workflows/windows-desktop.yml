@@ -41,10 +41,24 @@ jobs:
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/ui-stability.cjs
+      - name: Verify manual update progress and safe restart
+        shell: pwsh
+        run: |
+          $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
+          node desktop/tests/update-progress.cjs
       - run: npm run build
         working-directory: desktop
       - name: Verify packaged update support
         run: node desktop/tests/check-package.cjs
+      - name: Exercise visible installer progress and automatic relaunch
+        shell: pwsh
+        run: ./desktop/tests/installer-progress.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: FastGo-update-progress-screenshots
+          path: desktop/test-results/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: FastGo-Windows
