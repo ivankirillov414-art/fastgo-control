@@ -9,7 +9,7 @@ public final class AppUpdates {
   Calendar local=Calendar.getInstance(TimeZone.getTimeZone("GMT+05:00"));String day=String.format(Locale.ROOT,"%04d-%02d-%02d",local.get(Calendar.YEAR),local.get(Calendar.MONTH)+1,local.get(Calendar.DAY_OF_MONTH));
   if(!manual&&(local.get(Calendar.HOUR_OF_DAY)<18||day.equals(store.get("update_day"))))return "";
   store.put("update_day",day);JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));PackageManager pm=context.getPackageManager();PackageInfo own=pm.getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNATURES);
-  if(meta.getInt("versionCode")<=own.versionCode)return "Установлена актуальная версия "+own.versionName;
+  if(meta.getInt("versionCode")<=own.versionCode){new File(context.getCacheDir(),"update.apk").delete();return "Установлена актуальная версия "+own.versionName;}
   String url=meta.getString("url");if(!url.startsWith("https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/")||!url.endsWith(".apk"))throw new IOException("Недопустимый адрес обновления");
   byte[] data=get(url,20000000);StringBuilder hash=new StringBuilder();for(byte b:MessageDigest.getInstance("SHA-256").digest(data))hash.append(String.format(Locale.ROOT,"%02x",b&255));if(!hash.toString().equals(meta.getString("sha256")))throw new IOException("Контрольная сумма APK не совпала");
   File temp=new File(context.getCacheDir(),"update-download.apk");try(FileOutputStream out=new FileOutputStream(temp)){out.write(data);out.getFD().sync();}

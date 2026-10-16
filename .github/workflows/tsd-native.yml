@@ -1,10 +1,10 @@
 name: FastGo Native TSD
 on:
  pull_request:
-  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','.github/workflows/tsd-native.yml']
+  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','.github/workflows/tsd-native.yml']
  push:
   branches: [main]
-  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','.github/workflows/tsd-native.yml']
+  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','.github/workflows/tsd-native.yml']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -15,6 +15,7 @@ jobs:
    - uses: actions/setup-java@v4
      with: {distribution: temurin, java-version: '17'}
    - uses: android-actions/setup-android@v3
+     with: {packages: platform-tools}
    - uses: gradle/actions/setup-gradle@v4
      with: {gradle-version: '8.9'}
    - name: Compile native app and test document protocol
@@ -34,6 +35,7 @@ jobs:
    - uses: actions/setup-java@v4
      with: {distribution: temurin, java-version: '17'}
    - uses: android-actions/setup-android@v3
+     with: {packages: platform-tools}
    - uses: gradle/actions/setup-gradle@v4
      with: {gradle-version: '8.9'}
    - name: Enable KVM
