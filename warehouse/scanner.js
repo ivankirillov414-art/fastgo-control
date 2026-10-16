@@ -31,7 +31,7 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
     // A whole decoded value or a rapid run of keys is a scan. Slow manual
     // entry still waits for the existing Add button / Enter confirmation.
     if (added >= 4 || burst >= 4) timer = setTimeout(() => {
-      if (live() && document.activeElement === input && input.value === value) submit();
+      if (live() && (silent || document.activeElement === input) && input.value === value) submit();
     }, 200);
   };
   const onKey = e => {
@@ -61,7 +61,6 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('click', onClick);
   window.addEventListener('focus', focus);
-  window.addEventListener('blur', suspend);
   document.addEventListener('visibilitychange', onVisible);
   focus();
   // Older WebViews may not honour focus until the new screen has painted.
@@ -76,7 +75,6 @@ export function bindScanner(input, form, enabled, {silent=false}={}) {
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('click', onClick);
     window.removeEventListener('focus', focus);
-    window.removeEventListener('blur', suspend);
     document.removeEventListener('visibilitychange', onVisible);
   };
 }
