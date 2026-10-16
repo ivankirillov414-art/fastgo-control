@@ -1,7 +1,7 @@
 import {bindScanner} from './scanner.js';
 import {esc,money,uuid,matchBarcode} from './client.js';
 
-export function liveBasket({terminal,call,parts,render,home,run,message,load,save,refresh}){
+export function liveBasket({terminal,call,parts,render,home,run,message,load,save,refresh,repair}){
  let draft=null,stop=null,timer=null,syncing=null,active=false,mirrorTimer=null,mirror=null,locked=false;
  const $=id=>document.getElementById(id);
  const storeKey=kind=>'live:'+kind;
@@ -16,7 +16,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   syncing=call('draft_sync',{request_id:body.id,kind:body.kind,revision:body.revision,items:body.items,note:body.note||''}).then(r=>{
    if(r.state!=='queued')throw Error('Документ уже завершён или проводится. Откройте его заново.');
    current.acked=Math.max(current.acked||0,r.payload.revision);save(storeKey(current.kind),current);
-   if(active&&$('live-sync'))$('live-sync').textContent='Передано на ноутбук';
+   if(active&&$('live-sync'))$('live-sync').textContent=body.items.length?'Корзина синхронизирована':'Связь с сервером есть · ждём скан';
   }).catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent='Нет синхронизации · сканы сохранены';throw e;}).finally(()=>syncing=null);
   await syncing;if(draft===current&&current.acked<current.revision)return sync();
  }
@@ -33,7 +33,10 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   $('live-items').querySelectorAll('[data-own]').forEach(el=>el.onchange=()=>{const item=draft.items.find(x=>x.part_id===el.dataset.own);item.custom_price=el.checked;if(el.checked)item.unit_price=Number(product(item)?.retail_price||0);else delete item.unit_price;changed();draw();if(item.custom_price)$('live-items').querySelector('[data-own-value="'+item.part_id+'"]').focus();});
   $('live-items').querySelectorAll('[data-own-value]').forEach(el=>el.oninput=()=>{const n=Number(el.value);if(el.value===''||!Number.isFinite(n)||n<0||Math.abs(n*100-Math.round(n*100))>.00001){message('Введите цену в рублях и копейках',true);return;}draft.items.find(x=>x.part_id===el.dataset.ownValue).unit_price=n;changed();$('live-total').textContent=money(total());});
  }
- function add(code){if(locked||!code)return;const found=matchBarcode(parts(),code);if(found.length!==1){message(found.length?'Код неоднозначен':'Товар не найден. Добавьте его на ноутбуке.',true);return;}const old=draft.items.find(x=>x.part_id===found[0].id);if(old){if(old.quantity>=1000)return;old.quantity++;}else{if(draft.items.length>=40){message('Не больше 40 позиций в документе',true);return;}draft.items.push({part_id:found[0].id,quantity:1});}changed();draw();$('live-code').value='';$('live-code').focus();message('Добавлено: '+found[0].name);}
+ function add(code){if(locked||!code)return;
+  const feedback=$('scan-feedback');feedback.textContent='Код получен, ищем…';
+  if(/^https?:\/\//i.test(code)){void run(async()=>{try{if(draft.kind!=='sale')throw Error('QR ремонта сканируется в «Оплате»');if(draft.items.length)throw Error('Завершите товары перед оплатой ремонта');const quote=await call('repair_quote',{code});if(!quote.payable)throw Error(quote.due<=0?'Ремонт уже оплачен или сумма не назначена':'Ремонт закрыт');await sync();await call('draft_close',{id:draft.id});save(storeKey(draft.kind),null);draft=null;cleanup();await repair(quote);}catch(e){feedback.textContent=e.message;throw e;}}).catch(()=>{});return;}
+  const found=matchBarcode(parts(),code);if(found.length!==1){feedback.textContent=found.length?'Код неоднозначен':'Код получен, но товар не найден: '+code;$('live-code').select();return;}const old=draft.items.find(x=>x.part_id===found[0].id);if(old){if(old.quantity>=1000)return;old.quantity++;}else{if(draft.items.length>=40){message('Не больше 40 позиций в документе',true);return;}draft.items.push({part_id:found[0].id,quantity:1});}changed();draw();$('live-code').value='';$('live-code').focus();feedback.textContent='Добавлено: '+found[0].name;}
  async function finish(){
   if(!draft.items.length)throw Error('Добавьте товары');
   const method=document.querySelector('input[name="live-method"]:checked')?.value;
@@ -49,7 +52,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   cleanup();locked=false;draft=load(storeKey(kind));
   if(draft){const r=await call('job',{id:draft.id}).catch(()=>null);if(r?.state==='done'){save(storeKey(kind),null);draft=null;}else if(r?.state==='processing')locked=true;}
   if(!draft)draft={id:uuid(),kind,revision:1,acked:0,items:[],note:''};cache();active=true;
-  render('<div class="live-heading"><button id="live-back">←</button><h1>'+ (kind==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync">Подключаем ноутбук…</small><form id="live-scan"><input id="live-code" inputmode="none" autocomplete="off" aria-label="Штрихкод"><button type="submit" hidden>Добавить</button></form><div id="live-items"></div><section id="live-payment"><div class="total">Итого <b id="live-total"></b></div>'+payment()+'</section><button class="primary" id="live-submit">'+(kind==='sale'?'Оплатить':'Провести приход')+'</button><button class="live-cancel" id="live-cancel">Отменить документ</button>');
+  render('<div class="live-heading"><button id="live-back">←</button><h1>'+ (kind==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync">Подключаем ноутбук…</small><form id="live-scan"><label for="live-code">Штрихкод товара / QR ремонта</label><div class="scan-entry"><input id="live-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Наведите сканер или введите код" aria-label="Штрихкод"><button type="submit">Добавить</button></div></form><p id="scan-feedback" role="status">Ожидаем код от сканера</p><div id="live-items"></div><section id="live-payment"><div class="total">Итого <b id="live-total"></b></div>'+payment()+'</section><button class="primary" id="live-submit">'+(kind==='sale'?'Оплатить':'Провести приход')+'</button><button class="live-cancel" id="live-cancel">Отменить документ</button>');
   draw();$('live-back').onclick=()=>{cleanup();home();};$('live-scan').onsubmit=e=>{e.preventDefault();add($('live-code').value.trim());};
   stop=bindScanner($('live-code'),$('live-scan'),()=>active&&!locked);
   document.querySelectorAll('input[name="live-method"]').forEach(el=>el.onchange=()=>$('live-code').focus());

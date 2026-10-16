@@ -18,7 +18,7 @@ body[data-mode=terminal] #message:empty{display:none}
 body[data-mode=terminal] header{display:none}
 .live-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .live-heading h1,.live-heading h2{margin:0;font-size:22px}
-#live-scan{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+#live-scan{margin:12px 0}.scan-entry{display:flex;gap:6px}.scan-entry input{flex:1;width:0;font-size:14px;padding:10px 8px}.scan-entry button{padding:10px 8px;font-size:14px}#scan-feedback{font-size:14px;color:#a9d7fa;overflow-wrap:anywhere}
 .scan-empty{color:#adbed4;text-align:center;padding:44px 8px}
 .scan-product{padding:12px;margin:10px 0;background:#152238;border:1px solid #354862;border-radius:10px}
 .scan-product>small{display:block;margin:4px 0}
