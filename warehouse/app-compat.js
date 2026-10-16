@@ -1,18 +1,73 @@
 (() => {
+  var __create = Object.create;
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getProtoOf = Object.getPrototypeOf;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __commonJS = (cb, mod) => function __require() {
+    try {
+      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    } catch (e) {
+      throw mod = 0, e;
+    }
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key2 of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key2) && key2 !== except)
+          __defProp(to, key2, { get: () => from[key2], enumerable: !(desc = __getOwnPropDesc(from, key2)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+    // If the importer is in node compatibility mode or this is not an ESM
+    // file that has been converted to a CommonJS file using a Babel-
+    // compatible transform (i.e. "__esModule" has not been set), then set
+    // "default" to the CommonJS "module.exports" for node compatibility.
+    isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+    mod
+  ));
+
+  // warehouse-desktop/update-clock.cjs
+  var require_update_clock = __commonJS({
+    "warehouse-desktop/update-clock.cjs"(exports, module) {
+      function createDailyCheck2({ read, write, check, now = () => Date.now() }) {
+        let last = read() || "", running = false;
+        return async function daily() {
+          const local = new Date(now() + 5 * 60 * 60 * 1e3), day = local.toISOString().slice(0, 10);
+          if (running || local.getUTCHours() < 18 || last >= day) return false;
+          running = true;
+          last = day;
+          try {
+            write(day);
+            await check();
+            return true;
+          } finally {
+            running = false;
+          }
+        };
+      }
+      module.exports = { createDailyCheck: createDailyCheck2 };
+    }
+  });
+
   // warehouse/web-update.js
+  var import_update_clock = __toESM(require_update_clock());
   function createWebUpdater({ version, fetchVersion, fetchPage, canApply, apply, notify = () => {
   } }) {
-    let pending = null, checking = false, applying = false;
+    let pending = null, checking = false, applying = false, immediate = false;
     async function tick() {
       if (!pending || applying) return;
       applying = true;
       try {
-        if (!await canApply()) {
+        if (!await canApply(immediate)) {
           notify("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430 \u0433\u043E\u0442\u043E\u0432\u043E \xB7 \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0440\u0430\u0431\u043E\u0442\u044B");
           return;
         }
         apply(pending);
         pending = null;
+        immediate = false;
       } catch (e) {
         notify("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430 \u043E\u0442\u043B\u043E\u0436\u0435\u043D\u043E. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u043C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.");
       } finally {
@@ -25,23 +80,36 @@
       try {
         const next = await fetchVersion();
         if (!/^[a-f0-9]{24}$/.test(next) || next === version) {
-          if (next === version) pending = null;
+          if (next === version) {
+            pending = null;
+            if (immediate) notify("\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0432\u0435\u0440\u0441\u0438\u044F \u044D\u043A\u0440\u0430\u043D\u0430 \xB7 " + version);
+            immediate = false;
+          }
           return;
         }
-        if (await fetchPage(next) !== next) return;
+        if (await fetchPage(next) !== next) {
+          notify("\u041F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0435\u0449\u0451 \u0438\u0434\u0451\u0442. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443 \u043F\u043E\u0437\u0436\u0435.");
+          return;
+        }
         pending = next;
         notify("\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430");
       } catch (e) {
+        if (immediate) notify("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442 \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
       } finally {
         checking = false;
       }
       await tick();
     }
-    return { check, tick };
+    return { check, tick, now: async () => {
+      immediate = true;
+      notify("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u0435\u0440\u0441\u0438\u0438\u2026");
+      await check();
+      await tick();
+    } };
   }
   function startWebUpdates({ canApply }) {
-    var _a2;
-    const version = (_a2 = document.querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a2.content;
+    var _a;
+    const version = (_a = document.querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a.content;
     if (!version) return null;
     const get = async (url) => {
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15e3);
@@ -61,11 +129,11 @@
         return (await (await get(u)).json()).version;
       },
       fetchPage: async (next) => {
-        var _a3;
+        var _a2;
         const u = new URL(location.href);
         u.searchParams.set("ui", next);
         const html = await (await get(u)).text();
-        return (_a3 = new DOMParser().parseFromString(html, "text/html").querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a3.content;
+        return (_a2 = new DOMParser().parseFromString(html, "text/html").querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a2.content;
       },
       canApply,
       apply: (next) => {
@@ -79,10 +147,22 @@
         if (el) el.textContent = text;
       }
     });
-    setTimeout(() => void updater.check(), 5e3);
-    setInterval(() => void updater.check(), 6e4);
+    const daily = (0, import_update_clock.createDailyCheck)({ read: () => {
+      try {
+        return localStorage.getItem("warehouse-update-day");
+      } catch (e) {
+        return "";
+      }
+    }, write: (day) => {
+      try {
+        localStorage.setItem("warehouse-update-day", day);
+      } catch (e) {
+      }
+    }, check: updater.check });
+    setTimeout(() => void daily(), 5e3);
+    setInterval(() => void daily(), 6e4);
     setInterval(() => void updater.tick(), 5e3);
-    window.addEventListener("online", () => void updater.check());
+    window.addEventListener("online", () => void daily());
     return updater;
   }
 
@@ -116,8 +196,8 @@
     return j;
   }
   function save(j) {
-    var _a2;
-    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a2 = j.user) == null ? void 0 : _a2.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
+    var _a;
+    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a = j.user) == null ? void 0 : _a.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
     localStorage.setItem(STORE, JSON.stringify(session));
   }
   async function login(email, password) {
@@ -197,8 +277,8 @@
       }
       $2("repair-pay").disabled = !q.payable && !fixed;
       $2("repair-pay").onclick = () => run2(async () => {
-        var _a2, _b, _c;
-        const method = (fixed == null ? void 0 : fixed.method) || ((_a2 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a2.value);
+        var _a, _b, _c;
+        const method = (fixed == null ? void 0 : fixed.method) || ((_a = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a.value);
         if (!method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
         await call2("checkout", { id: latest.id, payment_method: method, amount: (_b = fixed == null ? void 0 : fixed.amount) != null ? _b : q.due, expected_revision: (_c = fixed == null ? void 0 : fixed.expected_revision) != null ? _c : q.revision });
         home2();
@@ -346,8 +426,8 @@
     }
     function total() {
       return draft2.items.reduce((sum, x) => {
-        var _a2;
-        return sum + x.quantity * (x.custom_price ? Number(x.unit_price) : Number(((_a2 = product(x)) == null ? void 0 : _a2.retail_price) || 0));
+        var _a;
+        return sum + x.quantity * (x.custom_price ? Number(x.unit_price) : Number(((_a = product(x)) == null ? void 0 : _a.retail_price) || 0));
       }, 0);
     }
     function rows(value, editable) {
@@ -383,10 +463,10 @@
         $2("live-code").focus();
       });
       $2("live-items").querySelectorAll("[data-own]").forEach((el) => el.onchange = () => {
-        var _a2;
+        var _a;
         const item = draft2.items.find((x) => x.part_id === el.dataset.own);
         item.custom_price = el.checked;
-        if (el.checked) item.unit_price = Number(((_a2 = product(item)) == null ? void 0 : _a2.retail_price) || 0);
+        if (el.checked) item.unit_price = Number(((_a = product(item)) == null ? void 0 : _a.retail_price) || 0);
         else delete item.unit_price;
         changed();
         draw();
@@ -452,9 +532,9 @@
       feedback.textContent = "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name;
     }
     async function finish() {
-      var _a2;
+      var _a;
       if (!draft2.items.length) throw Error("\u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u0432\u0430\u0440\u044B");
-      const method = (_a2 = document.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a2.value;
+      const method = (_a = document.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a.value;
       if (draft2.kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435, \u041A\u0430\u0440\u0442\u0443 \u0438\u043B\u0438 \u041F\u0435\u0440\u0435\u0432\u043E\u0434");
       for (const el of document.querySelectorAll("[data-live-qty]")) if (!el.checkValidity()) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
       for (const el of document.querySelectorAll("[data-own-value]:not([hidden])")) if (!el.value || !el.checkValidity()) throw Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0432\u043E\u044E \u0446\u0435\u043D\u0443");
@@ -525,7 +605,7 @@
         });
         const current = draft2;
         void call2("job", { id: current.id }).then((r) => {
-          var _a2;
+          var _a;
           if (active && !locked && draft2 === current && (r == null ? void 0 : r.state) === "done") {
             save3(storeKey(current.kind), null);
             draft2 = null;
@@ -533,24 +613,24 @@
             void refresh().catch(() => {
             });
             home2();
-            message2(((_a2 = r.result) == null ? void 0 : _a2.cancelled) ? "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
+            message2(((_a = r.result) == null ? void 0 : _a.cancelled) ? "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
           }
         }).catch(() => {
         });
       }, 2500);
     }
     function mirrorMarkup(job2) {
-      var _a2, _b;
-      return '<div class="live-heading"><h2>\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B \xB7 ' + (job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h2><small>" + (job2.state === "done" ? ((_a2 = job2.result) == null ? void 0 : _a2.cancelled) ? "\u041E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D" : job2.state === "processing" ? "\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F\u2026" : "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435") + "</small></div>" + rows(job2.payload, false) + (job2.payload.items.length ? "" : "<p>\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043D\u0430 \u0422\u0421\u0414\u2026</p>") + (job2.state === "done" && ((_b = job2.result) == null ? void 0 : _b.total) !== void 0 ? "<p>\u041E\u043F\u043B\u0430\u0447\u0435\u043D\u043E " + money(job2.result.total) + " \xB7 " + esc({ cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", card: "\u041A\u0430\u0440\u0442\u0430", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434" }[job2.result.payment_method] || job2.result.payment_method || "") + "</p>" : "");
+      var _a, _b;
+      return '<div class="live-heading"><h2>\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B \xB7 ' + (job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h2><small>" + (job2.state === "done" ? ((_a = job2.result) == null ? void 0 : _a.cancelled) ? "\u041E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D" : job2.state === "processing" ? "\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F\u2026" : "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435") + "</small></div>" + rows(job2.payload, false) + (job2.payload.items.length ? "" : "<p>\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043D\u0430 \u0422\u0421\u0414\u2026</p>") + (job2.state === "done" && ((_b = job2.result) == null ? void 0 : _b.total) !== void 0 ? "<p>\u041E\u043F\u043B\u0430\u0447\u0435\u043D\u043E " + money(job2.result.total) + " \xB7 " + esc({ cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", card: "\u041A\u0430\u0440\u0442\u0430", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434" }[job2.result.payment_method] || job2.result.payment_method || "") + "</p>" : "");
     }
     async function pollMirror() {
-      var _a2, _b, _c;
+      var _a, _b, _c;
       if (terminal2) return;
       const target = $2("live-terminal-panel");
       if (!target) return;
       const jobs = await call2("live_jobs");
       if (!$2("live-terminal-panel") || locked) return;
-      const chosen = (_a2 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a2.value;
+      const chosen = (_a = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a.value;
       jobs.sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
       const current = jobs.find((j) => j.state !== "done") || jobs[0], signature = JSON.stringify(current);
       if (signature === mirror && target.innerHTML) return;
@@ -561,8 +641,8 @@
         const selected = ((_b = current.checkout) == null ? void 0 : _b.payment_method) || chosen;
         if (selected) (_c = target.querySelector('input[value="' + selected + '"]')) == null ? void 0 : _c.click();
         $2("mirror-submit").onclick = () => run2(async () => {
-          var _a3, _b2;
-          const method = ((_a3 = current.checkout) == null ? void 0 : _a3.payment_method) || ((_b2 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _b2.value);
+          var _a2, _b2;
+          const method = ((_a2 = current.checkout) == null ? void 0 : _a2.payment_method) || ((_b2 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _b2.value);
           if (current.payload.kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
           locked = true;
           try {
@@ -706,10 +786,7 @@
     }
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
-  window.warehouseUpdateSafe = () => {
-    var _a2;
-    return !busy && screen === "home" && !draft && !job && !live.hasDraft() && !((_a2 = $("terminal-help")) == null ? void 0 : _a2.open) && Date.now() - lastActivity > 12e4;
-  };
+  window.warehouseUpdateSafe = (immediate = false) => !busy && screen === "home" && !draft && !job && !live.hasDraft() && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 12e4);
   window.addEventListener("beforeunload", (e) => {
     if (busy || screen === "basket" || screen === "checkout" || screen === "live" || screen === "repair") {
       e.preventDefault();
@@ -886,9 +963,9 @@
     };
     $("send").onclick = () => run(send);
     $("discard").onclick = () => {
-      var _a2;
+      var _a;
       if (confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442? \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) {
-        if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
+        if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
         draft = null;
         save2("draft:" + document.body.dataset.mode, null);
         home();
@@ -901,9 +978,9 @@
     return userId() + ":" + draft.id;
   }
   function addCode(code, usbId) {
-    var _a2;
+    var _a;
     if (!code) return false;
-    if (usbId && ((_a2 = draft.usb_ids) == null ? void 0 : _a2.includes(usbId))) return true;
+    if (usbId && ((_a = draft.usb_ids) == null ? void 0 : _a.includes(usbId))) return true;
     const found = matchBarcode(parts, code);
     if (found.length !== 1) {
       message(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D. \u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : "\u041A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435 FastGo.", true);
@@ -930,8 +1007,8 @@
     return true;
   }
   async function finishUSB() {
-    var _a2;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
+    var _a;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
   }
   function persist() {
     save2("draft:" + document.body.dataset.mode, draft);
@@ -939,9 +1016,9 @@
   function drawBasket() {
     const target = $("basket");
     target.innerHTML = draft.items.length ? draft.items.map((x) => {
-      var _a2;
+      var _a;
       const p = parts.find((p2) => p2.id === x.part_id);
-      return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a2 = p == null ? void 0 : p.quantity) != null ? _a2 : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
+      return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a = p == null ? void 0 : p.quantity) != null ? _a : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
     }).join("") : terminal ? "\u041D\u0430\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \u0437\u0435\u043B\u0451\u043D\u0443\u044E \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435. \u0422\u043E\u0432\u0430\u0440 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0412\u0440\u0443\u0447\u043D\u0443\u044E \u043A\u043E\u0434 \u043C\u043E\u0436\u043D\u043E \u0432\u0432\u0435\u0441\u0442\u0438 \u0432 \u043F\u043E\u043B\u0435 \u0432\u044B\u0448\u0435." : "\u0421\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0438\u043B\u0438 \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 / \u0430\u0440\u0442\u0438\u043A\u0443\u043B \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C\xBB.";
     target.querySelectorAll("[data-qty]").forEach((el) => el.onchange = () => {
       const n = Number(el.value);
@@ -960,8 +1037,8 @@
     });
   }
   async function send() {
-    var _a2;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbTarget) {
+    var _a;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.usbTarget) {
       await window.warehouseDesktop.usbTarget(null);
       if ((await window.warehouseDesktop.usbBatch(usbKey())).items.length) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F USB-\u0441\u043A\u0430\u043D\u043E\u0432 \u0438\u043B\u0438 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434.");
     }
@@ -1022,8 +1099,8 @@
     screen = "checkout";
     const state = await call("cash_state"), fixed = job.checkout;
     shell(nav() + "<h1>\u041E\u043F\u043B\u0430\u0442\u0430 \xB7 " + esc(job.id.slice(0, 8)) + '</h1><div class="twocol"><section class="panel"><h2>\u0422\u043E\u0432\u0430\u0440\u044B</h2>' + job.payload.items.map((x) => {
-      var _a2, _b, _c;
-      const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a2 = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a2.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
+      var _a, _b, _c;
+      const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
       return "<label>" + esc((p == null ? void 0 : p.name) || x.part_id) + " \xB7 " + x.quantity + ' \u0448\u0442.<input type="number" min="0" step="0.01" value="' + price + '" data-price="' + x.part_id + '" ' + (fixed ? "disabled" : "") + "></label>";
     }).join("") + '<div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="total"></b></div></section><section class="panel"><label>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F<select id="mode" ' + (fixed ? "disabled" : "") + '><option value="sale">\u041F\u0440\u043E\u0434\u0430\u0436\u0430</option><option value="master">\u0412\u044B\u0434\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \xB7 0 \u20BD</option></select></label><div id="sale-fields"><label>\u0421\u043C\u0435\u043D\u0430<select id="cash-shift">' + state.shifts.filter((x) => x.status === "open").map((x) => '<option value="' + x.id + '">' + esc(x.register) + " \xB7 \u2116 " + x.number + "</option>").join("") + '</select></label><label>\u041E\u043F\u043B\u0430\u0442\u0430<select id="method"><option value="cash">\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option><option value="card">\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option></select></label><p class="muted">\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u043C \u0443\u0447\u0451\u0442 \u043F\u0440\u043E\u0434\u0430\u0436\u0438. \u0411\u0430\u043D\u043A\u043E\u0432\u0441\u043A\u0438\u0439 \u043F\u043B\u0430\u0442\u0451\u0436 \u0438 \u0444\u0438\u0441\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0447\u0435\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0441\u0441\u0435.</p></div><label id="master-fields" hidden>\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0430<select id="master">' + staff.map((x) => '<option value="' + x.profile_id + '">' + esc(x.name) + "</option>").join("") + '</select></label><button class="primary" id="checkout">\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438</button><p class="muted">\u0412\u044B\u0434\u0430\u0447\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u0443\u043C\u0435\u043D\u044C\u0448\u0430\u0435\u0442 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A \u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430, \u0431\u0435\u0437 \u0434\u0435\u043D\u0435\u0436\u043D\u043E\u0439 \u0432\u044B\u0440\u0443\u0447\u043A\u0438.</p></section></div>');
     bindNav();
@@ -1084,10 +1161,10 @@
     bindNav();
   }
   async function desktopStatus() {
-    var _a2;
+    var _a;
     const el = $("desktop-status");
     if (!el) return;
-    if (!((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.desktopStatus)) {
+    if (!((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus)) {
       el.textContent = window.warehouseDesktop ? "USB: \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." : "\u041E\u0442\u043A\u0440\u044B\u0442\u0430 \u0432\u0435\u0431-\u0432\u0435\u0440\u0441\u0438\u044F. \u0414\u043B\u044F USB \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0443 FastGo \u0421\u043A\u043B\u0430\u0434 \u043D\u0430 Windows.";
       return;
     }
@@ -1103,28 +1180,19 @@
       el.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C USB: " + e.message;
     }
   }
-  var _a;
   if (!terminal) {
     void desktopStatus();
     setInterval(desktopStatus, 2500);
-    if (((_a = window.warehouseDesktop) == null ? void 0 : _a.checkUpdates) && $("desktop-update")) {
-      $("desktop-update").hidden = false;
-      $("desktop-update").onclick = () => run(async () => {
-        await window.warehouseDesktop.checkUpdates();
-        await (webUpdater == null ? void 0 : webUpdater.check());
-        await desktopStatus();
-      });
-    }
   }
   if ($("usb-scanner")) $("usb-scanner").onclick = () => {
-    var _a2;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
+    var _a;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
     else message("\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E USB \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u0432 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0435 FastGo \u0421\u043A\u043B\u0430\u0434 \u0432\u0435\u0440\u0441\u0438\u0438 1.0.4 \u0438 \u043D\u043E\u0432\u0435\u0435.");
   };
   if ($("terminal-update")) $("terminal-update").onclick = async () => {
-    var _a2;
+    var _a;
     try {
-      if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.openTerminalUpdater) await window.warehouseDesktop.openTerminalUpdater();
+      if ((_a = window.warehouseDesktop) == null ? void 0 : _a.openTerminalUpdater) await window.warehouseDesktop.openTerminalUpdater();
       else $("terminal-help").showModal();
     } catch (e) {
       message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430: " + e.message, true);
@@ -1151,23 +1219,46 @@
     else void poll();
   });
   void start();
-  if ($("screen-refresh")) $("screen-refresh").onclick = () => {
-    if (busy || screen !== "home") {
+  var webSafe = (immediate = false) => !busy && !polling && screen === "home" && !draft && !job && !live.hasDraft() && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
+  var webUpdater = startWebUpdates({ canApply: async (immediate) => {
+    var _a, _b, _c, _d;
+    if (!webSafe(immediate)) return false;
+    if ((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus) {
+      const state = await window.warehouseDesktop.desktopStatus();
+      if (((_b = state.usb) == null ? void 0 : _b.pending) || ((_c = state.usb) == null ? void 0 : _c.target) || ["downloading", "ready", "preparing", "installing"].includes((_d = state.update) == null ? void 0 : _d.status)) return false;
+    }
+    return webSafe(immediate);
+  } });
+  var updating = false;
+  async function updateNow() {
+    var _a;
+    if (updating) return;
+    if (!window.warehouseUpdateSafe(true)) {
       message("\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0438 \u0432\u0435\u0440\u043D\u0438\u0442\u0435\u0441\u044C \u043D\u0430 \u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D.");
       return;
     }
-    const url = new URL(location.href);
-    url.searchParams.set("refresh", Date.now());
-    location.replace(url.href);
-  };
-  var webSafe = () => !busy && !polling && screen === "home" && !draft && !job && !live.hasDraft() && !document.querySelector("#mirror-submit,dialog[open]") && Date.now() - lastActivity > 15e3;
-  var webUpdater = !terminal ? startWebUpdates({ canApply: async () => {
-    var _a2, _b, _c, _d;
-    if (!webSafe()) return false;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.desktopStatus) {
-      const state = await window.warehouseDesktop.desktopStatus();
-      if (((_b = state.usb) == null ? void 0 : _b.pending) || ((_c = state.usb) == null ? void 0 : _c.target) || ["ready", "installing"].includes((_d = state.update) == null ? void 0 : _d.status)) return false;
+    updating = true;
+    try {
+      message("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u2026");
+      if ((_a = window.warehouseDesktop) == null ? void 0 : _a.checkUpdates) {
+        const state = await window.warehouseDesktop.checkUpdates();
+        await desktopStatus();
+        if (["downloading", "ready", "preparing", "installing"].includes(state == null ? void 0 : state.status)) {
+          message("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + state.version + " \u0431\u0443\u0434\u0435\u0442 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438, \u043A\u043E\u0433\u0434\u0430 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u044B \u0437\u0430\u043A\u0440\u044B\u0442\u044B \u0438 USB \u0441\u0432\u043E\u0431\u043E\u0434\u0435\u043D.");
+          return;
+        }
+        if ((state == null ? void 0 : state.status) === "error") {
+          message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435: " + state.error, true);
+          return;
+        }
+      }
+      await (webUpdater == null ? void 0 : webUpdater.now());
+    } catch (e) {
+      message("\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + e.message, true);
+    } finally {
+      updating = false;
     }
-    return webSafe();
-  } }) : null;
+  }
+  if ($("screen-refresh")) $("screen-refresh").onclick = updateNow;
+  if ($("terminal-refresh")) $("terminal-refresh").onclick = updateNow;
 })();
