@@ -1,5 +1,5 @@
 import {createNativeEngine} from './native-engine.js';
-const writes=new Set(['stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const writes=new Set(['master_return','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 export function nativeClient({db,actor,google,storage}){
  let statePromise;
@@ -32,7 +32,15 @@ export function nativeClient({db,actor,google,storage}){
    await storage.put(object,bytes,p.content_type||'application/octet-stream');file={path:'native:'+object,sha256:digest,size:bytes.length};
   }
   for(let attempt=0;attempt<4;attempt++){
-   const snapshot=await state(),engine=createNativeEngine(snapshot.sheets);
+   const snapshot=await state();
+   let engineSheets=snapshot.sheets;
+   const lookupMasterId=p.assigned_master_id===undefined&&action==='update'?snapshot.sheets['Ремонты']?.rows.find(x=>x.repair_id===p.id)?.master_id:p.assigned_master_id;
+   if(['create','update'].includes(action)&&lookupMasterId){
+    const members=await db('workshop_members','profile_id=eq.'+encodeURIComponent(lookupMasterId)+'&active=eq.true&role=eq.mechanic&select=profile_id,name,role,active');
+    if(!members?.length)fail('Назначить можно только активного мастера',400);
+    engineSheets=structuredClone(snapshot.sheets);const staff=engineSheets['Сотрудники'];staff.rows=staff.rows.filter(x=>x.employee_id!==lookupMasterId);staff.rows.push({employee_id:members[0].profile_id,'ФИО':members[0].name,'Роль':'mechanic','Активен':true});
+   }
+   const engine=createNativeEngine(engineSheets);
    if(action==='part_photo_url'){
     let path;
     if(p.category){const cat=engine.sheets['Категории'].rows.find(r=>r['Категория (ключ)']===p.category);path=cat?.['Основное фото'];if(!engine.sheets['Фото товаров'].rows.some(r=>r.category===p.category&&r.path===path))fail('Фото категории не найдено',404);}
@@ -51,6 +59,7 @@ export function nativeClient({db,actor,google,storage}){
    if(action==='part_photo_upload'){localAction='native_photo';params={...p,path:file.path,sha256:file.sha256,photo_id:p.request_id};}
    if(action==='migrate_legacy_file'){localAction='native_file_migration';params={...p,path:file.path};}
    let result=engine.run(localAction,params,actor);if(action==='upload')result={path:file.path};
+   if(action==='catalog')result.master_holdings=engine.run('master_holdings',{},actor);
    if(!writes.has(action))return result;
    const committed=await db('rpc/workshop_native_commit','','POST',{p_actor:actor.id,p_action:action,p_request_id:p.request_id,p_fingerprint:p.__request_fingerprint,p_version:snapshot.version,p_changes:engine.changes(),p_result:result});
    reset();if(!committed.retry)return committed.result;

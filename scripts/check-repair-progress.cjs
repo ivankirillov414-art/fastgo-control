@@ -14,7 +14,7 @@ const server=createServer((req,res)=>{
  fs.mkdirSync('browser-results',{recursive:true});
  try{for(const viewport of [{width:1366,height:768},{width:1280,height:720},{width:390,height:844}]){
   const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[],updates=[];
-  let failUpdate=false,permission={can_mark_ready:true,can_issue:true,can_cancel:true};
+  let personalStock=false,failUpdate=false,permission={can_mark_ready:true,can_issue:true,can_cancel:true};
   let record={id:'progress-fixture',repair_number:16,revision:1,status:'accepted',brand:'Kugoo',model:'M4',last_name:'Тест',first_name:'Клиент',phone:'+79990000000',created_at:'2026-10-16',promised_date:'2026-10-20',works:[{name:'Назначенная стоимость ремонта',quantity:1,price:500}],parts:[],approved_amount:null,diagnostics_notes:'',paid_amount:0,total_amount:500,fault_photo_paths:['photo-one.jpg','photo-two.jpg'],signed_document_paths:[]};
   await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'progress-fixture',user_id:'progress-fixture',expires_at:4102444800})));
   page.on('pageerror',error=>errors.push(error.message));
@@ -28,7 +28,7 @@ const server=createServer((req,res)=>{
    if(action==='me')data={role:'owner',name:'Тест',profile_id:'progress-fixture',active:true,status_permissions:permission};
    if(action==='get')data={record,events:[],payments:[],linked:[]};
    if(action==='signed_url')data={url:'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="'+(params.path==='photo-one.jpg'?'#24455c':'#416a73')+'"/><text x="80" y="300" fill="white">'+params.path+'</text></svg>')};
-   if(action==='catalog')data={services:[{id:'tube',title:'Замена камеры',labor_price:600,active:true},{id:'brake',title:'Настройка тормозов',labor_price:400,active:true}],parts:[],staff:[],categories:[]};
+   if(action==='catalog')data={services:[{id:'tube',title:'Замена камеры',labor_price:600,active:true},{id:'brake',title:'Настройка тормозов',labor_price:400,active:true}],parts:personalStock?[{id:'22222222-2222-4222-8222-222222222222',name:'Камера мастера',retail_price:300,quantity:0,active:true}]:[],master_holdings:personalStock?[{master_id:'progress-fixture',part_id:'22222222-2222-4222-8222-222222222222',name:'Камера мастера',quantity:2}]:[],staff:[],categories:[]};
    if(action==='list')data={items:[],count:0};
    if(action==='update'){
     if(failUpdate){failUpdate=false;return route.fulfill({status:409,headers,json:{error:'Карточка уже изменена другим сотрудником. Обновите страницу.'}});}
@@ -127,6 +127,7 @@ const server=createServer((req,res)=>{
    record.status='stored';await page.goto(origin+'/workshop.html#order?kind=storage&id=progress-fixture');
    await page.getByRole('button',{name:'Хранение и выдача'}).click();
    assert.ok(await page.locator('#f-status').isVisible());assert.ok(await page.locator('#f-planned_return_date').isVisible());
+   personalStock=true;record.status='accepted';record.assigned_master_id='progress-fixture';await open();await page.locator('[data-held-part]').click();assert.ok(await page.locator('#part-rows [data-prop="name"]').filter({visible:true}).count());assert.equal(await page.locator('#part-rows [data-prop="name"]').last().inputValue(),'Камера мастера');
    assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, inline layout and saving, diagnostics → repair → ready without parts, customer parts, price approval, conflict, permissions and storage`);
   }catch(error){console.error('PAGE',await page.locator('body').innerText(),errors);throw error;}finally{await context.close();}
  }}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

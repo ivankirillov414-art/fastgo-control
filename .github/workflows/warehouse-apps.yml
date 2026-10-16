@@ -16,13 +16,14 @@ jobs:
    - uses: actions/setup-node@v4
      with: {node-version: '24'}
    - run: node scripts/build-warehouse-web.cjs --check
-   - run: node --test tests/warehouse*.mjs tests/native-store.test.mjs
+   - run: node --test tests/warehouse*.mjs tests/native-store.test.mjs tests/master-stock.test.mjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-live-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-product-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-master-stock-browser.cjs
  windows:
   if: github.event_name != 'pull_request'
   needs: test

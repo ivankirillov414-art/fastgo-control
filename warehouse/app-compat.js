@@ -1421,8 +1421,34 @@
   async function holdings() {
     const rows = await api("holdings");
     screen = "holdings";
-    shell(nav() + '<h1>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</h1><div class="panel tablewrap"><table><thead><tr><th>\u041C\u0430\u0441\u0442\u0435\u0440</th><th>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C</th><th>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E</th><th>\u0421\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C</th><th>\u0412\u044B\u0434\u0430\u043D\u043E</th></tr></thead><tbody>' + rows.map((x) => "<tr><td>" + esc(x.master_name) + "</td><td>" + esc(x.name) + "</td><td>" + x.quantity + "</td><td>" + money(x.unit_cost * x.quantity) + "</td><td>" + new Date(x.created_at).toLocaleString("ru-RU") + "</td></tr>").join("") + "</tbody></table>" + (rows.length ? "" : "\u041F\u043E\u043A\u0430 \u0432\u044B\u0434\u0430\u0447 \u043D\u0435\u0442.") + "</div>");
+    shell(nav() + '<h1>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</h1><div class="panel tablewrap"><table><thead><tr><th>\u041C\u0430\u0441\u0442\u0435\u0440</th><th>\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C</th><th>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E</th><th>\u0421\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C</th><th></th></tr></thead><tbody>' + rows.map((x, i) => "<tr><td>" + esc(x.master_name) + "</td><td>" + esc(x.name) + "</td><td>" + x.quantity + " \u0448\u0442.</td><td>" + money(x.unit_cost * x.quantity) + '</td><td><button data-master-return="' + i + '">\u0412\u0435\u0440\u043D\u0443\u0442\u044C \u043D\u0430 \u0441\u043A\u043B\u0430\u0434</button></td></tr>').join("") + "</tbody></table>" + (rows.length ? "" : "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445 \u043D\u0435\u0442.") + "</div>");
     bindNav();
+    document.querySelectorAll("[data-master-return]").forEach((button) => button.onclick = () => {
+      const x = rows[Number(button.dataset.masterReturn)], request_id = crypto.randomUUID(), dialog = document.createElement("dialog");
+      dialog.innerHTML = "<form><h2>\u0412\u043E\u0437\u0432\u0440\u0430\u0442 \u043D\u0430 \u0441\u043A\u043B\u0430\u0434</h2><p>" + esc(x.master_name) + " \xB7 " + esc(x.name) + '</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E<input name="quantity" type="number" min="1" max="' + x.quantity + '" step="1" value="1" required></label><p class="error" role="alert"></p><div class="actions"><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button><button class="primary">\u0412\u0435\u0440\u043D\u0443\u0442\u044C \u043D\u0430 \u0441\u043A\u043B\u0430\u0434</button></div></form>';
+      document.body.append(dialog);
+      dialog.showModal();
+      dialog.onclose = () => dialog.remove();
+      dialog.querySelector("[data-cancel]").onclick = () => dialog.close();
+      let pending = null;
+      dialog.querySelector("form").onsubmit = async (e) => {
+        e.preventDefault();
+        const submit = dialog.querySelector(".primary"), input = dialog.querySelector("input");
+        if (submit.disabled) return;
+        pending = pending || { request_id, master_id: x.master_id, part_id: x.part_id, quantity: Number(input.value) };
+        submit.disabled = true;
+        input.disabled = true;
+        try {
+          await call("master_return", pending);
+          dialog.close();
+          await holdings();
+          message("\u0414\u0435\u0442\u0430\u043B\u044C \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0435\u043D\u0430 \u043D\u0430 \u0441\u043A\u043B\u0430\u0434. \u0417\u0430\u043F\u0430\u0441 \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u0443\u043C\u0435\u043D\u044C\u0448\u0435\u043D.");
+        } catch (error) {
+          dialog.querySelector("[role=alert]").textContent = error.message;
+          submit.disabled = false;
+        }
+      };
+    });
   }
   async function desktopStatus() {
     var _a;
