@@ -149,9 +149,12 @@ test('native unknown scans are idempotent, station scoped and never enter paymen
  assert.equal((await h.request('unknown_scans',{},'terminal')).status,403);
  assert.equal((await h.request('unknown_scans')).data.length,1);assert.equal((await h.request('queue')).data.length,0);
  assert.equal(h.receipts.length,0);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+ const repeated={...payload,request_id:randomUUID()};await h.request('scan_unknown',repeated,'terminal');
  const resolved=await h.request('unknown_resolve',{id:request_id,part_id:part});assert.equal(resolved.status,200);assert.equal(resolved.data.part.id,part);
  const replay=await h.request('scan_unknown',payload,'terminal');assert.equal(replay.data.state,'done');assert.equal(replay.data.result.part.id,part);
  assert.equal((await h.request('unknown_scans')).data.length,0);
+ assert.equal((await h.request('scan_unknown',repeated,'terminal')).data.result.part.id,part);
+ assert.equal((await h.request('scan_unknown',{...payload,request_id:randomUUID()},'terminal')).data.result.part.id,part);
  assert.equal(h.receipts.length,0);
 });
 test('undo cancels unknown scan without stock changes and terminal cannot resolve it',async()=>{

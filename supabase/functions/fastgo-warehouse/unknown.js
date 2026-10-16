@@ -36,5 +36,5 @@ export async function unknownScan(action,p,{db,actor,device,stationId,g,mutate})
   if(row.checkout)fail('Завершите создание новой позиции',409);
   if(!id(p.part_id))fail('Выберите товар');part=(await g('catalog')).parts.find(x=>x.id===p.part_id&&x.active!==false);if(!part)fail('Товар не найден',404);
  }
- const result={part};const changed=await db('workshop_warehouse_queue','id=eq.'+row.id+'&state=neq.done','PATCH',{state:'done',result,completed_at:new Date().toISOString()},'return=representation');return changed[0]?.result||(await read(row.id)).result;
+ const result={part};await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&payload->>kind=eq.unknown&payload->>code=eq.'+encodeURIComponent(row.payload.code)+'&state=eq.queued&checkout=is.null','PATCH',{state:'done',result,completed_at:new Date().toISOString()});const changed=await db('workshop_warehouse_queue','id=eq.'+row.id+'&state=neq.done','PATCH',{state:'done',result,completed_at:new Date().toISOString()},'return=representation');return changed[0]?.result||(await read(row.id)).result;
 }
