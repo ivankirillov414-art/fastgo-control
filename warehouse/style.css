@@ -36,3 +36,16 @@ body[data-mode=terminal] header{display:none}
 #web-update-status:empty{display:none}
 
 body[data-mode=terminal] #terminal-refresh{display:none;margin:0 12px 8px;font-size:14px}body[data-mode=terminal][data-screen=home] #terminal-refresh{display:block}body[data-mode=terminal] #web-update-status{padding:0 12px;font-size:12px;overflow-wrap:anywhere}
+
+/* Hidden hardware capture stays focusable without opening a manual entry form. */
+.scanner-sink{position:fixed!important;left:0;bottom:0;width:1px;height:1px;margin:0!important;padding:0;opacity:0;overflow:hidden;pointer-events:none}
+.scanner-sink input{width:1px;height:1px;min-height:0;padding:0;border:0;font-size:16px}
+.last-scan{margin:28px 0;padding:22px 16px;border:1px solid #2b6b8c;border-radius:12px;background:#102d42}
+.last-scan h2{font-size:26px;line-height:1.25;overflow-wrap:anywhere;margin:12px 0}
+.last-scan p{font-size:22px;margin:8px 0;color:#4be4cf}
+#live-sync:empty,#scan-feedback:empty{display:none}
+.station-product{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:24px;padding:18px}
+.station-product strong{font-size:21px}.station-product label{margin:0;grid-column:3}.station-product input{width:110px}
+body[data-mode=station][data-screen=live] main,body[data-mode=station][data-screen=repair] main{max-width:900px}
+body[data-mode=station][data-screen=live] .payment-options,body[data-mode=station][data-screen=repair] .payment-options{display:flex;flex-wrap:wrap;gap:24px}
+#repair-pay{width:100%;font-size:21px;min-height:52px}

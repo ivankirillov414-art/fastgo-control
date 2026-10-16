@@ -1,13 +1,20 @@
 // Keyboard-wedge scanners can send Enter, Tab, or only the decoded text.
 // Keep capture scoped to a basket; never intercept a note, quantity or password.
-export function bindScanner(input, form, enabled) {
+export function bindScanner(input, form, enabled, {silent=false}={}) {
   let timer, previous = '', lastAt = 0, burst = 0, disposed = false;
   const editable = el => el && (el.matches('input,textarea,select') || el.isContentEditable);
   const reset = () => { clearTimeout(timer); previous = ''; lastAt = 0; burst = 0; };
   const live = () => !disposed && input.isConnected && enabled();
   const focus = () => {
-    if (live() && (!editable(document.activeElement) || document.activeElement === input)) input.focus();
+    if (live() && (!editable(document.activeElement) || document.activeElement === input)) {
+      // Focus a readonly sink first so older Android WebViews do not open the IME.
+      // Restore text input afterwards for scanner services that inject decoded text.
+      if(silent)input.readOnly=true;
+      input.focus({preventScroll:true});
+      if(silent)input.readOnly=false;
+    }
   };
+  if(silent){input.setAttribute('inputmode','none');input.tabIndex=-1;}
   const submit = () => {
     reset();
     if (live() && input.value.trim()) form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
@@ -35,7 +42,7 @@ export function bindScanner(input, form, enabled) {
     // Recover from a tap on the page or a basket button. Preserve the first
     // character, which would otherwise be delivered to that old focus target.
     if (!editable(e.target) && e.key && e.key.length === 1) {
-      e.preventDefault(); input.focus();
+      e.preventDefault(); focus();
       input.setRangeText(e.key, input.selectionStart, input.selectionEnd, 'end');
       input.dispatchEvent(new Event('input', {bubbles: true}));
     }

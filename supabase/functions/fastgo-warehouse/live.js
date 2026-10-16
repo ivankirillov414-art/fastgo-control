@@ -12,13 +12,14 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
  let job=await read();
  const owns=()=>{if(!job||job.payload.live!==true||device.kind==='terminal'&&job.terminal_id!==device.id)fail('Документ недоступен',403);};
  if(action==='draft_sync'){
-  if(device.kind!=='terminal')fail('Только для терминала',403);
+  if(!['terminal','station'].includes(device.kind))fail('Устройство недоступно',403);
   if(!['receipt','sale'].includes(p.kind)||!Number.isSafeInteger(p.revision)||p.revision<1)fail('Неверная версия документа');
   const normalized=Array.isArray(p.items)&&!p.items.length?[]:items(p.items);
   const prices=normalized.map(x=>{const source=p.items.find(y=>y.part_id===x.part_id);if(source.custom_price===true){const n=source.unit_price;if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1e8||Math.abs(n*100-Math.round(n*100))>0.00001)fail('Проверьте свою цену');return {...x,custom_price:true,unit_price:n};}return x;});
   const payload={live:true,kind:p.kind,revision:p.revision,items:prices,note:String(p.note||'').slice(0,500),updated_at:new Date().toISOString()};
   if(!job){try{await db('workshop_warehouse_queue','','POST',{id:requestId,station_id:stationId,terminal_id:device.id,created_by:actor.id,payload});return {id:requestId,state:'queued',payload};}catch(e){if(e.status!==409)throw e;job=await read();}}
-  owns();if(job.payload.kind!==p.kind)fail('Тип документа уже задан',409);
+  owns();if(job.terminal_id!==device.id)fail('Этот документ сканируется на другом устройстве',403);
+  if(job.payload.kind!==p.kind)fail('Тип документа уже задан',409);
   if(job.state!=='queued'||job.checkout)fail('Документ уже проводится или завершён',409);
   if(p.revision<=job.payload.revision)return job;
   await db('workshop_warehouse_queue','id=eq.'+requestId+'&state=eq.queued&checkout=is.null&payload->>revision=eq.'+job.payload.revision,'PATCH',{payload},'return=representation');
@@ -26,7 +27,7 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
  }
  owns();
  if(action==='draft_close'){
-  if(device.kind!=='terminal')fail('Только для терминала',403);
+  if(job.terminal_id!==device.id)fail('Этот документ открыт на другом устройстве',403);
   if(job.state==='done')return job;
   if(job.state!=='queued'||job.checkout)fail('Документ проводится; дождитесь результата',409);
   const changed=await db('workshop_warehouse_queue','id=eq.'+requestId+'&state=eq.queued&checkout=is.null','PATCH',{state:'done',result:{cancelled:true},completed_at:new Date().toISOString()},'return=representation');
@@ -52,6 +53,14 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   if(p.revision!==job.payload.revision)fail('Корзина изменилась. Дождитесь синхронизации',409);
   if(!receiving&&!['cash','card','transfer'].includes(p.payment_method))fail('Выберите способ оплаты');
   const c={actor_id:actor.id,mode:receiving?'receipt':'sale',payment_method:p.payment_method||'',items:items(job.payload.items).map(x=>({...x,...(job.payload.items.find(y=>y.part_id===x.part_id).custom_price?{custom_price:true,unit_price:job.payload.items.find(y=>y.part_id===x.part_id).unit_price}:{})})),note:job.payload.note};
+  // The laptop may choose receipt quantities, but cannot replace scanned goods.
+  // Revision CAS below refuses a simultaneous new scan before any stock write.
+  if(p.items!==undefined){
+   if(device.kind!=='station'||!receiving)fail('Количество прихода задаётся на ноутбуке',403);
+   const chosen=items(p.items);
+   if(chosen.length!==c.items.length||chosen.some(x=>!c.items.some(y=>y.part_id===x.part_id)))fail('Состав прихода изменился. Проверьте отсканированные товары',409);
+   c.items=c.items.map(x=>({...x,quantity:chosen.find(y=>y.part_id===x.part_id).quantity}));
+  }
   prepare(await db('rpc/workshop_native_snapshot','','POST',{}),c);
   const changed=await db('workshop_warehouse_queue','id=eq.'+requestId+'&state=eq.queued&checkout=is.null&payload->>revision=eq.'+p.revision,'PATCH',{checkout:c,state:'processing'},'return=representation');
   job=changed[0]||await read();if(job.state==='done')return job.result;

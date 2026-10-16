@@ -37,3 +37,12 @@ test('USB ready status requires terminal heartbeat, not just successful adb laun
  const url='http://127.0.0.1:'+s.port+'/'+s.state.token+'/';await fetch(url);assert.equal(s.snapshot().ready,false);await fetch(url+'status');assert.equal(s.snapshot().ready,true);assert.match(s.snapshot().status,/отвечает/);
  s.lastContact=Date.now()-15000;s.launchedAt=Date.now()-15000;assert.equal(s.snapshot().ready,false);assert.match(s.snapshot().status,/не отвечает/);await s.disable();assert.equal(s.snapshot().ready,false);
 });
+
+test('USB mode and recognized product round trip persist; temporary failures keep the scan pending',async t=>{
+ const {scanner:s}=await fixture(t);await s.enable('chosen');await s.selectMode('receipt');await s.record({id:'scan-feedback-0001',code:'FGP-00000001'});
+ assert.equal(s.inbox().items[0].kind,'receipt');await s.result('scan-feedback-0001',{error:'Нет связи',retry:true});assert.equal(s.inbox().items.length,1);
+ await s.result('scan-feedback-0001',{name:'Покрышка 10 × 2,5',quantity:2,price:1200});assert.equal(s.inbox().items.length,0);
+ const status=await(await fetch('http://127.0.0.1:'+s.port+'/'+s.state.token+'/status')).json();assert.equal(status.last.name,'Покрышка 10 × 2,5');assert.equal(status.last.quantity,2);
+ await s.record({id:'scan-feedback-0001',code:'FGP-00000001'});assert.equal(s.inbox().items.length,0);
+ await s.record({id:'scan-feedback-0002',kind:'sale',code:'UNKNOWN'});await s.result('scan-feedback-0002',{error:'Товар не найден'});assert.equal(s.inbox().items.length,0);
+});
