@@ -1,6 +1,6 @@
 {
   "name": "fastgo-desktop",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "private": true,
   "description": "FastGo workshop for Windows with offline database and remote printing",
   "author": "FastGo",
@@ -41,7 +41,8 @@
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false,
       "shortcutName": "FastGo",
-      "perMachine": false
+      "perMachine": false,
+      "include": "build/update-progress.nsh"
     },
     "forceCodeSigning": false,
     "npmRebuild": false,

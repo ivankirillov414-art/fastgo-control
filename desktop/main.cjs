@@ -19,7 +19,7 @@ async function cloud(pathname,body){if(!net.isOnline()||Date.now()<nextProbe)thr
 const remote=async(action,params,expectedActor=actor)=>{if(actor!==expectedActor)throw Object.assign(Error('Учётная запись изменилась. Синхронизация остановлена.'),{status:401});const j=await cloud('/functions/v1/fastgo-workshop-api',{action,params});if(!j.data)throw Error('Сервер не подтвердил ответ');return j.data;};
 const remotePrint=async(action,params={})=>(await cloud('/functions/v1/fastgo-print-api',{action,params})).data;
 function wrapError(error){return {__desktopError:true,message:error.message,status:error.status||0};}
-function handle(channel,fn){ipcMain.handle(channel,async(event,...args)=>{try{if(!String(event.senderFrame?.url||'').startsWith('fastgo://app/'))throw Error('Недоверенное окно');if(updateInstalling)throw Error('FastGo обновляется. Приложение сейчас откроется снова.');activeRequests++;try{return await fn(event,...args);}finally{activeRequests--;}}catch(e){return wrapError(e);}});}
+function handle(channel,fn){ipcMain.handle(channel,async(event,...args)=>{try{if(!String(event.senderFrame?.url||'').startsWith('fastgo://app/'))throw Error('Недоверенное окно');if(updateInstalling&&channel!=='fg-state')throw Error('FastGo обновляется. Приложение сейчас откроется снова.');const tracked=!['fg-state','fg-update-check','fg-update-now'].includes(channel);if(tracked)activeRequests++;try{return await fn(event,...args);}finally{if(tracked)activeRequests--;}}catch(e){return wrapError(e);}});}
 function warm(options={}){if(updateInstalling||updateDraining||!actor)return;if(warmPromise)return warmPromise;warming=true;const account=actor;warmPromise=(async()=>{try{await sync.warm(account,options);online=true;lastError='';}catch(e){online=false;lastError=e.message;}finally{warming=false;warmPromise=null;notify();}})();return warmPromise;}
 async function request(event,{path:pathname,body={}}){
  if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
@@ -108,22 +108,24 @@ app.whenReady().then(()=>{
  if(app.isPackaged){
   updates=new Updates({updater:require('electron-updater').autoUpdater,changed:()=>{if(updates?.state.status==='error'){updateInstalling=false;updateDraining=false;}if(win&&!win.isDestroyed())win.webContents.send('fg-update-changed');},
    canInstall:async immediate=>{
-    if(!win||win.isDestroyed()){updateDraining=false;return false;}
-    const idle=await win.webContents.executeJavaScript('window.fastgoUpdateSafe?.('+Boolean(immediate)+') === true');
+    if(!win||win.isDestroyed()){updateDraining=false;return {allowed:false,reason:'Ожидаем открытия приложения'};}
+    const rendererReason=await win.webContents.executeJavaScript('window.fastgoUpdateBlockReason?.('+Boolean(immediate)+') ?? "Дожидаемся загрузки приложения"');
+    const idle=!rendererReason;
     // Stop starting new polls while existing requests drain. One-second print polling
     // must not starve installation forever, but any claimed print must finish first.
     updateDraining=idle;
-    const busy=()=>printBusy||remoteBusy||sync.busy||warming||activeRequests||store.db.prepare("SELECT 1 FROM print_jobs WHERE state='queued' LIMIT 1").get();
-    if(!idle||busy())return false;
+    // Queued jobs are durable and resume after restart; only active work must drain.
+    const busy=()=>printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
+    const waiting=rendererReason||busy();if(waiting)return {allowed:false,reason:waiting};
     // Recheck on the renderer thread and block new input atomically before quitting.
     const locked=await win.webContents.executeJavaScript('window.fastgoLockForUpdate?.('+Boolean(immediate)+') === true');
-    if(!locked){updateDraining=false;return false;}
-    if(busy()){await win.webContents.executeJavaScript('window.fastgoReleaseUpdateLock?.()');updateDraining=false;return false;}
+    if(!locked){updateDraining=false;return {allowed:false,reason:'Завершите ввод и сохраните изменения'};}
+    const finalBusy=busy();if(finalBusy){await win.webContents.executeJavaScript('window.fastgoReleaseUpdateLock?.()');updateDraining=false;return {allowed:false,reason:finalBusy};}
     return true;
    },prepare:()=>{store.backup('before-update-'+Date.now());updateInstalling=true;}});
   setTimeout(()=>updates.check(),15000);
   setInterval(()=>updates.check(),60000);
-  setInterval(()=>updates.tick(),5000);
+  setInterval(()=>updates.tick(),1000);
  }
 
 });

@@ -1,21 +1,22 @@
 // Installation is explicit: never restart during a repair, print or database write.
 class Updates{
  constructor({updater,canInstall,prepare,changed=()=>{}}){
-  Object.assign(this,{updater,canInstall,prepare,changed});this.state={status:'idle',version:'',progress:0,error:'',immediate:false};this.checking=false;this.installing=false;
+  Object.assign(this,{updater,canInstall,prepare,changed});this.state={status:'idle',version:'',progress:0,error:'',immediate:false,waitReason:'',transferred:0,total:0,bytesPerSecond:0};this.checking=false;this.installing=false;
   updater.autoDownload=true;updater.autoInstallOnAppQuit=false;updater.allowPrerelease=false;updater.allowDowngrade=false;
-  updater.on('checking-for-update',()=>this.set({status:'checking',error:''}));
-  updater.on('update-available',info=>this.set({status:'downloading',version:info.version,error:''}));
-  updater.on('download-progress',p=>this.set({status:'downloading',progress:Math.round(p.percent)}));
+  updater.on('checking-for-update',()=>this.set({status:'checking',error:'',waitReason:''}));
+  updater.on('update-available',info=>this.set({status:'downloading',version:info.version,error:'',progress:0,waitReason:'',transferred:0,total:0,bytesPerSecond:0}));
+  updater.on('download-progress',p=>this.set({status:'downloading',progress:Math.max(0,Math.min(100,Math.round(p.percent)||0)),transferred:p.transferred||0,total:p.total||0,bytesPerSecond:p.bytesPerSecond||0}));
   updater.on('update-not-available',()=>this.set({status:'current',error:'',immediate:false}));
-  updater.on('update-downloaded',info=>{this.set({status:'ready',version:info.version,progress:100,error:''});if(this.state.immediate)void this.tick();});
+  updater.on('update-downloaded',info=>{this.set({status:'ready',version:info.version,progress:100,error:'',waitReason:''});if(this.state.immediate)void this.tick();});
   updater.on('error',e=>{this.installing=false;this.set({status:'error',error:e.message,immediate:false});});
  }
- set(p){Object.assign(this.state,p);this.changed();}
- async check(){if(this.checking||['downloading','ready','installing'].includes(this.state.status))return;this.checking=true;try{await this.updater.checkForUpdates();}catch(e){this.set({status:'error',error:e.message,immediate:false});}finally{this.checking=false;}}
+ set(p){if(Object.entries(p).every(([key,value])=>this.state[key]===value))return;Object.assign(this.state,p);this.changed();}
+ async check(){if(this.checking||['downloading','ready','preparing','installing'].includes(this.state.status))return;this.checking=true;try{await this.updater.checkForUpdates();}catch(e){this.set({status:'error',error:e.message,immediate:false});}finally{this.checking=false;}}
  async now(){this.set({immediate:true});await this.check();await this.tick();}
  async tick(){if(this.state.status!=='ready'||this.installing)return;this.installing=true;try{
-  if(!await this.canInstall(this.state.immediate)){this.installing=false;return;}
-  this.prepare();this.set({status:'installing'});this.updater.quitAndInstall(true,true);
+  const permission=await this.canInstall(this.state.immediate);
+  if(permission!==true&&permission?.allowed!==true){this.set({waitReason:permission?.reason||'Ожидаем завершения работы приложения'});this.installing=false;return;}
+  this.set({status:'preparing',waitReason:''});await this.prepare();this.set({status:'installing'});this.updater.quitAndInstall(true,true);
  }catch(e){this.installing=false;this.set({status:'error',error:e.message,immediate:false});}}
 }
 module.exports={Updates};

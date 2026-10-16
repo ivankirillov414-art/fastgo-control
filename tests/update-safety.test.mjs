@@ -11,3 +11,9 @@ test('downloaded update waits through intake, failed save, focus loss and inacti
 });
 test('update now cannot bypass an open modal, active field or missing application guard',()=>{const x=setup();x.setModal(true);assert.equal(x.window.fastgoLockForUpdate(true),false);x.setModal(false);x.setFocus(true);assert.equal(x.window.fastgoLockForUpdate(true),false);x.setFocus(false);delete x.window.fastgoHasUnsavedChanges;assert.equal(x.window.fastgoLockForUpdate(true),false);});
 test('new input between first check and restart cancels installation; lock is reversible on installer error',()=>{const x=setup();x.setTime(120001);assert.equal(x.window.fastgoUpdateSafe(),true);x.events.input();x.setDirty(true);assert.equal(x.window.fastgoLockForUpdate(),false);assert.equal(x.document.body.inert,false);x.setDirty(false);x.setTime(240002);assert.equal(x.window.fastgoLockForUpdate(),true);assert.equal(x.document.body.inert,true);assert.equal(x.window.fastgoLockForUpdate(true),false);x.window.fastgoReleaseUpdateLock();assert.equal(x.document.body.inert,false);assert.equal(x.window.fastgoUpdateSafe(),false);assert.equal(x.window.fastgoUpdateSafe(true),true);});
+test('manual update accepts a saved repair and its own progress window; automatic update still waits for a list',()=>{
+ const x=setup();x.window.location.hash='#order?kind=repair&id=example';x.setTime(900000);
+ x.document.querySelector=selector=>{assert.match(selector,/:not\(#desktop-update-progress\)/);return null;};
+ assert.equal(x.window.fastgoUpdateSafe(),false);assert.equal(x.window.fastgoUpdateSafe(true),true);
+ x.setDirty(true);assert.match(x.window.fastgoUpdateBlockReason(true),/Сохраните/);assert.equal(x.window.fastgoLockForUpdate(true),false);
+});
