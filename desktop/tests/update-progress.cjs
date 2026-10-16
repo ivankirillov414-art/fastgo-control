@@ -10,7 +10,7 @@ const {app,net,safeStorage}=require('electron'),{EventEmitter}=require('node:eve
 app.setPath('userData',${JSON.stringify(data)});net.isOnline=()=>false;Object.defineProperty(app,'isPackaged',{get:()=>true});
 const updater=new EventEmitter();globalThis.testUpdater=updater;globalThis.updateChecks=0;globalThis.updateInstalls=[];
 updater.checkForUpdates=async()=>{globalThis.updateChecks++;updater.emit('checking-for-update');};updater.quitAndInstall=(...args)=>globalThis.updateInstalls.push(args);
-require.cache[require.resolve('electron-updater')]={id:require.resolve('electron-updater'),filename:require.resolve('electron-updater'),loaded:true,exports:{autoUpdater:updater}};
+const updaterModule=${JSON.stringify(require.resolve('electron-updater'))};require.cache[updaterModule]={id:updaterModule,filename:updaterModule,loaded:true,exports:{autoUpdater:updater}};
 app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'credentials.bin'),safeStorage.encryptString(JSON.stringify({access_token:'update-ui-token',user_id:${JSON.stringify(actor)},expires_at:4102444800}))));
 require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 (async()=>{const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000}),page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));try{
