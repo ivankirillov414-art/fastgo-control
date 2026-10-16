@@ -62,6 +62,14 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  // Offline scans survive reload and reach the laptop without a manual send button.
  await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();api.state.offline=true;await scan(t);await t.locator('.last-scan').waitFor();await t.locator('#live-back').click();await t.reload();await t.locator('#pay').click();await t.locator('.last-scan').waitFor();
  api.state.offline=false;await d.locator('#live-submit').waitFor();await d.locator('input[value="cash"]').check();await d.locator('#live-submit').click();await t.locator('#pay').waitFor();assert.equal(api.payments.at(-1).items[0].quantity,1);
+ // Compatibility mode uses a real, writable editor activated by a user tap.
+ await t.locator('#receipt').click();await t.locator('#scanner-compat').click();
+ assert.equal(await t.locator('#live-code').isVisible(),true);assert.equal(await t.locator('#live-code').getAttribute('inputmode'),'text');
+ await scan(t,'FGP-00000001');await t.locator('.last-scan').waitFor();await d.locator('#live-submit').waitFor();
+ assert.match(await t.locator('#scan-received').innerText(),/FGP-00000001/);
+ await d.locator('#live-submit').click();await t.locator('#receipt').waitFor();
+ await t.locator('#receipt').click();assert.equal(await t.locator('#live-code').getAttribute('inputmode'),'text');
+ await t.locator('#scanner-compat').click();await t.locator('#live-back').click();
  // Unknown code is visible as an error; the next hardware scan works without tapping the sink.
  await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();await scan(t,'UNKNOWN-CODE');await t.waitForFunction(()=>document.getElementById('scan-feedback').textContent.includes('не найден'));
  await d.locator('#pay').click();await d.locator('.scan-empty').waitFor();

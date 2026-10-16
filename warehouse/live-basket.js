@@ -65,11 +65,21 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   for(const el of document.querySelectorAll('input[name="live-method"]'))el.disabled=locked;
  }
  function documentId(){return current?.id||draft?.id||'';}
- function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Назад">←</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>');}
+ function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Назад">←</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>');}
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
-  $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
+  $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;if($('scan-received'))$('scan-received').textContent='Получен код: '+code;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
   stop=bindScanner($('live-code'),$('live-scan'),()=>active&&!locked,{silent:true});
+  function compatible(enabled,focus=false){
+   stop?.();const form=$('live-scan'),input=$('live-code');
+   form.className=enabled?'scanner-compatible':'scanner-sink';form.setAttribute('aria-hidden',String(!enabled));
+   input.setAttribute('inputmode',enabled?'text':'none');input.tabIndex=enabled?0:-1;input.setAttribute('aria-label','Код аппаратного сканера');input.placeholder='Отсканируйте товар';
+   stop=bindScanner(input,form,()=>active&&!locked,{silent:!enabled});
+   $('scanner-compat').textContent=enabled?'Скрыть поле сканера':'Сканер не вводит код?';
+   if(enabled)feedback('Обычный ввод включён. Отсканируйте товар.');
+   if(focus)input.focus();
+  }
+  if(terminal){let enabled=load('scanner:compat')===true;if(enabled)compatible(true);$('scanner-compat').onclick=()=>{enabled=!enabled;save('scanner:compat',enabled);compatible(enabled,true);};}
   if(!terminal)$('live-submit').onclick=()=>run(finish);
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
  }

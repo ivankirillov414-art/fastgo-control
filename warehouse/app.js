@@ -108,7 +108,7 @@ async function updateNow(){
    if(['downloading','ready','preparing','installing'].includes(state?.status)){message('Обновление '+state.version+' будет установлено сразу после загрузки, когда документы закрыты и USB свободен.');return;}
    if(state?.status==='error'){message('Не удалось проверить приложение: '+state.error,true);return;}
   }
-  await webUpdater?.now();
+  await webUpdater?.now();message('');
  }catch(e){message('Ошибка обновления: '+e.message,true);}finally{updating=false;}
 }
 if($('screen-refresh'))$('screen-refresh').onclick=updateNow;
