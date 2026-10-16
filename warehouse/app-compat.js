@@ -201,6 +201,7 @@
       $2("live-total").textContent = money(total());
       $2("live-payment").hidden = draft2.kind !== "sale" || !draft2.items.length;
       $2("live-submit").hidden = !draft2.items.length;
+      $2("live-items").querySelectorAll("input,button").forEach((el) => el.disabled = locked);
       $2("live-items").querySelectorAll("[data-live-qty]").forEach((el) => el.onchange = () => {
         const n = Number(el.value);
         if (!Number.isInteger(n) || n < 1 || n > 1e3) {
@@ -212,6 +213,7 @@
         $2("live-total").textContent = money(total());
       });
       $2("live-items").querySelectorAll("[data-live-remove]").forEach((el) => el.onclick = () => {
+        if (locked) return;
         draft2.items = draft2.items.filter((x) => x.part_id !== el.dataset.liveRemove);
         changed();
         draw();
@@ -276,11 +278,17 @@
         const kind = draft2.kind;
         draft2 = null;
         cleanup();
-        await refresh();
+        await refresh().catch(() => {
+        });
         home2();
         message2((result == null ? void 0 : result.cancelled) ? "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u0430, \u0442\u043E\u0432\u0430\u0440 \u0441\u043F\u0438\u0441\u0430\u043D. " + money(result.total) : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043F\u0440\u043E\u0432\u0435\u0434\u0451\u043D, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
       } finally {
-        locked = false;
+        if (!draft2) locked = false;
+        else {
+          const state = await call2("job", { id: draft2.id }).catch(() => null);
+          locked = !state || state.state !== "queued";
+          if (active) draw();
+        }
       }
     }
     async function open(kind) {
@@ -350,10 +358,10 @@
     }
     function mirrorMarkup(job2) {
       var _a2, _b;
-      return '<div class="live-heading"><h2>\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B \xB7 ' + (job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h2><small>" + (job2.state === "done" ? ((_a2 = job2.result) == null ? void 0 : _a2.cancelled) ? "\u041E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D" : job2.state === "processing" ? "\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F\u2026" : "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435") + "</small></div>" + rows(job2.payload, false) + (job2.payload.items.length ? "" : "<p>\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043D\u0430 \u0422\u0421\u0414\u2026</p>") + (job2.state === "done" && ((_b = job2.result) == null ? void 0 : _b.total) !== void 0 ? "<p>\u041E\u043F\u043B\u0430\u0447\u0435\u043D\u043E " + money(job2.result.total) + " \xB7 " + esc({ cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", card: "\u041A\u0430\u0440\u0442\u0430", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434" }[job2.result.payment_method] || "") + "</p>" : "");
+      return '<div class="live-heading"><h2>\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B \xB7 ' + (job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h2><small>" + (job2.state === "done" ? ((_a2 = job2.result) == null ? void 0 : _a2.cancelled) ? "\u041E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D" : job2.state === "processing" ? "\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F\u2026" : "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435") + "</small></div>" + rows(job2.payload, false) + (job2.payload.items.length ? "" : "<p>\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043D\u0430 \u0422\u0421\u0414\u2026</p>") + (job2.state === "done" && ((_b = job2.result) == null ? void 0 : _b.total) !== void 0 ? "<p>\u041E\u043F\u043B\u0430\u0447\u0435\u043D\u043E " + money(job2.result.total) + " \xB7 " + esc({ cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", card: "\u041A\u0430\u0440\u0442\u0430", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434" }[job2.result.payment_method] || job2.result.payment_method || "") + "</p>" : "");
     }
     async function pollMirror() {
-      var _a2, _b;
+      var _a2, _b, _c;
       if (terminal2) return;
       const target = $2("live-terminal-panel");
       if (!target) return;
@@ -365,18 +373,20 @@
       if (signature === mirror && target.innerHTML) return;
       mirror = signature;
       target.innerHTML = current ? mirrorMarkup(current) : '<p class="muted">\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041F\u0440\u0438\u0445\u043E\u0434\xBB \u0438\u043B\u0438 \xAB\u041E\u043F\u043B\u0430\u0442\u0430\xBB \u043D\u0430 \u0422\u0421\u0414 \u2014 \u0442\u043E\u0432\u0430\u0440\u044B \u043F\u043E\u044F\u0432\u044F\u0442\u0441\u044F \u0437\u0434\u0435\u0441\u044C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p>';
-      if (current && current.state === "queued" && current.payload.items.length) {
+      if (current && ["queued", "processing"].includes(current.state) && current.payload.items.length) {
         target.insertAdjacentHTML("beforeend", (current.payload.kind === "sale" ? payment() : "") + '<button class="primary" id="mirror-submit">' + (current.payload.kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C" : "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434") + "</button>");
-        if (chosen) (_b = target.querySelector('input[value="' + chosen + '"]')) == null ? void 0 : _b.click();
+        const selected = ((_b = current.checkout) == null ? void 0 : _b.payment_method) || chosen;
+        if (selected) (_c = target.querySelector('input[value="' + selected + '"]')) == null ? void 0 : _c.click();
         $2("mirror-submit").onclick = () => run2(async () => {
-          var _a3;
-          const method = (_a3 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a3.value;
+          var _a3, _b2;
+          const method = ((_a3 = current.checkout) == null ? void 0 : _a3.payment_method) || ((_b2 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _b2.value);
           if (current.payload.kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
           locked = true;
           try {
             await call2(current.payload.kind === "sale" ? "live_pay" : "live_receive", { id: current.id, revision: current.payload.revision, payment_method: method });
             mirror = null;
-            await refresh();
+            await refresh().catch(() => {
+            });
             home2();
             message2("\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
           } finally {
