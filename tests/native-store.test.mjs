@@ -272,3 +272,14 @@ test('explicit individual permissions enable cash and catalogue, while stock adm
  await assert.rejects(h.call('part_save',{id:part,name:'Тест',retail_price:1},actor),/справочник/);
  await assert.rejects(h.call('catalog_save',{id:service,title:'Нет',labor_price:1},{...actor,can_edit_catalog:false}),/справочник/);
 });
+
+test('repair with no stock parts or a customer-supplied tube reaches ready without stock movement',async()=>{
+ for(const parts of [[],[{name:'Камера клиента',quantity:1,price:0}]]){
+  const h=harness();let r=await h.call('create',intake());
+  const work={kind:'repair',id:r.id,diagnostics_notes:'Прокол камеры',works:[{name:'Замена камеры',quantity:1,price:600}],parts};
+  for(const status of ['diagnostics','repair','ready'])r=await h.call('update',{...work,revision:r.revision,status,...(status==='repair'?{approve:true,approval_note:'Согласовано'}:{}),quality_checked:status==='ready'});
+  assert.equal(r.status,'ready');assert.equal(r.total_amount,600);assert.deepEqual(r.parts,parts);
+  assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],1);
+  assert.equal(h.outbox.flat().some(change=>change.sheet==='Товары'),false);
+ }
+});
