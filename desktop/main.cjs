@@ -62,7 +62,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  }catch(e){if(!store.printExists(account,key))store.printState(account,key,'failed',p.kind,p.id,e.message);throw e;}
  finally{if(hidden){printWindows.delete(hidden.webContents.id);hidden.destroy();}printBusy=false;notify();}
 }
-async function localPrints(){if(updateInstalling||printBusy||!actor||!store.setting('printer'))return;const row=store.db.prepare("SELECT * FROM print_jobs WHERE actor=? AND state='queued' ORDER BY created_at LIMIT 1").get(actor);if(!row)return;try{await printRecord({kind:row.kind,id:row.record_id},{key:row.key});}catch(e){lastError=e.message;notify();}}
+async function localPrints(){if(updateInstalling||updateDraining||printBusy||!actor||!store.setting('printer'))return;const row=store.db.prepare("SELECT * FROM print_jobs WHERE actor=? AND state='queued' ORDER BY created_at LIMIT 1").get(actor);if(!row)return;try{await printRecord({kind:row.kind,id:row.record_id},{key:row.key});}catch(e){lastError=e.message;notify();}}
 async function pollPrint(){if(updateInstalling||updateDraining||remoteBusy||printBusy||!actor||!store?.setting('remote_print'))return;remoteBusy=true;let job;
  try{// Claim validates the active station and owner atomically on the server.
   const result=await remotePrint('claim',{station_id:store.setting('station_id'),request_id:store.setting('claim_token')});job=result.job;if(!job)return;

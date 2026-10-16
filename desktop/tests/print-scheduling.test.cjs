@@ -23,6 +23,9 @@ test('an update drains existing print polling and resumes it when the user opens
  const start=source.indexOf('canInstall:async immediate=>')+'canInstall:'.length,end=source.indexOf(',prepare:()=>',start);
  const canInstall=vm.runInContext('('+source.slice(start,end)+')',context);
  assert.equal((await canInstall(true)).reason,'Завершаем запрос к очереди печати');assert.equal(vm.runInContext('updateDraining',context),true);
+ // Do not claim more queued local jobs while the current operation drains.
+ vm.runInContext("actor='test';store.setting=()=>{throw Error('Read the print queue during update drain');}",context);
+ await vm.runInContext('localPrints()',context);
  vm.runInContext('remoteBusy=false',context);assert.equal(await canInstall(true),true);
  vm.runInContext("win.webContents.executeJavaScript=async()=>'Сохраните изменения'",context);assert.equal((await canInstall(true)).allowed,false);assert.equal(vm.runInContext('updateDraining',context),false);
 });

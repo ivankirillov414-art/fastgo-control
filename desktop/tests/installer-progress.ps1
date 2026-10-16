@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $version = (Get-Content "$PSScriptRoot/../package.json" | ConvertFrom-Json).version
 $installer = (Resolve-Path "$PSScriptRoot/../dist/FastGo-Setup-$version-Windows-x64.exe").Path
-$installDir = Join-Path $env:RUNNER_TEMP ('fastgo-install-test-' + [guid]::NewGuid().ToString('N'))
+$installDir = Join-Path $env:RUNNER_TEMP ('FastGo-install-test-' + [guid]::NewGuid().ToString('N'))
 $appData = Join-Path $env:APPDATA 'FastGo'
 $marker = Join-Path $appData 'update-test-marker.txt'
 New-Item -ItemType Directory -Path $appData -Force | Out-Null
