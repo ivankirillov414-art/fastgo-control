@@ -14,7 +14,7 @@ const updaterModule=${JSON.stringify(require.resolve('electron-updater'))};requi
 app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'credentials.bin'),safeStorage.encryptString(JSON.stringify({access_token:'update-ui-token',user_id:${JSON.stringify(actor)},expires_at:4102444800}))));
 require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 (async()=>{const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000}),page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));try{
- await page.locator('#desktop-options').waitFor();await page.locator('#home-stats').waitFor();
+ await page.locator('#desktop-options').waitFor({state:'attached'});await page.locator('#home-stats').waitFor();
  await page.locator('[data-home-settings]').click();await page.locator('#desktop-update-now').click();
  await page.locator('#desktop-update-progress[open]').waitFor();assert.equal(await page.locator('#desktop-settings').evaluate(d=>d.open),false);
  await page.waitForFunction(()=>document.querySelector('#desktop-update-title').textContent==='Проверяем обновления');
