@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createWebUpdater} from '../warehouse/web-update.js';
+const old='a'.repeat(24),next='b'.repeat(24);
+test('page update waits for safe home and applies exactly once after completion',async()=>{let safe=false,applied=[];const u=createWebUpdater({version:old,fetchVersion:async()=>next,fetchPage:async()=>next,canApply:async()=>safe,apply:v=>applied.push(v)});await u.check();await u.tick();assert.deepEqual(applied,[]);safe=true;await Promise.all([u.tick(),u.tick()]);assert.deepEqual(applied,[next]);});
+test('same version, failed connection and mixed deployment never reload the page',async()=>{let value=old,page=old,applied=0,fail=false;const u=createWebUpdater({version:old,fetchVersion:async()=>{if(fail)throw Error('offline');return value;},fetchPage:async()=>page,canApply:async()=>true,apply:()=>applied++});await u.check();value=next;await u.check();fail=true;await u.check();assert.equal(applied,0);fail=false;page=next;await u.check();assert.equal(applied,1);});
+test('a rejected safety check retains the update and recovers without losing work',async()=>{let reject=true,applied=0;const u=createWebUpdater({version:old,fetchVersion:async()=>next,fetchPage:async()=>next,canApply:async()=>{if(reject)throw Error('USB status unavailable');return true;},apply:()=>applied++});await u.check();assert.equal(applied,0);reject=false;await u.tick();assert.equal(applied,1);});

@@ -1,4 +1,91 @@
 (() => {
+  // warehouse/web-update.js
+  function createWebUpdater({ version, fetchVersion, fetchPage, canApply, apply, notify = () => {
+  } }) {
+    let pending = null, checking = false, applying = false;
+    async function tick() {
+      if (!pending || applying) return;
+      applying = true;
+      try {
+        if (!await canApply()) {
+          notify("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430 \u0433\u043E\u0442\u043E\u0432\u043E \xB7 \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0440\u0430\u0431\u043E\u0442\u044B");
+          return;
+        }
+        apply(pending);
+        pending = null;
+      } catch (e) {
+        notify("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430 \u043E\u0442\u043B\u043E\u0436\u0435\u043D\u043E. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u043C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.");
+      } finally {
+        applying = false;
+      }
+    }
+    async function check() {
+      if (checking || applying) return;
+      checking = true;
+      try {
+        const next = await fetchVersion();
+        if (!/^[a-f0-9]{24}$/.test(next) || next === version) {
+          if (next === version) pending = null;
+          return;
+        }
+        if (await fetchPage(next) !== next) return;
+        pending = next;
+        notify("\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430");
+      } catch (e) {
+      } finally {
+        checking = false;
+      }
+      await tick();
+    }
+    return { check, tick };
+  }
+  function startWebUpdates({ canApply }) {
+    var _a2;
+    const version = (_a2 = document.querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a2.content;
+    if (!version) return null;
+    const get = async (url) => {
+      const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15e3);
+      try {
+        const r = await fetch(url, { cache: "no-store", signal: controller.signal });
+        if (!r.ok) throw Error("\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438");
+        return r;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const updater = createWebUpdater({
+      version,
+      fetchVersion: async () => {
+        const u = new URL("warehouse/web-version.json", location.href);
+        u.searchParams.set("check", Date.now());
+        return (await (await get(u)).json()).version;
+      },
+      fetchPage: async (next) => {
+        var _a3;
+        const u = new URL(location.href);
+        u.searchParams.set("ui", next);
+        const html = await (await get(u)).text();
+        return (_a3 = new DOMParser().parseFromString(html, "text/html").querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a3.content;
+      },
+      canApply,
+      apply: (next) => {
+        document.body.inert = true;
+        const u = new URL(location.href);
+        u.searchParams.set("ui", next);
+        location.replace(u.href);
+      },
+      notify: (text) => {
+        const el = document.getElementById("web-update-status");
+        if (el) el.textContent = text;
+      }
+    });
+    setTimeout(() => void updater.check(), 5e3);
+    setInterval(() => void updater.check(), 6e4);
+    setInterval(() => void updater.tick(), 5e3);
+    window.addEventListener("online", () => void updater.check());
+    return updater;
+  }
+
   // warehouse/client.js
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
@@ -1024,6 +1111,7 @@
       $("desktop-update").hidden = false;
       $("desktop-update").onclick = () => run(async () => {
         await window.warehouseDesktop.checkUpdates();
+        await (webUpdater == null ? void 0 : webUpdater.check());
         await desktopStatus();
       });
     }
@@ -1072,4 +1160,14 @@
     url.searchParams.set("refresh", Date.now());
     location.replace(url.href);
   };
+  var webSafe = () => !busy && !polling && screen === "home" && !draft && !job && !live.hasDraft() && !document.querySelector("#mirror-submit,dialog[open]") && Date.now() - lastActivity > 15e3;
+  var webUpdater = !terminal ? startWebUpdates({ canApply: async () => {
+    var _a2, _b, _c, _d;
+    if (!webSafe()) return false;
+    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.desktopStatus) {
+      const state = await window.warehouseDesktop.desktopStatus();
+      if (((_b = state.usb) == null ? void 0 : _b.pending) || ((_c = state.usb) == null ? void 0 : _c.target) || ["ready", "installing"].includes((_d = state.update) == null ? void 0 : _d.status)) return false;
+    }
+    return webSafe();
+  } }) : null;
 })();

@@ -1,3 +1,4 @@
+import {startWebUpdates} from './web-update.js';
 import {repairPayment} from './repair-payment.js?v=20261016-scan-2';
 import {liveBasket} from './live-basket.js?v=20261016-scan-2';
 import {bindUSBInbox} from './usb-client.js';
@@ -78,10 +79,18 @@ async function desktopStatus(){
  try{const s=await window.warehouseDesktop.desktopStatus(),update=s.update||{};let note='';if(update.status==='downloading')note=' · Загружается '+update.version+': '+update.progress+'%';if(update.status==='ready')note=' · Обновление '+update.version+' готово — завершите документ и оставьте главный экран открытым';if(update.status==='error')note=' · Ошибка обновления: '+update.error;const value='Windows '+s.version+' · '+s.usb.status+(s.usb.pending?' · Ожидают добавления: '+s.usb.pending:'')+note;if(el.textContent!==value)el.textContent=value;}
  catch(e){el.textContent='Не удалось проверить USB: '+e.message;}
 }
-if(!terminal){void desktopStatus();setInterval(desktopStatus,2500);if(window.warehouseDesktop?.checkUpdates&&$('desktop-update')){$('desktop-update').hidden=false;$('desktop-update').onclick=()=>run(async()=>{await window.warehouseDesktop.checkUpdates();await desktopStatus();});}}
+if(!terminal){void desktopStatus();setInterval(desktopStatus,2500);if(window.warehouseDesktop?.checkUpdates&&$('desktop-update')){$('desktop-update').hidden=false;$('desktop-update').onclick=()=>run(async()=>{await window.warehouseDesktop.checkUpdates();await webUpdater?.check();await desktopStatus();});}}
 if($('usb-scanner'))$('usb-scanner').onclick=()=>{if(window.warehouseDesktop?.openUSBScanner)void window.warehouseDesktop.openUSBScanner().catch(e=>message(e.message,true));else message('Сканирование по USB доступно в установленной программе FastGo Склад версии 1.0.4 и новее.');};
 if($('terminal-update'))$('terminal-update').onclick=async()=>{try{if(window.warehouseDesktop?.openTerminalUpdater)await window.warehouseDesktop.openTerminalUpdater();else $('terminal-help').showModal();}catch(e){message('Не удалось открыть обновление терминала: '+e.message,true);}};
 if($('terminal-help'))$('terminal-help').onclick=e=>{if(e.target!==e.currentTarget)return;const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.currentTarget.close();};
 $('logout').onclick=()=>run(async()=>{if((draft||job)&&!confirm('Документ сохранён. Выйти?'))return;await logout();device=null;parts=[];staff=[];draft=null;job=null;signIn();});setInterval(()=>void poll(),3000);window.addEventListener('online',()=>{if(terminal&&screen==='connection')void run(start);else void poll();});void start();
 
 if($('screen-refresh'))$('screen-refresh').onclick=()=>{if(busy||screen!=='home'){message('Сначала завершите документ и вернитесь на главный экран.');return;}const url=new URL(location.href);url.searchParams.set('refresh',Date.now());location.replace(url.href);};
+
+// Automatic page updates are independent of Windows installer updates.
+const webSafe=()=>!busy&&!polling&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!document.querySelector('#mirror-submit,dialog[open]')&&Date.now()-lastActivity>15000;
+const webUpdater=!terminal?startWebUpdates({canApply:async()=>{
+ if(!webSafe())return false;
+ if(window.warehouseDesktop?.desktopStatus){const state=await window.warehouseDesktop.desktopStatus();if(state.usb?.pending||state.usb?.target||['ready','installing'].includes(state.update?.status))return false;}
+ return webSafe();
+}}):null;

@@ -32,3 +32,5 @@ body[data-mode=terminal] header{display:none}
 .live-cancel{display:block;margin:4px auto;font-size:13px;background:transparent}
 #live-sync{display:block;min-height:20px}
 #live-terminal-panel .scan-product{margin:8px 0}
+
+#web-update-status:empty{display:none}
