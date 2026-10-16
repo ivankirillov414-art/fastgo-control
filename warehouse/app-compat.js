@@ -269,6 +269,7 @@
       if (!draft2.items.length) throw Error("\u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u0432\u0430\u0440\u044B");
       const method = (_a2 = document.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a2.value;
       if (draft2.kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435, \u041A\u0430\u0440\u0442\u0443 \u0438\u043B\u0438 \u041F\u0435\u0440\u0435\u0432\u043E\u0434");
+      for (const el of document.querySelectorAll("[data-live-qty]")) if (!el.checkValidity()) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
       for (const el of document.querySelectorAll("[data-own-value]:not([hidden])")) if (!el.value || !el.checkValidity()) throw Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0432\u043E\u044E \u0446\u0435\u043D\u0443");
       await sync();
       locked = true;
@@ -295,12 +296,6 @@
       cleanup();
       locked = false;
       draft2 = load2(storeKey(kind));
-      const legacy = load2("draft:terminal");
-      if (!draft2 && (legacy == null ? void 0 : legacy.kind) === kind) {
-        draft2 = { ...legacy, revision: 1, acked: 0 };
-        save3(storeKey(kind), draft2);
-        save3("draft:terminal", null);
-      }
       if (draft2) {
         const r = await call2("job", { id: draft2.id }).catch(() => null);
         if ((r == null ? void 0 : r.state) === "done") {
@@ -322,6 +317,7 @@
         add($2("live-code").value.trim());
       };
       stop = bindScanner($2("live-code"), $2("live-scan"), () => active && !locked);
+      document.querySelectorAll('input[name="live-method"]').forEach((el) => el.onchange = () => $2("live-code").focus());
       $2("live-submit").onclick = () => run2(finish);
       $2("live-cancel").onclick = () => run2(async () => {
         if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442?")) return;

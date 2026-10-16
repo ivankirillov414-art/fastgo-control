@@ -25,6 +25,7 @@ const server=http.createServer((req,res)=>{const p=path.resolve(root,'.'+new URL
  for(const method of ['cash','card','transfer']){
   await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();await t.keyboard.type('FGP-00000001',{delay:5});await t.keyboard.press('Enter');await t.locator('[data-live-qty]').waitFor();assert.equal(await t.locator('[data-live-qty]').inputValue(),'1');
   assert.equal(await t.locator('[data-own-value]').isVisible(),false);assert.match(await t.locator('#live-total').innerText(),/300/);
+  await t.locator('[data-live-qty]').fill('0');await t.locator('input[value="cash"]').check();await t.locator('#live-submit').click();await t.waitForFunction(()=>document.getElementById('message').textContent.includes('Количество'));await t.locator('[data-live-qty]').fill('1');await t.locator('[data-live-qty]').press('Tab');
   await t.locator('[data-own]').check();await t.locator('[data-own-value]').fill('250.50');await t.locator('input[name="live-method"][value="'+method+'"]').check();await t.locator('#live-submit').click();await t.locator('#pay').waitFor();
   const payment=payments.at(-1);assert.equal(payment.payment_method,method);assert.equal(payment.items[0].unit_price,250.5);assert.equal(payment.items[0].quantity,1);
  }

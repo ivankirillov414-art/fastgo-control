@@ -38,6 +38,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(!draft.items.length)throw Error('Добавьте товары');
   const method=document.querySelector('input[name="live-method"]:checked')?.value;
   if(draft.kind==='sale'&&!method)throw Error('Выберите Наличные, Карту или Перевод');
+  for(const el of document.querySelectorAll('[data-live-qty]'))if(!el.checkValidity())throw Error('Количество от 1 до 1000');
   for(const el of document.querySelectorAll('[data-own-value]:not([hidden])'))if(!el.value||!el.checkValidity())throw Error('Проверьте свою цену');
   await sync();locked=true;
   try{const result=await call(draft.kind==='sale'?'live_pay':'live_receive',{id:draft.id,revision:draft.revision,payment_method:method});
@@ -46,12 +47,12 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  }
  async function open(kind){
   cleanup();locked=false;draft=load(storeKey(kind));
-  const legacy=load('draft:terminal');if(!draft&&legacy?.kind===kind){draft={...legacy,revision:1,acked:0};save(storeKey(kind),draft);save('draft:terminal',null);}
   if(draft){const r=await call('job',{id:draft.id}).catch(()=>null);if(r?.state==='done'){save(storeKey(kind),null);draft=null;}else if(r?.state==='processing')locked=true;}
   if(!draft)draft={id:uuid(),kind,revision:1,acked:0,items:[],note:''};cache();active=true;
   render('<div class="live-heading"><button id="live-back">←</button><h1>'+ (kind==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync">Подключаем ноутбук…</small><form id="live-scan"><input id="live-code" inputmode="none" autocomplete="off" aria-label="Штрихкод"><button type="submit" hidden>Добавить</button></form><div id="live-items"></div><section id="live-payment"><div class="total">Итого <b id="live-total"></b></div>'+payment()+'</section><button class="primary" id="live-submit">'+(kind==='sale'?'Оплатить':'Провести приход')+'</button><button class="live-cancel" id="live-cancel">Отменить документ</button>');
   draw();$('live-back').onclick=()=>{cleanup();home();};$('live-scan').onsubmit=e=>{e.preventDefault();add($('live-code').value.trim());};
   stop=bindScanner($('live-code'),$('live-scan'),()=>active&&!locked);
+  document.querySelectorAll('input[name="live-method"]').forEach(el=>el.onchange=()=>$('live-code').focus());
   $('live-submit').onclick=()=>run(finish);
   $('live-cancel').onclick=()=>run(async()=>{if(!confirm('Отменить документ?'))return;await sync();await call('draft_close',{id:draft.id});save(storeKey(kind),null);draft=null;cleanup();home();});
   if(locked)message('Проверяем незавершённую операцию. Нажмите «'+(kind==='sale'?'Оплатить':'Провести приход')+'» для получения результата.',true);
