@@ -110,6 +110,81 @@
     return parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code);
   }
 
+  // warehouse/unknown-scans.js
+  function unknownScans({ call: call2, parts: parts2, refresh, run: run2, owner, message: message2 }) {
+    let loading = false;
+    async function poll2() {
+      const host = document.getElementById("unknown-scans");
+      if (!host || loading) return;
+      loading = true;
+      try {
+        const rows = await call2("unknown_scans");
+        if (!host.isConnected) return;
+        host.innerHTML = rows.length ? "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0435 \u043A\u043E\u0434\u044B \u0441 \u0422\u0421\u0414</h2>" + rows.map((x) => '<button data-unknown="' + esc(x.id) + '">' + esc(x.payload.code) + " \xB7 " + (x.payload.document_kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u043E\u0434\u0430\u0436\u0430") + "</button>").join("") : "";
+        host.querySelectorAll("[data-unknown]").forEach((b) => b.onclick = () => open(rows.find((x) => x.id === b.dataset.unknown)));
+      } catch (e) {
+        if (host.isConnected) host.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0435 \u043A\u043E\u0434\u044B: " + e.message;
+      } finally {
+        loading = false;
+      }
+    }
+    function open(row) {
+      var _a, _b, _c, _d, _e, _f, _g;
+      const dialog = document.createElement("dialog");
+      dialog.className = "unknown-dialog";
+      const creating = !!row.checkout;
+      dialog.innerHTML = "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434</h2><p>" + esc(row.payload.code) + '</p><form><label>\u041D\u0430\u0439\u0442\u0438 \u0442\u043E\u0432\u0430\u0440<input id="unknown-filter" placeholder="\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0438\u043B\u0438 \u0430\u0440\u0442\u0438\u043A\u0443\u043B"></label><label>\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F<select id="unknown-part"><option value="">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440</option></select></label><button class="primary" type="submit">\u0421\u0432\u044F\u0437\u0430\u0442\u044C \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C</button></form>' + (owner() ? "<details " + (creating ? "open" : "") + '><summary>\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u043F\u043E\u0437\u0438\u0446\u0438\u044E</summary><form id="unknown-create"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input name="name" required value="' + esc(((_b = (_a = row.checkout) == null ? void 0 : _a.create) == null ? void 0 : _b.name) || "") + '"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required value="' + esc(((_d = (_c = row.checkout) == null ? void 0 : _c.create) == null ? void 0 : _d.category) || "") + '"></label><label>\u0426\u0435\u043D\u0430, \u20BD<input name="retail_price" type="number" min="0" max="100000000" step="0.01" required value="' + esc((_g = (_f = (_e = row.checkout) == null ? void 0 : _e.create) == null ? void 0 : _f.retail_price) != null ? _g : "") + '"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C</button></form></details>' : "") + '<p class="error" role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
+      document.body.append(dialog);
+      dialog.showModal();
+      dialog.querySelector("[data-close]").onclick = () => dialog.close();
+      dialog.onclose = () => dialog.remove();
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          const r = dialog.getBoundingClientRect();
+          if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close();
+        }
+      };
+      const select = dialog.querySelector("#unknown-part"), filter = dialog.querySelector("#unknown-filter");
+      const draw = () => {
+        const q = filter.value.toLowerCase();
+        select.innerHTML = '<option value="">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440</option>' + parts2().filter((x) => x.active !== false && (x.name + " " + (x.sku || "")).toLowerCase().includes(q)).slice(0, 200).map((x) => '<option value="' + esc(x.id) + '">' + esc(x.name) + " \xB7 " + esc(x.sku || x.barcode || "") + "</option>").join("");
+      };
+      draw();
+      filter.oninput = draw;
+      const submit = (payload) => run2(async () => {
+        try {
+          await call2("unknown_resolve", { id: row.id, ...payload });
+          await refresh();
+          dialog.close();
+          await poll2();
+          message2("\u041A\u043E\u0434 \u0441\u0432\u044F\u0437\u0430\u043D. \u0422\u0421\u0414 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0434\u043E\u0431\u0430\u0432\u0438\u0442 \u0442\u043E\u0432\u0430\u0440 \u0432 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442.");
+        } catch (e) {
+          dialog.querySelector(".error").textContent = e.message;
+          throw e;
+        }
+      });
+      dialog.querySelector("form").onsubmit = (e) => {
+        e.preventDefault();
+        if (!select.value) return;
+        void submit({ part_id: select.value });
+      };
+      if (creating) {
+        dialog.querySelector("form button").disabled = true;
+        select.disabled = true;
+      }
+      const create = dialog.querySelector("#unknown-create");
+      if (create) {
+        if (creating) create.querySelectorAll("input").forEach((i) => i.readOnly = true);
+        create.onsubmit = (e) => {
+          e.preventDefault();
+          const data = new FormData(create);
+          void submit({ create: { name: data.get("name"), category: data.get("category"), retail_price: Number(data.get("retail_price")) } });
+        };
+      }
+    }
+    return { poll: poll2 };
+  }
+
   // warehouse/product-panel.js
   var pencil = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
   function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2 }) {
@@ -1010,6 +1085,7 @@
     shell(html);
   }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: () => ["home", "live"].includes(screen) });
   var call = (action, p = {}) => api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
+  var unknown = unknownScans({ call: (a, p) => call(a, p), parts: () => parts, refresh: catalog, run, message, owner: () => ["owner", "developer"].includes(memberRole) });
   function message(v, error = false) {
     $("message").textContent = v;
     $("message").className = error ? "error" : "";
@@ -1183,7 +1259,7 @@
     live.cleanup();
     screen = "home";
     job = null;
-    shell((terminal ? "" : nav()) + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft && !terminal ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><div id="live-terminal-panel"></div><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div></section>' : usbHelp()));
+    shell((terminal ? "" : nav()) + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft && !terminal ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><div id="live-terminal-panel"></div><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div><section id="unknown-scans"></section></section>' : usbHelp()));
     bindNav();
     $("receipt").onclick = () => run(() => live.open("receipt"));
     $("pay").onclick = () => run(() => live.open("sale"));
@@ -1579,4 +1655,7 @@
     }
   }
   setInterval(() => void pollUSB(), 400);
+  setInterval(() => {
+    if (!terminal && screen === "home" && !busy) void unknown.poll();
+  }, 3e3);
 })();
