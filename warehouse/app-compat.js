@@ -904,7 +904,7 @@
     }
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
-  window.warehouseUpdateSafe = (immediate = false) => !busy && screen === "home" && !draft && !job && !live.hasDraft() && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 12e4);
+  window.warehouseUpdateSafe = (immediate = false) => !busy && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 12e4);
   window.addEventListener("beforeunload", (e) => {
     if (busy || screen === "basket" || screen === "checkout" || screen === "live" || screen === "repair") {
       e.preventDefault();
@@ -1341,7 +1341,7 @@
     else void poll();
   });
   void start();
-  var webSafe = (immediate = false) => !busy && !polling && screen === "home" && !draft && !job && !live.hasDraft() && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
+  var webSafe = (immediate = false) => !busy && !polling && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
   var webUpdater = startWebUpdates({ canApply: async (immediate) => {
     var _a, _b, _c, _d;
     if (!webSafe(immediate)) return false;

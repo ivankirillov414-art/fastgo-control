@@ -5,6 +5,10 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  const t=await tc.newPage(),d=await dc.newPage(),errors=[];for(const p of [t,d]){p.setDefaultTimeout(10000);p.on('pageerror',e=>errors.push(e.message));}
  await Promise.all([t.goto(base+'/warehouse-terminal.html'),d.goto(base+'/warehouse.html')]);await t.locator('#pay').waitFor();
  assert.equal(await t.locator('#resume,#back').count(),0);assert.equal(await t.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),true);
+ // Old saved basket data must not block updates on the TSD home screen.
+ await t.evaluate(()=>{const prefix=Object.keys(localStorage).find(k=>k.endsWith(':terminal'));if(!prefix)throw Error('terminal identity missing');localStorage.setItem(prefix.slice(0,-'terminal'.length)+'draft:terminal',JSON.stringify({id:'legacy',kind:'receipt',items:[{part_id:'legacy-part',quantity:1}]}));});
+ await t.reload();await t.locator('#pay').waitFor();
+ assert.equal(await t.evaluate(()=>window.warehouseUpdateSafe(true)),true);
  await t.locator('#receipt').click();await t.locator('.scan-empty').waitFor();
  assert.equal(await t.locator('#live-items').innerText(),'');assert.equal(await t.locator('#live-submit,#live-payment').count(),0);assert.equal(await t.getByRole('button',{name:'Добавить',exact:true}).count(),0);
  assert.equal(await t.locator('#live-code').getAttribute('inputmode'),'none');assert.equal(await t.locator('#live-code').evaluate(el=>getComputedStyle(el.closest('form')).opacity),'0');
@@ -24,6 +28,11 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  // Scanner services can insert a complete value after transient WebView focus loss.
  await t.evaluate(()=>{window.dispatchEvent(new Event('blur'));const el=document.getElementById('live-code');el.blur();el.value='FGP-00000002';el.dispatchEvent(new Event('input',{bubbles:true}));});
  await t.locator('.last-scan').waitFor();await d.locator('[data-live-qty]').waitFor();
+ assert.equal(await t.evaluate(()=>window.warehouseUpdateSafe(true)),false);
+ await t.locator('#live-back').click();await t.locator('#pay').waitFor();
+ assert.equal(await t.evaluate(()=>window.warehouseUpdateSafe(true)),true);
+ await t.locator('#receipt').click();await t.locator('.last-scan').waitFor();
+
  assert.equal(await t.locator('.last-scan').count(),1);
  await d.locator('#live-submit').click();await t.locator('#pay').waitFor();api.payments.length=0;
  await t.locator('#receipt').click();await t.locator('.scan-empty').waitFor();
