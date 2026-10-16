@@ -58,7 +58,7 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   if(!job.checkout)fail('Корзина изменилась. Повторите',409);
  }
  const c=job.checkout;if(c.actor_id!==actor.id)fail('Операцию завершает другой сотрудник',409);
- const name=receiving?'warehouse_live_receipt':'warehouse_live_sale';
+ const name=receiving?'stock_receive':'sale';
  const fingerprint=await digest(JSON.stringify(c));
  const previous=async()=>{const r=(await db('workshop_native_receipts','request_id=eq.'+requestId))[0];if(!r)return null;if(r.actor_id!==actor.id||r.action!==name||r.fingerprint!==fingerprint)fail('Конфликт операции',409);return r.result;};
  let result=await previous();
