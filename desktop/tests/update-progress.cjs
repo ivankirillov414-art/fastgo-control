@@ -15,7 +15,7 @@ app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'cre
 require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 (async()=>{const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000}),page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));try{
  await page.locator('#desktop-options').waitFor();await page.locator('#home-stats').waitFor();
- await page.locator('#desktop-options').click();await page.locator('#desktop-update-now').click();
+ await page.locator('[data-home-settings]').click();await page.locator('#desktop-update-now').click();
  await page.locator('#desktop-update-progress[open]').waitFor();assert.equal(await page.locator('#desktop-settings').evaluate(d=>d.open),false);
  await page.waitForFunction(()=>document.querySelector('#desktop-update-title').textContent==='Проверяем обновления');
  await app.evaluate(()=>{testUpdater.emit('update-available',{version:'99.0.0'});testUpdater.emit('download-progress',{percent:37,transferred:38797312,total:104857600,bytesPerSecond:1048576});});
@@ -37,4 +37,7 @@ require(${JSON.stringify(path.join(root,'main.cjs'))});`);
  assert.deepEqual(await app.evaluate(()=>updateInstalls),[[true,true]]);assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),false);
  const final=await page.evaluate(()=>window.fastgoDesktop.state());assert.ok(final.pending>=2);assert.ok(fs.readdirSync(path.join(data,'backups')).some(name=>name.includes('before-update')));
  assert.deepEqual(errors,[]);console.log('PASS: immediate update dialog, real progress, retry/current states, dirty form protection, clean-card install and durable pending receipt');
- }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{await app.close();}})().catch(error=>{console.error(error);process.exitCode=1;});
+ }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{
+ await page.evaluate(()=>{window.confirm=()=>true;location.hash='home';}).catch(()=>{});
+ await page.waitForFunction(()=>!window.fastgoHasUnsavedChanges()).catch(()=>{});
+ await app.close();}})().catch(error=>{console.error(error);process.exitCode=1;});
