@@ -353,7 +353,7 @@
       previous = value;
       lastAt = now;
       if (added >= 4 || burst >= 4) timer = setTimeout(() => {
-        if (live2() && document.activeElement === input && input.value === value) submit();
+        if (live2() && (silent || document.activeElement === input) && input.value === value) submit();
       }, 200);
     };
     const onKey = (e) => {
@@ -397,7 +397,6 @@
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("click", onClick);
     window.addEventListener("focus", focus);
-    window.addEventListener("blur", suspend);
     document.addEventListener("visibilitychange", onVisible);
     focus();
     const paint = requestAnimationFrame(focus);
@@ -413,7 +412,6 @@
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("click", onClick);
       window.removeEventListener("focus", focus);
-      window.removeEventListener("blur", suspend);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }
@@ -584,6 +582,7 @@
       $2("live-scan").onsubmit = (e) => {
         e.preventDefault();
         const code = $2("live-code").value.trim();
+        if (!code) return;
         $2("live-code").value = "";
         void add(code).catch((e2) => feedback(e2.message, true));
       };
@@ -644,7 +643,8 @@
     }
     async function addCode2(code, usbId) {
       var _a, _b;
-      if (!active || locked || !code) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438");
+      if (!code) return;
+      if (!active || locked) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438");
       if (usbId && (((_a = draft2 == null ? void 0 : draft2.usb_ids) == null ? void 0 : _a.includes(usbId)) || (load2("usb:accepted") || []).includes(usbId))) {
         const p = matchBarcode(parts2(), code)[0];
         return { name: (p == null ? void 0 : p.name) || code, price: p == null ? void 0 : p.retail_price, quantity: ((_b = draft2 == null ? void 0 : draft2.items.find((x) => x.part_id === (p == null ? void 0 : p.id))) == null ? void 0 : _b.quantity) || 1 };
@@ -705,8 +705,8 @@
           });
           const r = await call2("job", { id: local.id });
           if (active && draft2 === local && (r == null ? void 0 : r.state) === "done") finished(r);
-          else if ((r == null ? void 0 : r.state) === "processing") {
-            locked = true;
+          else if (active && draft2 === local && r) {
+            locked = r.state === "processing";
             draw();
           }
           return;

@@ -68,7 +68,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Назад">←</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>');}
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
-  $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
+  $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
   stop=bindScanner($('live-code'),$('live-scan'),()=>active&&!locked,{silent:true});
   if(!terminal)$('live-submit').onclick=()=>run(finish);
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
@@ -82,7 +82,8 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  }
  async function openMirror(value){cleanup();kind=value.payload.kind;draft=null;current=value;locked=value.state==='processing';overrides=load('live-edits:'+value.id)||{};active=true;mount();if(value.checkout?.payment_method){const el=document.querySelector('input[name="live-method"][value="'+value.checkout.payment_method+'"]');if(el)el.checked=true;}}
  async function addCode(code,usbId){
-  if(!active||locked||!code)throw Error('Дождитесь завершения операции');
+  if(!code)return;
+  if(!active||locked)throw Error('Дождитесь завершения операции');
   if(usbId&&(draft?.usb_ids?.includes(usbId)||(load('usb:accepted')||[]).includes(usbId))){const p=matchBarcode(parts(),code)[0];return {name:p?.name||code,price:p?.retail_price,quantity:draft?.items.find(x=>x.part_id===p?.id)?.quantity||1};}
   if(current)throw Error('Сейчас открыт документ другого терминала');
   if(/^https?:\/\//i.test(code)){
@@ -103,7 +104,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  function add(code,usbId){const next=scanChain.then(()=>addCode(code,usbId));scanChain=next.catch(()=>{});return next;}
  async function poll(){
   if(polling||!active)return;polling=true;try{
-   if(draft){const local=draft;void sync().catch(()=>{});const r=await call('job',{id:local.id});if(active&&draft===local&&r?.state==='done')finished(r);else if(r?.state==='processing'){locked=true;draw();}return;}
+   if(draft){const local=draft;void sync().catch(()=>{});const r=await call('job',{id:local.id});if(active&&draft===local&&r?.state==='done')finished(r);else if(active&&draft===local&&r){locked=r.state==='processing';draw();}return;}
    if(current){const id=current.id,r=await call('job',{id});if(!active||current?.id!==id||!r)return;if(r.state==='done'){finished(r);return;}if(r.payload.revision!==current.payload.revision||r.state!==current.state){current=r;locked=r.state==='processing';draw();}return;}
    if(!terminal)await pollMirror();
   }finally{polling=false;}
