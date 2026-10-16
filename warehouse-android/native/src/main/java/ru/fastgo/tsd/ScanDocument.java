@@ -10,7 +10,7 @@ public final class ScanDocument {
   if(doc.getJSONArray("events").length()>=2000)throw new IllegalStateException("Завершите документ на ноутбуке");
   int revision=doc.getInt("revision")+1;doc.put("revision",revision);
   JSONObject e=new JSONObject().put("id",UUID.randomUUID().toString()).put("code",code.trim()).put("revision",revision).put("origin_doc",doc.getString("id")).put("undone",false);
-  if(part!=null)e.put("part_id",part.getString("id")).put("name",part.optString("name")).put("price",part.optDouble("retail_price"));
+  if(part!=null)e.put("part_id",part.getString("id")).put("name",part.optString("name")).put("price",part.optDouble("retail_price",0));
   doc.getJSONArray("events").put(e);
  }
  public static boolean undo(JSONObject doc) throws JSONException {

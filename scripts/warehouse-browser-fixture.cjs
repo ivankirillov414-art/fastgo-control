@@ -15,7 +15,7 @@ function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-466
  case 'inventory_edit':{state.edits.push(p);const old=state.editReceipts.get(p.request_id);if(old){data=old;break;}const x=state.parts.find(x=>x.id===p.part_id);if(x[p.field]!==p.expected){status=409;error='Данные изменились';break;}x[p.field]=p.value;data=structuredClone(x);state.editReceipts.set(p.request_id,data);if(state.failEditResponse){state.failEditResponse=false;return route.abort();}break;}
  case 'queue':data=[...jobs.values()].filter(j=>j.payload.kind==='repair'&&j.state!=='done');break;
  case 'unknown_scans':data=[...jobs.values()].filter(j=>j.payload.kind==='unknown'&&j.state!=='done');break;
- case 'unknown_resolve':{const j=jobs.get(p.id);j.state='done';j.result={part:catalog.parts.find(x=>x.id===p.part_id)};data=j.result;break;}
+ case 'unknown_resolve':{const j=jobs.get(p.id);j.state='done';j.result={part:catalog.find(x=>x.id===p.part_id)};data=j.result;break;}
  case 'live_jobs':data=[...jobs.values()].filter(j=>j.payload.live).reverse();break;
  case 'repair_quote':data=quote;break;
  case 'enqueue_repair':data=jobs.get(p.request_id)||{id:p.request_id,state:'queued',repair:quote,payload:{kind:'repair',repair_id:quote.id,repair:quote,items:[]}};jobs.set(data.id,data);break;
