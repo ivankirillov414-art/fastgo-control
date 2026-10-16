@@ -139,3 +139,30 @@ test('inventory edits preserve permissions and reject malformed or stale values 
 
 test('warehouse uses auth members for catalog and issue without a duplicate native employee',async()=>{const h=await harness();h.snap.sheets['Сотрудники'].rows=[];const c=await h.request('catalog');assert.equal(c.status,200);assert.equal(c.data.staff[0].profile_id,master);const request_id=randomUUID();await h.request('enqueue',{request_id,items:[{part_id:part,quantity:1}]},'terminal');const result=await h.request('checkout',{id:request_id,mode:'master',master_id:master,items:[{part_id:part,unit_price:0}]});assert.equal(result.status,200);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],4);assert.equal(h.snap.sheets['Сотрудники'].rows.length,0);});
 test('warehouse return is atomic, idempotent and owner-only',async()=>{const h=await harness(),request_id=randomUUID();await h.request('enqueue',{request_id,items:[{part_id:part,quantity:2}]},'terminal');await h.request('checkout',{id:request_id,mode:'master',master_id:master,items:[{part_id:part,unit_price:0}]});const p={request_id:randomUUID(),master_id:master,part_id:part,quantity:1};assert.equal((await h.request('master_return',p)).status,200);assert.equal((await h.request('master_return',p)).status,200);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],4);assert.equal((await h.request('holdings')).data[0].quantity,1);h.member.role='seller';assert.equal((await h.request('master_return',{...p,request_id:randomUUID()})).status,403);});
+
+test('native unknown scans are idempotent, station scoped and never enter payment queue',async()=>{
+ const h=await harness(),request_id=randomUUID(),document_id=randomUUID(),payload={request_id,document_id,code:'UNKNOWN-65',kind:'receipt'};
+ const first=await h.request('scan_unknown',payload,'terminal');assert.equal(first.status,200);assert.equal(first.data.payload.code,'UNKNOWN-65');
+ await h.request('scan_unknown',payload,'terminal');assert.equal(h.queue.length,1);
+ assert.equal((await h.request('scan_unknown',{...payload,code:'DIFFERENT'},'terminal')).status,409);
+ assert.equal((await h.request('scan_unknown',payload)).status,403);
+ assert.equal((await h.request('unknown_scans',{},'terminal')).status,403);
+ assert.equal((await h.request('unknown_scans')).data.length,1);assert.equal((await h.request('queue')).data.length,0);
+ assert.equal(h.receipts.length,0);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+ const resolved=await h.request('unknown_resolve',{id:request_id,part_id:part});assert.equal(resolved.status,200);assert.equal(resolved.data.part.id,part);
+ const replay=await h.request('scan_unknown',payload,'terminal');assert.equal(replay.data.state,'done');assert.equal(replay.data.result.part.id,part);
+ assert.equal((await h.request('unknown_scans')).data.length,0);
+ assert.equal(h.receipts.length,0);
+});
+test('undo cancels unknown scan without stock changes and terminal cannot resolve it',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),document_id:randomUUID(),code:'UNKNOWN-UNDO',kind:'sale'};
+ await h.request('scan_unknown',p,'terminal');assert.equal((await h.request('unknown_resolve',{id:p.request_id,part_id:part},'terminal')).status,403);
+ const r=await h.request('scan_unknown',{...p,cancel:true},'terminal');assert.equal(r.data.result.cancelled,true);assert.equal(h.receipts.length,0);
+ const empty=await h.request('scan_unknown',{...p,request_id:randomUUID(),cancel:true},'terminal');assert.equal(empty.status,200);assert.equal(h.queue.length,1);
+});
+test('unknown product creation is owner-only, stock remains zero and retry reuses product',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),document_id:randomUUID(),code:'NEW-UNKNOWN-PART',kind:'receipt'};await h.request('scan_unknown',p,'terminal');
+ h.member.role='seller';assert.equal((await h.request('unknown_resolve',{id:p.request_id,create:{name:'Новая камера',category:'Запчасти',retail_price:400}})).status,403);
+ h.member.role='owner';const first=await h.request('unknown_resolve',{id:p.request_id,create:{name:'Новая камера',category:'Запчасти',retail_price:400}});assert.equal(first.status,200,JSON.stringify(first));assert.ok(first.data.part.id);assert.equal(first.data.part.quantity,0);
+ const replay=await h.request('unknown_resolve',{id:p.request_id,create:{name:'Новая камера',category:'Запчасти',retail_price:400}});assert.equal(replay.data.part.id,first.data.part.id);assert.equal(h.snap.sheets['Товары'].rows.length,2);
+});

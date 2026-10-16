@@ -1,3 +1,4 @@
+import {unknownScan} from './unknown.js';
 import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
@@ -42,6 +43,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
  const activeMaster=async masterId=>{const m=(await db('workshop_members','profile_id=eq.'+masterId+'&active=eq.true&role=eq.mechanic&select=profile_id,name'))[0];if(!m)fail('Выберите активного мастера');return m;};
  const mutate=async(a,params)=>{if(!id(params.request_id))fail('Неверный код операции');const body={...params};delete body.__request_fingerprint;const fingerprint=await digest(JSON.stringify({action:a,params:body}));const old=await g('operation_retry',{request_id:params.request_id,action:a,fingerprint});if(old.status==='committed')return old.result;return g(a,{...params,__request_fingerprint:fingerprint});};
+ const unknown=await unknownScan(action,p,{db,actor,device,stationId,g,mutate});if(unknown!==undefined)return out({data:unknown});
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
  if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
  if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},member:{name:member.name,role:member.role}}});
@@ -62,7 +64,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
   return out({data:{id:p.request_id,state:'queued'}});
  }
  if(action==='enqueue'){if(!id(p.request_id))fail('Неверный код корзины');const payload={items:items(p.items)},old=(await db('workshop_warehouse_queue','id=eq.'+p.request_id))[0];if(old){if(old.terminal_id!==device.id||old.payload.kind==='repair'||JSON.stringify(items(old.payload.items))!==JSON.stringify(payload.items))fail('Код корзины уже использован',409);return out({data:{id:old.id,state:old.state}});}await db('workshop_warehouse_queue','','POST',{id:p.request_id,station_id:stationId,terminal_id:device.id,created_by:user.id,payload});return out({data:{id:p.request_id,state:'queued'}});}
- if(action==='queue'){station();return out({data:(await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=neq.done&order=created_at.asc&limit=100')).filter(x=>!x.payload.live)});}
+ if(action==='queue'){station();return out({data:(await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=neq.done&order=created_at.asc&limit=100')).filter(x=>!x.payload.live&&x.payload.kind!=='unknown')});}
  if(action==='job'){if(!id(p.id))fail('Неверная корзина');const job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId+(device.kind==='terminal'?'&terminal_id=eq.'+device.id:'')))[0]||null;if(job?.payload.kind==='repair'&&job.state!=='done')job.repair=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),job.payload.repair_id,actor);return out({data:job});}
  if(action==='receipt'){if(!['owner','developer','seller'].includes(member.role))fail('Нет права принимать товар',403);if(!String(p.note||'').trim())fail('Укажите поставщика / документ');return out({data:await mutate('stock_receive',{request_id:p.request_id,note:String(p.note).slice(0,500),items:items(p.items)})});}
  if(action==='cash_state'){station();return out({data:await g('cash_state')});}
