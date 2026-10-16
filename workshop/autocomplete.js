@@ -25,7 +25,7 @@ export function searchSelect(select){if(!select||select.dataset.suggestions)retu
 export function installSuggestions(){
  const catalogValues=async field=>{const c=await api('catalog');return [...new Set((c.parts||[]).map(p=>p[field]).filter(Boolean))].map(value=>({value}));};
  const bind=()=>{
-  document.querySelectorAll('#catalog-picker,#part-picker').forEach(searchSelect);
+  document.querySelectorAll('#part-picker').forEach(searchSelect);
   document.querySelectorAll('input:not([data-suggestions])').forEach(input=>{
    const n=input.name||input.dataset.field;if(input.matches(':disabled')||input.closest('.login-card'))return;
    if(['category','model','sku','unit'].includes(n)&&!input.closest('#intake-form')&& !input.closest('#modal-form')?.querySelector('[name=brand]'))suggest(input,()=>catalogValues(n));
