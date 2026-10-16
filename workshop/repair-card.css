@@ -1,0 +1,171 @@
+/* Repair workspace: a photo column and a single working column. */
+.shell:has(.repair-workspace){display:block;min-height:100vh;background:radial-gradient(ellipse at 45% 0,#102539 0,#08131f 65%)}
+.shell:has(.repair-workspace)>.sidebar{display:none}
+.shell:has(.repair-workspace)>.content{margin:0;min-width:0}
+.workspace.repair-workspace{width:100%;max-width:1680px;margin:auto;padding:18px 20px 28px;--line:#31465e;--panel:#14253a;--lime:#18d8e7}
+.repair-card{display:grid;grid-template-columns:minmax(250px,31%) minmax(0,1fr);column-gap:20px;row-gap:14px;align-items:start;border:1px solid #30465b;border-radius:14px;padding:16px;background:#0a1827;box-shadow:0 14px 50px #0003}
+.repair-card-top{display:contents}
+.repair-brand{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:48px;padding:0 8px}
+.repair-brand .brand{font-size:34px;line-height:1;letter-spacing:-1px;color:#f4f8fd}
+.repair-brand .brand span{color:#1bdfed}
+.repair-menu-button{margin-left:auto;background:transparent;border:0;color:#a3b5c9;padding:6px;cursor:pointer}
+.repair-menu-button .ui-icon{width:22px;height:22px}
+.repair-brand .back{font-size:12px;margin:0;color:#9eafc3}
+.repair-workspace .order-detail-head{display:flex;align-items:center;gap:14px;margin:0;min-width:0;min-height:48px;padding:0}
+.repair-workspace .order-detail-head h1{margin:0;font-size:clamp(23px,2.4vw,34px);line-height:1.15;letter-spacing:-.7px;white-space:nowrap}
+.repair-workspace .order-detail-print{order:1;display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:8px 14px;font-size:14px;background:#182c43;color:#edf3fb;border:1px solid #3a526b}
+.repair-workspace .order-detail-status{order:2;margin-left:auto;min-width:0}
+.repair-status-menu{position:relative;z-index:65;font-size:14px}
+.repair-status-menu summary{display:flex;align-items:center;gap:7px;cursor:pointer;list-style:none;padding:10px 12px;border:1px solid #34556a;border-radius:9px;background:linear-gradient(110deg,#103330,#14253a);white-space:nowrap}
+.repair-status-menu summary::-webkit-details-marker{display:none}
+.repair-status-menu summary .badge{padding:0;border:0;background:none;font:inherit;color:inherit}
+.repair-status-menu .ui-icon{width:17px;height:17px}
+.repair-status-dot{background:#23dea4;width:10px;height:10px;border-radius:50%;box-shadow:0 0 10px #23dea43b}
+.repair-status-menu .actions{position:absolute;top:calc(100% + 7px);right:0;min-width:230px;display:grid;padding:8px;background:#14253a;border:1px solid #3b536e;border-radius:10px;box-shadow:0 10px 32px #0008}
+.repair-status-menu .btn{justify-content:flex-start;text-align:left;white-space:normal}
+.repair-visual{min-width:0;position:sticky;top:18px}
+body:has(#desktop-status) .repair-visual{top:65px}
+.repair-workspace .order-vehicle-card{margin:0!important;border:1px solid #3a5067!important;border-radius:12px!important;background:#112238!important;overflow:hidden}
+.repair-workspace #order-vehicle-photo{min-height:300px!important;height:clamp(320px,calc(100dvh - 248px),710px);padding:0;overflow:hidden;background:#0a1420}
+.repair-workspace #order-vehicle-photo>a{display:block;width:100%;height:100%}
+.repair-workspace #order-vehicle-photo img{display:block;width:100%;height:100%;object-fit:contain}
+.repair-workspace #order-vehicle-photo p{padding:28px;text-align:center;line-height:1.5}
+.repair-workspace .order-vehicle-card>div:nth-child(2){padding:10px 12px!important;border-top:1px solid #2d4258}
+.repair-workspace .order-vehicle-card>div:nth-child(2) strong{font-size:14px!important}
+.repair-photo-thumbnails{display:flex;gap:8px;padding:8px;overflow:auto;scrollbar-width:thin}
+.repair-photo-thumbnails[hidden]{display:none}
+.repair-photo-thumbnail{flex:0 0 calc(50% - 4px);max-width:170px;height:94px;overflow:hidden;padding:0;background:#0b1827;color:#91a4bd;border:2px solid transparent;border-radius:7px;cursor:pointer}
+.repair-photo-thumbnail img{width:100%;height:100%;object-fit:cover;display:block}
+.repair-photo-thumbnail[aria-pressed=true]{border-color:#19dce8;box-shadow:0 0 0 1px #19dce837}
+.repair-photo-add{display:block;margin:10px auto 0;font-size:13px;min-height:32px;padding:5px 12px}
+.repair-main{min-width:0;display:flex;flex-direction:column;gap:10px}
+.repair-main>.notice{margin:0}
+.repair-workspace .panel{border:1px solid #314963;border-radius:10px;padding:12px 14px;margin:0;background:linear-gradient(115deg,#152a40,#152338);box-shadow:none}
+.repair-workspace h2{display:flex;align-items:center;gap:10px;font-size:18px;margin:0 0 8px;line-height:1.25}
+.repair-workspace h3{font-size:15px;margin:8px 0;font-weight:600}
+.repair-workspace .ui-icon{width:20px;height:20px;flex-shrink:0}
+.repair-workspace .btn{border-radius:7px;min-height:38px}
+#repair-client-panel>.actions{margin-bottom:6px!important}
+#repair-client-panel .info{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+#repair-client-panel .info p{margin:0;overflow-wrap:anywhere}
+.repair-client-identity p:first-child{font-size:21px;font-weight:650;line-height:1.25}
+.repair-client-identity p+p{font-size:14px;color:#b6c9dd;margin-top:5px!important}
+.repair-client-equipment{border-left:1px solid #314963;padding-left:20px;display:flex;align-items:center;gap:12px;min-width:0}
+.repair-client-equipment .ui-icon{width:30px;height:30px}
+.repair-client-equipment p{font-size:18px;font-weight:500}
+#repair-client-panel #edit-intake{min-height:32px;padding:6px 12px;font-size:13px}
+.repair-workspace #order-form>fieldset{display:flex;flex-direction:column;gap:10px}
+.repair-workspace #repair-progress-panel h2{margin-bottom:10px}
+.repair-workspace .repair-flow-costs{margin:0;position:relative}
+.repair-workspace .toolbar{margin:0 0 8px;padding:0;border:0;background:none;display:flex;flex-wrap:wrap;gap:10px}
+.repair-workspace .toolbar input,.repair-workspace .toolbar select{background:#102239;color:#f0f6fd;border:1px solid #3c5573;border-radius:7px;font-size:14px;min-height:38px;padding:8px 11px;line-height:20px}
+.repair-workspace .repair-work-search{flex:1;min-width:180px}
+.repair-workspace .toolbar .btn{padding:8px 14px;font-size:13px;background:#1b3048;color:#edf3fb;border:1px solid #3b5571}
+.repair-workspace .cost-row,.repair-workspace .row-labels{display:grid;grid-template-columns:28px minmax(0,1fr) 58px 100px 34px;gap:6px;align-items:center}
+.repair-workspace .row-labels{margin:7px 0 0;padding:7px 6px;background:#102238;color:#99aec6;border:1px solid #2d435b;border-bottom:0;border-radius:7px 7px 0 0;font-size:12px}
+.repair-workspace #work-rows,.repair-workspace #part-rows{counter-reset:repair-row}
+.repair-workspace .cost-row{counter-increment:repair-row;margin:0;padding:4px 6px;border:1px solid #2d435b;border-top:0;position:relative}
+.repair-workspace .cost-row::before{content:counter(repair-row);color:#9fb2ca;font-size:13px;text-align:center}
+.repair-workspace .cost-row:last-child{border-radius:0 0 7px 7px}
+.repair-workspace .cost-row input{background:transparent;border:1px solid transparent;min-width:0;min-height:34px;padding:5px;font-size:14px;border-radius:4px;color:#edf4ff;box-shadow:none}
+.repair-workspace .cost-row input:hover,.repair-workspace .cost-row input:focus{border-color:#476581;background:#102239}
+.repair-workspace .cost-row .btn{min-height:32px;padding:5px;background:transparent;border:0;color:#b3c4d9}
+.repair-workspace .cost-row .btn:hover{color:#ff8989;background:#4f202a}
+.repair-workspace .cost-row .ui-icon{width:16px;height:16px}
+.repair-workspace .cost-row .fg-suggestions{left:34px;top:38px;margin:0;width:calc(100% - 40px);max-width:600px}
+.repair-workspace .ops-templates{position:absolute;right:0;top:0;z-index:58;margin:0;font-size:12px;color:#9ab2cc}
+.repair-workspace .ops-templates>summary{padding:0;line-height:22px;text-align:right}
+.repair-workspace .ops-templates>.actions{position:absolute;right:0;top:22px;width:270px;margin:0;padding:10px;border:1px solid #3b5571;border-radius:8px;background:#14253a;box-shadow:0 10px 30px #0007}
+.repair-parts-section h3{margin-top:12px}
+.repair-parts-section:not(:has(.cost-row))>.row-labels,.repair-parts-section #part-rows>p:only-child{display:none}
+.repair-part-search{position:relative;flex:1;min-width:190px}
+.repair-part-search input{width:100%;min-width:0}
+.repair-part-search .fg-suggestions{left:0;top:calc(100% + 4px);width:100%;max-height:220px}
+.repair-part-tools{position:relative}
+.repair-part-tools>summary{display:flex;align-items:center;list-style:none;cursor:pointer;white-space:nowrap}
+.repair-part-tools>summary::-webkit-details-marker{display:none}
+.repair-part-tool-buttons{position:absolute;z-index:60;right:0;top:calc(100% + 7px);min-width:220px;padding:8px;display:grid;gap:7px;background:#172b42;border:1px solid #405b77;border-radius:8px;box-shadow:0 10px 30px #0007}
+.repair-part-help{margin-top:8px;font-size:12px;color:#9dafc5}
+.repair-part-help summary{cursor:pointer}
+.repair-part-help p{margin:8px 0 0;line-height:1.5}
+.repair-payment-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:stretch}
+.repair-payment-summary .summary-total{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;background:#1b3049;border:1px solid #324d6b;border-radius:7px;padding:8px 10px;margin:0;font-size:13px;color:#bed0e3;min-width:0}
+.repair-payment-summary .summary-total strong,.repair-payment-summary .summary-total b{color:#f5f9ff;font-size:23px;line-height:1.15;overflow-wrap:anywhere}
+.repair-payment-summary .summary-total:nth-child(3){background:#123f50;border-color:#1d9bae}
+.repair-payment-summary .summary-total:nth-child(3) b{color:#2ce6ee}
+.repair-payment-summary>.actions{margin:0!important;display:flex;align-items:center;justify-content:center}
+.repair-payment-summary #payment{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;font-size:13px;background:#1c314b;border:1px solid #3c5675;color:#f1f6fe;white-space:nowrap}
+.repair-payment-options{margin-top:10px;font-size:12px;color:#9dafc5}
+.repair-payment-options>summary{cursor:pointer}
+.repair-payment-options[open]{padding-top:6px}
+.repair-payment-options .field{margin:12px 0}
+.repair-payment-options label,.repair-payment-options .muted{font-size:14px}
+.repair-details.panel{padding:0}
+.repair-details>summary{display:flex;gap:10px;align-items:center;list-style:none;cursor:pointer;font-size:15px;font-weight:600;padding:12px 16px}
+.repair-details>summary::-webkit-details-marker{display:none}
+.repair-details>summary .ui-icon:last-child{margin-left:auto}
+.repair-details[open]>summary .ui-icon:last-child{transform:rotate(180deg)}
+.repair-details-body{padding:4px 16px 16px;border-top:1px solid #314963}
+.repair-details-body .repair-details-section{margin-top:16px}
+.repair-details-body .panel{padding:14px;background:#102238}
+.repair-details-body .field{margin:14px 0}
+.repair-workspace .repair-card-save{position:sticky;bottom:12px;z-index:55;margin:0;padding:0;border:0;border-radius:8px;background:#0a1827}
+.repair-workspace .repair-save-row{display:block}
+.repair-workspace .repair-save-row>span{display:none}
+.repair-workspace #repair-save{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(95deg,#16d9e9,#21e4eb);color:#062535;border:1px solid #3aedf2;border-radius:8px;font-size:16px;min-height:44px;font-weight:700}
+.repair-workspace #repair-save:hover{filter:brightness(1.08)}
+.repair-workspace #repair-save-error:not(:empty){padding:10px 14px;border:1px solid #a16c60;border-radius:8px;background:#38272a;margin-bottom:8px}
+.repair-workspace #order-error:empty{display:none}
+@media(max-width:1150px){
+ .workspace.repair-workspace{padding:12px}
+ .repair-card{padding:12px;column-gap:14px;grid-template-columns:minmax(230px,29%) minmax(0,1fr)}
+ .repair-workspace .order-detail-head{gap:9px;flex-wrap:wrap}
+ .repair-workspace .order-detail-head h1{font-size:25px}
+ .repair-workspace .order-detail-status{margin-left:auto}
+ .repair-payment-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .repair-payment-summary>.actions{grid-column:1/-1;justify-content:flex-end}
+ .repair-workspace .panel{padding:12px}
+ .repair-details.panel{padding:0}
+}
+@media(max-width:760px){
+ .workspace.repair-workspace{padding:10px 10px 100px}
+ .repair-card{display:flex;flex-direction:column;gap:12px;padding:10px}
+ .repair-card-top{display:flex;flex-direction:column;gap:14px;width:100%}
+ .repair-brand{padding:0;min-height:38px}
+ .repair-brand .brand{font-size:28px}
+ .repair-workspace .order-detail-head{width:100%;gap:10px}
+ .repair-workspace .order-detail-head h1{font-size:24px;flex:1}
+ .repair-workspace .order-detail-print{font-size:12px;padding:7px 10px}
+ .repair-workspace .order-detail-status{flex-basis:100%;margin:0}
+ .repair-status-menu summary{justify-content:flex-start;width:100%;min-height:42px}
+ .repair-status-menu summary .ui-icon{margin-left:auto}
+ .repair-status-menu .actions{left:0;right:0;min-width:0}
+ .repair-visual{position:static;width:100%}
+ .repair-workspace #order-vehicle-photo{height:280px;min-height:180px!important}
+ .repair-photo-thumbnail{height:70px;flex-basis:90px}
+ .repair-photo-add{margin-top:5px}
+ .repair-main{width:100%}
+ .repair-workspace .panel{padding:12px 10px}
+ #repair-client-panel .info{grid-template-columns:1fr;gap:12px}
+ .repair-client-equipment{padding:10px 0 0;border-left:0;border-top:1px solid #314963}
+ .repair-client-identity p:first-child{font-size:19px}
+ .repair-client-equipment p{font-size:16px}
+ .repair-workspace #repair-progress-panel .repair-work-search,.repair-workspace .repair-part-search{flex-basis:100%;min-width:0}
+ .repair-workspace .toolbar .btn{width:auto;flex:1;min-width:0}
+ .repair-workspace .cost-row,.repair-workspace .row-labels{grid-template-columns:18px minmax(0,1fr) 39px 66px 26px;gap:3px;padding-left:3px;padding-right:3px}
+ .repair-workspace .cost-row input{font-size:13px;padding:4px 1px}
+ .repair-workspace .row-labels{font-size:10px}
+ .repair-workspace .cost-row .btn{padding:4px;min-height:34px}
+ .repair-part-tools{width:100%}
+ .repair-part-tools>summary{justify-content:center}
+ .repair-part-tool-buttons{left:0;right:0}
+ .repair-payment-summary{gap:5px}
+ .repair-payment-summary .summary-total{padding:9px 7px;font-size:11px}
+ .repair-payment-summary .summary-total b,.repair-payment-summary .summary-total strong{font-size:18px}
+ .repair-payment-summary>.actions{justify-content:stretch}
+ .repair-payment-summary #payment{width:100%;justify-content:center}
+ .repair-details.panel{padding:0}
+ .repair-details>summary{font-size:14px;padding:12px 10px}
+ .repair-details-body{padding:4px 10px 12px}
+ .repair-workspace .repair-card-save{bottom:82px}
+}

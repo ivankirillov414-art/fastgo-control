@@ -12,10 +12,10 @@ const server=createServer((req,res)=>{
  const origin='http://127.0.0.1:'+server.address().port;
  const browser=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,args:['--no-sandbox']}:{});
  fs.mkdirSync('browser-results',{recursive:true});
- try{for(const viewport of [{width:1366,height:768},{width:390,height:844}]){
+ try{for(const viewport of [{width:1366,height:768},{width:1280,height:720},{width:390,height:844}]){
   const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[],updates=[];
   let failUpdate=false,permission={can_mark_ready:true,can_issue:true,can_cancel:true};
-  let record={id:'progress-fixture',repair_number:16,revision:1,status:'accepted',brand:'Kugoo',model:'M4',last_name:'Тест',first_name:'Клиент',phone:'+79990000000',created_at:'2026-10-16',promised_date:'2026-10-20',works:[{name:'Назначенная стоимость ремонта',quantity:1,price:500}],parts:[],approved_amount:null,diagnostics_notes:'',paid_amount:0,total_amount:500,fault_photo_paths:[],signed_document_paths:[]};
+  let record={id:'progress-fixture',repair_number:16,revision:1,status:'accepted',brand:'Kugoo',model:'M4',last_name:'Тест',first_name:'Клиент',phone:'+79990000000',created_at:'2026-10-16',promised_date:'2026-10-20',works:[{name:'Назначенная стоимость ремонта',quantity:1,price:500}],parts:[],approved_amount:null,diagnostics_notes:'',paid_amount:0,total_amount:500,fault_photo_paths:['photo-one.jpg','photo-two.jpg'],signed_document_paths:[]};
   await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'progress-fixture',user_id:'progress-fixture',expires_at:4102444800})));
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',async route=>{
@@ -27,6 +27,7 @@ const server=createServer((req,res)=>{
    if(action==='request_access')data={active:true};
    if(action==='me')data={role:'owner',name:'Тест',profile_id:'progress-fixture',active:true,status_permissions:permission};
    if(action==='get')data={record,events:[],payments:[],linked:[]};
+   if(action==='signed_url')data={url:'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="'+(params.path==='photo-one.jpg'?'#24455c':'#416a73')+'"/><text x="80" y="300" fill="white">'+params.path+'</text></svg>')};
    if(action==='catalog')data={services:[{id:'tube',title:'Замена камеры',labor_price:600,active:true},{id:'brake',title:'Настройка тормозов',labor_price:400,active:true}],parts:[],staff:[],categories:[]};
    if(action==='list')data={items:[],count:0};
    if(action==='update'){
@@ -42,9 +43,9 @@ const server=createServer((req,res)=>{
   });
   const open=async()=>{
    await page.goto(origin+'/workshop.html#order?kind=repair&id=progress-fixture');
-   await page.locator('#repair-progress-panel .compact-panel-trigger').click();
    await page.locator('#work-search').waitFor();
   };
+  const transition=async name=>{await page.locator('.repair-status-menu > summary').click();await page.getByRole('button',{name,exact:true}).click();};
   const saved=async action=>{
    const form=await page.locator('#order-form').elementHandle(),count=updates.length;
    await action();await page.waitForFunction(form=>!form.isConnected,form);
@@ -54,6 +55,21 @@ const server=createServer((req,res)=>{
    await open();
    assert.equal(await page.locator('#f-status,#f-promised_date,#catalog-picker').count(),0);
    assert.ok(await page.locator('#repair-save').isVisible());
+   await page.locator('.repair-photo-thumbnail img').first().waitFor();
+   await page.getByRole('button',{name:'Фото 2',exact:true}).click();
+   assert.match(await page.locator('#order-vehicle-photo img').getAttribute('src'),/photo-two/);
+   await page.locator('#payment').click();await page.locator('#f-amount').waitFor();assert.equal(updates.length,0);
+   await page.locator('#dialog [aria-label="Закрыть"]').click();
+   await page.locator('#edit-intake').click();await page.locator('#f-last_name').waitFor();await page.locator('#dialog [aria-label="Закрыть"]').click();
+   assert.equal(await page.locator('#repair-save').evaluate(x=>x.form.id),'order-form');
+   await page.locator('.repair-menu-button').click();await page.locator('#dialog a[href="#stock"]').waitFor();await page.locator('#dialog [aria-label="Закрыть"]').click();
+   await page.locator('#repair-details-panel > summary').click();
+   assert.equal(await page.locator('#approve').evaluate(x=>x.form.id),'order-form');
+   await page.locator('#refresh-photos').click();await page.waitForFunction(()=>document.querySelector('#order-vehicle-photo img')?.src.includes('photo-two'));
+   await page.locator('.repair-payment-options > summary').click();
+   await page.locator('#f-approval_note').fill('Проверка сохранения подробной информации');assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),true);
+   await page.locator('#repair-details-panel > summary').click();await page.evaluate(()=>window.scrollTo(0,0));
+   await page.screenshot({path:`browser-results/repair-card-initial-${viewport.width}.png`});
    await page.locator('#work-search').fill('замена');
    await page.getByRole('option',{name:/Замена камеры/}).waitFor();
    await page.locator('#work-search').press('ArrowDown');await page.locator('#work-search').press('Enter');
@@ -67,21 +83,21 @@ const server=createServer((req,res)=>{
    await saved(()=>page.locator('#repair-save').click());
    assert.deepEqual(updates.at(-1).parts,[]);assert.equal(updates.at(-1).status,'accepted');assert.equal(Object.hasOwn(updates.at(-1),'promised_date'),false);
    assert.equal(record.promised_date,'2026-10-20');
-   // Saving keeps the dialog open and refreshes actions from the new record.
-   await saved(()=>page.getByRole('button',{name:'Начать диагностику',exact:true}).click());
-   assert.equal(record.status,'diagnostics');assert.equal(await page.getByRole('button',{name:'Начать ремонт',exact:true}).count(),1);
-   await page.getByRole('button',{name:'Начать ремонт',exact:true}).click();
+   // Saving refreshes the inline card and its permitted transitions.
+   await saved(()=>transition('Начать диагностику'));
+   assert.equal(record.status,'diagnostics');assert.equal(await page.locator('[data-repair-status=repair]').count(),1);
+   await transition('Начать ремонт');
    await page.locator('#f-flow_diagnostics').fill('Прокол камеры; клиент принёс свою камеру');
    await page.locator('[name="flow_approved"]').check();await page.locator('#f-flow_approval_note').fill('Согласовано при приёмке');
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'repair');assert.deepEqual(record.parts,[]);
-   await page.getByRole('button',{name:'Ремонт готов',exact:true}).click();
+   await transition('Ремонт готов');
    await page.locator('[name="flow_quality"]').check();
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'ready');assert.deepEqual(record.parts,[]);
-   assert.equal(await page.getByRole('button',{name:'Выдать клиенту',exact:true}).count(),1);
+   assert.equal(await page.locator('[data-repair-status=issued]').count(),1);
    // An optional customer part has zero price and no inventory reference.
-   await page.locator('#customer-part').click();
+   await page.locator('.repair-part-tools > summary').click();await page.locator('#customer-part').click();
    await page.locator('#part-rows [data-prop="name"]').fill('Камера клиента');
    await saved(()=>page.locator('#repair-save').click());
    assert.deepEqual(record.parts,[{name:'Камера клиента',price:0,quantity:1}]);
@@ -97,21 +113,21 @@ const server=createServer((req,res)=>{
    assert.ok(await page.locator('#repair-save').isEnabled());
    // No horizontal overflow; sticky save remains in view at both scroll extremes.
    for(const bottom of [false,true]){
-    await page.locator('#repair-progress-panel .is-open').evaluate((box,bottom)=>box.scrollTop=bottom?box.scrollHeight:0,bottom);
+    await page.evaluate(bottom=>window.scrollTo(0,bottom?document.documentElement.scrollHeight:0),bottom);
     assert.ok(await page.locator('#repair-save').isVisible());
     const box=await page.locator('#repair-save').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=viewport.height,JSON.stringify(box));
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    }
    await page.screenshot({path:`browser-results/repair-progress-saved-${viewport.width}.png`});
    // Fresh roles still control transitions, and closed records stay read-only.
-   record.status='repair';permission={};await page.reload();await page.locator('#repair-progress-panel .compact-panel-trigger').click();
+   record.status='repair';permission={};await page.reload();await page.locator('#repair-progress-panel').waitFor();
    assert.equal(await page.locator('[data-repair-status="ready"],[data-repair-status="cancelled"]').count(),0);
-   record.status='issued';await page.reload();await page.locator('#repair-progress-panel .compact-panel-trigger').waitFor();
+   record.status='issued';await page.reload();await page.locator('#repair-progress-panel').waitFor();
    assert.equal(await page.locator('#repair-save,[data-repair-status]').count(),0);assert.ok(await page.locator('#add-work').isDisabled());
    record.status='stored';await page.goto(origin+'/workshop.html#order?kind=storage&id=progress-fixture');
    await page.getByRole('button',{name:'Хранение и выдача'}).click();
    assert.ok(await page.locator('#f-status').isVisible());assert.ok(await page.locator('#f-planned_return_date').isVisible());
-   assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, in-dialog saving, diagnostics → repair → ready without parts, customer parts, price approval, conflict, permissions and storage`);
-  }finally{await context.close();}
+   assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, inline layout and saving, diagnostics → repair → ready without parts, customer parts, price approval, conflict, permissions and storage`);
+  }catch(error){console.error('PAGE',await page.locator('body').innerText(),errors);throw error;}finally{await context.close();}
  }}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

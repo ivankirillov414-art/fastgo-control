@@ -8,6 +8,8 @@ store.close();
 const wrapper=path.join(data,'launch.cjs');fs.writeFileSync(wrapper,`const {app,net,safeStorage}=require('electron');const fs=require('node:fs'),path=require('node:path');app.setPath('userData',${JSON.stringify(data)});net.isOnline=()=>false;app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'credentials.bin'),safeStorage.encryptString(JSON.stringify({access_token:'offline-smoke-token',refresh_token:'offline-smoke-refresh',user_id:${JSON.stringify(actor)},expires_at:4102444800}))));require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 async function launch(){const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});const page=await app.firstWindow();page.on('pageerror',e=>console.error('Renderer:',e.message));await page.locator('#desktop-state-text').waitFor({state:'attached'});return {app,page};}
 (async()=>{let opened=await launch();try{
+ const chrome=await opened.app.evaluate(({Menu,BrowserWindow})=>({menu:Menu.getApplicationMenu(),menuVisible:BrowserWindow.getAllWindows()[0].isMenuBarVisible()}));assert.equal(chrome.menu,null);assert.equal(chrome.menuVisible,false);
+ if(process.platform==='win32'){assert.equal(await opened.page.evaluate(()=>navigator.windowControlsOverlay.visible),true);const rect=await opened.page.evaluate(()=>{const r=navigator.windowControlsOverlay.getTitlebarAreaRect();const bar=document.querySelector('#desktop-status').getBoundingClientRect();return {width:r.width,barRight:bar.right};});assert.ok(rect.barRight<=rect.width+1);}
  await opened.page.waitForFunction(()=>document.querySelector('#desktop-state-text')?.textContent.includes('Работа без сети'));
  await opened.page.evaluate(()=>location.hash='#new?kind=repair');
  await opened.page.locator('#f-last_name').fill('Клиент');await opened.page.locator('#f-first_name').fill('Тест');await opened.page.locator('#f-phone').fill('79999999999');await opened.page.locator('#f-equipment_name').fill('Kugoo Max Speed');await opened.page.locator('#f-intake_amount').fill('500');
@@ -23,16 +25,17 @@ async function launch(){const app=await _electron.launch({executablePath:require
  const state=await opened.page.evaluate(()=>window.fastgoDesktop.state());assert.equal(state.records,1);assert.equal(state.pending,2);
  // The bundled Windows interface can save and advance an offline repair without stock parts.
  await opened.page.locator('.order-no').first().click();
- await opened.page.locator('#repair-progress-panel .compact-panel-trigger').click();
+ await opened.page.locator('#repair-progress-panel').waitFor();
  assert.equal(await opened.page.locator('#f-status,#f-promised_date,#catalog-picker').count(),0);
+ const transition=async name=>{await opened.page.locator('.repair-status-menu > summary').click();await opened.page.getByRole('button',{name,exact:true}).click();};
  const save=async action=>{const form=await opened.page.locator('#order-form').elementHandle();await action();await opened.page.waitForFunction(form=>!form.isConnected,form);await opened.page.locator('#repair-save').waitFor();};
  await save(()=>opened.page.locator('#repair-save').click());
- await save(()=>opened.page.getByRole('button',{name:'Начать диагностику',exact:true}).click());
- await opened.page.getByRole('button',{name:'Начать ремонт',exact:true}).click();
+ await save(()=>transition('Начать диагностику'));
+ await transition('Начать ремонт');
  await opened.page.locator('#f-flow_diagnostics').fill('Прокол камеры, деталь клиента');
  await opened.page.locator('[name="flow_approved"]').check();await opened.page.locator('#f-flow_approval_note').fill('Согласовано');
  await save(()=>opened.page.locator('#modal-form button[type="submit"]').click());
- await opened.page.getByRole('button',{name:'Ремонт готов',exact:true}).click();await opened.page.locator('[name="flow_quality"]').check();
+ await transition('Ремонт готов');await opened.page.locator('[name="flow_quality"]').check();
  await save(()=>opened.page.locator('#modal-form button[type="submit"]').click());
  assert.equal(await opened.page.locator('#part-rows .cost-row').count(),0);
  assert.match(await opened.page.locator('.order-detail-status').innerText(),/Готов/);
