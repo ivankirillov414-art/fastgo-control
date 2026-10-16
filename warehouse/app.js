@@ -17,7 +17,7 @@ const call=(action,p={})=>api(action,{device_id:device?.id,device_token:device?.
 function message(v,error=false){$('message').textContent=v;$('message').className=error?'error':'';}
 async function run(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(x=>x.disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;document.querySelectorAll('button').forEach(x=>x.disabled=false);}}
 for(const e of ['keydown','pointerdown','input','change'])window.addEventListener(e,()=>lastActivity=Date.now(),true);
-window.warehouseUpdateSafe=(immediate=false)=>!busy&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>120000);
+window.warehouseUpdateSafe=(immediate=false)=>!busy&&screen==='home'&&!job&&(terminal||!draft&&!live.hasDraft())&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>120000);
 window.addEventListener('beforeunload',e=>{if(busy||screen==='basket'||screen==='checkout'||screen==='live'||screen==='repair'){e.preventDefault();e.returnValue='';}});
 function shell(html){document.body.dataset.screen=screen;if(stopUSB){stopUSB();stopUSB=null;}if(stopScanner){stopScanner();stopScanner=null;}$('app').innerHTML=html;message('');if(!terminal)bindNav();}
 function nav(){if(!terminal)return '';return '<div class="subnav"><button id="back">← Главное</button>'+(!terminal?'<button id="inventory">Остатки</button><button id="shift">Открыть смену</button>'+(['owner','developer'].includes(memberRole)?'<button id="master-stock">Запчасти на мастерах</button>':'')+'':'')+'</div>';}
@@ -90,7 +90,7 @@ if($('terminal-help'))$('terminal-help').onclick=e=>{if(e.target!==e.currentTarg
 $('logout').onclick=()=>run(async()=>{if((draft||job)&&!confirm('Документ сохранён. Выйти?'))return;await logout();device=null;parts=[];staff=[];draft=null;job=null;signIn();});setInterval(()=>void poll(),1000);window.addEventListener('online',()=>{if(terminal&&screen==='connection')void run(start);else void poll();});void start();
 
 // Manual updates bypass idle delays, never an open document or pending scan.
-const webSafe=(immediate=false)=>!busy&&!polling&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>15000);
+const webSafe=(immediate=false)=>!busy&&!polling&&screen==='home'&&!job&&(terminal||!draft&&!live.hasDraft())&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>15000);
 const webUpdater=startWebUpdates({canApply:async immediate=>{
  if(!webSafe(immediate))return false;
  if(window.warehouseDesktop?.desktopStatus){const state=await window.warehouseDesktop.desktopStatus();if(state.usb?.pending||state.usb?.target||['downloading','ready','preparing','installing'].includes(state.update?.status))return false;}
