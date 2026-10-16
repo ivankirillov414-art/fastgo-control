@@ -1,73 +1,4 @@
 (() => {
-  // warehouse/usb-client.js
-  function bindUSBInbox({ key: key2, label, container, enabled, add, error, bridge = window.warehouseDesktop }) {
-    if (!(bridge == null ? void 0 : bridge.usbTarget)) {
-      container.hidden = true;
-      return () => {
-      };
-    }
-    let stopped = false, working = false, rendered = "";
-    const live = () => !stopped && container.isConnected && enabled();
-    function render(unassigned, blocked) {
-      const signature = JSON.stringify([unassigned, blocked == null ? void 0 : blocked.id]);
-      if (signature === rendered) return;
-      rendered = signature;
-      container.replaceChildren();
-      const caption = document.createElement("span");
-      caption.textContent = blocked ? "USB: \u043A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u2014 " + blocked.code : "USB-\u0441\u043A\u0430\u043D\u0435\u0440: \u0433\u043E\u0442\u043E\u0432 \u043A \u043F\u0440\u0438\u0451\u043C\u0443";
-      container.append(caption);
-      const button = (text, action) => {
-        const b = document.createElement("button");
-        b.textContent = text;
-        b.onclick = async () => {
-          b.disabled = true;
-          try {
-            await action();
-          } catch (e) {
-            error(e.message);
-          } finally {
-            b.disabled = false;
-          }
-        };
-        container.append(b);
-      };
-      if (unassigned) button("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043A\u0430\u043D\u044B (" + unassigned + ")", () => bridge.usbClaim(key2));
-      if (blocked) button("\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0441\u043A\u0430\u043D", () => bridge.usbAck(key2, [blocked.id]));
-    }
-    async function poll2() {
-      if (!live() || working) return;
-      working = true;
-      try {
-        await bridge.usbTarget({ key: key2, label });
-        if (!live()) return;
-        const batch = await bridge.usbBatch(key2);
-        if (!live()) return;
-        let blocked;
-        for (const item of batch.items) {
-          if (!live()) break;
-          if (!add(item)) {
-            blocked = item;
-            break;
-          }
-          await bridge.usbAck(key2, [item.id]);
-        }
-        if (live()) render(batch.unassigned, blocked);
-      } catch (e) {
-        if (live()) error(e.message);
-      } finally {
-        working = false;
-      }
-    }
-    void poll2();
-    const timer = setInterval(poll2, 400);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      void bridge.usbTarget(null).catch(() => {
-      });
-    };
-  }
-
   // warehouse/scanner.js
   function bindScanner(input, form, enabled) {
     let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
@@ -78,17 +9,17 @@
       lastAt = 0;
       burst = 0;
     };
-    const live = () => !disposed && input.isConnected && enabled();
+    const live2 = () => !disposed && input.isConnected && enabled();
     const focus = () => {
-      if (live() && (!editable(document.activeElement) || document.activeElement === input)) input.focus();
+      if (live2() && (!editable(document.activeElement) || document.activeElement === input)) input.focus();
     };
     const submit = () => {
       reset();
-      if (live() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      if (live2() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     };
     const onInput = (e) => {
       clearTimeout(timer);
-      if (!live() || e.isComposing) return reset();
+      if (!live2() || e.isComposing) return reset();
       const value = input.value, now = performance.now();
       const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
       if (added <= 0) {
@@ -100,11 +31,11 @@
       previous = value;
       lastAt = now;
       if (added >= 4 || burst >= 4) timer = setTimeout(() => {
-        if (live() && document.activeElement === input && input.value === value) submit();
+        if (live2() && document.activeElement === input && input.value === value) submit();
       }, 200);
     };
     const onKey = (e) => {
-      if (!live() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!live2() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
       if (e.target === input && (e.key === "Enter" || e.key === "Tab") && input.value.trim()) {
         e.preventDefault();
         submit();
@@ -202,6 +133,336 @@
     return parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code);
   }
 
+  // warehouse/live-basket.js
+  function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh }) {
+    let draft2 = null, stop = null, timer = null, syncing = null, active = false, mirrorTimer = null, mirror = null, locked = false;
+    const $2 = (id) => document.getElementById(id);
+    const storeKey = (kind) => "live:" + kind;
+    function cleanup() {
+      active = false;
+      if (stop) stop();
+      stop = null;
+      clearTimeout(timer);
+      clearInterval(mirrorTimer);
+      mirrorTimer = null;
+    }
+    function cache() {
+      save3(storeKey(draft2.kind), draft2);
+    }
+    function changed() {
+      draft2.revision++;
+      cache();
+      schedule();
+    }
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(() => void sync().catch((e) => message2(e.message, true)), 150);
+    }
+    async function sync() {
+      if (syncing) {
+        await syncing;
+        if (draft2 && draft2.acked < draft2.revision) return sync();
+        return;
+      }
+      if (!draft2 || locked || draft2.acked >= draft2.revision) return;
+      const current = draft2, body = JSON.parse(JSON.stringify(current));
+      syncing = call2("draft_sync", { request_id: body.id, kind: body.kind, revision: body.revision, items: body.items, note: body.note || "" }).then((r) => {
+        if (r.state !== "queued") throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0443\u0436\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D \u0438\u043B\u0438 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0435\u0433\u043E \u0437\u0430\u043D\u043E\u0432\u043E.");
+        current.acked = Math.max(current.acked || 0, r.payload.revision);
+        save3(storeKey(current.kind), current);
+        if (active && $2("live-sync")) $2("live-sync").textContent = "\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A";
+      }).catch((e) => {
+        if (active && $2("live-sync")) $2("live-sync").textContent = "\u041D\u0435\u0442 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438 \xB7 \u0441\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B";
+        throw e;
+      }).finally(() => syncing = null);
+      await syncing;
+      if (draft2 === current && current.acked < current.revision) return sync();
+    }
+    function product(x) {
+      return parts2().find((p) => p.id === x.part_id);
+    }
+    function total() {
+      return draft2.items.reduce((sum, x) => {
+        var _a2;
+        return sum + x.quantity * (x.custom_price ? Number(x.unit_price) : Number(((_a2 = product(x)) == null ? void 0 : _a2.retail_price) || 0));
+      }, 0);
+    }
+    function rows(value, editable) {
+      return value.items.map((x) => {
+        const p = product(x);
+        return '<div class="scan-product"><strong>' + esc((p == null ? void 0 : p.name) || x.part_id) + "</strong><small>" + esc((p == null ? void 0 : p.barcode) || (p == null ? void 0 : p.sku) || "") + '</small><div class="scan-product-line"><span>' + money(x.custom_price ? x.unit_price : p == null ? void 0 : p.retail_price) + "</span>" + (editable ? '<input data-live-qty="' + x.part_id + '" type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E"><button data-live-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button>' : "<b>" + x.quantity + " \u0448\u0442.</b>") + "</div>" + (editable && value.kind === "sale" ? '<label class="own-price"><input type="checkbox" data-own="' + x.part_id + '" ' + (x.custom_price ? "checked" : "") + '>\u0421\u0432\u043E\u044F \u0446\u0435\u043D\u0430</label><input data-own-value="' + x.part_id + '" type="number" min="0" step="0.01" inputmode="decimal" aria-label="\u0421\u0432\u043E\u044F \u0446\u0435\u043D\u0430" value="' + esc(x.custom_price ? x.unit_price : (p == null ? void 0 : p.retail_price) || 0) + '" ' + (x.custom_price ? "" : "hidden") + ">" : "") + "</div>";
+      }).join("");
+    }
+    function payment() {
+      return '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u041A\u0430\u0440\u0442\u0430"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + "</fieldset>";
+    }
+    function draw() {
+      $2("live-items").innerHTML = rows(draft2, true) || '<p class="scan-empty">\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \u0441\u043A\u0430\u043D\u0435\u0440\u0430 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435</p>';
+      $2("live-total").textContent = money(total());
+      $2("live-payment").hidden = draft2.kind !== "sale" || !draft2.items.length;
+      $2("live-submit").hidden = !draft2.items.length;
+      $2("live-items").querySelectorAll("input,button").forEach((el) => el.disabled = locked);
+      $2("live-items").querySelectorAll("[data-live-qty]").forEach((el) => el.onchange = () => {
+        const n = Number(el.value);
+        if (!Number.isInteger(n) || n < 1 || n > 1e3) {
+          message2("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000", true);
+          return;
+        }
+        draft2.items.find((x) => x.part_id === el.dataset.liveQty).quantity = n;
+        changed();
+        $2("live-total").textContent = money(total());
+      });
+      $2("live-items").querySelectorAll("[data-live-remove]").forEach((el) => el.onclick = () => {
+        if (locked) return;
+        draft2.items = draft2.items.filter((x) => x.part_id !== el.dataset.liveRemove);
+        changed();
+        draw();
+        $2("live-code").focus();
+      });
+      $2("live-items").querySelectorAll("[data-own]").forEach((el) => el.onchange = () => {
+        var _a2;
+        const item = draft2.items.find((x) => x.part_id === el.dataset.own);
+        item.custom_price = el.checked;
+        if (el.checked) item.unit_price = Number(((_a2 = product(item)) == null ? void 0 : _a2.retail_price) || 0);
+        else delete item.unit_price;
+        changed();
+        draw();
+        if (item.custom_price) $2("live-items").querySelector('[data-own-value="' + item.part_id + '"]').focus();
+      });
+      $2("live-items").querySelectorAll("[data-own-value]").forEach((el) => el.oninput = () => {
+        const n = Number(el.value);
+        if (el.value === "" || !Number.isFinite(n) || n < 0 || Math.abs(n * 100 - Math.round(n * 100)) > 1e-5) {
+          message2("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0446\u0435\u043D\u0443 \u0432 \u0440\u0443\u0431\u043B\u044F\u0445 \u0438 \u043A\u043E\u043F\u0435\u0439\u043A\u0430\u0445", true);
+          return;
+        }
+        draft2.items.find((x) => x.part_id === el.dataset.ownValue).unit_price = n;
+        changed();
+        $2("live-total").textContent = money(total());
+      });
+    }
+    function add(code) {
+      if (locked || !code) return;
+      const found = matchBarcode(parts2(), code);
+      if (found.length !== 1) {
+        message2(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0435\u0433\u043E \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.", true);
+        return;
+      }
+      const old = draft2.items.find((x) => x.part_id === found[0].id);
+      if (old) {
+        if (old.quantity >= 1e3) return;
+        old.quantity++;
+      } else {
+        if (draft2.items.length >= 40) {
+          message2("\u041D\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 40 \u043F\u043E\u0437\u0438\u0446\u0438\u0439 \u0432 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0435", true);
+          return;
+        }
+        draft2.items.push({ part_id: found[0].id, quantity: 1 });
+      }
+      changed();
+      draw();
+      $2("live-code").value = "";
+      $2("live-code").focus();
+      message2("\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E: " + found[0].name);
+    }
+    async function finish() {
+      var _a2;
+      if (!draft2.items.length) throw Error("\u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u0432\u0430\u0440\u044B");
+      const method = (_a2 = document.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a2.value;
+      if (draft2.kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435, \u041A\u0430\u0440\u0442\u0443 \u0438\u043B\u0438 \u041F\u0435\u0440\u0435\u0432\u043E\u0434");
+      for (const el of document.querySelectorAll("[data-live-qty]")) if (!el.checkValidity()) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
+      for (const el of document.querySelectorAll("[data-own-value]:not([hidden])")) if (!el.value || !el.checkValidity()) throw Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0432\u043E\u044E \u0446\u0435\u043D\u0443");
+      await sync();
+      locked = true;
+      try {
+        const result = await call2(draft2.kind === "sale" ? "live_pay" : "live_receive", { id: draft2.id, revision: draft2.revision, payment_method: method });
+        save3(storeKey(draft2.kind), null);
+        const kind = draft2.kind;
+        draft2 = null;
+        cleanup();
+        await refresh().catch(() => {
+        });
+        home2();
+        message2((result == null ? void 0 : result.cancelled) ? "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u0430, \u0442\u043E\u0432\u0430\u0440 \u0441\u043F\u0438\u0441\u0430\u043D. " + money(result.total) : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043F\u0440\u043E\u0432\u0435\u0434\u0451\u043D, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
+      } finally {
+        if (!draft2) locked = false;
+        else {
+          const state = await call2("job", { id: draft2.id }).catch(() => null);
+          locked = !state || state.state !== "queued";
+          if (active) draw();
+        }
+      }
+    }
+    async function open(kind) {
+      cleanup();
+      locked = false;
+      draft2 = load2(storeKey(kind));
+      if (draft2) {
+        const r = await call2("job", { id: draft2.id }).catch(() => null);
+        if ((r == null ? void 0 : r.state) === "done") {
+          save3(storeKey(kind), null);
+          draft2 = null;
+        } else if ((r == null ? void 0 : r.state) === "processing") locked = true;
+      }
+      if (!draft2) draft2 = { id: uuid(), kind, revision: 1, acked: 0, items: [], note: "" };
+      cache();
+      active = true;
+      render('<div class="live-heading"><button id="live-back">\u2190</button><h1>' + (kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0435\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u2026</small><form id="live-scan"><input id="live-code" inputmode="none" autocomplete="off" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434"><button type="submit" hidden>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C</button></form><div id="live-items"></div><section id="live-payment"><div class="total">\u0418\u0442\u043E\u0433\u043E <b id="live-total"></b></div>' + payment() + '</section><button class="primary" id="live-submit">' + (kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C" : "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434") + '</button><button class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442</button>');
+      draw();
+      $2("live-back").onclick = () => {
+        cleanup();
+        home2();
+      };
+      $2("live-scan").onsubmit = (e) => {
+        e.preventDefault();
+        add($2("live-code").value.trim());
+      };
+      stop = bindScanner($2("live-code"), $2("live-scan"), () => active && !locked);
+      document.querySelectorAll('input[name="live-method"]').forEach((el) => el.onchange = () => $2("live-code").focus());
+      $2("live-submit").onclick = () => run2(finish);
+      $2("live-cancel").onclick = () => run2(async () => {
+        if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442?")) return;
+        await sync();
+        await call2("draft_close", { id: draft2.id });
+        save3(storeKey(kind), null);
+        draft2 = null;
+        cleanup();
+        home2();
+      });
+      if (locked) message2("\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u0443\u044E \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB" + (kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C" : "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434") + "\xBB \u0434\u043B\u044F \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430.", true);
+      else {
+        changed();
+      }
+      mirrorTimer = setInterval(() => {
+        if (!active || locked || !draft2) return;
+        void sync().catch(() => {
+        });
+        const current = draft2;
+        void call2("job", { id: current.id }).then((r) => {
+          var _a2;
+          if (active && !locked && draft2 === current && (r == null ? void 0 : r.state) === "done") {
+            save3(storeKey(current.kind), null);
+            draft2 = null;
+            cleanup();
+            void refresh().catch(() => {
+            });
+            home2();
+            message2(((_a2 = r.result) == null ? void 0 : _a2.cancelled) ? "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
+          }
+        }).catch(() => {
+        });
+      }, 2500);
+    }
+    function mirrorMarkup(job2) {
+      var _a2, _b;
+      return '<div class="live-heading"><h2>\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B \xB7 ' + (job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h2><small>" + (job2.state === "done" ? ((_a2 = job2.result) == null ? void 0 : _a2.cancelled) ? "\u041E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D" : job2.state === "processing" ? "\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F\u2026" : "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435") + "</small></div>" + rows(job2.payload, false) + (job2.payload.items.length ? "" : "<p>\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043D\u0430 \u0422\u0421\u0414\u2026</p>") + (job2.state === "done" && ((_b = job2.result) == null ? void 0 : _b.total) !== void 0 ? "<p>\u041E\u043F\u043B\u0430\u0447\u0435\u043D\u043E " + money(job2.result.total) + " \xB7 " + esc({ cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", card: "\u041A\u0430\u0440\u0442\u0430", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434" }[job2.result.payment_method] || job2.result.payment_method || "") + "</p>" : "");
+    }
+    async function pollMirror() {
+      var _a2, _b, _c;
+      if (terminal2) return;
+      const target = $2("live-terminal-panel");
+      if (!target) return;
+      const jobs = await call2("live_jobs");
+      if (!$2("live-terminal-panel") || locked) return;
+      const chosen = (_a2 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _a2.value;
+      jobs.sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
+      const current = jobs.find((j) => j.state !== "done") || jobs[0], signature = JSON.stringify(current);
+      if (signature === mirror && target.innerHTML) return;
+      mirror = signature;
+      target.innerHTML = current ? mirrorMarkup(current) : '<p class="muted">\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041F\u0440\u0438\u0445\u043E\u0434\xBB \u0438\u043B\u0438 \xAB\u041E\u043F\u043B\u0430\u0442\u0430\xBB \u043D\u0430 \u0422\u0421\u0414 \u2014 \u0442\u043E\u0432\u0430\u0440\u044B \u043F\u043E\u044F\u0432\u044F\u0442\u0441\u044F \u0437\u0434\u0435\u0441\u044C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p>';
+      if (current && ["queued", "processing"].includes(current.state) && current.payload.items.length) {
+        target.insertAdjacentHTML("beforeend", (current.payload.kind === "sale" ? payment() : "") + '<button class="primary" id="mirror-submit">' + (current.payload.kind === "sale" ? "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C" : "\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438 \u043F\u0440\u0438\u0445\u043E\u0434") + "</button>");
+        const selected = ((_b = current.checkout) == null ? void 0 : _b.payment_method) || chosen;
+        if (selected) (_c = target.querySelector('input[value="' + selected + '"]')) == null ? void 0 : _c.click();
+        $2("mirror-submit").onclick = () => run2(async () => {
+          var _a3, _b2;
+          const method = ((_a3 = current.checkout) == null ? void 0 : _a3.payment_method) || ((_b2 = target.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _b2.value);
+          if (current.payload.kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
+          locked = true;
+          try {
+            await call2(current.payload.kind === "sale" ? "live_pay" : "live_receive", { id: current.id, revision: current.payload.revision, payment_method: method });
+            mirror = null;
+            await refresh().catch(() => {
+            });
+            home2();
+            message2("\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B.");
+          } finally {
+            locked = false;
+          }
+        });
+      }
+    }
+    return { open, cleanup, pollMirror, hasDraft: () => !!draft2, active: () => active };
+  }
+
+  // warehouse/usb-client.js
+  function bindUSBInbox({ key: key2, label, container, enabled, add, error, bridge = window.warehouseDesktop }) {
+    if (!(bridge == null ? void 0 : bridge.usbTarget)) {
+      container.hidden = true;
+      return () => {
+      };
+    }
+    let stopped = false, working = false, rendered = "";
+    const live2 = () => !stopped && container.isConnected && enabled();
+    function render(unassigned, blocked) {
+      const signature = JSON.stringify([unassigned, blocked == null ? void 0 : blocked.id]);
+      if (signature === rendered) return;
+      rendered = signature;
+      container.replaceChildren();
+      const caption = document.createElement("span");
+      caption.textContent = blocked ? "USB: \u043A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u2014 " + blocked.code : "USB-\u0441\u043A\u0430\u043D\u0435\u0440: \u0433\u043E\u0442\u043E\u0432 \u043A \u043F\u0440\u0438\u0451\u043C\u0443";
+      container.append(caption);
+      const button = (text, action) => {
+        const b = document.createElement("button");
+        b.textContent = text;
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await action();
+          } catch (e) {
+            error(e.message);
+          } finally {
+            b.disabled = false;
+          }
+        };
+        container.append(b);
+      };
+      if (unassigned) button("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043A\u0430\u043D\u044B (" + unassigned + ")", () => bridge.usbClaim(key2));
+      if (blocked) button("\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0441\u043A\u0430\u043D", () => bridge.usbAck(key2, [blocked.id]));
+    }
+    async function poll2() {
+      if (!live2() || working) return;
+      working = true;
+      try {
+        await bridge.usbTarget({ key: key2, label });
+        if (!live2()) return;
+        const batch = await bridge.usbBatch(key2);
+        if (!live2()) return;
+        let blocked;
+        for (const item of batch.items) {
+          if (!live2()) break;
+          if (!add(item)) {
+            blocked = item;
+            break;
+          }
+          await bridge.usbAck(key2, [item.id]);
+        }
+        if (live2()) render(batch.unassigned, blocked);
+      } catch (e) {
+        if (live2()) error(e.message);
+      } finally {
+        working = false;
+      }
+    }
+    void poll2();
+    const timer = setInterval(poll2, 400);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      void bridge.usbTarget(null).catch(() => {
+      });
+    };
+  }
+
   // warehouse/app.js
   var formValues = (form) => {
     const p = {};
@@ -231,6 +492,10 @@
     }
   };
   var save2 = (n, v) => localStorage.setItem(key(n), JSON.stringify(v));
+  var live = liveBasket({ terminal, call: (a, p) => call(a, p), parts: () => parts, render: (html) => {
+    screen = "live";
+    shell(html);
+  }, home, run, message, load, save: save2, refresh: catalog });
   var call = (action, p = {}) => api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
   function message(v, error = false) {
     $("message").textContent = v;
@@ -252,10 +517,10 @@
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = () => {
     var _a2;
-    return !busy && screen === "home" && !draft && !job && !((_a2 = $("terminal-help")) == null ? void 0 : _a2.open) && Date.now() - lastActivity > 12e4;
+    return !busy && screen === "home" && !draft && !job && !live.hasDraft() && !((_a2 = $("terminal-help")) == null ? void 0 : _a2.open) && Date.now() - lastActivity > 12e4;
   };
   window.addEventListener("beforeunload", (e) => {
-    if (busy || screen === "basket" || screen === "checkout") {
+    if (busy || screen === "basket" || screen === "checkout" || screen === "live") {
       e.preventDefault();
       e.returnValue = "";
     }
@@ -396,12 +661,13 @@
     };
   }
   function home() {
+    live.cleanup();
     screen = "home";
     job = null;
-    shell((terminal ? "" : nav()) + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft && !terminal ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><h2>\u041A\u043E\u0440\u0437\u0438\u043D\u044B \u0441 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430</h2><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div></section>' : usbHelp()));
+    shell((terminal ? "" : nav()) + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft && !terminal ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><h2>\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B</h2><div id="live-terminal-panel"></div><h2>\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u0440\u0437\u0438\u043D\u044B</h2><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div></section>' : usbHelp()));
     bindNav();
-    $("receipt").onclick = () => basket("receipt");
-    $("pay").onclick = () => basket("sale");
+    $("receipt").onclick = () => terminal ? run(() => live.open("receipt")) : basket("receipt");
+    $("pay").onclick = () => terminal ? run(() => live.open("sale")) : basket("sale");
     if ($("resume")) $("resume").onclick = () => basket(draft.kind, true);
     if (!terminal) void poll();
   }
@@ -539,6 +805,7 @@
     if (terminal || screen !== "home" || polling || busy || !device) return;
     polling = true;
     try {
+      await live.pollMirror();
       const jobs = await call("queue");
       if (screen !== "home" || !$("queue")) return;
       $("queue").innerHTML = jobs.length ? jobs.map((x) => '<div class="job"><span>\u041A\u043E\u0440\u0437\u0438\u043D\u0430 ' + esc(x.id.slice(0, 8)) + " \xB7 " + x.payload.items.reduce((n, i) => n + i.quantity, 0) + ' \u0448\u0442.<small style="display:block">' + new Date(x.created_at).toLocaleString("ru-RU") + " \xB7 " + (x.state === "processing" ? "\u0422\u0440\u0435\u0431\u0443\u0435\u0442 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043E\u043F\u043B\u0430\u0442\u044B") + '</small></span><button data-job="' + x.id + '">\u041E\u0442\u043A\u0440\u044B\u0442\u044C</button></div>').join("") : "\u041D\u043E\u0432\u044B\u0445 \u043A\u043E\u0440\u0437\u0438\u043D \u043D\u0435\u0442";
