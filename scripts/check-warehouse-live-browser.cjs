@@ -8,13 +8,16 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  await t.locator('#receipt').click();await t.locator('.scan-empty').waitFor();
  assert.equal(await t.locator('#live-items').innerText(),'');assert.equal(await t.locator('#live-submit,#live-payment').count(),0);assert.equal(await t.getByRole('button',{name:'Добавить',exact:true}).count(),0);
  assert.equal(await t.locator('#live-code').getAttribute('inputmode'),'none');assert.equal(await t.locator('#live-code').evaluate(el=>getComputedStyle(el.closest('form')).opacity),'0');
- // Backgrounded WebViews must not retain an editable scan field for Android IME restoration.
+ // Keep the editor writable across hide/resume: Android scanner IMEs need an input connection.
  await t.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
- assert.equal(await t.locator('#live-code').evaluate(el=>el.readOnly),true);
+ assert.equal(await t.locator('#live-code').evaluate(el=>el.readOnly),false);
  assert.equal(await t.locator('#live-code').evaluate(el=>document.activeElement===el),false);
  await t.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
  assert.equal(await t.locator('#live-code').evaluate(el=>el.readOnly),false);
  assert.equal(await t.locator('#live-code').evaluate(el=>document.activeElement===el),true);
+ // A scanner IME must see an editable input at the exact moment focus is acquired.
+ const focusReadonly=await t.evaluate(()=>{const el=document.getElementById('live-code'),seen=[];el.addEventListener('focus',()=>seen.push(el.readOnly));el.blur();window.dispatchEvent(new Event('focus'));return seen;});
+ assert.deepEqual(focusReadonly,[false]);
  // Empty implicit Enter must not claim an operation is in progress.
  await t.evaluate(()=>document.getElementById('live-scan').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
  assert.equal(await t.locator('#scan-feedback').innerText(),'');
