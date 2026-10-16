@@ -34,3 +34,5 @@ body[data-mode=terminal] header{display:none}
 #live-terminal-panel .scan-product{margin:8px 0}
 
 #web-update-status:empty{display:none}
+
+body[data-mode=terminal] #terminal-refresh{display:none;margin:0 12px 8px;font-size:14px}body[data-mode=terminal][data-screen=home] #terminal-refresh{display:block}body[data-mode=terminal] #web-update-status{padding:0 12px;font-size:12px;overflow-wrap:anywhere}

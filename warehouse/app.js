@@ -16,7 +16,7 @@ const call=(action,p={})=>api(action,{device_id:device?.id,device_token:device?.
 function message(v,error=false){$('message').textContent=v;$('message').className=error?'error':'';}
 async function run(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(x=>x.disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;document.querySelectorAll('button').forEach(x=>x.disabled=false);}}
 for(const e of ['keydown','pointerdown','input','change'])window.addEventListener(e,()=>lastActivity=Date.now(),true);
-window.warehouseUpdateSafe=()=>!busy&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!$('terminal-help')?.open&&Date.now()-lastActivity>120000;
+window.warehouseUpdateSafe=(immediate=false)=>!busy&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>120000);
 window.addEventListener('beforeunload',e=>{if(busy||screen==='basket'||screen==='checkout'||screen==='live'||screen==='repair'){e.preventDefault();e.returnValue='';}});
 function shell(html){document.body.dataset.screen=screen;if(stopUSB){stopUSB();stopUSB=null;}if(stopScanner){stopScanner();stopScanner=null;}$('app').innerHTML=html;message('');}
 function nav(){return '<div class="subnav"><button id="back">← Главное</button>'+(!terminal?'<button id="inventory">Остатки</button><button id="shift">Открыть смену</button>'+(['owner','developer'].includes(memberRole)?'<button id="master-stock">Запчасти на мастерах</button>':'')+'':'')+'</div>';}
@@ -79,18 +79,33 @@ async function desktopStatus(){
  try{const s=await window.warehouseDesktop.desktopStatus(),update=s.update||{};let note='';if(update.status==='downloading')note=' · Загружается '+update.version+': '+update.progress+'%';if(update.status==='ready')note=' · Обновление '+update.version+' готово — завершите документ и оставьте главный экран открытым';if(update.status==='error')note=' · Ошибка обновления: '+update.error;const value='Windows '+s.version+' · '+s.usb.status+(s.usb.pending?' · Ожидают добавления: '+s.usb.pending:'')+note;if(el.textContent!==value)el.textContent=value;}
  catch(e){el.textContent='Не удалось проверить USB: '+e.message;}
 }
-if(!terminal){void desktopStatus();setInterval(desktopStatus,2500);if(window.warehouseDesktop?.checkUpdates&&$('desktop-update')){$('desktop-update').hidden=false;$('desktop-update').onclick=()=>run(async()=>{await window.warehouseDesktop.checkUpdates();await webUpdater?.check();await desktopStatus();});}}
+if(!terminal){void desktopStatus();setInterval(desktopStatus,2500);}
 if($('usb-scanner'))$('usb-scanner').onclick=()=>{if(window.warehouseDesktop?.openUSBScanner)void window.warehouseDesktop.openUSBScanner().catch(e=>message(e.message,true));else message('Сканирование по USB доступно в установленной программе FastGo Склад версии 1.0.4 и новее.');};
 if($('terminal-update'))$('terminal-update').onclick=async()=>{try{if(window.warehouseDesktop?.openTerminalUpdater)await window.warehouseDesktop.openTerminalUpdater();else $('terminal-help').showModal();}catch(e){message('Не удалось открыть обновление терминала: '+e.message,true);}};
 if($('terminal-help'))$('terminal-help').onclick=e=>{if(e.target!==e.currentTarget)return;const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.currentTarget.close();};
 $('logout').onclick=()=>run(async()=>{if((draft||job)&&!confirm('Документ сохранён. Выйти?'))return;await logout();device=null;parts=[];staff=[];draft=null;job=null;signIn();});setInterval(()=>void poll(),3000);window.addEventListener('online',()=>{if(terminal&&screen==='connection')void run(start);else void poll();});void start();
 
-if($('screen-refresh'))$('screen-refresh').onclick=()=>{if(busy||screen!=='home'){message('Сначала завершите документ и вернитесь на главный экран.');return;}const url=new URL(location.href);url.searchParams.set('refresh',Date.now());location.replace(url.href);};
-
-// Automatic page updates are independent of Windows installer updates.
-const webSafe=()=>!busy&&!polling&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!document.querySelector('#mirror-submit,dialog[open]')&&Date.now()-lastActivity>15000;
-const webUpdater=!terminal?startWebUpdates({canApply:async()=>{
- if(!webSafe())return false;
- if(window.warehouseDesktop?.desktopStatus){const state=await window.warehouseDesktop.desktopStatus();if(state.usb?.pending||state.usb?.target||['ready','installing'].includes(state.update?.status))return false;}
- return webSafe();
-}}):null;
+// Manual updates bypass idle delays, never an open document or pending scan.
+const webSafe=(immediate=false)=>!busy&&!polling&&screen==='home'&&!draft&&!job&&!live.hasDraft()&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>15000);
+const webUpdater=startWebUpdates({canApply:async immediate=>{
+ if(!webSafe(immediate))return false;
+ if(window.warehouseDesktop?.desktopStatus){const state=await window.warehouseDesktop.desktopStatus();if(state.usb?.pending||state.usb?.target||['downloading','ready','preparing','installing'].includes(state.update?.status))return false;}
+ return webSafe(immediate);
+}});
+let updating=false;
+async function updateNow(){
+ if(updating)return;
+ if(!window.warehouseUpdateSafe(true)){message('Сначала завершите документ и вернитесь на главный экран.');return;}
+ updating=true;
+ try{
+  message('Проверка версии приложения…');
+  if(window.warehouseDesktop?.checkUpdates){
+   const state=await window.warehouseDesktop.checkUpdates();await desktopStatus();
+   if(['downloading','ready','preparing','installing'].includes(state?.status)){message('Обновление '+state.version+' будет установлено сразу после загрузки, когда документы закрыты и USB свободен.');return;}
+   if(state?.status==='error'){message('Не удалось проверить приложение: '+state.error,true);return;}
+  }
+  await webUpdater?.now();
+ }catch(e){message('Ошибка обновления: '+e.message,true);}finally{updating=false;}
+}
+if($('screen-refresh'))$('screen-refresh').onclick=updateNow;
+if($('terminal-refresh'))$('terminal-refresh').onclick=updateNow;
