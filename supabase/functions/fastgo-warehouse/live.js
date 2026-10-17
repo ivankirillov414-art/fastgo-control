@@ -45,7 +45,7 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   else {
    let shift=engine.run('cash_state',{},actor).shifts.find(s=>s.status==='open'&&s.register.toLowerCase()===register.toLowerCase());
    if(!shift)shift=engine.run('shift_open',{register,opening_cash:0},actor);
-   result=engine.run('sale',{request_id:requestId,shift_id:shift.id,payment_method:c.payment_method,items:c.items.map(x=>({...x,price_mode:x.custom_price?'free':'base'})),discount:0,note:'Терминал · '+requestId},actor);
+   result=engine.run('sale',{request_id:requestId,shift_id:shift.id,payment_method:c.payment_method,items:c.items.map(x=>({...x,price_mode:x.custom_price?'free':'base'})),discount:0,...(c.total_override!==undefined?{total_override:c.total_override}:{}),note:'Терминал · '+requestId},actor);
   }
   return {result,changes:engine.changes()};
  };
@@ -53,6 +53,8 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   if(p.revision!==job.payload.revision)fail('Корзина изменилась. Дождитесь синхронизации',409);
   if(!receiving&&!['cash','card','transfer'].includes(p.payment_method))fail('Выберите способ оплаты');
   const c={actor_id:actor.id,mode:receiving?'receipt':'sale',payment_method:p.payment_method||'',items:items(job.payload.items).map(x=>({...x,...(job.payload.items.find(y=>y.part_id===x.part_id).custom_price?{custom_price:true,unit_price:job.payload.items.find(y=>y.part_id===x.part_id).unit_price}:{})})),note:job.payload.note};
+  if(p.total_override!==undefined){if(receiving||device.kind!=='station')fail('Итоговую сумму задают на ноутбуке',403);const n=p.total_override;if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1e8||Math.abs(n*100-Math.round(n*100))>0.00001)fail('Проверьте итоговую сумму');c.total_override=n;}
+  // The laptop may choose receipt quantities, but cannot replace scanned goods.
   // The laptop may choose receipt quantities, or omit removed positions, but cannot introduce unscanned goods.
   // Revision CAS below refuses a simultaneous new scan before any stock write.
   if(p.items!==undefined){

@@ -605,6 +605,20 @@
     const newDraft = (k) => ({ id: uuid(), kind: k, revision: 1, acked: 0, items: [], usb_ids: [], note: "" });
     const source = () => (current == null ? void 0 : current.payload) || draft2 || { kind, items: [] };
     const qty = (x) => overrides[x.part_id] ? Number(overrides[x.part_id].value) + x.quantity - overrides[x.part_id].base : x.quantity;
+    const signature = () => JSON.stringify(source().items);
+    const baseTotal = () => Math.round(source().items.reduce((sum, x) => sum + x.quantity * amount(x), 0) * 100) / 100;
+    function totalEdit() {
+      const saved = load2("live-total:" + documentId());
+      return (saved == null ? void 0 : saved.signature) === signature() ? saved : null;
+    }
+    function totalValue() {
+      var _a;
+      if (((_a = current == null ? void 0 : current.checkout) == null ? void 0 : _a.total_override) !== void 0) return current.checkout.total_override;
+      const edit = totalEdit();
+      if (!edit) return baseTotal();
+      const raw = String(edit.value).trim().replace(",", ".");
+      return /^\d+(?:\.\d{1,2})?$/.test(raw) && Number(raw) <= 1e8 ? Number(raw) : null;
+    }
     const amount = (x) => {
       var _a;
       return x.custom_price ? Number(x.unit_price) : Number(((_a = product2(x)) == null ? void 0 : _a.retail_price) || 0);
@@ -688,7 +702,7 @@
       if (draft2 === local && local.acked < local.revision && !locked) return sync();
     }
     function draw() {
-      var _a, _b;
+      var _a, _b, _c;
       if (!active || !$2("live-items")) return;
       const value = source(), items = value.items.filter((x) => {
         var _a2;
@@ -744,14 +758,20 @@
       $2("scan-empty").hidden = !!items.length;
       $2("live-payment").hidden = value.kind !== "sale" || !items.length;
       $2("live-submit").hidden = !items.length;
-      $2("live-total").textContent = money(items.reduce((sum, x) => sum + x.quantity * amount(x), 0));
+      $2("live-total").textContent = totalValue() === null ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0443\u043C\u043C\u0443" : money(totalValue());
+      $2("live-total-edit").disabled = locked;
+      const edit = totalEdit();
+      $2("live-total-field").hidden = !edit;
+      if (document.activeElement !== $2("live-total-input")) $2("live-total-input").value = (_c = edit == null ? void 0 : edit.value) != null ? _c : "";
+      $2("live-total-input").disabled = locked;
+      $2("live-total-reset").disabled = locked;
       for (const el of document.querySelectorAll('input[name="live-method"]')) el.disabled = locked;
     }
     function documentId() {
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>' + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
+      return '<div class="live-heading"><button id="live-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>' + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E <button type="button" id="live-total-edit" class="total-pencil" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443" title="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443">\u270E</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435"></label><button type="button" id="live-total-reset">\u041F\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443</button></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
     }
     function mount() {
       render(markup(kind));
@@ -793,7 +813,24 @@
           compatible(enabled, true);
         };
       }
-      if (!terminal2) $2("live-submit").onclick = () => run2(finish);
+      if (!terminal2) {
+        $2("live-submit").onclick = () => run2(finish);
+        $2("live-total-edit").onclick = () => {
+          if (locked) return;
+          if (!totalEdit()) save3("live-total:" + documentId(), { signature: signature(), value: String(baseTotal()) });
+          draw();
+          $2("live-total-input").focus();
+          $2("live-total-input").select();
+        };
+        $2("live-total-input").oninput = () => {
+          save3("live-total:" + documentId(), { signature: signature(), value: $2("live-total-input").value });
+          $2("live-total").textContent = totalValue() === null ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0443\u043C\u043C\u0443" : money(totalValue());
+        };
+        $2("live-total-reset").onclick = () => {
+          save3("live-total:" + documentId(), null);
+          draw();
+        };
+      }
       pollTimer = setInterval(() => void poll2().catch((e) => {
         if (active && $2("live-sync")) $2("live-sync").textContent = e.message;
       }), 1e3);
@@ -950,7 +987,7 @@
       if (target) target.textContent = candidates.length ? "\u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \xB7 " + (candidates[0].payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") : "";
     }
     async function finish() {
-      var _a, _b;
+      var _a, _b, _c;
       if (terminal2) return;
       await scanChain;
       if (draft2) await sync();
@@ -966,11 +1003,15 @@
         }).map((x) => ({ part_id: x.part_id, quantity: qty(x) }));
         if (chosen.some((x) => !Number.isInteger(x.quantity) || x.quantity < 1 || x.quantity > 1e3) || Object.values(overrides).some((x) => !x.removed && x.value === "")) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
       }
+      const total = kind === "sale" ? totalValue() : void 0;
+      if (total === null) throw Error("\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0441\u0443\u043C\u043C\u0443 \u043E\u0442 0 \u0434\u043E 100 000 000 \u20BD, \u043D\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 \u0434\u0432\u0443\u0445 \u0437\u043D\u0430\u043A\u043E\u0432 \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u043F\u044F\u0442\u043E\u0439");
+      const custom = kind === "sale" && (totalEdit() || ((_c = current == null ? void 0 : current.checkout) == null ? void 0 : _c.total_override) !== void 0);
       locked = true;
       draw();
       try {
-        const result = await call2(kind === "receipt" ? "live_receive" : "live_pay", { id, revision: value.revision, payment_method: method, ...chosen ? { items: chosen } : {} });
+        const result = await call2(kind === "receipt" ? "live_receive" : "live_pay", { id, revision: value.revision, payment_method: method, ...custom ? { total_override: total } : {}, ...chosen ? { items: chosen } : {} });
         save3("live-edits:" + id, null);
+        save3("live-total:" + id, null);
         finished({ id, payload: value, result });
       } catch (e) {
         const r = await call2("job", { id }).catch(() => null);
