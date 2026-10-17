@@ -43,7 +43,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   await syncing;if(draft===local&&local.acked<local.revision&&!locked)return sync();
  }
  function draw(){
-  if(!active||!$('live-items'))return;const value=source(),items=value.items;
+  if(!active||!$('live-items'))return;const value=source(),items=value.items.filter(x=>!overrides[x.part_id]?.removed||qty(x)>0);
   if(terminal){
    const x=items.find(x=>x.part_id===draft?.last_part_id)||items[items.length-1];
    $('live-items').innerHTML=x?'<article class="last-scan"><small>Отсканировано</small><h2>'+esc(product(x)?.name||x.part_id)+'</h2><p>'+x.quantity+' шт.</p></article>':'';
@@ -51,10 +51,12 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   }
   const host=$('live-items'),seen=new Set();
   for(const x of items){seen.add(x.part_id);let row=[...host.children].find(r=>r.dataset.part===x.part_id);
-   if(!row){row=document.createElement('article');row.className='scan-product station-product';row.dataset.part=x.part_id;
-    row.innerHTML='<strong></strong>'+(value.kind==='receipt'?'<label>Количество<input type="number" min="1" max="1000" step="1" data-live-qty="'+x.part_id+'" aria-label="Количество"></label>':'<span data-count></span><b data-price></b>');host.append(row);
+   if(!row){row=document.createElement('article');row.className='scan-product station-product'+(value.kind==='receipt'?' receipt-product':'');row.dataset.part=x.part_id;
+    row.innerHTML='<strong></strong>'+(value.kind==='receipt'?'<label>Количество<input type="number" min="1" max="1000" step="1" data-live-qty="'+x.part_id+'" aria-label="Количество"></label><button type="button" class="live-remove" data-live-remove="'+x.part_id+'" aria-label="Удалить позицию" title="Удалить позицию"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg></button>':'<span data-count></span><b data-price></b>');host.append(row);
+    const remove=row.querySelector('[data-live-remove]');if(remove)remove.onclick=()=>{if(locked)return;const item=source().items.find(i=>i.part_id===x.part_id);overrides[x.part_id]={value:0,base:item.quantity,removed:true};save('live-edits:'+documentId(),overrides);draw();};
     const input=row.querySelector('input');if(input){input.oninput=()=>{const item=source().items.find(i=>i.part_id===x.part_id);overrides[x.part_id]={value:input.value,base:item.quantity};save('live-edits:'+documentId(),overrides);};input.onblur=draw;}
    }
+   const removeButton=row.querySelector('[data-live-remove]');if(removeButton)removeButton.disabled=locked;
    row.querySelector('strong').textContent=product(x)?.name||x.part_id;
    const input=row.querySelector('input');if(input){input.disabled=locked;if(document.activeElement!==input)input.value=String(qty(x));}
    else{row.querySelector('[data-count]').textContent=x.quantity+' шт.';row.querySelector('[data-price]').textContent=money(amount(x)*x.quantity);}
@@ -132,7 +134,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   const value=source(),id=documentId();if(!value.items.length)throw Error('Нет отсканированных товаров');
   const method=current?.checkout?.payment_method||document.querySelector('input[name="live-method"]:checked')?.value;
   if(kind==='sale'&&!method)throw Error('Выберите способ оплаты');
-  let chosen;if(kind==='receipt'){chosen=value.items.map(x=>({part_id:x.part_id,quantity:qty(x)}));if(chosen.some(x=>!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>1000)||Object.values(overrides).some(x=>x.value===''))throw Error('Количество от 1 до 1000');}
+  let chosen;if(kind==='receipt'){chosen=value.items.filter(x=>!overrides[x.part_id]?.removed||qty(x)>0).map(x=>({part_id:x.part_id,quantity:qty(x)}));if(chosen.some(x=>!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>1000)||Object.values(overrides).some(x=>!x.removed&&x.value===''))throw Error('Количество от 1 до 1000');}
   locked=true;draw();try{
    const result=await call(kind==='receipt'?'live_receive':'live_pay',{id,revision:value.revision,payment_method:method,...(chosen?{items:chosen}:{})});
    save('live-edits:'+id,null);finished({id,payload:value,result});

@@ -690,7 +690,10 @@
     function draw() {
       var _a, _b;
       if (!active || !$2("live-items")) return;
-      const value = source(), items = value.items;
+      const value = source(), items = value.items.filter((x) => {
+        var _a2;
+        return !((_a2 = overrides[x.part_id]) == null ? void 0 : _a2.removed) || qty(x) > 0;
+      });
       if (terminal2) {
         const x = items.find((x2) => x2.part_id === (draft2 == null ? void 0 : draft2.last_part_id)) || items[items.length - 1];
         $2("live-items").innerHTML = x ? '<article class="last-scan"><small>\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043E</small><h2>' + esc(((_a = product2(x)) == null ? void 0 : _a.name) || x.part_id) + "</h2><p>" + x.quantity + " \u0448\u0442.</p></article>" : "";
@@ -703,10 +706,18 @@
         let row = [...host.children].find((r) => r.dataset.part === x.part_id);
         if (!row) {
           row = document.createElement("article");
-          row.className = "scan-product station-product";
+          row.className = "scan-product station-product" + (value.kind === "receipt" ? " receipt-product" : "");
           row.dataset.part = x.part_id;
-          row.innerHTML = "<strong></strong>" + (value.kind === "receipt" ? '<label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E<input type="number" min="1" max="1000" step="1" data-live-qty="' + x.part_id + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E"></label>' : "<span data-count></span><b data-price></b>");
+          row.innerHTML = "<strong></strong>" + (value.kind === "receipt" ? '<label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E<input type="number" min="1" max="1000" step="1" data-live-qty="' + x.part_id + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E"></label><button type="button" class="live-remove" data-live-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E" title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg></button>' : "<span data-count></span><b data-price></b>");
           host.append(row);
+          const remove = row.querySelector("[data-live-remove]");
+          if (remove) remove.onclick = () => {
+            if (locked) return;
+            const item = source().items.find((i) => i.part_id === x.part_id);
+            overrides[x.part_id] = { value: 0, base: item.quantity, removed: true };
+            save3("live-edits:" + documentId(), overrides);
+            draw();
+          };
           const input2 = row.querySelector("input");
           if (input2) {
             input2.oninput = () => {
@@ -717,6 +728,8 @@
             input2.onblur = draw;
           }
         }
+        const removeButton = row.querySelector("[data-live-remove]");
+        if (removeButton) removeButton.disabled = locked;
         row.querySelector("strong").textContent = ((_b = product2(x)) == null ? void 0 : _b.name) || x.part_id;
         const input = row.querySelector("input");
         if (input) {
@@ -947,8 +960,11 @@
       if (kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
       let chosen;
       if (kind === "receipt") {
-        chosen = value.items.map((x) => ({ part_id: x.part_id, quantity: qty(x) }));
-        if (chosen.some((x) => !Number.isInteger(x.quantity) || x.quantity < 1 || x.quantity > 1e3) || Object.values(overrides).some((x) => x.value === "")) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
+        chosen = value.items.filter((x) => {
+          var _a2;
+          return !((_a2 = overrides[x.part_id]) == null ? void 0 : _a2.removed) || qty(x) > 0;
+        }).map((x) => ({ part_id: x.part_id, quantity: qty(x) }));
+        if (chosen.some((x) => !Number.isInteger(x.quantity) || x.quantity < 1 || x.quantity > 1e3) || Object.values(overrides).some((x) => !x.removed && x.value === "")) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
       }
       locked = true;
       draw();
