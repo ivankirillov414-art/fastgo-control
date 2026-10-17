@@ -392,10 +392,10 @@
       } catch (e) {
       }
     }, check: updater.check });
-    setTimeout(() => void daily(), 5e3);
-    setInterval(() => void daily(), 6e4);
+    setTimeout(() => void updater.check(), 5e3);
+    setInterval(() => void updater.check(), 6e4);
     setInterval(() => void updater.tick(), 5e3);
-    window.addEventListener("online", () => void daily());
+    window.addEventListener("online", () => void updater.check());
     return updater;
   }
 
@@ -602,6 +602,32 @@
     const cache = () => {
       if (draft2) save3(key2(draft2.kind), draft2);
     };
+    function checkpoint() {
+      if (terminal2) return;
+      cache();
+      if (current || (draft2 == null ? void 0 : draft2.items.length)) save3("live:resume:station", { kind, current: current ? JSON.parse(JSON.stringify(current)) : null, draft_id: (draft2 == null ? void 0 : draft2.id) || null });
+    }
+    async function restore() {
+      var _a;
+      if (terminal2) return false;
+      const saved = load2("live:resume:station");
+      if (!saved) return false;
+      if (saved.current) {
+        const latest = await call2("job", { id: saved.current.id }).catch(() => null);
+        if ((latest == null ? void 0 : latest.state) === "done") {
+          save3("live:resume:station", null);
+          return false;
+        }
+        await openMirror(latest || saved.current);
+        return true;
+      }
+      if (((_a = load2(key2(saved.kind))) == null ? void 0 : _a.id) === saved.draft_id) {
+        await open(saved.kind);
+        return true;
+      }
+      save3("live:resume:station", null);
+      return false;
+    }
     const newDraft = (k) => ({ id: uuid(), kind: k, revision: 1, acked: 0, items: [], usb_ids: [], note: "" });
     const source = () => (current == null ? void 0 : current.payload) || draft2 || { kind, items: [] };
     const qty = (x) => overrides[x.part_id] ? Number(overrides[x.part_id].value) + x.quantity - overrides[x.part_id].base : x.quantity;
@@ -646,6 +672,10 @@
       var _a;
       if (!active) return;
       const local = draft2 || load2(key2(job2.payload.kind)), extra = remaining(local, job2);
+      if (!terminal2) {
+        save3("live:resume:station", null);
+        save3("live-method:" + job2.id, null);
+      }
       if ((local == null ? void 0 : local.id) === job2.id) {
         rememberUSB(local);
         save3(key2(local.kind), null);
@@ -714,6 +744,7 @@
         $2("scan-empty").hidden = !!x;
         return;
       }
+      checkpoint();
       const host = $2("live-items"), seen = /* @__PURE__ */ new Set();
       for (const x of items) {
         seen.add(x.part_id);
@@ -774,6 +805,7 @@
       return '<div class="live-heading"><button id="live-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>' + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E <button type="button" id="live-total-edit" class="total-pencil" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443" title="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443">\u270E</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435"></label><button type="button" id="live-total-reset">\u041F\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443</button></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
     }
     function mount() {
+      var _a;
       render(markup(kind));
       draw();
       $2("live-back").onclick = () => {
@@ -830,6 +862,14 @@
           save3("live-total:" + documentId(), null);
           draw();
         };
+        const method = ((_a = current == null ? void 0 : current.checkout) == null ? void 0 : _a.payment_method) || load2("live-method:" + documentId());
+        for (const el of document.querySelectorAll('input[name="live-method"]')) {
+          el.checked = el.value === method;
+          el.onchange = () => {
+            save3("live-method:" + documentId(), el.value);
+            checkpoint();
+          };
+        }
       }
       pollTimer = setInterval(() => void poll2().catch((e) => {
         if (active && $2("live-sync")) $2("live-sync").textContent = e.message;
@@ -1027,7 +1067,7 @@
         throw e;
       }
     }
-    return { open, cleanup, pollMirror, hasDraft: () => !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !current && !locked && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !current && !locked && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
@@ -1161,8 +1201,16 @@
     }
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
-  window.warehouseUpdateSafe = (immediate = false) => !busy && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 12e4);
+  window.warehouseUpdateSafe = (immediate = false) => !busy && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
   window.addEventListener("beforeunload", (e) => {
+    try {
+      live.checkpoint();
+    } catch (error) {
+      message(error.message, true);
+      e.preventDefault();
+      e.returnValue = "";
+      return;
+    }
     if (busy || screen === "basket" || screen === "checkout" || screen === "live" || screen === "repair") {
       e.preventDefault();
       e.returnValue = "";
@@ -1202,8 +1250,8 @@
     const c = await call("catalog");
     parts = c.parts;
     staff = c.staff;
-    if (terminal) try {
-      save2("catalog:terminal", { device_id: device.id, parts, staff, role: memberRole });
+    try {
+      save2("catalog:" + document.body.dataset.mode, { device_id: device.id, parts, staff, role: memberRole });
     } catch (e) {
       message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B \u0431\u0435\u0437 \u0441\u0435\u0442\u0438.", true);
     }
@@ -1256,19 +1304,21 @@
       $("connection").textContent = info.device.name + " \xB7 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442";
       await catalog();
       home();
+      if (!terminal) await live.restore();
     } catch (e) {
       if (e.status === 401) {
         signIn();
         message("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0441\u043D\u043E\u0432\u0430. \u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0430 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435.", true);
         return;
       }
-      if (terminal && e.status !== 403) {
-        const cached = load("catalog:terminal");
+      if (e.status !== 403) {
+        const cached = load("catalog:" + document.body.dataset.mode);
         if ((cached == null ? void 0 : cached.device_id) === device.id && Array.isArray(cached.parts)) {
           parts = cached.parts;
           staff = cached.staff || [];
           memberRole = cached.role || "";
           home();
+          if (!terminal) await live.restore();
           $("connection").textContent = "\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438 \xB7 \u0441\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F";
           message("\u041C\u043E\u0436\u043D\u043E \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u0442\u044C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u0442\u044C. \u041F\u0435\u0440\u0435\u0434\u0430\u0439\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u043E\u0441\u043B\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0432\u044F\u0437\u0438.", true);
           return;
@@ -1584,7 +1634,7 @@
     });
   }
   async function desktopStatus() {
-    var _a;
+    var _a, _b;
     const el = $("desktop-status");
     if (!el) return;
     if (!((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus)) {
@@ -1595,8 +1645,9 @@
       const s = await window.warehouseDesktop.desktopStatus(), update = s.update || {};
       let note = "";
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
-      if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0438 \u043E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C";
+      if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
+      if ((_b = s.terminalUpdate) == null ? void 0 : _b.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {
@@ -1656,12 +1707,9 @@
   async function updateNow() {
     var _a;
     if (updating) return;
-    if (!window.warehouseUpdateSafe(true)) {
-      message("\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0438 \u0432\u0435\u0440\u043D\u0438\u0442\u0435\u0441\u044C \u043D\u0430 \u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D.");
-      return;
-    }
     updating = true;
     try {
+      live.checkpoint();
       message("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u2026");
       if ((_a = window.warehouseDesktop) == null ? void 0 : _a.checkUpdates) {
         const state = await window.warehouseDesktop.checkUpdates();
@@ -1676,13 +1724,20 @@
         }
       }
       await (webUpdater == null ? void 0 : webUpdater.now());
-      message("");
+      message(window.warehouseUpdateSafe(true) ? "" : "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430. \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430 \u043D\u0430 \u0433\u043B\u0430\u0432\u043D\u043E\u043C \u044D\u043A\u0440\u0430\u043D\u0435; \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D.");
     } catch (e) {
       message("\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + e.message, true);
     } finally {
       updating = false;
     }
   }
+  window.warehouseRequestUpdate = () => void updateNow();
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "F5" || (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+      e.preventDefault();
+      void updateNow();
+    }
+  }, true);
   if ($("screen-refresh")) $("screen-refresh").onclick = updateNow;
   if ($("terminal-refresh")) $("terminal-refresh").onclick = updateNow;
   var usbPolling = false;

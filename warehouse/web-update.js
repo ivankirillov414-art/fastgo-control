@@ -33,7 +33,7 @@ export function startWebUpdates({canApply}){
   notify:text=>{const el=document.getElementById('web-update-status');if(el)el.textContent=text;}
  });
  const daily=createDailyCheck({read:()=>{try{return localStorage.getItem('warehouse-update-day');}catch{return ''; }},write:day=>{try{localStorage.setItem('warehouse-update-day',day);}catch{}},check:updater.check});
- setTimeout(()=>void daily(),5000);setInterval(()=>void daily(),60000);setInterval(()=>void updater.tick(),5000);
- window.addEventListener('online',()=>void daily());
+ setTimeout(()=>void updater.check(),5000);setInterval(()=>void updater.check(),60000);setInterval(()=>void updater.tick(),5000);
+ window.addEventListener('online',()=>void updater.check());
  return updater;
 }
