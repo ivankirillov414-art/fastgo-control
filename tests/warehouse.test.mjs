@@ -169,3 +169,12 @@ test('unknown product creation is owner-only, stock remains zero and retry reuse
  h.member.role='owner';const first=await h.request('unknown_resolve',{id:p.request_id,create:{name:'Новая камера',category:'Запчасти',retail_price:400}});assert.equal(first.status,200,JSON.stringify(first));assert.ok(first.data.part.id);assert.equal(first.data.part.quantity,0);
  const replay=await h.request('unknown_resolve',{id:p.request_id,create:{name:'Новая камера',category:'Запчасти',retail_price:400}});assert.equal(replay.data.part.id,first.data.part.id);assert.equal(h.snap.sheets['Товары'].rows.length,2);
 });
+
+test('laptop manual total is exact, freezes across retry and leaves catalog price unchanged',async()=>{
+ for(const amount of [0,250.45,750.99]){const h=await harness(),request_id=randomUUID();h.member.role='seller';await h.request('draft_sync',{request_id,kind:'sale',revision:1,items:[{part_id:part,quantity:2}]},'terminal');h.loseCompletion();const p={id:request_id,revision:1,payment_method:'cash',total_override:amount};assert.equal((await h.request('live_pay',p)).status,503);const retry=await h.request('live_pay',{...p,total_override:999});assert.equal(retry.status,200,retry.error);assert.equal(retry.data.total,amount);assert.equal(h.snap.sheets['Продажи'].rows.length,1);assert.equal(h.snap.sheets['Продажи'].rows[0]['Итого'],amount);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],3);assert.equal(h.snap.sheets['Товары'].rows[0]['Цена продажи, ₽'],300);assert.match(h.snap.sheets['Продажи'].rows[0]['Комментарий'],/Итого вручную/);}
+});
+test('manual total rejects malformed values and terminal overrides before stock writes',async()=>{
+ const h=await harness(),request_id=randomUUID();await h.request('draft_sync',{request_id,kind:'sale',revision:1,items:[{part_id:part,quantity:1}]},'terminal');const p={id:request_id,revision:1,payment_method:'card'};
+ for(const total_override of [-1,0.001,'250',null,100000001]){assert.equal((await h.request('live_pay',{...p,total_override})).status,400);assert.equal(h.queue[0].checkout,undefined);}
+ assert.equal((await h.request('live_pay',{...p,total_override:200},'terminal')).status,403);assert.equal(h.receipts.length,0);assert.equal((await h.request('live_pay',p)).data.total,300);
+});

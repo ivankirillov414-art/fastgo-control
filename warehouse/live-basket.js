@@ -13,6 +13,10 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  const newDraft=k=>({id:uuid(),kind:k,revision:1,acked:0,items:[],usb_ids:[],note:''});
  const source=()=>current?.payload||draft||{kind,items:[]};
  const qty=x=>overrides[x.part_id]?Number(overrides[x.part_id].value)+x.quantity-overrides[x.part_id].base:x.quantity;
+ const signature=()=>JSON.stringify(source().items);
+ const baseTotal=()=>source().items.reduce((sum,x)=>sum+x.quantity*amount(x),0);
+ function totalEdit(){const saved=load('live-total:'+documentId());return saved?.signature===signature()?saved:null;}
+ function totalValue(){if(current?.checkout?.total_override!==undefined)return current.checkout.total_override;const edit=totalEdit();if(!edit)return baseTotal();const raw=String(edit.value).trim().replace(',','.');return /^\d+(?:\.\d{1,2})?$/.test(raw)&&Number(raw)<=1e8?Number(raw):null;}
  const amount=x=>(x.custom_price?Number(x.unit_price):Number(product(x)?.retail_price||0));
  function cleanup(){active=false;stop?.();stop=null;clearTimeout(timer);clearInterval(pollTimer);pollTimer=null;}
  function changed(){draft.revision++;cache();clearTimeout(timer);timer=setTimeout(()=>void sync().catch(e=>feedback(e.message,true)),120);}
@@ -61,11 +65,12 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   }
   for(const row of [...host.children])if(!seen.has(row.dataset.part))row.remove();
   $('scan-empty').hidden=!!items.length;$('live-payment').hidden=value.kind!=='sale'||!items.length;$('live-submit').hidden=!items.length;
-  $('live-total').textContent=money(items.reduce((sum,x)=>sum+x.quantity*amount(x),0));
+  $('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());
+  $('live-total-edit').disabled=locked;const edit=totalEdit();$('live-total-field').hidden=!edit;if(document.activeElement!==$('live-total-input'))$('live-total-input').value=edit?.value??'';$('live-total-input').disabled=locked;$('live-total-reset').disabled=locked;
   for(const el of document.querySelectorAll('input[name="live-method"]'))el.disabled=locked;
  }
  function documentId(){return current?.id||draft?.id||'';}
- function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Назад">←</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого</span><b id="live-total"></b></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>');}
+ function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Назад">←</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого <button type="button" id="live-total-edit" class="total-pencil" aria-label="Изменить итоговую сумму" title="Изменить итоговую сумму">✎</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>Сумма к оплате, ₽<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Сумма к оплате"></label><button type="button" id="live-total-reset">По каталогу</button></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>');}
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
   $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;if($('scan-received'))$('scan-received').textContent='Получен код: '+code;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
@@ -80,7 +85,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    if(focus)input.focus();
   }
   if(terminal){let enabled=load('scanner:compat')===true;if(enabled)compatible(true);$('scanner-compat').onclick=()=>{enabled=!enabled;save('scanner:compat',enabled);compatible(enabled,true);};}
-  if(!terminal)$('live-submit').onclick=()=>run(finish);
+  if(!terminal){$('live-submit').onclick=()=>run(finish);$('live-total-edit').onclick=()=>{if(locked)return;if(!totalEdit())save('live-total:'+documentId(),{signature:signature(),value:String(baseTotal())});draw();$('live-total-input').focus();$('live-total-input').select();};$('live-total-input').oninput=()=>{save('live-total:'+documentId(),{signature:signature(),value:$('live-total-input').value});$('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());};$('live-total-reset').onclick=()=>{save('live-total:'+documentId(),null);draw();};}
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
  }
  async function open(k){
@@ -133,9 +138,11 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   const method=current?.checkout?.payment_method||document.querySelector('input[name="live-method"]:checked')?.value;
   if(kind==='sale'&&!method)throw Error('Выберите способ оплаты');
   let chosen;if(kind==='receipt'){chosen=value.items.map(x=>({part_id:x.part_id,quantity:qty(x)}));if(chosen.some(x=>!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>1000)||Object.values(overrides).some(x=>x.value===''))throw Error('Количество от 1 до 1000');}
+  const total=kind==='sale'?totalValue():undefined;if(total===null)throw Error('Укажите сумму от 0 до 100 000 000 ₽, не больше двух знаков после запятой');
+  const custom=kind==='sale'&&(totalEdit()||current?.checkout?.total_override!==undefined);
   locked=true;draw();try{
-   const result=await call(kind==='receipt'?'live_receive':'live_pay',{id,revision:value.revision,payment_method:method,...(chosen?{items:chosen}:{})});
-   save('live-edits:'+id,null);finished({id,payload:value,result});
+   const result=await call(kind==='receipt'?'live_receive':'live_pay',{id,revision:value.revision,payment_method:method,...(custom?{total_override:total}:{}),...(chosen?{items:chosen}:{})});
+   save('live-edits:'+id,null);save('live-total:'+id,null);finished({id,payload:value,result});
   }catch(e){const r=await call('job',{id}).catch(()=>null);if(r?.state==='done'){finished(r);return;}if(r){if(current)current=r;locked=r.state==='processing';}else locked=true;draw();throw e;}
  }
  return {open,cleanup,pollMirror,hasDraft:()=>!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!current&&!locked&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};

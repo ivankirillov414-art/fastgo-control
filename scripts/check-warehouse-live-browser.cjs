@@ -57,8 +57,8 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
   await d.locator('#live-submit').click();await t.locator('#pay').waitFor();assert.equal(api.payments.at(-1).payment_method,method);assert.deepEqual(api.payments.at(-1).items.map(x=>x.quantity),[2,1]);
  }
  // Laptop retry retains the frozen method after the server accepted the operation.
- await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();await scan(t);await d.locator('#live-submit').waitFor();await d.locator('input[value="card"]').check();api.state.holdPayment=true;await d.locator('#live-submit').click();
- await d.waitForFunction(()=>document.querySelector('input[value="card"]')?.disabled===true);await d.locator('#live-submit').click();await t.locator('#pay').waitFor();assert.equal(api.payments.at(-1).payment_method,'card');
+ await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();await scan(t);await d.locator('#live-submit').waitFor();await d.locator('#live-total-edit').click();await d.locator('#live-total-input').fill('250,45');assert.match(await d.locator('#live-total').innerText(),/250,45/);await d.locator('input[value="card"]').check();api.state.holdPayment=true;await d.locator('#live-submit').click();
+ await d.waitForFunction(()=>document.querySelector('input[value="card"]')?.disabled===true);await d.locator('#live-submit').click();await t.locator('#pay').waitFor();assert.equal(api.payments.at(-1).payment_method,'card');assert.equal(api.payments.at(-1).total_override,250.45);
  // Offline scans survive reload and reach the laptop without a manual send button.
  await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();api.state.offline=true;await scan(t);await t.locator('.last-scan').waitFor();await t.locator('#live-back').click();await t.reload();await t.locator('#pay').click();await t.locator('.last-scan').waitFor();
  api.state.offline=false;await d.locator('#live-submit').waitFor();await d.locator('input[value="cash"]').check();await d.locator('#live-submit').click();await t.locator('#pay').waitFor();assert.equal(api.payments.at(-1).items[0].quantity,1);

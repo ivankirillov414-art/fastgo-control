@@ -85,3 +85,5 @@ body.warehouse-native-window header button{-webkit-app-region:no-drag}
 @media(max-width:700px){body[data-mode=station] header{padding:12px;gap:8px}body[data-mode=station] .warehouse-sidebar{padding-top:12px}body[data-mode=station] header>b.warehouse-top-brand{font-size:22px}body[data-mode=station] header>#connection{font-size:12px}body[data-mode=station] header{order:-1}body[data-mode=station]{display:flex;flex-direction:column}body[data-mode=station] main{width:100%}body[data-mode=station] header button{font-size:12px}}
 
 #unknown-scans:empty{display:none}#unknown-scans button{display:block;margin:8px 0;width:100%;text-align:left}.unknown-dialog{max-height:90vh;overflow:auto}.unknown-dialog input,.unknown-dialog select{min-height:44px}
+
+.total-pencil{padding:2px 8px;min-height:30px;font-size:22px;margin-left:8px}#live-total-field:not([hidden]){display:flex;align-items:end;gap:12px;margin:12px 0}#live-total-field label{flex:1}#live-total-input{max-width:240px}
