@@ -14,7 +14,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  const source=()=>current?.payload||draft||{kind,items:[]};
  const qty=x=>overrides[x.part_id]?Number(overrides[x.part_id].value)+x.quantity-overrides[x.part_id].base:x.quantity;
  const signature=()=>JSON.stringify(source().items);
- const baseTotal=()=>source().items.reduce((sum,x)=>sum+x.quantity*amount(x),0);
+ const baseTotal=()=>Math.round(source().items.reduce((sum,x)=>sum+x.quantity*amount(x),0)*100)/100;
  function totalEdit(){const saved=load('live-total:'+documentId());return saved?.signature===signature()?saved:null;}
  function totalValue(){if(current?.checkout?.total_override!==undefined)return current.checkout.total_override;const edit=totalEdit();if(!edit)return baseTotal();const raw=String(edit.value).trim().replace(',','.');return /^\d+(?:\.\d{1,2})?$/.test(raw)&&Number(raw)<=1e8?Number(raw):null;}
  const amount=x=>(x.custom_price?Number(x.unit_price):Number(product(x)?.retail_price||0));

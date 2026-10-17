@@ -606,7 +606,7 @@
     const source = () => (current == null ? void 0 : current.payload) || draft2 || { kind, items: [] };
     const qty = (x) => overrides[x.part_id] ? Number(overrides[x.part_id].value) + x.quantity - overrides[x.part_id].base : x.quantity;
     const signature = () => JSON.stringify(source().items);
-    const baseTotal = () => source().items.reduce((sum, x) => sum + x.quantity * amount(x), 0);
+    const baseTotal = () => Math.round(source().items.reduce((sum, x) => sum + x.quantity * amount(x), 0) * 100) / 100;
     function totalEdit() {
       const saved = load2("live-total:" + documentId());
       return (saved == null ? void 0 : saved.signature) === signature() ? saved : null;
