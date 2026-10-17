@@ -10,6 +10,8 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  const remaining=(local,job)=>local&&local.id===job.id&&local.revision>job.payload.revision?local.items.map(x=>({...x,quantity:x.quantity-(job.payload.items.find(y=>y.part_id===x.part_id)?.quantity||0)})).filter(x=>x.quantity>0):[];
  function rememberUSB(local){if(local?.usb_ids?.length)save("usb:accepted",[...(load("usb:accepted")||[]),...local.usb_ids].slice(-10000));}
  const cache=()=>{if(draft)save(key(draft.kind),draft);};
+ function checkpoint(){if(terminal)return;cache();if(current||draft?.items.length)save('live:resume:station',{kind,current:current?JSON.parse(JSON.stringify(current)):null,draft_id:draft?.id||null});}
+ async function restore(){if(terminal)return false;const saved=load('live:resume:station');if(!saved)return false;if(saved.current){const latest=await call('job',{id:saved.current.id}).catch(()=>null);if(latest?.state==='done'){save('live:resume:station',null);return false;}await openMirror(latest||saved.current);return true;}if(load(key(saved.kind))?.id===saved.draft_id){await open(saved.kind);return true;}save('live:resume:station',null);return false;}
  const newDraft=k=>({id:uuid(),kind:k,revision:1,acked:0,items:[],usb_ids:[],note:''});
  const source=()=>current?.payload||draft||{kind,items:[]};
  const qty=x=>overrides[x.part_id]?Number(overrides[x.part_id].value)+x.quantity-overrides[x.part_id].base:x.quantity;
@@ -25,6 +27,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(!active)return;
   // A scan received while the laptop was committing belongs to the next document.
   const local=draft||load(key(job.payload.kind)),extra=remaining(local,job);
+  if(!terminal){save('live:resume:station',null);save('live-method:'+job.id,null);}
   if(local?.id===job.id){rememberUSB(local);save(key(local.kind),null);}
   if(draft){save(key(draft.kind),null);save('live:'+draft.kind,null);}
   if(extra.length){draft={...newDraft(kind),items:extra,last_part_id:extra[extra.length-1].part_id};current=null;locked=false;cache();draw();changed();return;}
@@ -53,6 +56,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    $('live-items').innerHTML=x?'<article class="last-scan"><small>Отсканировано</small><h2>'+esc(product(x)?.name||x.part_id)+'</h2><p>'+x.quantity+' шт.</p></article>':'';
    $('scan-empty').hidden=!!x;return;
   }
+  checkpoint();
   const host=$('live-items'),seen=new Set();
   for(const x of items){seen.add(x.part_id);let row=[...host.children].find(r=>r.dataset.part===x.part_id);
    if(!row){row=document.createElement('article');row.className='scan-product station-product'+(value.kind==='receipt'?' receipt-product':'');row.dataset.part=x.part_id;
@@ -87,7 +91,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    if(focus)input.focus();
   }
   if(terminal){let enabled=load('scanner:compat')===true;if(enabled)compatible(true);$('scanner-compat').onclick=()=>{enabled=!enabled;save('scanner:compat',enabled);compatible(enabled,true);};}
-  if(!terminal){$('live-submit').onclick=()=>run(finish);$('live-total-edit').onclick=()=>{if(locked)return;if(!totalEdit())save('live-total:'+documentId(),{signature:signature(),value:String(baseTotal())});draw();$('live-total-input').focus();$('live-total-input').select();};$('live-total-input').oninput=()=>{save('live-total:'+documentId(),{signature:signature(),value:$('live-total-input').value});$('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());};$('live-total-reset').onclick=()=>{save('live-total:'+documentId(),null);draw();};}
+  if(!terminal){$('live-submit').onclick=()=>run(finish);$('live-total-edit').onclick=()=>{if(locked)return;if(!totalEdit())save('live-total:'+documentId(),{signature:signature(),value:String(baseTotal())});draw();$('live-total-input').focus();$('live-total-input').select();};$('live-total-input').oninput=()=>{save('live-total:'+documentId(),{signature:signature(),value:$('live-total-input').value});$('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());};$('live-total-reset').onclick=()=>{save('live-total:'+documentId(),null);draw();};const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
  }
  async function open(k){
@@ -147,5 +151,5 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    save('live-edits:'+id,null);save('live-total:'+id,null);finished({id,payload:value,result});
   }catch(e){const r=await call('job',{id}).catch(()=>null);if(r?.state==='done'){finished(r);return;}if(r){if(current)current=r;locked=r.state==='processing';}else locked=true;draw();throw e;}
  }
- return {open,cleanup,pollMirror,hasDraft:()=>!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!current&&!locked&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
+ return {open,cleanup,checkpoint,restore,pollMirror,hasDraft:()=>!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!current&&!locked&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
 }

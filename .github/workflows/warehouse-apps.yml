@@ -22,6 +22,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-live-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-safe-refresh-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-product-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-master-stock-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-native-unknown-browser.cjs
@@ -84,5 +85,5 @@ jobs:
       fi
       mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'ТСД: пустой экран ожидания без полей и клавиатуры, после скана — последний товар. Ноутбук автоматически открывает приход или оплату и обновляет список. Количество прихода и подтверждение операции — на ноутбуке; оплата наличными, картой или переводом. USB передаёт распознанное название обратно на ТСД. Повторные доставки защищены от дублей. Сохраняются ежедневное обновление в 18:00 по Оренбургу и кнопка «Обновить сейчас». APK менять не требуется.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад: проверка обновлений без перезагрузки открытых документов; восстановление прихода, оплаты, количества, выбранного способа оплаты и ручной суммы после перезапуска. USB-установка отдельного FastGo ТСД 2.0 с проверкой SHA-256 без удаления старой оболочки и её документов. Сохранены корзинка удаления позиции прихода, ручная сумма и учёт запчастей мастеров. Старый APK приложен только для совместимости; для нового интерфейса установите FastGo ТСД 2.0 через USB.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       python3 scripts/publish-warehouse-feed.py

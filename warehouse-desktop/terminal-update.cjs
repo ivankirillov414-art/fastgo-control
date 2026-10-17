@@ -9,6 +9,25 @@ class TerminalUpdate{
  constructor({adb,dir,exec=run,fetcher=fetch}){Object.assign(this,{adb,dir,exec,fetcher});this.busy=false;}
  async command(args,timeout=15000){try{return (await this.exec(this.adb,args,{timeout,windowsHide:true,maxBuffer:1024*1024})).stdout;}catch(e){throw Error(String(e.stdout||e.stderr||e.message).includes('INSTALL_FAILED_UPDATE_INCOMPATIBLE')?'Подпись APK отличается. Обновление остановлено, данные сохранены. Нужна сборка с прежней подписью.':String(e.stderr||e.stdout||e.message).slice(0,800));}}
  async devices(){return parseDevices(await this.command(['devices','-l']));}
+ async installNative(serial,automatic=false){
+  if(this.busy)throw Error('Установка уже выполняется.');this.busy=true;
+  try{
+   if(!(await this.devices()).some(d=>d.serial===serial&&d.state==='device'))throw Error('Терминал не подключён или не подтверждена USB-отладка.');
+   const request=async url=>{const r=await this.fetcher(url,{signal:AbortSignal.timeout(90000)});if(!r.ok)throw Error('Ошибка загрузки: '+r.status);return r;};
+   const meta=await(await request('https://raw.githubusercontent.com/'+REPO+'/main/warehouse/native-update.json')).json();
+   if(meta.package!=='ru.fastgo.tsd'||!Number.isInteger(meta.versionCode)||meta.versionCode<1||!/^\d+\.\d+\.\d+$/.test(meta.versionName)||!/^([a-f0-9]{64})$/.test(meta.sha256)||!meta.url.startsWith('https://raw.githubusercontent.com/'+REPO+'/main/warehouse/native/')||!meta.url.endsWith('.apk'))throw Error('Недопустимый канал FastGo ТСД.');
+   if(automatic){const installed=await this.command(['-s',serial,'shell','dumpsys','package',meta.package]);if(Number(installed.match(/versionCode=(\d+)/)?.[1])>=meta.versionCode)return 'Установлена актуальная версия '+meta.versionName;}
+   const data=Buffer.from(await(await request(meta.url)).arrayBuffer());
+   if(data.length>20*1024*1024||crypto.createHash('sha256').update(data).digest('hex')!==meta.sha256)throw Error('Контрольная сумма APK не совпала. Установка отменена.');
+   await fs.mkdir(this.dir,{recursive:true});const file=path.join(this.dir,'native-terminal.apk');await fs.writeFile(file,data);
+   const output=await this.command(['-s',serial,'install','-r',file],120000);if(!/\bSuccess\b/.test(output))throw Error('Android не подтвердил установку: '+output);
+   const details=await this.command(['-s',serial,'shell','dumpsys','package',meta.package]);
+   if(details.match(/versionName=([^\s]+)/)?.[1]!==meta.versionName||Number(details.match(/versionCode=(\d+)/)?.[1])!==meta.versionCode)throw Error('Версия FastGo ТСД не подтверждена. Старое приложение сохранено.');
+   if(automatic)await this.command(['-s',serial,'shell','am','start','-n','ru.fastgo.tsd/.MainActivity']);
+   return 'Установлен FastGo ТСД '+meta.versionName+'. Откройте новое приложение «FastGo ТСД». Старая оболочка и её документы сохранены; незавершённые документы завершайте в ней.';
+  }finally{this.busy=false;}
+ }
+
  async install(serial){if(this.busy)throw Error('Установка уже выполняется.');this.busy=true;try{
  if(!(await this.devices()).some(d=>d.serial===serial&&d.state==='device'))throw Error('Терминал не подключён или не подтверждена USB-отладка.');
  const request=async url=>{const r=await this.fetcher(url,{headers:{'User-Agent':'FastGo-Warehouse'},signal:AbortSignal.timeout(90000)});if(!r.ok)throw Error('Ошибка загрузки: '+r.status);return r;};
