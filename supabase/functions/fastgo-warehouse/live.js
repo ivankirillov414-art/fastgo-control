@@ -55,12 +55,13 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   const c={actor_id:actor.id,mode:receiving?'receipt':'sale',payment_method:p.payment_method||'',items:items(job.payload.items).map(x=>({...x,...(job.payload.items.find(y=>y.part_id===x.part_id).custom_price?{custom_price:true,unit_price:job.payload.items.find(y=>y.part_id===x.part_id).unit_price}:{})})),note:job.payload.note};
   if(p.total_override!==undefined){if(receiving||device.kind!=='station')fail('Итоговую сумму задают на ноутбуке',403);const n=p.total_override;if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1e8||Math.abs(n*100-Math.round(n*100))>0.00001)fail('Проверьте итоговую сумму');c.total_override=n;}
   // The laptop may choose receipt quantities, but cannot replace scanned goods.
+  // The laptop may choose receipt quantities, or omit removed positions, but cannot introduce unscanned goods.
   // Revision CAS below refuses a simultaneous new scan before any stock write.
   if(p.items!==undefined){
    if(device.kind!=='station'||!receiving)fail('Количество прихода задаётся на ноутбуке',403);
    const chosen=items(p.items);
-   if(chosen.length!==c.items.length||chosen.some(x=>!c.items.some(y=>y.part_id===x.part_id)))fail('Состав прихода изменился. Проверьте отсканированные товары',409);
-   c.items=c.items.map(x=>({...x,quantity:chosen.find(y=>y.part_id===x.part_id).quantity}));
+   if(chosen.some(x=>!c.items.some(y=>y.part_id===x.part_id)))fail('Состав прихода изменился. Проверьте отсканированные товары',409);
+   c.items=chosen.map(x=>({...c.items.find(y=>y.part_id===x.part_id),quantity:x.quantity}));
   }
   prepare(await db('rpc/workshop_native_snapshot','','POST',{}),c);
   const changed=await db('workshop_warehouse_queue','id=eq.'+requestId+'&state=eq.queued&checkout=is.null&payload->>revision=eq.'+p.revision,'PATCH',{checkout:c,state:'processing'},'return=representation');
