@@ -23,7 +23,7 @@ function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-466
  case 'draft_sync':{let j=jobs.get(p.request_id);if(j&&j.state!=='queued'){status=409;error='Документ уже проводится или завершён';break;}if(!j||j.payload.revision<p.revision){j={id:p.request_id,state:'queued',payload:{live:true,...p,updated_at:new Date().toISOString()}};jobs.set(j.id,j);}data=j;break;}
  case 'job':data=jobs.get(p.id)||null;break;
  case 'live_pay':case 'live_receive':{const j=jobs.get(p.id);if(j.state==='done'){data=j.result;break;}if(!j.checkout&&p.revision!==j.payload.revision){status=409;error='Корзина изменилась';break;}j.checkout||={payment_method:p.payment_method,items:p.items||structuredClone(j.payload.items)};if(state.holdPayment){state.holdPayment=false;j.state='processing';return route.abort();}j.state='done';j.result={total:0,payment_method:j.checkout.payment_method};payments.push({...p,items:structuredClone(j.checkout.items)});data=j.result;break;}
- case 'draft_close':data=jobs.get(p.id);data.state='done';data.result={cancelled:true};break;
+ case 'draft_close':data=jobs.get(p.id);if(data.state!=='done'&&(data.state!=='queued'||data.checkout||p.revision!==undefined&&p.revision!==data.payload.revision)){status=409;error='Приход изменился или проводится';break;}data.state='done';data.result={cancelled:true};break;
  default:if(route.request().method()!=='OPTIONS')throw Error('Unexpected browser API action: '+p.action);
  }
  await route.fulfill({status,json:{data,error},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}});});}

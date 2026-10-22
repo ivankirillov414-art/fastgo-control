@@ -56,9 +56,11 @@
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
   var STORE = "fastgo_warehouse_session_v1";
+  var unified = new URLSearchParams(location.search).get("unified") === "1";
+  var SESSION_KEY = unified ? "fastgo_workshop_session" : STORE;
   var session;
   try {
-    session = JSON.parse(localStorage.getItem(STORE) || "null");
+    session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
   } catch (e) {
   }
   var userId = () => (session == null ? void 0 : session.user_id) || "";
@@ -84,7 +86,7 @@
   function save(j) {
     var _a;
     session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a = j.user) == null ? void 0 : _a.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
-    localStorage.setItem(STORE, JSON.stringify(session));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
   async function login(email, password) {
     save(await request("/auth/v1/token?grant_type=password", { email, password }));
@@ -92,7 +94,7 @@
   async function logout() {
     const token = session == null ? void 0 : session.access_token;
     session = null;
-    localStorage.removeItem(STORE);
+    localStorage.removeItem(SESSION_KEY);
     if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
     });
   }
@@ -102,6 +104,7 @@
       if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
       await refreshing;
     }
+    if (action === "service_catalog") return (await request("/functions/v1/fastgo-workshop-api", { action: "catalog", params: {} }, session.access_token)).data;
     return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
   }
   var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
@@ -700,7 +703,7 @@
       void refresh().catch(() => {
       });
       home2();
-      message2(((_a = job2.result) == null ? void 0 : _a.cancelled) ? "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
+      message2(((_a = job2.result) == null ? void 0 : _a.cancelled) ? job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
     }
     async function sync() {
       if (syncing) {
@@ -753,7 +756,7 @@
           row = document.createElement("article");
           row.className = "scan-product station-product" + (value.kind === "receipt" ? " receipt-product" : "");
           row.dataset.part = x.part_id;
-          row.innerHTML = "<strong></strong>" + (value.kind === "receipt" ? '<label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E<input type="number" min="1" max="1000" step="1" data-live-qty="' + x.part_id + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E"></label><button type="button" class="live-remove" data-live-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E" title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg></button>' : "<span data-count></span><b data-price></b>");
+          row.innerHTML = "<strong></strong>" + (value.kind === "receipt" ? '<label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E<input type="number" min="1" max="1000" step="1" data-live-qty="' + x.part_id + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E"></label><button type="button" class="live-remove" data-live-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E" title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg><span>\u0423\u0434\u0430\u043B\u0438\u0442\u044C</span></button>' : "<span data-count></span><b data-price></b>");
           host.append(row);
           const remove = row.querySelector("[data-live-remove]");
           if (remove) remove.onclick = () => {
@@ -786,6 +789,7 @@
         }
       }
       for (const row of [...host.children]) if (!seen.has(row.dataset.part)) row.remove();
+      if ($2("live-cancel")) $2("live-cancel").disabled = locked;
       $2("scan-empty").hidden = !!items.length;
       $2("live-payment").hidden = value.kind !== "sale" || !items.length;
       $2("live-submit").hidden = !items.length;
@@ -802,7 +806,7 @@
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>' + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E <button type="button" id="live-total-edit" class="total-pencil" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443" title="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443">\u270E</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435"></label><button type="button" id="live-total-reset">\u041F\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443</button></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
+      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E <button type="button" id="live-total-edit" class="total-pencil" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443" title="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443">\u270E</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435"></label><button type="button" id="live-total-reset">\u041F\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443</button></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>" + (k === "receipt" ? '<button type="button" class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434</button>' : ""));
     }
     function mount() {
       var _a;
@@ -846,6 +850,7 @@
         };
       }
       if (!terminal2) {
+        if ($2("live-cancel")) $2("live-cancel").onclick = () => run2(cancelReceipt);
         $2("live-submit").onclick = () => run2(finish);
         $2("live-total-edit").onclick = () => {
           if (locked) return;
@@ -1018,13 +1023,56 @@
       const jobs = await call2("live_jobs");
       if (!canOpen() || active && (locked || current || (draft2 == null ? void 0 : draft2.items.length))) return;
       const candidates = jobs.filter((j) => j.state !== "done").sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
-      const found = candidates.find((j) => j.payload.items.length && j.id + ":" + j.payload.revision !== dismissed);
+      const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id + ":" + j.payload.revision !== dismissed);
       if (found) {
         await openMirror(found);
         return;
       }
       const target = $2("live-terminal-panel");
-      if (target) target.textContent = candidates.length ? "\u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \xB7 " + (candidates[0].payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") : "";
+      if (target) {
+        target.textContent = "";
+        for (const saved of candidates) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = (saved.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + " \xB7 \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A";
+          button.onclick = () => run2(() => saved.terminal_id && saved.terminal_id === saved.station_id ? open(saved.payload.kind) : openMirror(saved));
+          target.append(button);
+        }
+      }
+    }
+    async function cancelReceipt() {
+      if (terminal2 || kind !== "receipt") return;
+      if (locked) throw Error("\u041F\u0440\u0438\u0445\u043E\u0434 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430");
+      if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434? \u0421\u043A\u043B\u0430\u0434\u0441\u043A\u0438\u0435 \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) return;
+      await scanChain;
+      if (draft2) await sync();
+      const id = documentId(), value = source();
+      if (!id) {
+        cleanup();
+        home2();
+        message2("\u041F\u0443\u0441\u0442\u043E\u0439 \u043F\u0440\u0438\u0445\u043E\u0434 \u0437\u0430\u043A\u0440\u044B\u0442");
+        return;
+      }
+      locked = true;
+      draw();
+      try {
+        const result = await call2("draft_close", { id, revision: value.revision });
+        if ((result == null ? void 0 : result.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435");
+        save3("live-edits:" + id, null);
+        save3("live-total:" + id, null);
+        finished(result);
+      } catch (e) {
+        const latest = await call2("job", { id }).catch(() => null);
+        if ((latest == null ? void 0 : latest.state) === "done") {
+          save3("live-edits:" + id, null);
+          finished(latest);
+          return;
+        }
+        if (current && latest) current = latest;
+        locked = (latest == null ? void 0 : latest.state) === "processing" || !!(latest == null ? void 0 : latest.checkout);
+        draw();
+        throw e;
+      }
     }
     async function finish() {
       var _a, _b, _c;
@@ -1067,7 +1115,7 @@
         throw e;
       }
     }
-    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !current && !locked && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(current == null ? void 0 : current.payload.items.length) && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
@@ -1163,6 +1211,15 @@
   var lastActivity = Date.now();
   var stopScanner;
   var stopUSB;
+  var serviceLink = $("warehouse-service");
+  if (serviceLink) serviceLink.hidden = !(window.fastgoDesktop || new URLSearchParams(location.search).get("unified") === "1");
+  serviceLink == null ? void 0 : serviceLink.addEventListener("click", (e) => {
+    var _a;
+    if (!((_a = window.fastgoWarehouseCanLeave) == null ? void 0 : _a.call(window))) {
+      e.preventDefault();
+      message("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u0435\u0440\u0435\u0434 \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u043E\u043C \u0432 \u0441\u0435\u0440\u0432\u0438\u0441", true);
+    }
+  });
   var key = (n) => "fgwarehouse:" + userId() + ":" + n;
   var load = (n) => {
     try {
@@ -1181,7 +1238,20 @@
     screen = "live";
     shell(html);
   }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: () => ["home", "live"].includes(screen) });
-  var call = (action, p = {}) => api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
+  var call = (action, p = {}) => {
+    if (!device && document.body.dataset.readonly === "true") {
+      if (action === "catalog") return api("service_catalog");
+      throw Error("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445. \u0417\u0434\u0435\u0441\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430.");
+    }
+    return api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
+  };
+  function applyReadOnly() {
+    if (document.body.dataset.readonly !== "true") return;
+    for (const id of ["receipt", "pay", "nav-receipt", "nav-pay", "shift", "usb-scanner", "terminal-update"]) if ($(id)) {
+      $(id).disabled = true;
+      $(id).title = "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043D\u0430 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
+    }
+  }
   var unknown = unknownScans({ call: (a, p) => call(a, p), parts: () => parts, refresh: catalog, run, message, owner: () => ["owner", "developer"].includes(memberRole) });
   function message(v, error = false) {
     $("message").textContent = v;
@@ -1198,6 +1268,7 @@
     } finally {
       busy = false;
       document.querySelectorAll("button").forEach((x) => x.disabled = false);
+      applyReadOnly();
     }
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
@@ -1241,6 +1312,7 @@
     if ($("nav-pay")) $("nav-pay").onclick = () => run(() => live.open("sale"));
     if ($("master-stock")) $("master-stock").hidden = !["owner", "developer"].includes(memberRole);
     document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
+    applyReadOnly();
     if ($("back")) $("back").onclick = home;
     if ($("inventory")) $("inventory").onclick = () => run(inventory);
     if ($("shift")) $("shift").onclick = shift;
@@ -1251,7 +1323,7 @@
     parts = c.parts;
     staff = c.staff;
     try {
-      save2("catalog:" + document.body.dataset.mode, { device_id: device.id, parts, staff, role: memberRole });
+      save2("catalog:" + document.body.dataset.mode, { device_id: device == null ? void 0 : device.id, parts, staff, role: memberRole });
     } catch (e) {
       message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B \u0431\u0435\u0437 \u0441\u0435\u0442\u0438.", true);
     }
@@ -1291,6 +1363,16 @@
     draft = load("draft:" + document.body.dataset.mode);
     $("logout").hidden = false;
     if (!device) {
+      if (!terminal && new URLSearchParams(location.search).get("unified") === "1") {
+        document.body.dataset.readonly = "true";
+        memberRole = "viewer";
+        await catalog();
+        $("connection").textContent = "\u041F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430 \xB7 \u043E\u0431\u0449\u0435\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435";
+        home();
+        await inventory();
+        message("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.");
+        return;
+      }
       if (!terminal) return setup();
       try {
         return await connectTerminal();
@@ -1304,7 +1386,10 @@
       $("connection").textContent = info.device.name + " \xB7 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442";
       await catalog();
       home();
-      if (!terminal) await live.restore();
+      if (!terminal) {
+        if (new URLSearchParams(location.search).get("section") === "inventory") await inventory();
+        await live.restore();
+      }
     } catch (e) {
       if (e.status === 401) {
         signIn();
@@ -1355,8 +1440,14 @@
       e.preventDefault();
       const value = e.target.elements.value.value;
       run(async () => {
-        device = await api("register", { name: value });
+        let pending = load("station-registration");
+        if (!pending) {
+          pending = { station_id: uuid(), token: uuid() + uuid() };
+          save2("station-registration", pending);
+        }
+        device = await api("register", { name: value, ...pending });
         save2("station", device);
+        save2("station-registration", null);
         await start();
       });
     };
@@ -1732,6 +1823,28 @@
     }
   }
   window.warehouseRequestUpdate = () => void updateNow();
+  window.fastgoWarehouseCanLeave = () => !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
+  window.fastgoWarehouseOpenMode = async (kind) => {
+    if (!["receipt", "sale"].includes(kind) || !window.fastgoWarehouseCanLeave() && !live.canUSB(kind)) return false;
+    if (!live.active() || live.kind() !== kind) await live.open(kind);
+    return true;
+  };
+  if (window.fastgoDesktop) {
+    window.fastgoHasUnsavedChanges = () => !window.fastgoWarehouseCanLeave();
+    window.fastgoUpdateBlockReason = (immediate) => {
+      var _a;
+      return ((_a = window.warehouseUpdateSafe) == null ? void 0 : _a.call(window, immediate)) ? "" : "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0441\u043A\u043B\u0430\u0434\u0430";
+    };
+    window.fastgoLockForUpdate = (immediate) => {
+      var _a;
+      if (!((_a = window.warehouseUpdateSafe) == null ? void 0 : _a.call(window, immediate))) return false;
+      document.body.inert = true;
+      return true;
+    };
+    window.fastgoReleaseUpdateLock = () => {
+      document.body.inert = false;
+    };
+  }
   window.addEventListener("keydown", (e) => {
     if (e.key === "F5" || (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
       e.preventDefault();

@@ -1,6 +1,6 @@
 {
   "name": "fastgo-desktop",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "private": true,
   "description": "FastGo workshop for Windows with offline database and remote printing",
   "author": "FastGo",
@@ -28,7 +28,10 @@
       "sync.cjs",
       "updates.cjs",
       "web/**/*",
-      "package.json"
+      "package.json",
+      "warehouse-runtime.cjs",
+      "warehouse-native/**/*",
+      "warehouse-station.cjs"
     ],
     "win": {
       "target": "nsis",
@@ -49,7 +52,13 @@
     "publish": {
       "provider": "generic",
       "url": "https://github.com/ivankirillov414-art/fastgo-control/releases/latest/download/"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "platform-tools",
+        "to": "platform-tools"
+      }
+    ]
   },
   "dependencies": {
     "electron-updater": "6.8.10"

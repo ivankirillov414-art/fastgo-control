@@ -3,3 +3,15 @@ supabase/.temp/
 desktop/node_modules/
 desktop/web/
 desktop/dist/
+
+desktop/warehouse-native/
+desktop/platform-tools/
+desktop/pnpm-lock.yaml
+
+warehouse-desktop/node_modules/
+warehouse-desktop/pnpm-lock.yaml
+warehouse-desktop/platform-tools/
+warehouse-desktop/dist/
+
+warehouse-desktop/updates.cjs
+desktop/inspect-nsis-build.cjs

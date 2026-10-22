@@ -1,13 +1,14 @@
 const BASE='https://oqgpjfikjpcplnxueoki.supabase.co',KEY='sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji',STORE='fastgo_warehouse_session_v1';
-let session;try{session=JSON.parse(localStorage.getItem(STORE)||'null');}catch{}
+const unified=new URLSearchParams(location.search).get('unified')==='1',SESSION_KEY=unified?'fastgo_workshop_session':STORE;
+let session;try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch{}
 export const userId=()=>session?.user_id||'';
 export const esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 export const money=n=>Number(n||0).toLocaleString('ru-RU',{style:'currency',currency:'RUB'});
 let refreshing;
 async function request(path,body,auth){let r;try{r=await fetch(BASE+path,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+auth}:{})},body:JSON.stringify(body),signal:(()=>{if(typeof AbortController==='undefined')return undefined;const c=new AbortController();setTimeout(()=>c.abort(),30000);return c.signal;})()});}catch{throw Error('Нет связи. Данные не удалены. Повторите после подключения.');}const j=await r.json();if(!r.ok)throw Object.assign(Error(j.error||j.error_description||j.message||'Ошибка сервиса'),{status:r.status});return j;}
-function save(j){session={access_token:j.access_token,refresh_token:j.refresh_token,user_id:j.user?.id||session?.user_id,expires_at:j.expires_at||Math.floor(Date.now()/1000)+j.expires_in};localStorage.setItem(STORE,JSON.stringify(session));}
+function save(j){session={access_token:j.access_token,refresh_token:j.refresh_token,user_id:j.user?.id||session?.user_id,expires_at:j.expires_at||Math.floor(Date.now()/1000)+j.expires_in};localStorage.setItem(SESSION_KEY,JSON.stringify(session));}
 export async function login(email,password){save(await request('/auth/v1/token?grant_type=password',{email,password}));}
-export async function logout(){const token=session?.access_token;session=null;localStorage.removeItem(STORE);if(token)await request('/auth/v1/logout?scope=local',{},token).catch(()=>{});}
-export async function api(action,params={}){if(!session)throw Object.assign(Error('Войдите в FastGo'),{status:401});if(session.expires_at*1000<Date.now()+60000){if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(save).finally(()=>refreshing=null);await refreshing;}return(await request('/functions/v1/fastgo-warehouse',{...params,action},session.access_token)).data;}
+export async function logout(){const token=session?.access_token;session=null;localStorage.removeItem(SESSION_KEY);if(token)await request('/auth/v1/logout?scope=local',{},token).catch(()=>{});}
+export async function api(action,params={}){if(!session)throw Object.assign(Error('Войдите в FastGo'),{status:401});if(session.expires_at*1000<Date.now()+60000){if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(save).finally(()=>refreshing=null);await refreshing;}if(action==='service_catalog')return(await request('/functions/v1/fastgo-workshop-api',{action:'catalog',params:{}},session.access_token)).data;return(await request('/functions/v1/fastgo-warehouse',{...params,action},session.access_token)).data;}
 export const uuid=()=>crypto.randomUUID?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(Number(c)^crypto.getRandomValues(new Uint8Array(1))[0]&15>>Number(c)/4).toString(16));
 export function matchBarcode(parts,value){const code=String(value).trim().toUpperCase();return parts.filter(x=>String(x.barcode||'').toUpperCase()===code||String(x.sku||'').toUpperCase()===code||x.id.toUpperCase()===code);}

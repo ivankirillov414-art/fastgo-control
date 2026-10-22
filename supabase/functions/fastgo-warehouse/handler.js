@@ -21,8 +21,11 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const actor={id:user.id,email:user.email||'',name:member.name||'',role:member.role,can_sell:cash};
  // All connections still require a verified user and an active cash-enabled member.
  // This project contains one shared workshop; only public station labels are listed.
- if(action==='stations')return out({data:(await db('workshop_warehouse_devices','kind=eq.station&active=eq.true&select=id,name,created_at&order=created_at.desc')).map(x=>({id:x.id,name:x.name,created_at:x.created_at}))});
+ const permitted=await db('workshop_terminal_stations','select=station_id');
+ const permittedIds=new Set(permitted.map(x=>x.station_id));
+ if(action==='stations')return out({data:(await db('workshop_warehouse_devices','kind=eq.station&active=eq.true&select=id,name,created_at&order=created_at.desc')).filter(x=>permittedIds.has(x.id)).map(x=>({id:x.id,name:x.name,created_at:x.created_at}))});
  if(action==='connect_terminal'){
+  if(!permittedIds.has(p.station_id))fail('Этот ноутбук не разрешён для ТСД',403);
   if(!id(p.station_id)||!id(p.terminal_id)||typeof p.token!=='string'||!(/^[a-f0-9-]{72}$/.test(p.token)))fail('Неверные данные подключения');
   const destination=(await db('workshop_warehouse_devices','id=eq.'+p.station_id+'&kind=eq.station&active=eq.true&select=id,name'))[0];
   if(!destination)fail('Складской ноутбук недоступен',404);
@@ -33,11 +36,12 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
   catch(e){if(e.status!==409)throw e;const retry=(await db('workshop_warehouse_devices','id=eq.'+p.terminal_id))[0];if(!retry||retry.kind!=='terminal'||!retry.active||retry.created_by!==user.id||retry.token_hash!==hash||retry.station_id!==destination.id)throw e;}
   return out({data:result});
  }
- if(action==='register'){const token=crypto.randomUUID()+crypto.randomUUID(),device={id:crypto.randomUUID(),kind:'station',name:String(p.name||'Складской ноутбук').slice(0,80),token_hash:await digest(token),created_by:user.id,pair_code:crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase(),pair_expires:new Date(Date.now()+600000).toISOString()};await db('workshop_warehouse_devices','','POST',device);return out({data:{id:device.id,token,pair_code:device.pair_code,name:device.name}});}
+ if(action==='register'){if(!owner)fail('Разрешить ноутбук для ТСД может только владелец',403);if(p.station_id!==undefined&&(!id(p.station_id)||typeof p.token!=='string'||!(/^[a-f0-9-]{72}$/.test(p.token))))fail('Неверная регистрация');const token=p.station_id?p.token:crypto.randomUUID()+crypto.randomUUID(),device={id:p.station_id||crypto.randomUUID(),name:String(p.name||'Ноутбук FastGo').slice(0,80)};await db('rpc/warehouse_register_terminal_station','','POST',{p_id:device.id,p_name:device.name,p_token_hash:await digest(token),p_actor:user.id});return out({data:{...device,token}});}
  if(action==='pair'){const token=crypto.randomUUID()+crypto.randomUUID(),device_id=crypto.randomUUID();const station=await db('rpc/warehouse_pair','','POST',{p_code:String(p.code||'').trim().toUpperCase(),p_id:device_id,p_token_hash:await digest(token),p_actor:user.id,p_name:'iData / терминал'});return out({data:{id:device_id,token,station_id:station,name:'Терминал'}});}
  if(!id(p.device_id)||typeof p.device_token!=='string')fail('Привяжите устройство',403);
  const device=(await db('workshop_warehouse_devices','id=eq.'+p.device_id+'&active=eq.true&token_hash=eq.'+await digest(p.device_token)))[0];if(!device)fail('Привязка отключена',403);
  const stationId=device.kind==='station'?device.id:device.station_id;
+ if(!permittedIds.has(stationId))fail('Этот ноутбук не разрешён для ТСД',403);
  if(device.kind==='terminal'&&!(await db('workshop_warehouse_devices','id=eq.'+stationId+'&active=eq.true&select=id')).length)fail('Складское рабочее место отключено',403);
  const station=()=>{if(device.kind!=='station')fail('Операция доступна только складскому ноутбуку',403);};
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
@@ -46,7 +50,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const unknown=await unknownScan(action,p,{db,actor,device,stationId,g,mutate});if(unknown!==undefined)return out({data:unknown});
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
  if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
- if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},member:{name:member.name,role:member.role}}});
+ if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},terminal_allowed:true,member:{name:member.name,role:member.role}}});
  if(action==='pair_code'){station();const code=crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase();await db('workshop_warehouse_devices','id=eq.'+device.id,'PATCH',{pair_code:code,pair_expires:new Date(Date.now()+600000).toISOString()});return out({data:{code}});}
  if(action==='catalog'){const c=await g('catalog');const staff=device.kind==='station'?await db('workshop_members','active=eq.true&role=eq.mechanic&select=profile_id,name,role,active&order=name'):[];return out({data:{parts:c.parts.filter(x=>x.active!==false),staff}});}
  if(action==='master_return'){station();if(!owner)fail('Только для владельца',403);return out({data:await mutate('master_return',{request_id:p.request_id,master_id:p.master_id,part_id:p.part_id,quantity:p.quantity})});}

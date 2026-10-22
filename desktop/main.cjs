@@ -1,7 +1,13 @@
-const {app,BrowserWindow,Menu,ipcMain,protocol,net,shell,safeStorage}=require('electron');
+const {app,BrowserWindow,Menu,ipcMain,protocol,net,shell,safeStorage,session}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
 const {Updates}=require('./updates.cjs');
+const {createWarehouseRuntime}=require('./warehouse-runtime.cjs');
+let warehouseRuntime;
+const {importLegacyStation}=require('./warehouse-station.cjs');
+const stationFile=()=>path.join(app.getPath('userData'),'warehouse-station.bin');
+function savedStation(){try{return JSON.parse(safeStorage.decryptString(fs.readFileSync(stationFile())));}catch{return null;}}
+
 const BASE='https://oqgpjfikjpcplnxueoki.supabase.co',KEY='sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji';
 app.setName('FastGo');
 protocol.registerSchemesAsPrivileged([{scheme:'fastgo',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
@@ -15,16 +21,17 @@ async function validToken(){if(!credentials?.access_token)throw Object.assign(Er
  if(!refreshing)refreshing=fetch(BASE+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:credentials.refresh_token}),signal:AbortSignal.timeout(15000)}).then(async r=>{const j=await r.json();if(!r.ok)throw Object.assign(Error('Войдите в FastGo снова'),{status:r.status});persistSession({access_token:j.access_token,refresh_token:j.refresh_token,user_id:j.user.id,expires_at:Math.floor(Date.now()/1000)+j.expires_in});}).finally(()=>refreshing=null);
  await refreshing;
  }return credentials.access_token;}
-async function cloud(pathname,body){if(!net.isOnline()||Date.now()<nextProbe)throw Error('Нет связи. Работаем с локальной базой');try{const token=pathname.startsWith('/functions/')?await validToken():credentials?.access_token;const r=await fetch(BASE+pathname,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body||{}),signal:AbortSignal.timeout(25000)});const j=await r.json();if(!r.ok)throw Object.assign(Error(j.error||j.message||j.error_description||'Ошибка сервера'),{status:r.status});online=true;return j;}catch(e){if(transient(e)){online=false;nextProbe=Date.now()+15000;}throw e;}}
+async function cloud(pathname,body){if(!net.isOnline()||!pathname.endsWith('fastgo-warehouse')&&Date.now()<nextProbe)throw Error('Нет связи. Работаем с локальной базой');try{const token=pathname.startsWith('/functions/')?await validToken():credentials?.access_token;const r=await fetch(BASE+pathname,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body||{}),signal:AbortSignal.timeout(25000)});const j=await r.json();if(!r.ok)throw Object.assign(Error(j.error||j.message||j.error_description||'Ошибка сервера'),{status:r.status});online=true;return j;}catch(e){if(transient(e)){online=false;nextProbe=Date.now()+15000;}throw e;}}
 const remote=async(action,params,expectedActor=actor)=>{if(actor!==expectedActor)throw Object.assign(Error('Учётная запись изменилась. Синхронизация остановлена.'),{status:401});const j=await cloud('/functions/v1/fastgo-workshop-api',{action,params});if(!j.data)throw Error('Сервер не подтвердил ответ');return j.data;};
 const remotePrint=async(action,params={})=>(await cloud('/functions/v1/fastgo-print-api',{action,params})).data;
 function wrapError(error){return {__desktopError:true,message:error.message,status:error.status||0};}
 function handle(channel,fn){ipcMain.handle(channel,async(event,...args)=>{try{if(!String(event.senderFrame?.url||'').startsWith('fastgo://app/'))throw Error('Недоверенное окно');if(updateInstalling&&channel!=='fg-state')throw Error('FastGo обновляется. Приложение сейчас откроется снова.');const tracked=!['fg-state','fg-update-check','fg-update-now'].includes(channel);if(tracked)activeRequests++;try{return await fn(event,...args);}finally{if(tracked)activeRequests--;}}catch(e){return wrapError(e);}});}
 function warm(options={}){if(updateInstalling||updateDraining||!actor)return;if(warmPromise)return warmPromise;warming=true;const account=actor;warmPromise=(async()=>{try{await sync.warm(account,options);online=true;lastError='';}catch(e){online=false;lastError=e.message;}finally{warming=false;warmPromise=null;notify();}})();return warmPromise;}
 async function request(event,{path:pathname,body={}}){
- if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
+ if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api|fastgo-warehouse)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
  if(pathname.startsWith('/auth/'))return cloud(pathname,body);
  if(!actor)throw Object.assign(Error('Войдите в FastGo'),{status:401});
+ if(pathname.endsWith('fastgo-warehouse')){const result=await cloud(pathname,body);if(body.action==='info')await warehouseRuntime?.authorize(result.data?.terminal_allowed===true);return result;}
  if(pathname.endsWith('fastgo-print-api'))return {data:await remotePrint(body.action,body.params||{})};
  const action=body.action,p=body.params||{},account=actor;
  if(writes.has(action)){
@@ -78,9 +85,11 @@ app.whenReady().then(()=>{
  protocol.handle('fastgo',async req=>{const url=new URL(req.url);if(url.hostname!=='app')return new Response('Forbidden',{status:403});const relative=decodeURIComponent(url.pathname).replace(/^\/+/,''),target=path.resolve(webRoot,relative||'workshop.html');if(!target.startsWith(webRoot+path.sep))return new Response('Forbidden',{status:403});
   return net.fetch(require('node:url').pathToFileURL(target).href);
  });
+ handle('fg-warehouse-station-get',async()=>{let station=savedStation();if(!station){station=await importLegacyStation({app,BrowserWindow,session,actor});if(station)fs.writeFileSync(stationFile(),safeStorage.encryptString(JSON.stringify(station)));}return station;});
+ handle('fg-warehouse-station-save',(_e,value)=>{if(!value?.id||!value?.token)throw Error('Неверное рабочее место');if(!safeStorage.isEncryptionAvailable())throw Error('Защищённое хранилище недоступно');fs.writeFileSync(stationFile(),safeStorage.encryptString(JSON.stringify(value)));return true;});
  handle('fg-session-get',()=>credentials);
- handle('fg-session-save',(_e,s)=>{if(!s?.access_token||!s.user_id)throw Error('Неверная сессия');persistSession(s);notify();return true;});
- handle('fg-session-clear',()=>{persistSession(null);notify();return true;});
+ handle('fg-session-save',async(_e,s)=>{if(!s?.access_token||!s.user_id)throw Error('Неверная сессия');if(actor&&actor!==s.user_id)await warehouseRuntime?.authorize(false);persistSession(s);notify();return true;});
+ handle('fg-session-clear',async()=>{await warehouseRuntime?.authorize(false);persistSession(null);notify();return true;});
  handle('fg-request',request);
  handle('fg-diagnostics',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(!['owner','developer'].includes(member?.role))throw Error('Доступно только владельцу');return store.diagnostics(actor);});
  handle('fg-home-data',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(store.cache(actor,'request_access')?.active===false||!['developer','owner','admin','receiver','manager','mechanic'].includes(member?.role))throw Error('Нет доступа к мастерской');return store.homeData(actor);});
@@ -100,7 +109,10 @@ app.whenReady().then(()=>{
  win.setMenu(null);
  win.webContents.setWindowOpenHandler(({url})=>{if(url.startsWith('https://'))shell.openExternal(url);return {action:'deny'};});
  win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('fastgo://app/')){event.preventDefault();if(url.startsWith('https://'))shell.openExternal(url);}});
+ warehouseRuntime=createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow:()=>win,updates:()=>updates,warehouseCall:async action=>{const station=savedStation();if(!station||!actor)return [];try{return(await cloud('/functions/v1/fastgo-warehouse',{action,device_id:station.id,device_token:station.token})).data;}catch(e){if([401,403].includes(e.status))await warehouseRuntime.authorize(false);return [];}}});
+ win.webContents.on('did-finish-load',()=>warehouseRuntime.loaded());
  win.loadURL('fastgo://app/workshop.html#home');
+ const bound=savedStation();if(bound&&actor)cloud('/functions/v1/fastgo-warehouse',{action:'info',device_id:bound.id,device_token:bound.token}).then(r=>warehouseRuntime.authorize(r.data?.terminal_allowed===true)).catch(()=>{});
  // Never put printing behind a database upload or its network timeout.
  setInterval(()=>{if(actor&&!updateInstalling&&!updateDraining)sync.run(actor).catch(()=>{});},5000);
  setInterval(()=>{if(actor){localPrints();pollPrint();}},1000);
@@ -115,7 +127,7 @@ app.whenReady().then(()=>{
     // must not starve installation forever, but any claimed print must finish first.
     updateDraining=idle;
     // Queued jobs are durable and resume after restart; only active work must drain.
-    const busy=()=>printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
+    const busy=()=>warehouseRuntime?.busy()?'Завершите документ склада и передачу сканов':printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
     const waiting=rendererReason||busy();if(waiting)return {allowed:false,reason:waiting};
     // Recheck on the renderer thread and block new input atomically before quitting.
     const locked=await win.webContents.executeJavaScript('window.fastgoLockForUpdate?.('+Boolean(immediate)+') === true');
@@ -131,4 +143,4 @@ app.whenReady().then(()=>{
 });
 app.on('second-instance',()=>{if(win){win.restore();win.focus();}});
 app.on('window-all-closed',()=>app.quit());
-app.on('before-quit',()=>{try{store?.backup();store?.close();}catch{}});
+app.on('before-quit',()=>{warehouseRuntime?.close();try{store?.backup();store?.close();}catch{}});

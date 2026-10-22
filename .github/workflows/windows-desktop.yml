@@ -1,7 +1,7 @@
 name: FastGo Windows
 on:
   push:
-    paths: ['desktop/**', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
+    paths: ['desktop/**', 'warehouse/**', 'warehouse-desktop/**', 'warehouse.html', 'workshop/**', 'workshop.html', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,6 +17,11 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
         working-directory: desktop
+      - name: Bundle official Android USB tools
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile "$env:RUNNER_TEMP/fastgo-adb.zip"
+          Expand-Archive "$env:RUNNER_TEMP/fastgo-adb.zip" -DestinationPath desktop
       - run: npm test
         working-directory: desktop
       - name: Verify incremental sync metadata and access checks
@@ -31,6 +36,11 @@ jobs:
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/smoke.cjs
+      - name: Verify the warehouse inside the common app
+        shell: pwsh
+        run: |
+          $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
+          node desktop/tests/unified-smoke.cjs
       - name: Verify repair receipt fits one A4 page
         shell: pwsh
         run: |

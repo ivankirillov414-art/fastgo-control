@@ -31,7 +31,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(local?.id===job.id){rememberUSB(local);save(key(local.kind),null);}
   if(draft){save(key(draft.kind),null);save('live:'+draft.kind,null);}
   if(extra.length){draft={...newDraft(kind),items:extra,last_part_id:extra[extra.length-1].part_id};current=null;locked=false;cache();draw();changed();return;}
-  draft=null;current=null;locked=false;cleanup();void refresh().catch(()=>{});home();message(job.result?.cancelled?'Документ отменён':kind==='receipt'?'Приход оформлен':'Оплата принята');
+  draft=null;current=null;locked=false;cleanup();void refresh().catch(()=>{});home();message(job.result?.cancelled?(job.payload.kind==='receipt'?'Приход отменён':'Документ отменён'):kind==='receipt'?'Приход оформлен':'Оплата принята');
  }
  async function sync(){
   if(syncing){await syncing;if(draft&&draft.acked<draft.revision)return sync();return;}
@@ -60,7 +60,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   const host=$('live-items'),seen=new Set();
   for(const x of items){seen.add(x.part_id);let row=[...host.children].find(r=>r.dataset.part===x.part_id);
    if(!row){row=document.createElement('article');row.className='scan-product station-product'+(value.kind==='receipt'?' receipt-product':'');row.dataset.part=x.part_id;
-    row.innerHTML='<strong></strong>'+(value.kind==='receipt'?'<label>Количество<input type="number" min="1" max="1000" step="1" data-live-qty="'+x.part_id+'" aria-label="Количество"></label><button type="button" class="live-remove" data-live-remove="'+x.part_id+'" aria-label="Удалить позицию" title="Удалить позицию"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg></button>':'<span data-count></span><b data-price></b>');host.append(row);
+    row.innerHTML='<strong></strong>'+(value.kind==='receipt'?'<label>Количество<input type="number" min="1" max="1000" step="1" data-live-qty="'+x.part_id+'" aria-label="Количество"></label><button type="button" class="live-remove" data-live-remove="'+x.part_id+'" aria-label="Удалить позицию" title="Удалить позицию"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg><span>Удалить</span></button>':'<span data-count></span><b data-price></b>');host.append(row);
     const remove=row.querySelector('[data-live-remove]');if(remove)remove.onclick=()=>{if(locked)return;const item=source().items.find(i=>i.part_id===x.part_id);overrides[x.part_id]={value:0,base:item.quantity,removed:true};save('live-edits:'+documentId(),overrides);draw();};
     const input=row.querySelector('input');if(input){input.oninput=()=>{const item=source().items.find(i=>i.part_id===x.part_id);overrides[x.part_id]={value:input.value,base:item.quantity};save('live-edits:'+documentId(),overrides);};input.onblur=draw;}
    }
@@ -70,13 +70,14 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    else{row.querySelector('[data-count]').textContent=x.quantity+' шт.';row.querySelector('[data-price]').textContent=money(amount(x)*x.quantity);}
   }
   for(const row of [...host.children])if(!seen.has(row.dataset.part))row.remove();
+  if($('live-cancel'))$('live-cancel').disabled=locked;
   $('scan-empty').hidden=!!items.length;$('live-payment').hidden=value.kind!=='sale'||!items.length;$('live-submit').hidden=!items.length;
   $('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());
   $('live-total-edit').disabled=locked;const edit=totalEdit();$('live-total-field').hidden=!edit;if(document.activeElement!==$('live-total-input'))$('live-total-input').value=edit?.value??'';$('live-total-input').disabled=locked;$('live-total-reset').disabled=locked;
   for(const el of document.querySelectorAll('input[name="live-method"]'))el.disabled=locked;
  }
  function documentId(){return current?.id||draft?.id||'';}
- function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Назад">←</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого <button type="button" id="live-total-edit" class="total-pencil" aria-label="Изменить итоговую сумму" title="Изменить итоговую сумму">✎</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>Сумма к оплате, ₽<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Сумма к оплате"></label><button type="button" id="live-total-reset">По каталогу</button></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>');}
+ function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Закрыть и сохранить черновик">'+(terminal?'←':'← К списку')+'</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого <button type="button" id="live-total-edit" class="total-pencil" aria-label="Изменить итоговую сумму" title="Изменить итоговую сумму">✎</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>Сумма к оплате, ₽<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Сумма к оплате"></label><button type="button" id="live-total-reset">По каталогу</button></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>'+(k==='receipt'?'<button type="button" class="live-cancel" id="live-cancel">Отменить весь приход</button>':''));}
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
   $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;if($('scan-received'))$('scan-received').textContent='Получен код: '+code;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
@@ -91,7 +92,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    if(focus)input.focus();
   }
   if(terminal){let enabled=load('scanner:compat')===true;if(enabled)compatible(true);$('scanner-compat').onclick=()=>{enabled=!enabled;save('scanner:compat',enabled);compatible(enabled,true);};}
-  if(!terminal){$('live-submit').onclick=()=>run(finish);$('live-total-edit').onclick=()=>{if(locked)return;if(!totalEdit())save('live-total:'+documentId(),{signature:signature(),value:String(baseTotal())});draw();$('live-total-input').focus();$('live-total-input').select();};$('live-total-input').oninput=()=>{save('live-total:'+documentId(),{signature:signature(),value:$('live-total-input').value});$('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());};$('live-total-reset').onclick=()=>{save('live-total:'+documentId(),null);draw();};const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
+  if(!terminal){if($('live-cancel'))$('live-cancel').onclick=()=>run(cancelReceipt);$('live-submit').onclick=()=>run(finish);$('live-total-edit').onclick=()=>{if(locked)return;if(!totalEdit())save('live-total:'+documentId(),{signature:signature(),value:String(baseTotal())});draw();$('live-total-input').focus();$('live-total-input').select();};$('live-total-input').oninput=()=>{save('live-total:'+documentId(),{signature:signature(),value:$('live-total-input').value});$('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());};$('live-total-reset').onclick=()=>{save('live-total:'+documentId(),null);draw();};const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
  }
  async function open(k){
@@ -134,9 +135,28 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(terminal||!canOpen()||active&&(current||draft?.items.length))return;
   const jobs=await call('live_jobs');if(!canOpen()||active&&(locked||current||draft?.items.length))return;
   const candidates=jobs.filter(j=>j.state!=='done').sort((a,b)=>String(b.payload.updated_at||b.created_at).localeCompare(String(a.payload.updated_at||a.created_at)));
-  const found=candidates.find(j=>j.payload.items.length&&j.id+':'+j.payload.revision!==dismissed);
+  const found=candidates.find(j=>(!j.station_id||j.terminal_id!==j.station_id)&&j.id+':'+j.payload.revision!==dismissed);
   if(found){await openMirror(found);return;}
-  const target=$('live-terminal-panel');if(target)target.textContent=candidates.length?'Ожидание · '+(candidates[0].payload.kind==='receipt'?'Приход':'Оплата'):'';
+  const target=$('live-terminal-panel');if(target){target.textContent='';for(const saved of candidates){const button=document.createElement('button');button.type='button';button.textContent=(saved.payload.kind==='receipt'?'Приход':'Оплата')+' · Открыть черновик';button.onclick=()=>run(()=>saved.terminal_id&&saved.terminal_id===saved.station_id?open(saved.payload.kind):openMirror(saved));target.append(button);}}
+ }
+ async function cancelReceipt(){
+  if(terminal||kind!=='receipt')return;
+  if(locked)throw Error('Приход уже проводится. Дождитесь результата');
+  if(!confirm('Отменить весь приход? Складские остатки не изменятся.'))return;
+  await scanChain;if(draft)await sync();
+  const id=documentId(),value=source();
+  if(!id){cleanup();home();message('Пустой приход закрыт');return;}
+  locked=true;draw();
+  try{
+   const result=await call('draft_close',{id,revision:value.revision});
+   if(result?.state!=='done')throw Error('Сервер не подтвердил отмену. Повторите');
+   save('live-edits:'+id,null);save('live-total:'+id,null);finished(result);
+  }catch(e){
+   const latest=await call('job',{id}).catch(()=>null);
+   if(latest?.state==='done'){save('live-edits:'+id,null);finished(latest);return;}
+   if(current&&latest)current=latest;
+   locked=latest?.state==='processing'||!!latest?.checkout;draw();throw e;
+  }
  }
  async function finish(){
   if(terminal)return;await scanChain;if(draft)await sync();
@@ -151,5 +171,5 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    save('live-edits:'+id,null);save('live-total:'+id,null);finished({id,payload:value,result});
   }catch(e){const r=await call('job',{id}).catch(()=>null);if(r?.state==='done'){finished(r);return;}if(r){if(current)current=r;locked=r.state==='processing';}else locked=true;draw();throw e;}
  }
- return {open,cleanup,checkpoint,restore,pollMirror,hasDraft:()=>!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!current&&!locked&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
+ return {open,cleanup,checkpoint,restore,pollMirror,hasDraft:()=>active&&(!!current||locked)||!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!locked&&!current?.payload.items.length&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
 }

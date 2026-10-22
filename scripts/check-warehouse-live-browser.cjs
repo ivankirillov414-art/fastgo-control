@@ -73,7 +73,7 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  await t.locator('#scanner-compat').click();await t.locator('#live-back').click();
  // Unknown code is visible as an error; the next hardware scan works without tapping the sink.
  await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();await scan(t,'UNKNOWN-CODE');await t.waitForFunction(()=>document.getElementById('scan-feedback').textContent.includes('не найден'));
- await d.locator('#pay').click();await d.locator('.scan-empty').waitFor();
+ if(await d.locator('#pay').count())await d.locator('#pay').click();await d.locator('.scan-empty').waitFor();
  await scan(t,'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+api.quote.id);
  await t.getByRole('heading',{name:'Ремонт № 0026'}).waitFor();await d.locator('#repair-pay').waitFor();assert.equal(await t.locator('#repair-pay,#repair-check').count(),0);
  await d.locator('input[name="repair-method"][value="transfer"]').check();await d.locator('#repair-pay').click();await t.locator('#pay').waitFor();assert.equal(api.state.repairPaid,true);assert.equal(api.payments.at(-1).payment_method,'transfer');
