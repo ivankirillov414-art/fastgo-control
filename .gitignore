@@ -12,3 +12,6 @@ warehouse-desktop/node_modules/
 warehouse-desktop/pnpm-lock.yaml
 warehouse-desktop/platform-tools/
 warehouse-desktop/dist/
+
+warehouse-desktop/updates.cjs
+desktop/inspect-nsis-build.cjs

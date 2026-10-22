@@ -27,10 +27,13 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
  }
  owns();
  if(action==='draft_close'){
-  if(job.terminal_id!==device.id)fail('Этот документ открыт на другом устройстве',403);
+  const stationReceipt=device.kind==='station'&&job.payload.kind==='receipt'&&['owner','developer','seller'].includes(actor.role);
+  if(job.terminal_id!==device.id&&!stationReceipt)fail('Этот документ открыт на другом устройстве',403);
   if(job.state==='done')return job;
   if(job.state!=='queued'||job.checkout)fail('Документ проводится; дождитесь результата',409);
-  const changed=await db('workshop_warehouse_queue','id=eq.'+requestId+'&state=eq.queued&checkout=is.null','PATCH',{state:'done',result:{cancelled:true},completed_at:new Date().toISOString()},'return=representation');
+  if(job.terminal_id!==device.id&&p.revision!==job.payload.revision)fail('Приход изменился. Проверьте новые сканы и повторите отмену',409);
+  if(p.revision!==undefined&&p.revision!==job.payload.revision)fail('Приход изменился. Повторите отмену',409);
+  const changed=await db('workshop_warehouse_queue','id=eq.'+requestId+'&state=eq.queued&checkout=is.null&payload->>revision=eq.'+job.payload.revision,'PATCH',{state:'done',result:{cancelled:true},completed_at:new Date().toISOString()},'return=representation');
   if(!changed.length)fail('Документ уже проводится',409);return changed[0];
  }
  if(job.state==='done')return job.result;
