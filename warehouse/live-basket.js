@@ -134,7 +134,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(terminal||!canOpen()||active&&(current||draft?.items.length))return;
   const jobs=await call('live_jobs');if(!canOpen()||active&&(locked||current||draft?.items.length))return;
   const candidates=jobs.filter(j=>j.state!=='done').sort((a,b)=>String(b.payload.updated_at||b.created_at).localeCompare(String(a.payload.updated_at||a.created_at)));
-  const found=candidates.find(j=>j.payload.items.length&&j.id+':'+j.payload.revision!==dismissed);
+  const found=candidates.find(j=>(!j.station_id||j.terminal_id!==j.station_id)&&j.id+':'+j.payload.revision!==dismissed);
   if(found){await openMirror(found);return;}
   const target=$('live-terminal-panel');if(target)target.textContent=candidates.length?'Ожидание · '+(candidates[0].payload.kind==='receipt'?'Приход':'Оплата'):'';
  }
@@ -151,5 +151,5 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    save('live-edits:'+id,null);save('live-total:'+id,null);finished({id,payload:value,result});
   }catch(e){const r=await call('job',{id}).catch(()=>null);if(r?.state==='done'){finished(r);return;}if(r){if(current)current=r;locked=r.state==='processing';}else locked=true;draw();throw e;}
  }
- return {open,cleanup,checkpoint,restore,pollMirror,hasDraft:()=>!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!current&&!locked&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
+ return {open,cleanup,checkpoint,restore,pollMirror,hasDraft:()=>active&&(!!current||locked)||!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!locked&&!current?.payload.items.length&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
 }

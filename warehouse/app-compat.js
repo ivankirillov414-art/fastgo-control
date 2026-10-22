@@ -56,9 +56,11 @@
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
   var STORE = "fastgo_warehouse_session_v1";
+  var unified = new URLSearchParams(location.search).get("unified") === "1";
+  var SESSION_KEY = unified ? "fastgo_workshop_session" : STORE;
   var session;
   try {
-    session = JSON.parse(localStorage.getItem(STORE) || "null");
+    session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
   } catch (e) {
   }
   var userId = () => (session == null ? void 0 : session.user_id) || "";
@@ -84,7 +86,7 @@
   function save(j) {
     var _a;
     session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a = j.user) == null ? void 0 : _a.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
-    localStorage.setItem(STORE, JSON.stringify(session));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
   async function login(email, password) {
     save(await request("/auth/v1/token?grant_type=password", { email, password }));
@@ -92,7 +94,7 @@
   async function logout() {
     const token = session == null ? void 0 : session.access_token;
     session = null;
-    localStorage.removeItem(STORE);
+    localStorage.removeItem(SESSION_KEY);
     if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
     });
   }
@@ -102,6 +104,7 @@
       if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
       await refreshing;
     }
+    if (action === "service_catalog") return (await request("/functions/v1/fastgo-workshop-api", { action: "catalog", params: {} }, session.access_token)).data;
     return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
   }
   var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
@@ -1018,7 +1021,7 @@
       const jobs = await call2("live_jobs");
       if (!canOpen() || active && (locked || current || (draft2 == null ? void 0 : draft2.items.length))) return;
       const candidates = jobs.filter((j) => j.state !== "done").sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
-      const found = candidates.find((j) => j.payload.items.length && j.id + ":" + j.payload.revision !== dismissed);
+      const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id + ":" + j.payload.revision !== dismissed);
       if (found) {
         await openMirror(found);
         return;
@@ -1067,7 +1070,7 @@
         throw e;
       }
     }
-    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !current && !locked && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(current == null ? void 0 : current.payload.items.length) && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
@@ -1163,6 +1166,15 @@
   var lastActivity = Date.now();
   var stopScanner;
   var stopUSB;
+  var serviceLink = $("warehouse-service");
+  if (serviceLink) serviceLink.hidden = !(window.fastgoDesktop || new URLSearchParams(location.search).get("unified") === "1");
+  serviceLink == null ? void 0 : serviceLink.addEventListener("click", (e) => {
+    var _a;
+    if (!((_a = window.fastgoWarehouseCanLeave) == null ? void 0 : _a.call(window))) {
+      e.preventDefault();
+      message("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u0435\u0440\u0435\u0434 \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u043E\u043C \u0432 \u0441\u0435\u0440\u0432\u0438\u0441", true);
+    }
+  });
   var key = (n) => "fgwarehouse:" + userId() + ":" + n;
   var load = (n) => {
     try {
@@ -1181,7 +1193,20 @@
     screen = "live";
     shell(html);
   }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: () => ["home", "live"].includes(screen) });
-  var call = (action, p = {}) => api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
+  var call = (action, p = {}) => {
+    if (!device && document.body.dataset.readonly === "true") {
+      if (action === "catalog") return api("service_catalog");
+      throw Error("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445. \u0417\u0434\u0435\u0441\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430.");
+    }
+    return api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
+  };
+  function applyReadOnly() {
+    if (document.body.dataset.readonly !== "true") return;
+    for (const id of ["receipt", "pay", "nav-receipt", "nav-pay", "shift", "usb-scanner", "terminal-update"]) if ($(id)) {
+      $(id).disabled = true;
+      $(id).title = "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043D\u0430 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
+    }
+  }
   var unknown = unknownScans({ call: (a, p) => call(a, p), parts: () => parts, refresh: catalog, run, message, owner: () => ["owner", "developer"].includes(memberRole) });
   function message(v, error = false) {
     $("message").textContent = v;
@@ -1198,6 +1223,7 @@
     } finally {
       busy = false;
       document.querySelectorAll("button").forEach((x) => x.disabled = false);
+      applyReadOnly();
     }
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
@@ -1241,6 +1267,7 @@
     if ($("nav-pay")) $("nav-pay").onclick = () => run(() => live.open("sale"));
     if ($("master-stock")) $("master-stock").hidden = !["owner", "developer"].includes(memberRole);
     document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
+    applyReadOnly();
     if ($("back")) $("back").onclick = home;
     if ($("inventory")) $("inventory").onclick = () => run(inventory);
     if ($("shift")) $("shift").onclick = shift;
@@ -1251,7 +1278,7 @@
     parts = c.parts;
     staff = c.staff;
     try {
-      save2("catalog:" + document.body.dataset.mode, { device_id: device.id, parts, staff, role: memberRole });
+      save2("catalog:" + document.body.dataset.mode, { device_id: device == null ? void 0 : device.id, parts, staff, role: memberRole });
     } catch (e) {
       message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B \u0431\u0435\u0437 \u0441\u0435\u0442\u0438.", true);
     }
@@ -1291,6 +1318,16 @@
     draft = load("draft:" + document.body.dataset.mode);
     $("logout").hidden = false;
     if (!device) {
+      if (!terminal && new URLSearchParams(location.search).get("unified") === "1") {
+        document.body.dataset.readonly = "true";
+        memberRole = "viewer";
+        await catalog();
+        $("connection").textContent = "\u041F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430 \xB7 \u043E\u0431\u0449\u0435\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435";
+        home();
+        await inventory();
+        message("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.");
+        return;
+      }
       if (!terminal) return setup();
       try {
         return await connectTerminal();
@@ -1304,7 +1341,10 @@
       $("connection").textContent = info.device.name + " \xB7 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442";
       await catalog();
       home();
-      if (!terminal) await live.restore();
+      if (!terminal) {
+        if (new URLSearchParams(location.search).get("section") === "inventory") await inventory();
+        await live.restore();
+      }
     } catch (e) {
       if (e.status === 401) {
         signIn();
@@ -1355,8 +1395,14 @@
       e.preventDefault();
       const value = e.target.elements.value.value;
       run(async () => {
-        device = await api("register", { name: value });
+        let pending = load("station-registration");
+        if (!pending) {
+          pending = { station_id: uuid(), token: uuid() + uuid() };
+          save2("station-registration", pending);
+        }
+        device = await api("register", { name: value, ...pending });
         save2("station", device);
+        save2("station-registration", null);
         await start();
       });
     };
@@ -1732,6 +1778,28 @@
     }
   }
   window.warehouseRequestUpdate = () => void updateNow();
+  window.fastgoWarehouseCanLeave = () => !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
+  window.fastgoWarehouseOpenMode = async (kind) => {
+    if (!["receipt", "sale"].includes(kind) || !window.fastgoWarehouseCanLeave() && !live.canUSB(kind)) return false;
+    if (!live.active() || live.kind() !== kind) await live.open(kind);
+    return true;
+  };
+  if (window.fastgoDesktop) {
+    window.fastgoHasUnsavedChanges = () => !window.fastgoWarehouseCanLeave();
+    window.fastgoUpdateBlockReason = (immediate) => {
+      var _a;
+      return ((_a = window.warehouseUpdateSafe) == null ? void 0 : _a.call(window, immediate)) ? "" : "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0441\u043A\u043B\u0430\u0434\u0430";
+    };
+    window.fastgoLockForUpdate = (immediate) => {
+      var _a;
+      if (!((_a = window.warehouseUpdateSafe) == null ? void 0 : _a.call(window, immediate))) return false;
+      document.body.inert = true;
+      return true;
+    };
+    window.fastgoReleaseUpdateLock = () => {
+      document.body.inert = false;
+    };
+  }
   window.addEventListener("keydown", (e) => {
     if (e.key === "F5" || (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
       e.preventDefault();

@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),out=path.join(__dirname,'web');fs.rmSync(out,{recursive:true,force:true});fs.mkdirSync(out,{recursive:true});
-for(const folder of ['workshop','vendor'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true});
-for(const name of ['workshop.html','workshop.css','fastgo-logo.png'])if(fs.existsSync(path.join(root,name)))fs.copyFileSync(path.join(root,name),path.join(out,name));
+for(const folder of ['workshop','vendor','warehouse'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true});
+for(const name of ['workshop.html','workshop.css','fastgo-logo.png','warehouse.html'])if(fs.existsSync(path.join(root,name)))fs.copyFileSync(path.join(root,name),path.join(out,name));
 function modify(name,fn){const file=path.join(out,name);fs.writeFileSync(file,fn(fs.readFileSync(file,'utf8')));}
 modify('workshop/core.js',s=>{
  s=s.replace("try{session=JSON.parse(localStorage.getItem(STORE)||'null');if(!session&&localStorage.getItem('fastgo_token'))session={access_token:localStorage.getItem('fastgo_token')};}catch{}","try{session=await window.fastgoDesktop.getSession();}catch{}");
@@ -21,3 +21,13 @@ if(fs.existsSync(path.join(out,'workshop/repair-print.js')))modify('workshop/rep
 modify('workshop.html',s=>s.replace('</head>','<script type="module" src="desktop-ui.js"></script></head>'));
 for(const name of ['desktop-ui.js','update-progress.js','document-host.html','document-host.js'])fs.copyFileSync(path.join(__dirname,'renderer',name),path.join(out,name));
 console.log('Prepared bundled offline FastGo interface');
+
+modify('warehouse.html',s=>s.replace(/<script defer src="warehouse\/app-compat\.js[^"]*"><\/script>/,'<script type="module" src="warehouse/app.js"></script>'));
+modify('warehouse/client.js',s=>s.replace("let session;try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch{}","let session=await window.fastgoDesktop.getSession();").replace('async function request(path,body,auth){', 'async function request(path,body,auth){const r=await window.fastgoDesktop.request(path,body);if(r?.__desktopError)throw Object.assign(Error(r.message),{status:r.status});return r;}\nasync function browserRequestUnused(path,body,auth){').replace('localStorage.setItem(SESSION_KEY,JSON.stringify(session));','window.fastgoDesktop.saveSession(session);').replace('export async function logout(){','export async function logout(){await window.fastgoDesktop.clearSession();').replace('if(session.expires_at*1000<Date.now()+60000)', 'if(false)'));
+modify('warehouse/app.js',s=>s.replace("device=load(terminal?'terminal':'station');","try{device=await window.fastgoDesktop.warehouseStation()||load('station');if(device)await window.fastgoDesktop.saveWarehouseStation(device);}catch(e){return connectionError(e);}").replace("save('station',device);save('station-registration',null);await start();","save('station',device);await window.fastgoDesktop.saveWarehouseStation(device);save('station-registration',null);await start();"));
+const native=path.join(__dirname,'warehouse-native');fs.mkdirSync(native,{recursive:true});
+for(const name of ['terminal-update.cjs','terminal-preload.cjs','terminal.html','terminal-ui.js','warehouse-bridge.cjs','usb-scanner.cjs','usb-bridge.cjs','usb-preload.cjs','usb-control.html','usb-control.js','usb-phone.html','usb-phone.js'])fs.copyFileSync(path.join(__dirname,'../warehouse-desktop',name),path.join(native,name));
+
+// The source web updater imports a CJS module for esbuild; native ESM needs its browser export.
+modify('warehouse/web-update.js',s=>s.replace("../warehouse-desktop/update-clock.cjs","./update-clock.js"));
+fs.writeFileSync(path.join(out,'warehouse/update-clock.js'),fs.readFileSync(path.join(root,'warehouse-desktop/update-clock.cjs'),'utf8').replace('module.exports={createDailyCheck};','export {createDailyCheck};'));
