@@ -2,8 +2,8 @@ plugins { id 'com.android.application' }
 android {
  namespace 'ru.fastgo.tsd'
  compileSdk 35
- defaultConfig { applicationId 'ru.fastgo.tsd.app'; minSdk 23; targetSdk 35; versionCode = Integer.parseInt(project.findProperty('fastgoVersionCode') ?: '4'); versionName = project.findProperty('fastgoVersionName') ?: '2.1.1'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
+ defaultConfig { applicationId 'ru.fastgo.tsd.app'; minSdk 23; targetSdk 35; versionCode = Integer.parseInt(project.findProperty('fastgoVersionCode') ?: '5'); versionName = project.findProperty('fastgoVersionName') ?: '2.1.2'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
  buildTypes { release { minifyEnabled false } }
  testOptions { unitTests.returnDefaultValues = true }
 }
-dependencies { testImplementation 'junit:junit:4.13.2'; testImplementation 'org.json:json:20240303'; androidTestImplementation 'androidx.test:runner:1.6.2'; androidTestImplementation 'androidx.test:core:1.6.1'; androidTestImplementation 'androidx.test.ext:junit:1.2.1' }
+dependencies { testImplementation 'junit:junit:4.13.2'; testImplementation 'org.json:json:20240303'; androidTestImplementation 'androidx.test:runner:1.6.2'; androidTestImplementation 'androidx.test:core:1.6.1'; androidTestImplementation 'androidx.test.ext:junit:1.2.1'; androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1' }
