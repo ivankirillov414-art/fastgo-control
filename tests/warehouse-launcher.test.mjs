@@ -1,5 +1,11 @@
 import{test}from'node:test';import assert from'node:assert/strict';import{createRequire}from'node:module';
 const require=createRequire(import.meta.url),{WAREHOUSE_URL,registerTerminalLauncher}=require('../warehouse-desktop/warehouse-bridge.cjs');
+test('incoming document restores only its trusted warehouse window',()=>{
+ const {registerWarehouseAttention}=require('../warehouse-desktop/warehouse-bridge.cjs');let handler,restored=0,shown=0,focused=0;const frame={url:WAREHOUSE_URL},webContents={mainFrame:frame},win={webContents,isDestroyed:()=>false,isMinimized:()=>true,restore:()=>restored++,show:()=>shown++,focus:()=>focused++};
+ registerWarehouseAttention({handle:(name,fn)=>{assert.equal(name,'warehouse:incoming');handler=fn;}},()=>win);
+ assert.throws(()=>handler({sender:webContents,senderFrame:{url:WAREHOUSE_URL}}),/Недоступно/);assert.equal(focused,0);
+ assert.equal(handler({sender:webContents,senderFrame:frame}),true);assert.deepEqual([restored,shown,focused],[1,1,1]);
+});
 test('warehouse button opens USB updater only from its trusted main frame',()=>{
  let handler,opened=0;const frame={url:WAREHOUSE_URL},contents={mainFrame:frame},win={isDestroyed:()=>false,webContents:contents};
  registerTerminalLauncher({handle:(name,fn)=>{assert.equal(name,'terminal:open');handler=fn;}},()=>win,()=>opened++);

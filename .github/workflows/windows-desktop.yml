@@ -41,6 +41,7 @@ jobs:
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/unified-smoke.cjs
+          node desktop/tests/terminal-auto-open.cjs
       - name: Verify repair receipt fits one A4 page
         shell: pwsh
         run: |

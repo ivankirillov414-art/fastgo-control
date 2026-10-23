@@ -1,7 +1,7 @@
 const {app,BrowserWindow,shell,Menu,ipcMain,dialog}=require('electron'),{Updates}=require('./updates.cjs');
 app.setName('FastGo Склад');if(!app.requestSingleInstanceLock())app.quit();let win,terminalWindow;
 const path=require('node:path'),{TerminalUpdate}=require('./terminal-update.cjs');
-const {WAREHOUSE_URL,allowedWarehouseURL,registerTerminalLauncher}=require('./warehouse-bridge.cjs');
+const {WAREHOUSE_URL,allowedWarehouseURL,registerTerminalLauncher,registerWarehouseAttention}=require('./warehouse-bridge.cjs');
 const {USBScanner}=require('./usb-scanner.cjs'),{registerUSBBridge}=require('./usb-bridge.cjs');
 let terminal,usb,usbWindow,updates,autoTerminal;
 const {createAutoTerminal}=require('./auto-terminal.cjs');
@@ -12,6 +12,7 @@ ipcMain.handle('terminal:devices',async e=>{trusted(e);return terminal.devices()
 ipcMain.handle('terminal:install',async(e,serial)=>{trusted(e);if(typeof serial!=='string'||serial.length>200)throw Error('Неверный терминал');return terminal.install(serial);});
 ipcMain.handle('terminal:installNative',async(e,serial)=>{trusted(e);if(typeof serial!=='string'||serial.length>200)throw Error('Неверный терминал');return terminal.installNative(serial);});
 registerTerminalLauncher(ipcMain,()=>win,showTerminal);
+registerWarehouseAttention(ipcMain,()=>win);
 app.whenReady().then(async()=>{terminal=new TerminalUpdate({adb:path.join(process.resourcesPath,'platform-tools','adb.exe'),dir:path.join(app.getPath('userData'),'terminal-update')});usb=await new USBScanner({terminal,dir:path.join(app.getPath('userData'),'usb-scanner')}).init();registerUSBBridge({ipcMain,getWindow:()=>win,getControl:()=>usbWindow,getScanner:()=>usb,terminal,open:showUSB,getDesktopStatus:()=>({version:app.getVersion(),terminalUpdate:autoTerminal?.state||{},update:updates?.state||{status:'idle'},usb:usb.snapshot()}),checkUpdates:async()=>{if(updates)await updates.now();return updates?.state;}});Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Терминал iData',submenu:[{label:'Сканировать по USB',click:showUSB},{label:'Установить / обновить по USB',click:showTerminal}]}]));win=new BrowserWindow({width:1250,height:850,minWidth:850,minHeight:620,title:'FastGo Склад',backgroundColor:'#091827',titleBarStyle:'hidden',titleBarOverlay:{color:'#091827',symbolColor:'#dcecff',height:64},autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'warehouse-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  autoTerminal=createAutoTerminal({terminal,blocked:()=>usb.state.pending.length>0||!!usb.target});setTimeout(()=>void autoTerminal.tick(),15000);setInterval(()=>void autoTerminal.tick(),60000);
  win.webContents.on('before-input-event',(event,input)=>{if(input.type==='keyDown'&&(input.key==='F5'||(input.control||input.meta)&&input.key.toLowerCase()==='r')){event.preventDefault();void win.webContents.executeJavaScript('window.warehouseRequestUpdate?.()').catch(()=>{});}});

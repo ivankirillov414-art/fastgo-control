@@ -593,6 +593,13 @@
     const $2 = (id) => document.getElementById(id), key2 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
     let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve();
     const product2 = (x) => parts2().find((p) => p.id === (x == null ? void 0 : x.part_id));
+    const shown = /* @__PURE__ */ new Map();
+    const jobStamp = (value) => String((value == null ? void 0 : value.payload.updated_at) || (value == null ? void 0 : value.created_at) || "");
+    function suspend() {
+      if (current) dismissed = current.id + ":" + current.payload.revision;
+      checkpoint();
+      cleanup();
+    }
     const rejected = (text) => Object.assign(Error(text), { rejected: true });
     const remaining = (local, job2) => local && local.id === job2.id && local.revision > job2.payload.revision ? local.items.map((x) => {
       var _a;
@@ -920,6 +927,7 @@
       kind = value.payload.kind;
       draft2 = null;
       current = value;
+      shown.set(value.id, value.payload.revision);
       locked = value.state === "processing";
       overrides = load2("live-edits:" + value.id) || {};
       active = true;
@@ -1019,13 +1027,16 @@
       }
     }
     async function pollMirror() {
-      if (terminal2 || !canOpen() || active && (current || (draft2 == null ? void 0 : draft2.items.length))) return;
+      var _a, _b;
+      if (terminal2 || !canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const jobs = await call2("live_jobs");
-      if (!canOpen() || active && (locked || current || (draft2 == null ? void 0 : draft2.items.length))) return;
+      if (!canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const candidates = jobs.filter((j) => j.state !== "done").sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
-      const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id + ":" + j.payload.revision !== dismissed);
+      const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id !== (current == null ? void 0 : current.id) && shown.get(j.id) !== j.payload.revision && j.id + ":" + j.payload.revision !== dismissed && (!active || !current || jobStamp(j) > jobStamp(current)));
       if (found) {
+        suspend();
         await openMirror(found);
+        void ((_b = (_a = window.warehouseDesktop) == null ? void 0 : _a.showIncoming) == null ? void 0 : _b.call(_a));
         return;
       }
       const target = $2("live-terminal-panel");
@@ -1115,7 +1126,7 @@
         throw e;
       }
     }
-    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(current == null ? void 0 : current.payload.items.length) && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    return { open, cleanup, suspend, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(draft2 == null ? void 0 : draft2.items.length) && !(current == null ? void 0 : current.checkout), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
@@ -1237,7 +1248,7 @@
   var live = liveBasket({ terminal, call: (a, p) => call(a, p), parts: () => parts, render: (html) => {
     screen = "live";
     shell(html);
-  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: () => ["home", "live"].includes(screen) });
+  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: canReceiveIncoming });
   var call = (action, p = {}) => {
     if (!device && document.body.dataset.readonly === "true") {
       if (action === "catalog") return api("service_catalog");
@@ -1597,20 +1608,27 @@
       });
     } else await checkout(await call("job", { id: queuedId }));
   }
-  var autoRepairSeen = null;
+  function canReceiveIncoming() {
+    var _a;
+    return !busy && !job && !draft && ["home", "live", "inventory", "holdings"].includes(screen) && !document.querySelector("dialog[open]") && !((_a = document.activeElement) == null ? void 0 : _a.matches("input:not(#live-code):not(#filter),textarea,select"));
+  }
+  var autoQueueSeen = /* @__PURE__ */ new Set();
   async function poll() {
-    if (terminal || !["home", "live"].includes(screen) || !live.canAutoOpen() || polling || busy || !device) return;
+    var _a, _b;
+    if (terminal || !canReceiveIncoming() || !live.canAutoOpen() || polling || !device) return;
     polling = true;
     try {
-      await live.pollMirror();
       const jobs = await call("queue");
-      if (!["home", "live"].includes(screen) || !live.canAutoOpen()) return;
-      const repairJob = jobs.find((x) => x.payload.kind === "repair");
-      if (repairJob && repairJob.id !== autoRepairSeen) {
-        autoRepairSeen = repairJob.id;
-        await repair.checkout(repairJob);
+      if (!canReceiveIncoming() || !live.canAutoOpen()) return;
+      const next = jobs.filter((x) => x.state !== "done" && !autoQueueSeen.has(x.id)).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      if (next) {
+        live.suspend();
+        await checkout(next);
+        autoQueueSeen.add(next.id);
+        void ((_b = (_a = window.warehouseDesktop) == null ? void 0 : _a.showIncoming) == null ? void 0 : _b.call(_a));
         return;
       }
+      await live.pollMirror();
       if (!$("queue")) return;
       $("queue").innerHTML = jobs.length ? jobs.map((x) => '<div class="job"><span>' + (x.payload.kind === "repair" ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 " + esc(x.payload.repair.number) + " \xB7 " + money(x.payload.repair.due) : "\u041A\u043E\u0440\u0437\u0438\u043D\u0430 " + esc(x.id.slice(0, 8)) + " \xB7 " + x.payload.items.reduce((n, i) => n + i.quantity, 0) + " \u0448\u0442.") + '<small style="display:block">' + new Date(x.created_at).toLocaleString("ru-RU") + " \xB7 " + (x.state === "processing" ? "\u0422\u0440\u0435\u0431\u0443\u0435\u0442 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043E\u043F\u043B\u0430\u0442\u044B") + '</small></span><button data-job="' + x.id + '">\u041E\u0442\u043A\u0440\u044B\u0442\u044C</button></div>').join("") : "\u041D\u043E\u0432\u044B\u0445 \u043A\u043E\u0440\u0437\u0438\u043D \u043D\u0435\u0442";
       $("queue").querySelectorAll("[data-job]").forEach((b) => b.onclick = () => run(async () => checkout(jobs.find((x) => x.id === b.dataset.job))));

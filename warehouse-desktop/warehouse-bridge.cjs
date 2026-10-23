@@ -10,4 +10,11 @@ function registerTerminalLauncher(ipcMain,getWindow,openTerminal){
   return true;
  });
 }
-module.exports={WAREHOUSE_URL,allowedWarehouseURL,registerTerminalLauncher};
+function registerWarehouseAttention(ipcMain,getWindow){
+ ipcMain.handle('warehouse:incoming',event=>{
+  const win=getWindow();
+  if(!win||win.isDestroyed()||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!allowedWarehouseURL(event.senderFrame?.url))throw Error('Недоступно');
+  if(win.isMinimized())win.restore();win.show();win.focus();return true;
+ });
+}
+module.exports={WAREHOUSE_URL,allowedWarehouseURL,registerTerminalLauncher,registerWarehouseAttention};

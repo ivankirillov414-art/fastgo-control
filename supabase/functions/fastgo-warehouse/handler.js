@@ -1,4 +1,5 @@
 import {unknownScan} from './unknown.js';
+import {repairScan} from './repair-scan.js';
 import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
@@ -47,6 +48,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
  const activeMaster=async masterId=>{const m=(await db('workshop_members','profile_id=eq.'+masterId+'&active=eq.true&role=eq.mechanic&select=profile_id,name'))[0];if(!m)fail('Выберите активного мастера');return m;};
  const mutate=async(a,params)=>{if(!id(params.request_id))fail('Неверный код операции');const body={...params};delete body.__request_fingerprint;const fingerprint=await digest(JSON.stringify({action:a,params:body}));const old=await g('operation_retry',{request_id:params.request_id,action:a,fingerprint});if(old.status==='committed')return old.result;return g(a,{...params,__request_fingerprint:fingerprint});};
+ const repairScanResult=await repairScan(action,p,{db,actor,device,stationId,key});if(repairScanResult!==undefined)return out({data:repairScanResult});
  const unknown=await unknownScan(action,p,{db,actor,device,stationId,g,mutate});if(unknown!==undefined)return out({data:unknown});
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
  if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
