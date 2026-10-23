@@ -11,7 +11,7 @@ import org.junit.*;import org.junit.runner.RunWith;import static org.junit.Asser
    store.put("active_document","");String id=store.open("receipt").getString("id");store.scan(id,"UPDATE-BLOCKING-SCAN");
    AppUpdates updates=new AppUpdates(context,store,(url,limit)->{if(url.contains(".json"))return meta.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);downloads[0]++;return apk;});
    assertTrue(updates.check(true).contains("незакрытые"));assertEquals(0,downloads[0]);assertFalse(updates.ready());
-   store.requestCancel(id);store.complete(id,store.doc(id).getInt("revision"));updates.check(true);assertTrue(updates.ready());assertEquals(1,downloads[0]);
+   store.requestCancel(id);store.complete(id,store.doc(id).getInt("revision"));updates.check(false);assertTrue(updates.ready());assertEquals(1,downloads[0]);
    store.put("upgrade-proof","retained-database");new SecurePrefs(context).put("upgrade-proof","retained-encrypted-value");
   }
  }
