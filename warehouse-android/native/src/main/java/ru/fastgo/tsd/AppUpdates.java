@@ -14,26 +14,30 @@ public final class AppUpdates {
   PackageManager pm=context.getPackageManager();PackageInfo own=pm.getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNATURES),next=pm.getPackageArchiveInfo(file.getAbsolutePath(),PackageManager.GET_SIGNATURES);
   if(next==null||!own.packageName.equals(next.packageName)||next.versionCode!=meta.getInt("versionCode")||next.versionCode<=own.versionCode||next.signatures==null||next.signatures.length!=1||own.signatures==null||own.signatures.length!=1||!own.signatures[0].equals(next.signatures[0]))throw new IOException("Подпись или версия APK не совпала");return next;
  }
- public synchronized String check(boolean manual)throws Exception{
+ public String check(boolean manual)throws Exception{synchronized(AppUpdates.class){return checkLocked(manual);}}
+ private String checkLocked(boolean manual)throws Exception{
   long last=0;try{last=Long.parseLong(store.get("update_last_check"));}catch(NumberFormatException ignored){}
   if(!manual&&System.currentTimeMillis()-last<60000)return notice();
   JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));JSONObject channels=meta.optJSONObject("channels");if(channels!=null&&channels.optJSONObject(context.getPackageName())!=null)meta=channels.getJSONObject(context.getPackageName());PackageInfo own=context.getPackageManager().getPackageInfo(context.getPackageName(),0);
   if(!context.getPackageName().equals(meta.getString("package")))throw new IOException("Канал обновлений относится к другому приложению");
-  store.put("update_last_check",Long.toString(System.currentTimeMillis()));
+  store.put("update_last_check",Long.toString(System.currentTimeMillis()));store.put("update_check_error","");
   if(meta.getInt("versionCode")<=own.versionCode){new File(context.getCacheDir(),"update.apk").delete();store.put("update_pending_version","");return manual?"Установлена актуальная версия "+own.versionName:"";}
   store.put("update_pending_version",meta.getString("versionName"));String blocked=blockers();if(!blocked.isEmpty())return notice();
   String url=meta.getString("url");if(!url.startsWith("https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/")||!url.endsWith(".apk"))throw new IOException("Недопустимый адрес обновления");
   File target=new File(context.getCacheDir(),"update.apk");if(target.isFile()){try{verify(target,meta);store.put("update_meta",meta.toString());return notice();}catch(Exception ignored){target.delete();}}
   byte[] data=get(url,20000000);File temp=new File(context.getCacheDir(),"update-download.apk");try(FileOutputStream out=new FileOutputStream(temp)){out.write(data);out.getFD().sync();}
   try{verify(temp,meta);}catch(Exception e){temp.delete();throw e;}
-  if(target.exists()&&!target.delete())throw new IOException("Не удалось заменить APK");if(!temp.renameTo(target))throw new IOException("Не удалось сохранить APK");store.put("update_meta",meta.toString());return notice();
+  if(target.exists()&&!target.delete())throw new IOException("Не удалось заменить APK");if(!temp.renameTo(target))throw new IOException("Не удалось сохранить APK");store.put("update_meta",meta.toString());store.put("update_download_url",url);store.put("update_downloaded_at",Long.toString(System.currentTimeMillis()));return notice();
  }
  public boolean ready(){return new File(context.getCacheDir(),"update.apk").isFile();}
  public String readyVersion(){return store.get("update_pending_version");}
  public boolean installerAllowed(){return Build.VERSION.SDK_INT<26||context.getPackageManager().canRequestPackageInstalls();}
- public boolean install()throws Exception{
+ public boolean install()throws Exception{synchronized(AppUpdates.class){return installLocked();}}
+ private boolean installLocked()throws Exception{
   String blocked=blockers();if(!blocked.isEmpty())throw new IOException(blocked);File apk=new File(context.getCacheDir(),"update.apk");verify(apk,new JSONObject(store.get("update_meta")));
   if(Build.VERSION.SDK_INT>=26&&!context.getPackageManager().canRequestPackageInstalls()){context.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+context.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return false;}
-  Uri uri=Uri.parse("content://"+context.getPackageName()+".updates/update.apk");context.startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_ACTIVITY_NEW_TASK));return true;
+  Uri uri=Uri.parse("content://"+context.getPackageName()+".updates/update.apk");Intent install=new Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri,"application/vnd.android.package-archive").putExtra(Intent.EXTRA_RETURN_RESULT,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  store.put("update_install_started_at",Long.toString(System.currentTimeMillis()));
+  if(context instanceof android.app.Activity)((android.app.Activity)context).startActivityForResult(install,7301);else context.startActivity(install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return true;
  }
 }

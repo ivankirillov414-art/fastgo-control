@@ -19,6 +19,21 @@ import android.widget.EditText;import android.view.inputmethod.*;import org.json
    scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");for(String kind:new String[]{"receipt","repair"}){invoke(a,"open",new Class[]{String.class},kind);assertTrue(((android.widget.Button)field(a,"cancel")).getText().toString().contains(kind.equals("receipt")?"приход":"ремонта"));String id=(String)field(a,"documentId");store.requestCancel(id);invoke(a,"refresh",new Class[]{});assertFalse(((android.widget.Button)field(a,"cancel")).isEnabled());assertTrue(store.doc(id).getBoolean("cancel_requested"));store.complete(id,store.doc(id).getInt("revision"));assertEquals(0,ScanDocument.count(store.open(kind)));}}catch(Exception e){throw new AssertionError(e);}});
   }
  }
+ @Test public void repairBackOpensVisibleCancellationAndConfirmationPersistsTheRequest()throws Exception{
+  try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();final String[] id={""};
+   scenario.onActivity(a->{try{
+    LocalStore store=(LocalStore)field(a,"store");invoke(a,"open",new Class[]{String.class},"repair");id[0]=(String)field(a,"documentId");store.scan(id[0],"WRONG-REPAIR-CANCELLATION-FIXTURE");invoke(a,"refresh",new Class[]{});
+    android.widget.Button cancel=(android.widget.Button)field(a,"cancel");android.graphics.Rect visible=new android.graphics.Rect();assertTrue(cancel.getGlobalVisibleRect(visible));assertEquals(cancel.getHeight(),visible.height());assertTrue(cancel.isEnabled());
+    a.onBackPressed();
+   }catch(Exception error){throw new AssertionError(error);}});
+   InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   android.view.accessibility.AccessibilityNodeInfo root=InstrumentationRegistry.getInstrumentation().getUiAutomation().getRootInActiveWindow();assertNotNull(root);
+   java.util.List<android.view.accessibility.AccessibilityNodeInfo> buttons=root.findAccessibilityNodeInfosByText("Да, отменить");assertFalse(buttons.isEmpty());assertTrue(buttons.get(0).performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+   Thread.sleep(300);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");assertTrue(store.doc(id[0]).getBoolean("cancel_requested"));assertFalse(((android.widget.Button)field(a,"cancel")).isEnabled());store.complete(id[0],store.doc(id[0]).getInt("revision"));}catch(Exception error){throw new AssertionError(error);}});
+  }
+ }
  @Test public void nativeEditorAcceptsImeScanWithoutSoftKeyboardAndPersistsIt()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();

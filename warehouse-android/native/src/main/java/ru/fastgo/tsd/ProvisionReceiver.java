@@ -22,7 +22,7 @@ public final class ProvisionReceiver extends BroadcastReceiver {
    if("status".equals(intent.getStringExtra("operation"))){
     SecurePrefs prefs=new SecurePrefs(context);
     try(LocalStore store=new LocalStore(context)){
-     setResultCode(0);setResultData(new JSONObject().put("version",context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName).put("configured",!prefs.get("auth").isEmpty()&&!prefs.get("device").isEmpty()).put("blocking_documents",store.blockingDocuments()).put("active_screen",!store.get("active_document").isEmpty()).toString());return;
+     setResultCode(0);setResultData(new JSONObject().put("version",context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName).put("configured",!prefs.get("auth").isEmpty()&&!prefs.get("device").isEmpty()).put("blocking_documents",store.blockingDocuments()).put("active_screen",!store.get("active_document").isEmpty()).put("update_pending_version",store.get("update_pending_version")).put("update_ready",new AppUpdates(context,store).ready()).put("update_last_check",store.get("update_last_check")).put("update_download_url",store.get("update_download_url")).put("update_downloaded_at",store.get("update_downloaded_at")).put("update_install_started_at",store.get("update_install_started_at")).put("update_installed_at",store.get("update_installed_at")).put("update_background_checked_at",store.get("update_background_checked_at")).put("update_background_error",store.get("update_background_error")).toString());return;
     }
    }
    String encoded=intent.getStringExtra("payload");

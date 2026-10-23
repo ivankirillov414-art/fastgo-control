@@ -38,6 +38,6 @@ public final class SyncEngine {
   try{quote=(JSONObject)api.call("repair_quote",new JSONObject().put("code",code));}catch(WarehouseApi.ApiError e){store.put("repair:"+id,"Ошибка: "+e.getMessage());return;}
   store.put("repair:"+id,"Ремонт № "+quote.optString("number")+"\n"+quote.optString("vehicle")+"\nК оплате: "+quote.optString("due")+" ₽");
   if(d.optInt("acked")==0){api.call("enqueue_repair",new JSONObject().put("request_id",id).put("repair_id",quote.getString("id")));store.acknowledge(id,d.getInt("revision"));}
-  Object r=api.call("job",new JSONObject().put("id",id));if(r instanceof JSONObject&&((JSONObject)r).optString("state").equals("done"))store.complete(id,d.getInt("revision"));
+  Object r=api.call("job",new JSONObject().put("id",id));if(r instanceof JSONObject){JSONObject job=(JSONObject)r;store.put("server:"+id,job.optString("state"));if(job.optString("state").equals("done"))store.complete(id,d.getInt("revision"));}
  }
 }
