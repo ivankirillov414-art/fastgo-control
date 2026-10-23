@@ -16,7 +16,7 @@ class TerminalUpdate{
   try{
    if(!(await this.devices()).some(d=>d.serial===serial&&d.state==='device'))throw Error('Терминал не подключён или не подтверждена USB-отладка.');
    const request=async url=>{const r=await this.fetcher(url,{signal:AbortSignal.timeout(90000)});if(!r.ok)throw Error('Ошибка загрузки: '+r.status);return r;};
-   const meta=await(await request('https://raw.githubusercontent.com/'+REPO+'/main/warehouse/native-update.json')).json();
+   const manifest=await(await request('https://raw.githubusercontent.com/'+REPO+'/main/warehouse/native-update.json')).json(),meta=manifest.channels?.['ru.fastgo.tsd.app']||manifest;
    if(!['ru.fastgo.tsd','ru.fastgo.tsd.app'].includes(meta.package)||!Number.isInteger(meta.versionCode)||meta.versionCode<1||!/^\d+\.\d+\.\d+$/.test(meta.versionName)||!/^([a-f0-9]{64})$/.test(meta.sha256)||!meta.url.startsWith('https://raw.githubusercontent.com/'+REPO+'/main/warehouse/native/')||!meta.url.endsWith('.apk'))throw Error('Недопустимый канал FastGo ТСД.');
    const installed=await this.command(['-s',serial,'shell','dumpsys','package',meta.package]);const installedCode=Number(installed.match(/versionCode=(\d+)/)?.[1]);
    if(automatic&&installedCode>=meta.versionCode)return 'Установлена актуальная версия '+meta.versionName;

@@ -17,7 +17,7 @@ public final class AppUpdates {
  public synchronized String check(boolean manual)throws Exception{
   long last=0;try{last=Long.parseLong(store.get("update_last_check"));}catch(NumberFormatException ignored){}
   if(!manual&&System.currentTimeMillis()-last<60000)return notice();
-  JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));PackageInfo own=context.getPackageManager().getPackageInfo(context.getPackageName(),0);
+  JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));JSONObject channels=meta.optJSONObject("channels");if(channels!=null&&channels.optJSONObject(context.getPackageName())!=null)meta=channels.getJSONObject(context.getPackageName());PackageInfo own=context.getPackageManager().getPackageInfo(context.getPackageName(),0);
   if(!context.getPackageName().equals(meta.getString("package")))throw new IOException("Канал обновлений относится к другому приложению");
   store.put("update_last_check",Long.toString(System.currentTimeMillis()));
   if(meta.getInt("versionCode")<=own.versionCode){new File(context.getCacheDir(),"update.apk").delete();store.put("update_pending_version","");return manual?"Установлена актуальная версия "+own.versionName:"";}
