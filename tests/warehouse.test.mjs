@@ -3,6 +3,25 @@ import {createHandler,digest} from '../supabase/functions/fastgo-warehouse/handl
 import {masterIssue,items,masterHoldings} from '../supabase/functions/fastgo-warehouse/model.js';
 function seedRepair(h){const id=randomUUID();h.snap.sheets['Ремонты'].rows.push({__row:2,repair_id:id,'Номер ремонта':26,'Статус':'В ремонте','Итого':1500,'Оплачено':500,revision:2});return id;}
 const repairCode=id=>'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+id;
+for(const kind of ['receipt','sale','repair'])test('TSD cancellation of '+kind+' survives offline first delivery and rejects late replays',async()=>{
+ const h=await harness(),id=randomUUID();const cancelled=await h.request('cancel_document',{id,kind,revision:2},'terminal');assert.equal(cancelled.status,200,cancelled.error);assert.equal(cancelled.data.result.cancelled,true);
+ assert.equal((await h.request('cancel_document',{id,kind,revision:2},'terminal')).status,200);assert.equal(h.queue.length,1);assert.equal(h.queue[0].state,'done');
+ if(kind!=='repair')assert.equal((await h.request('draft_sync',{request_id:id,kind,revision:3,items:[{part_id:part,quantity:1}]},'terminal')).status,409);
+ assert.equal(h.receipts.length,0);assert.equal(h.snap.sheets['Оплаты'].rows.length,0);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+});
+test('TSD cancels its own queued repair but cannot cancel another terminal or an ongoing checkout',async()=>{
+ const h=await harness(),repair=seedRepair(h),id=randomUUID();await h.request('enqueue_repair',{request_id:id,repair_id:repair},'terminal');
+ h.queue[0].terminal_id=randomUUID();assert.equal((await h.request('cancel_document',{id,kind:'repair',revision:1},'terminal')).status,403);h.queue[0].terminal_id=terminal;h.queue[0].state='processing';h.queue[0].checkout={actor_id:actor};
+ assert.equal((await h.request('cancel_document',{id,kind:'repair',revision:1},'terminal')).status,409);h.queue[0].state='queued';h.queue[0].checkout=null;
+ assert.equal((await h.request('cancel_document',{id,kind:'repair',revision:1},'terminal')).data.result.cancelled,true);
+ assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
+});
+test('zero-value repair still reaches the laptop, while payment remains forbidden',async()=>{
+ const h=await harness(),repair=seedRepair(h),id=randomUUID();h.snap.sheets['Ремонты'].rows[0]['Итого']=0;h.snap.sheets['Ремонты'].rows[0]['Оплачено']=0;
+ assert.equal((await h.request('enqueue_repair',{request_id:id,repair_id:repair},'terminal')).status,200);assert.equal((await h.request('queue')).data[0].payload.repair.payable,false);
+ const scan=await h.request('scan_unknown',{request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)},'terminal');assert.equal(scan.status,200,scan.error);assert.equal(scan.data.payload.kind,'repair');
+ assert.equal((await h.request('checkout',{id,payment_method:'cash',amount:0,expected_revision:2})).status,409);assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
+});
 test('native sale QR routes to the paired cashier as a repair, never as an unknown product or automatic payment',async()=>{
  const h=await harness(),repair=seedRepair(h),p={request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)};
  for(let i=0;i<2;i++){const r=await h.request('scan_unknown',p,'terminal');assert.equal(r.status,200,r.error);assert.equal(r.data.payload.kind,'repair');}

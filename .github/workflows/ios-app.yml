@@ -1,0 +1,62 @@
+name: FastGo iPhone
+on:
+ push:
+  branches: [main]
+  paths: ['ios/**','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/ios-app.yml']
+ pull_request:
+  paths: ['ios/**','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/ios-app.yml']
+ workflow_dispatch:
+permissions: {contents: read}
+jobs:
+ build:
+  runs-on: macos-latest
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-node@v4
+     with: {node-version: '24'}
+   - run: node ios/prepare-web.cjs
+   - name: Compile iPhone application
+     run: xcodebuild -project ios/FastGo.xcodeproj -scheme FastGo -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
+   - name: Package IPA for user signing
+     run: |
+      mkdir -p ios/build/package/Payload
+      cp -R ios/build/device/Build/Products/Release-iphoneos/FastGo.app ios/build/package/Payload/
+      cd ios/build/package
+      zip -qry FastGo-1.0.0-unsigned.ipa Payload
+      shasum -a 256 FastGo-1.0.0-unsigned.ipa > SHA256SUMS.txt
+      file Payload/FastGo.app/FastGo
+   - name: Compile simulator application
+     run: xcodebuild -project ios/FastGo.xcodeproj -scheme FastGo -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=NO build
+   - name: Launch simulator and inspect installed assets
+     run: |
+      xcrun simctl list devices available --json > ios/build/simulators.json
+      device=$(python3 -c 'import json; d=json.load(open("ios/build/simulators.json")); print(next(x["udid"] for a in d["devices"].values() for x in a if x.get("isAvailable") and "iPhone" in x["name"]))')
+      xcrun simctl boot "$device" || true
+      xcrun simctl bootstatus "$device" -b
+      xcrun simctl install "$device" ios/build/simulator/Build/Products/Debug-iphonesimulator/FastGo.app
+      xcrun simctl launch "$device" ru.fastgo.ios
+      for attempt in 1 2 3 4 5 6 7 8 9 10; do
+       if curl --fail --silent http://127.0.0.1:17861/bundle-receipt.json > ios/build/installed-bundle.json; then break; fi
+       sleep 1
+      done
+      python3 -c 'import json; x=json.load(open("ios/build/installed-bundle.json")); assert x["bundle_source"]=="installed-ipa" and x["version"]=="1.0.0"'
+      xcrun simctl io "$device" screenshot ios/build/iphone-simulator.png
+   - uses: actions/upload-artifact@v4
+     if: always()
+     with:
+      name: FastGo-iPhone-unsigned
+      path: |
+       ios/build/package/*.ipa
+       ios/build/package/SHA256SUMS.txt
+       ios/build/installed-bundle.json
+       ios/build/iphone-simulator.png
+ publish:
+  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  needs: build
+  runs-on: ubuntu-latest
+  permissions: {contents: write}
+  steps:
+   - uses: actions/download-artifact@v4
+     with: {name: FastGo-iPhone-unsigned, path: release}
+   - env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
+     run: gh release create fastgo-ios-v1.0.0 --target "$GITHUB_SHA" --latest=false --title 'FastGo для iPhone 1.0.0' --notes 'Скомпилированное приложение iPhone с интерфейсом внутри IPA. Нужна подпись через Sideloadly или Apple Developer. Проверено в симуляторе; установка и камера на физическом iPhone требуют проверки.' release/*.ipa release/SHA256SUMS.txt

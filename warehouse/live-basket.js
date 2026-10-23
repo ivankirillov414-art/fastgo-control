@@ -114,7 +114,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(/^https?:\/\//i.test(code)){
    if(kind!=='sale')throw rejected('QR ремонта сканируется в «Оплате»');
    if(draft?.items.length)throw Error('Завершите оплату товаров перед сканированием ремонта');
-   const quote=await call('repair_quote',{code});if(!quote.payable)throw Error(quote.due<=0?'Ремонт уже оплачен':'Ремонт закрыт');
+   const quote=await call('repair_quote',{code});
    if(draft){await sync();await call('draft_close',{id:draft.id});save(key(kind),null);draft=null;}
    cleanup();await (terminal?repair(quote):stationRepair(quote,usbId));return {name:'Ремонт № '+quote.number+' · '+quote.vehicle,price:quote.due};
   }

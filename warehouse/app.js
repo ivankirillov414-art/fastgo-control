@@ -20,7 +20,7 @@ const call=(action,p={})=>{if(!device&&document.body.dataset.readonly==='true'){
 function applyReadOnly(){if(document.body.dataset.readonly!=='true')return;for(const id of ['receipt','pay','nav-receipt','nav-pay','shift','usb-scanner','terminal-update'])if($(id)){$(id).disabled=true;$(id).title='Доступно на подключённом складском ноутбуке';}}
 const unknown=unknownScans({call:(a,p)=>call(a,p),parts:()=>parts,refresh:catalog,run,message,owner:()=>['owner','developer'].includes(memberRole)});
 function message(v,error=false){$('message').textContent=v;$('message').className=error?'error':'';}
-async function run(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(x=>x.disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;document.querySelectorAll('button').forEach(x=>x.disabled=false);applyReadOnly();}}
+async function run(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(x=>x.disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;document.querySelectorAll('button').forEach(x=>x.disabled=x.dataset.unavailable==='true');applyReadOnly();}}
 for(const e of ['keydown','pointerdown','input','change'])window.addEventListener(e,()=>lastActivity=Date.now(),true);
 window.warehouseUpdateSafe=(immediate=false)=>!busy&&screen==='home'&&!job&&(terminal||!draft&&!live.hasDraft())&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>15000);
 window.addEventListener('beforeunload',e=>{try{live.checkpoint();}catch(error){message(error.message,true);e.preventDefault();e.returnValue='';return;}if(busy||screen==='basket'||screen==='checkout'||screen==='live'||screen==='repair'){e.preventDefault();e.returnValue='';}});
@@ -106,7 +106,7 @@ async function holdings(){
  });
 }
 async function desktopStatus(){
- const el=$('desktop-status');if(!el)return;
+ const el=$('desktop-status');if(!el)return;if(window.fastgoInstalledApp?.platform==='ios'){el.textContent='FastGo для iPhone · '+window.fastgoInstalledApp.version;return;}
  if(!window.warehouseDesktop?.desktopStatus){el.textContent=window.warehouseDesktop?'USB: откройте «Сканер по USB» для проверки подключения.':'Открыта веб-версия. Для USB запустите программу FastGo Склад на Windows.';return;}
  try{const s=await window.warehouseDesktop.desktopStatus(),update=s.update||{};let note='';if(update.status==='downloading')note=' · Загружается '+update.version+': '+update.progress+'%';if(update.status==='ready')note=' · Обновление '+update.version+' готово — приложение само перезапустится после завершения документа';if(update.status==='error')note=' · Ошибка обновления: '+update.error;if(s.terminalUpdate?.message)note+=' · ТСД: '+s.terminalUpdate.message;const value='Windows '+s.version+' · '+s.usb.status+(s.usb.pending?' · Ожидают добавления: '+s.usb.pending:'')+note;if(el.textContent!==value)el.textContent=value;}
  catch(e){el.textContent='Не удалось проверить USB: '+e.message;}
@@ -119,7 +119,7 @@ $('logout').onclick=()=>run(async()=>{if((draft||job)&&!confirm('Докумен�
 
 // Manual updates bypass idle delays, never an open document or pending scan.
 const webSafe=(immediate=false)=>!busy&&!polling&&screen==='home'&&!job&&(terminal||!draft&&!live.hasDraft())&&!document.querySelector('#mirror-submit,dialog[open]')&&(immediate||Date.now()-lastActivity>15000);
-const webUpdater=startWebUpdates({canApply:async immediate=>{
+const webUpdater=window.warehouseDesktop||window.fastgoInstalledApp?null:startWebUpdates({canApply:async immediate=>{
  if(!webSafe(immediate))return false;
  if(window.warehouseDesktop?.desktopStatus){const state=await window.warehouseDesktop.desktopStatus();if(state.usb?.pending||state.usb?.target||['downloading','ready','preparing','installing'].includes(state.update?.status))return false;}
  return webSafe(immediate);

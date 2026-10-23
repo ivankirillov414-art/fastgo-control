@@ -404,6 +404,7 @@
 
   // warehouse/repair-payment.js?v=20261016-scan-2
   function repairPayment({ call: call2, render, home: home2, run: run2, message: message2, load: load2, save: save3 }) {
+    let watching = 0;
     const $2 = (id) => document.getElementById(id);
     const summary = (q) => '<section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + '</p><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b>' + money(q.due) + "</b></div></section>";
     async function enqueue(q, usbId) {
@@ -421,6 +422,7 @@
       $2("repair-back").onclick = home2;
       let jobId = "", polling2 = false;
       async function poll2() {
+        var _a;
         if (polling2 || !$2("repair-status")) return;
         polling2 = true;
         try {
@@ -433,7 +435,7 @@
           if ((r == null ? void 0 : r.state) === "done") {
             save3("repair:terminal", null);
             home2();
-            message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
+            message2(((_a = r.result) == null ? void 0 : _a.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
             return;
           }
           $2("repair-status").textContent = "\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u043E\u043F\u043B\u0430\u0442\u0443 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
@@ -454,11 +456,12 @@
       await checkout2(await call2("job", { id: pending.request_id }));
     }
     async function checkout2(job2) {
+      var _a;
       const latest = await call2("job", { id: job2.id });
       if (!latest) throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
       if (latest.state === "done") {
         home2();
-        message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
+        message2(((_a = latest.result) == null ? void 0 : _a.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
         return;
       }
       const q = latest.repair || await call2("repair_quote", { repair_id: latest.payload.repair_id }), fixed = latest.checkout;
@@ -470,9 +473,47 @@
         document.querySelectorAll('input[name="repair-method"]').forEach((el) => el.disabled = true);
       }
       $2("repair-pay").disabled = !q.payable && !fixed;
+      $2("repair-pay").dataset.unavailable = String(!q.payable && !fixed);
+      const note = document.createElement("p");
+      note.id = "repair-state";
+      note.className = "muted";
+      note.textContent = q.payable ? "" : q.total === 0 ? "\u0421\u0443\u043C\u043C\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0435\u0449\u0451 \u043D\u0435 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0430. \u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0432 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430." : q.due <= 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D." : "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442. \u041F\u0440\u0438\u0451\u043C \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.";
+      $2("repair-pay").before(note);
+      const token = ++watching;
+      let polling2 = false;
+      const timer = setInterval(async () => {
+        var _a2, _b;
+        if (token !== watching || !$2("repair-pay")) {
+          clearInterval(timer);
+          return;
+        }
+        if (polling2) return;
+        polling2 = true;
+        try {
+          const status = await call2("job", { id: latest.id });
+          if (token !== watching || !$2("repair-pay")) return;
+          if ((status == null ? void 0 : status.state) === "done") {
+            clearInterval(timer);
+            home2();
+            message2(((_a2 = status.result) == null ? void 0 : _a2.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u043D\u0430 \u0422\u0421\u0414" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
+          } else if ((status == null ? void 0 : status.repair) && JSON.stringify(status.repair) !== JSON.stringify(q)) {
+            const selected = (_b = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _b.value;
+            clearInterval(timer);
+            await checkout2(status);
+            if (selected) {
+              const input = document.querySelector('input[name="repair-method"][value="' + selected + '"]');
+              if (input) input.checked = true;
+            }
+          }
+        } catch (e) {
+          if ($2("repair-state")) $2("repair-state").textContent = e.message;
+        } finally {
+          polling2 = false;
+        }
+      }, 1e3);
       $2("repair-pay").onclick = () => run2(async () => {
-        var _a, _b, _c;
-        const method = (fixed == null ? void 0 : fixed.method) || ((_a = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a.value);
+        var _a2, _b, _c;
+        const method = (fixed == null ? void 0 : fixed.method) || ((_a2 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a2.value);
         if (!method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
         try {
           await call2("checkout", { id: latest.id, payment_method: method, amount: (_b = fixed == null ? void 0 : fixed.amount) != null ? _b : q.due, expected_revision: (_c = fixed == null ? void 0 : fixed.expected_revision) != null ? _c : q.revision });
@@ -950,7 +991,6 @@
         if (kind !== "sale") throw rejected("QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u0432 \xAB\u041E\u043F\u043B\u0430\u0442\u0435\xBB");
         if (draft2 == null ? void 0 : draft2.items.length) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u043E\u043F\u043B\u0430\u0442\u0443 \u0442\u043E\u0432\u0430\u0440\u043E\u0432 \u043F\u0435\u0440\u0435\u0434 \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C \u0440\u0435\u043C\u043E\u043D\u0442\u0430");
         const quote = await call2("repair_quote", { code });
-        if (!quote.payable) throw Error(quote.due <= 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D" : "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442");
         if (draft2) {
           await sync();
           await call2("draft_close", { id: draft2.id });
@@ -1278,7 +1318,7 @@
       message(e.message, true);
     } finally {
       busy = false;
-      document.querySelectorAll("button").forEach((x) => x.disabled = false);
+      document.querySelectorAll("button").forEach((x) => x.disabled = x.dataset.unavailable === "true");
       applyReadOnly();
     }
   }
@@ -1743,10 +1783,14 @@
     });
   }
   async function desktopStatus() {
-    var _a, _b;
+    var _a, _b, _c;
     const el = $("desktop-status");
     if (!el) return;
-    if (!((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus)) {
+    if (((_a = window.fastgoInstalledApp) == null ? void 0 : _a.platform) === "ios") {
+      el.textContent = "FastGo \u0434\u043B\u044F iPhone \xB7 " + window.fastgoInstalledApp.version;
+      return;
+    }
+    if (!((_b = window.warehouseDesktop) == null ? void 0 : _b.desktopStatus)) {
       el.textContent = window.warehouseDesktop ? "USB: \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." : "\u041E\u0442\u043A\u0440\u044B\u0442\u0430 \u0432\u0435\u0431-\u0432\u0435\u0440\u0441\u0438\u044F. \u0414\u043B\u044F USB \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0443 FastGo \u0421\u043A\u043B\u0430\u0434 \u043D\u0430 Windows.";
       return;
     }
@@ -1756,7 +1800,7 @@
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
-      if ((_b = s.terminalUpdate) == null ? void 0 : _b.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
+      if ((_c = s.terminalUpdate) == null ? void 0 : _c.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {
@@ -1803,7 +1847,7 @@
   });
   void start();
   var webSafe = (immediate = false) => !busy && !polling && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
-  var webUpdater = startWebUpdates({ canApply: async (immediate) => {
+  var webUpdater = window.warehouseDesktop || window.fastgoInstalledApp ? null : startWebUpdates({ canApply: async (immediate) => {
     var _a, _b, _c, _d;
     if (!webSafe(immediate)) return false;
     if ((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus) {

@@ -46,6 +46,12 @@ jobs:
       Expand-Archive adb.zip -DestinationPath warehouse-desktop
    - run: npm run build
      working-directory: warehouse-desktop
+   - name: Verify installed warehouse assets without internet
+     shell: pwsh
+     run: |
+      npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
+      $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/warehouse-playwright"
+      node scripts/check-warehouse-bundled-desktop.cjs
    - uses: actions/upload-artifact@v4
      with:
       name: warehouse-windows

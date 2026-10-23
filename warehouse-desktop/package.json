@@ -39,7 +39,9 @@
       "usb-phone.html",
       "usb-phone.js",
       "update-clock.cjs",
-      "auto-terminal.cjs"
+      "auto-terminal.cjs",
+      "bundled-ui.cjs",
+      "web/**/*"
     ],
     "win": {
       "target": "nsis",

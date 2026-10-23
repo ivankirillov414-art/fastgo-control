@@ -23,7 +23,6 @@ export async function repairScan(action,p,{db,actor,device,stationId,key}){
  }
  if(row?.payload.kind==='repair')return row;
  const quote=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),repairId,actor);
- if(!quote.payable)fail(quote.due<=0?'Ремонт уже оплачен или сумма не назначена':'Ремонт закрыт',409);
  const payload={kind:'repair',repair_id:repairId,repair:quote,items:[],code:p.code,document_id:p.document_id};
  if(row){
   const changed=await db('workshop_warehouse_queue','id=eq.'+row.id+'&payload->>kind=eq.unknown&state=eq.queued&checkout=is.null','PATCH',{payload},'return=representation');
