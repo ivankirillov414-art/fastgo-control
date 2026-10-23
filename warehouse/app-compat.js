@@ -2222,7 +2222,7 @@
     bindNav();
     drawInventory = () => {
       if (!$("stock-list")) return;
-      const q = $("filter").value.toLowerCase(), matches = parts.filter((x) => [x.name, x.barcode, x.sku].join(" ").toLowerCase().includes(q));
+      const q = $("filter").value.toLowerCase(), matches = parts.filter((x) => [x.name, x.barcode, x.sku, x.model].join(" ").toLowerCase().includes(q));
       $("stock-list").innerHTML = matches.slice(0, 100).map((x) => '<button type="button" class="inventory-item" data-part="' + esc(x.id) + '"><span class="inventory-name">' + photos.thumbnail(x) + "<strong>" + esc(x.name) + "</strong></span><span>" + esc(x.sku || "\u2014") + "</span><span>" + x.quantity + " \u0448\u0442.</span><span>" + money(x.retail_price) + "</span></button>").join("") + (matches.length ? "" : '<p class="muted inventory-empty">\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E</p>');
       photos.bindThumbnails($("stock-list"), parts);
       $("stock-list").querySelectorAll("[data-part]").forEach((b) => b.onclick = () => {
