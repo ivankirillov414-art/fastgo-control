@@ -404,6 +404,7 @@
 
   // warehouse/repair-payment.js?v=20261016-scan-2
   function repairPayment({ call: call2, render, home: home2, run: run2, message: message2, load: load2, save: save3 }) {
+    let watching = 0;
     const $2 = (id) => document.getElementById(id);
     const summary = (q) => '<section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + '</p><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b>' + money(q.due) + "</b></div></section>";
     async function enqueue(q, usbId) {
@@ -421,6 +422,7 @@
       $2("repair-back").onclick = home2;
       let jobId = "", polling2 = false;
       async function poll2() {
+        var _a;
         if (polling2 || !$2("repair-status")) return;
         polling2 = true;
         try {
@@ -433,7 +435,7 @@
           if ((r == null ? void 0 : r.state) === "done") {
             save3("repair:terminal", null);
             home2();
-            message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
+            message2(((_a = r.result) == null ? void 0 : _a.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
             return;
           }
           $2("repair-status").textContent = "\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u043E\u043F\u043B\u0430\u0442\u0443 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
@@ -454,11 +456,12 @@
       await checkout2(await call2("job", { id: pending.request_id }));
     }
     async function checkout2(job2) {
+      var _a;
       const latest = await call2("job", { id: job2.id });
       if (!latest) throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
       if (latest.state === "done") {
         home2();
-        message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
+        message2(((_a = latest.result) == null ? void 0 : _a.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
         return;
       }
       const q = latest.repair || await call2("repair_quote", { repair_id: latest.payload.repair_id }), fixed = latest.checkout;
@@ -470,9 +473,47 @@
         document.querySelectorAll('input[name="repair-method"]').forEach((el) => el.disabled = true);
       }
       $2("repair-pay").disabled = !q.payable && !fixed;
+      $2("repair-pay").dataset.unavailable = String(!q.payable && !fixed);
+      const note = document.createElement("p");
+      note.id = "repair-state";
+      note.className = "muted";
+      note.textContent = q.payable ? "" : q.total === 0 ? "\u0421\u0443\u043C\u043C\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0435\u0449\u0451 \u043D\u0435 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0430. \u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0432 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430." : q.due <= 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D." : "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442. \u041F\u0440\u0438\u0451\u043C \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.";
+      $2("repair-pay").before(note);
+      const token = ++watching;
+      let polling2 = false;
+      const timer = setInterval(async () => {
+        var _a2, _b;
+        if (token !== watching || !$2("repair-pay")) {
+          clearInterval(timer);
+          return;
+        }
+        if (polling2) return;
+        polling2 = true;
+        try {
+          const status = await call2("job", { id: latest.id });
+          if (token !== watching || !$2("repair-pay")) return;
+          if ((status == null ? void 0 : status.state) === "done") {
+            clearInterval(timer);
+            home2();
+            message2(((_a2 = status.result) == null ? void 0 : _a2.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u043D\u0430 \u0422\u0421\u0414" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
+          } else if ((status == null ? void 0 : status.repair) && JSON.stringify(status.repair) !== JSON.stringify(q)) {
+            const selected = (_b = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _b.value;
+            clearInterval(timer);
+            await checkout2(status);
+            if (selected) {
+              const input = document.querySelector('input[name="repair-method"][value="' + selected + '"]');
+              if (input) input.checked = true;
+            }
+          }
+        } catch (e) {
+          if ($2("repair-state")) $2("repair-state").textContent = e.message;
+        } finally {
+          polling2 = false;
+        }
+      }, 1e3);
       $2("repair-pay").onclick = () => run2(async () => {
-        var _a, _b, _c;
-        const method = (fixed == null ? void 0 : fixed.method) || ((_a = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a.value);
+        var _a2, _b, _c;
+        const method = (fixed == null ? void 0 : fixed.method) || ((_a2 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a2.value);
         if (!method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
         try {
           await call2("checkout", { id: latest.id, payment_method: method, amount: (_b = fixed == null ? void 0 : fixed.amount) != null ? _b : q.due, expected_revision: (_c = fixed == null ? void 0 : fixed.expected_revision) != null ? _c : q.revision });
@@ -593,6 +634,13 @@
     const $2 = (id) => document.getElementById(id), key2 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
     let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve();
     const product2 = (x) => parts2().find((p) => p.id === (x == null ? void 0 : x.part_id));
+    const shown = /* @__PURE__ */ new Map();
+    const jobStamp = (value) => String((value == null ? void 0 : value.payload.updated_at) || (value == null ? void 0 : value.created_at) || "");
+    function suspend() {
+      if (current) dismissed = current.id + ":" + current.payload.revision;
+      checkpoint();
+      cleanup();
+    }
     const rejected = (text) => Object.assign(Error(text), { rejected: true });
     const remaining = (local, job2) => local && local.id === job2.id && local.revision > job2.payload.revision ? local.items.map((x) => {
       var _a;
@@ -920,6 +968,7 @@
       kind = value.payload.kind;
       draft2 = null;
       current = value;
+      shown.set(value.id, value.payload.revision);
       locked = value.state === "processing";
       overrides = load2("live-edits:" + value.id) || {};
       active = true;
@@ -942,7 +991,6 @@
         if (kind !== "sale") throw rejected("QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u0432 \xAB\u041E\u043F\u043B\u0430\u0442\u0435\xBB");
         if (draft2 == null ? void 0 : draft2.items.length) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u043E\u043F\u043B\u0430\u0442\u0443 \u0442\u043E\u0432\u0430\u0440\u043E\u0432 \u043F\u0435\u0440\u0435\u0434 \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C \u0440\u0435\u043C\u043E\u043D\u0442\u0430");
         const quote = await call2("repair_quote", { code });
-        if (!quote.payable) throw Error(quote.due <= 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D" : "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442");
         if (draft2) {
           await sync();
           await call2("draft_close", { id: draft2.id });
@@ -1019,13 +1067,16 @@
       }
     }
     async function pollMirror() {
-      if (terminal2 || !canOpen() || active && (current || (draft2 == null ? void 0 : draft2.items.length))) return;
+      var _a, _b;
+      if (terminal2 || !canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const jobs = await call2("live_jobs");
-      if (!canOpen() || active && (locked || current || (draft2 == null ? void 0 : draft2.items.length))) return;
+      if (!canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const candidates = jobs.filter((j) => j.state !== "done").sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
-      const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id + ":" + j.payload.revision !== dismissed);
+      const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id !== (current == null ? void 0 : current.id) && shown.get(j.id) !== j.payload.revision && j.id + ":" + j.payload.revision !== dismissed && (!active || !current || jobStamp(j) > jobStamp(current)));
       if (found) {
+        suspend();
         await openMirror(found);
+        void ((_b = (_a = window.warehouseDesktop) == null ? void 0 : _a.showIncoming) == null ? void 0 : _b.call(_a));
         return;
       }
       const target = $2("live-terminal-panel");
@@ -1115,7 +1166,7 @@
         throw e;
       }
     }
-    return { open, cleanup, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(current == null ? void 0 : current.payload.items.length) && !(draft2 == null ? void 0 : draft2.items.length), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    return { open, cleanup, suspend, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(draft2 == null ? void 0 : draft2.items.length) && !(current == null ? void 0 : current.checkout), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
@@ -1237,7 +1288,7 @@
   var live = liveBasket({ terminal, call: (a, p) => call(a, p), parts: () => parts, render: (html) => {
     screen = "live";
     shell(html);
-  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: () => ["home", "live"].includes(screen) });
+  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: canReceiveIncoming });
   var call = (action, p = {}) => {
     if (!device && document.body.dataset.readonly === "true") {
       if (action === "catalog") return api("service_catalog");
@@ -1267,7 +1318,7 @@
       message(e.message, true);
     } finally {
       busy = false;
-      document.querySelectorAll("button").forEach((x) => x.disabled = false);
+      document.querySelectorAll("button").forEach((x) => x.disabled = x.dataset.unavailable === "true");
       applyReadOnly();
     }
   }
@@ -1597,20 +1648,27 @@
       });
     } else await checkout(await call("job", { id: queuedId }));
   }
-  var autoRepairSeen = null;
+  function canReceiveIncoming() {
+    var _a;
+    return !busy && !job && !draft && ["home", "live", "inventory", "holdings"].includes(screen) && !document.querySelector("dialog[open]") && !((_a = document.activeElement) == null ? void 0 : _a.matches("input:not(#live-code):not(#filter),textarea,select"));
+  }
+  var autoQueueSeen = /* @__PURE__ */ new Set();
   async function poll() {
-    if (terminal || !["home", "live"].includes(screen) || !live.canAutoOpen() || polling || busy || !device) return;
+    var _a, _b;
+    if (terminal || !canReceiveIncoming() || !live.canAutoOpen() || polling || !device) return;
     polling = true;
     try {
-      await live.pollMirror();
       const jobs = await call("queue");
-      if (!["home", "live"].includes(screen) || !live.canAutoOpen()) return;
-      const repairJob = jobs.find((x) => x.payload.kind === "repair");
-      if (repairJob && repairJob.id !== autoRepairSeen) {
-        autoRepairSeen = repairJob.id;
-        await repair.checkout(repairJob);
+      if (!canReceiveIncoming() || !live.canAutoOpen()) return;
+      const next = jobs.filter((x) => x.state !== "done" && !autoQueueSeen.has(x.id)).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      if (next) {
+        live.suspend();
+        await checkout(next);
+        autoQueueSeen.add(next.id);
+        void ((_b = (_a = window.warehouseDesktop) == null ? void 0 : _a.showIncoming) == null ? void 0 : _b.call(_a));
         return;
       }
+      await live.pollMirror();
       if (!$("queue")) return;
       $("queue").innerHTML = jobs.length ? jobs.map((x) => '<div class="job"><span>' + (x.payload.kind === "repair" ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 " + esc(x.payload.repair.number) + " \xB7 " + money(x.payload.repair.due) : "\u041A\u043E\u0440\u0437\u0438\u043D\u0430 " + esc(x.id.slice(0, 8)) + " \xB7 " + x.payload.items.reduce((n, i) => n + i.quantity, 0) + " \u0448\u0442.") + '<small style="display:block">' + new Date(x.created_at).toLocaleString("ru-RU") + " \xB7 " + (x.state === "processing" ? "\u0422\u0440\u0435\u0431\u0443\u0435\u0442 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043E\u043F\u043B\u0430\u0442\u044B") + '</small></span><button data-job="' + x.id + '">\u041E\u0442\u043A\u0440\u044B\u0442\u044C</button></div>').join("") : "\u041D\u043E\u0432\u044B\u0445 \u043A\u043E\u0440\u0437\u0438\u043D \u043D\u0435\u0442";
       $("queue").querySelectorAll("[data-job]").forEach((b) => b.onclick = () => run(async () => checkout(jobs.find((x) => x.id === b.dataset.job))));
@@ -1725,10 +1783,14 @@
     });
   }
   async function desktopStatus() {
-    var _a, _b;
+    var _a, _b, _c;
     const el = $("desktop-status");
     if (!el) return;
-    if (!((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus)) {
+    if (((_a = window.fastgoInstalledApp) == null ? void 0 : _a.platform) === "ios") {
+      el.textContent = "FastGo \u0434\u043B\u044F iPhone \xB7 " + window.fastgoInstalledApp.version;
+      return;
+    }
+    if (!((_b = window.warehouseDesktop) == null ? void 0 : _b.desktopStatus)) {
       el.textContent = window.warehouseDesktop ? "USB: \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u043E USB\xBB \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." : "\u041E\u0442\u043A\u0440\u044B\u0442\u0430 \u0432\u0435\u0431-\u0432\u0435\u0440\u0441\u0438\u044F. \u0414\u043B\u044F USB \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0443 FastGo \u0421\u043A\u043B\u0430\u0434 \u043D\u0430 Windows.";
       return;
     }
@@ -1738,7 +1800,7 @@
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
-      if ((_b = s.terminalUpdate) == null ? void 0 : _b.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
+      if ((_c = s.terminalUpdate) == null ? void 0 : _c.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {
@@ -1785,7 +1847,7 @@
   });
   void start();
   var webSafe = (immediate = false) => !busy && !polling && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
-  var webUpdater = startWebUpdates({ canApply: async (immediate) => {
+  var webUpdater = window.warehouseDesktop || window.fastgoInstalledApp ? null : startWebUpdates({ canApply: async (immediate) => {
     var _a, _b, _c, _d;
     if (!webSafe(immediate)) return false;
     if ((_a = window.warehouseDesktop) == null ? void 0 : _a.desktopStatus) {

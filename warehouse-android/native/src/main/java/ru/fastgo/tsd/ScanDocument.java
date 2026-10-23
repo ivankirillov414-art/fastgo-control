@@ -3,6 +3,7 @@ import org.json.*;
 import java.util.*;
 // Pure document logic: repeated scans have different IDs; retries reuse one ID/revision.
 public final class ScanDocument {
+ public static boolean isRepairCode(String code){try{java.net.URI u=new java.net.URI(code.trim());if(!"https".equals(u.getScheme())||!"ivankirillov414-art.github.io".equals(u.getHost())||u.getUserInfo()!=null)return false;return "/fastgo-control/repair-status.html".equals(u.getPath())||"/fastgo-control/workshop.html".equals(u.getPath())&&u.getFragment()!=null&&u.getFragment().startsWith("order?")&&u.getFragment().contains("kind=repair");}catch(Exception e){return false;}}
  public static JSONObject create(String kind) throws JSONException {return new JSONObject().put("id",UUID.randomUUID().toString()).put("kind",kind).put("revision",1).put("acked",0).put("events",new JSONArray()).put("state","open");}
  public static void append(JSONObject doc,String code,JSONObject part) throws JSONException {
   if(!doc.optString("state").equals("open"))throw new IllegalStateException("Документ уже завершён");

@@ -8,6 +8,12 @@ public final class SyncEngine {
   if(api.device()==null)return;
   for(JSONObject snapshot:store.pending()){
    String id=snapshot.getString("id"),kind=snapshot.getString("kind");
+   if(snapshot.optBoolean("cancel_requested")){
+    JSONObject result;
+    try{result=(JSONObject)api.call("cancel_document",new JSONObject().put("id",id).put("kind",kind).put("revision",snapshot.getInt("revision")));}
+    catch(WarehouseApi.ApiError e){if(e.status!=409)throw e;Object latest=api.call("job",new JSONObject().put("id",id));if(!(latest instanceof JSONObject))throw e;result=(JSONObject)latest;store.put("server:"+id,result.optString("state"));if(!result.optString("state").equals("done"))throw e;}
+    if(result.optString("state").equals("done")){store.put("cancelled:"+id,Boolean.toString(result.optJSONObject("result")!=null&&result.getJSONObject("result").optBoolean("cancelled")));store.complete(id,snapshot.getInt("revision"));}continue;
+   }
    if(kind.equals("repair")){syncRepair(snapshot);continue;}
    JSONArray events=snapshot.getJSONArray("events");
    for(int i=0;i<events.length();i++){
@@ -31,7 +37,7 @@ public final class SyncEngine {
   String id=d.getString("id"),code=event.getString("code");JSONObject quote;
   try{quote=(JSONObject)api.call("repair_quote",new JSONObject().put("code",code));}catch(WarehouseApi.ApiError e){store.put("repair:"+id,"Ошибка: "+e.getMessage());return;}
   store.put("repair:"+id,"Ремонт № "+quote.optString("number")+"\n"+quote.optString("vehicle")+"\nК оплате: "+quote.optString("due")+" ₽");
-  if(d.optInt("acked")==0){if(!quote.optBoolean("payable"))return;api.call("enqueue_repair",new JSONObject().put("request_id",id).put("repair_id",quote.getString("id")));store.acknowledge(id,d.getInt("revision"));}
+  if(d.optInt("acked")==0){api.call("enqueue_repair",new JSONObject().put("request_id",id).put("repair_id",quote.getString("id")));store.acknowledge(id,d.getInt("revision"));}
   Object r=api.call("job",new JSONObject().put("id",id));if(r instanceof JSONObject&&((JSONObject)r).optString("state").equals("done"))store.complete(id,d.getInt("revision"));
  }
 }

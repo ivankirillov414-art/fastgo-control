@@ -14,4 +14,7 @@ warehouse-desktop/platform-tools/
 warehouse-desktop/dist/
 
 warehouse-desktop/updates.cjs
+warehouse-desktop/web/
+ios/web/
+ios/build/
 desktop/inspect-nsis-build.cjs

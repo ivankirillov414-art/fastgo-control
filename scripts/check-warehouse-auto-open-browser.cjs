@@ -1,0 +1,20 @@
+const {chromium}=require('playwright'),assert=require('node:assert/strict');
+const {serve,backend,launchOptions,catalog}=require('./warehouse-browser-fixture.cjs');
+(async()=>{const {server,base}=await serve(),browser=await chromium.launch(launchOptions);try{
+ const api=backend(),context=await browser.newContext();await api.connect(context,false);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(base+'/warehouse.html');await page.locator('#inventory').click();await page.getByText(catalog[0].name,{exact:true}).waitFor();
+ api.jobs.set('repair-auto',{id:'repair-auto',created_at:new Date().toISOString(),state:'queued',repair:api.quote,payload:{kind:'repair',repair_id:api.quote.id,repair:api.quote,items:[]}});
+ await page.locator('#repair-pay').waitFor();assert.match(await page.locator('#app h2').innerText(),/0026/);assert.equal(api.payments.length,0);
+ api.jobs.get('repair-auto').state='done';await page.locator('#repair-back').click();await page.locator('#inventory').click();
+ const live=(id,kind)=>({id,state:'queued',created_at:new Date().toISOString(),payload:{live:true,kind,revision:1,updated_at:new Date().toISOString(),items:[{part_id:catalog[0].id,quantity:2}]}});
+ api.jobs.set('receipt-auto',live('receipt-auto','receipt'));await page.locator('[data-live-qty]').waitFor();assert.equal(await page.locator('h1').innerText(),'Приход');
+ await page.locator('[data-live-qty]').fill('7');
+ api.jobs.set('sale-auto',live('sale-auto','sale'));
+ await page.waitForTimeout(1600);assert.equal(await page.locator('h1').innerText(),'Приход');assert.equal(await page.locator('[data-live-qty]').inputValue(),'7');
+ await page.locator('h1').click();await page.waitForFunction(()=>document.querySelector('h1')?.textContent==='Оплата');assert.equal(await page.locator('[name=live-method]').count(),3);
+ await page.locator('#live-back').click();await page.getByRole('button',{name:'Приход · Открыть черновик',exact:true}).click();assert.equal(await page.locator('[data-live-qty]').inputValue(),'7');
+ api.jobs.clear();await page.locator('#live-back').click();await page.locator('#inventory').click();await page.locator('[data-part]').first().click();await page.locator('dialog[open]').waitFor();
+ api.jobs.set('repair-protected',{id:'repair-protected',created_at:new Date().toISOString(),state:'queued',repair:api.quote,payload:{kind:'repair',repair_id:api.quote.id,repair:api.quote,items:[]}});
+ await page.waitForTimeout(1600);assert.equal(await page.locator('#repair-pay').count(),0);await page.locator('[data-close]').click();await page.locator('#repair-pay').waitFor();
+ assert.equal(api.payments.length,0);assert.deepEqual(errors,[]);console.log('PASS: repair, receipt and sale auto-open from inventory; active edits and product dialogs defer switching; previous quantities survive; no payments');await context.close();
+ }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

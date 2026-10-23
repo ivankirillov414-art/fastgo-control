@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -39,7 +39,9 @@
       "usb-phone.html",
       "usb-phone.js",
       "update-clock.cjs",
-      "auto-terminal.cjs"
+      "auto-terminal.cjs",
+      "bundled-ui.cjs",
+      "web/**/*"
     ],
     "win": {
       "target": "nsis",

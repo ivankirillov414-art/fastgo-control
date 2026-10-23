@@ -7,6 +7,19 @@ let warehouseRuntime;
 const {importLegacyStation}=require('./warehouse-station.cjs');
 const stationFile=()=>path.join(app.getPath('userData'),'warehouse-station.bin');
 function savedStation(){try{return JSON.parse(safeStorage.decryptString(fs.readFileSync(stationFile())));}catch{return null;}}
+let stationLoading,stationAuthorizing=false;
+async function warehouseStation(){
+ const saved=savedStation();if(saved||!actor)return saved;
+ if(!stationLoading){const account=actor;stationLoading=importLegacyStation({app,BrowserWindow,session,actor:account}).then(station=>{if(station&&actor===account)fs.writeFileSync(stationFile(),safeStorage.encryptString(JSON.stringify(station)));return actor===account?station:null;}).finally(()=>{stationLoading=null;});}
+ return stationLoading;
+}
+async function authorizeWarehouse(){
+ if(stationAuthorizing||!actor||!warehouseRuntime||updateInstalling||updateDraining)return;
+ stationAuthorizing=true;
+ try{const station=await warehouseStation();if(!station)return;const r=await cloud('/functions/v1/fastgo-warehouse',{action:'info',device_id:station.id,device_token:station.token});await warehouseRuntime.authorize(r.data?.terminal_allowed===true);}
+ catch(e){if([401,403].includes(e.status))await warehouseRuntime.authorize(false);}
+ finally{stationAuthorizing=false;}
+}
 
 const BASE='https://oqgpjfikjpcplnxueoki.supabase.co',KEY='sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji';
 app.setName('FastGo');
@@ -85,10 +98,10 @@ app.whenReady().then(()=>{
  protocol.handle('fastgo',async req=>{const url=new URL(req.url);if(url.hostname!=='app')return new Response('Forbidden',{status:403});const relative=decodeURIComponent(url.pathname).replace(/^\/+/,''),target=path.resolve(webRoot,relative||'workshop.html');if(!target.startsWith(webRoot+path.sep))return new Response('Forbidden',{status:403});
   return net.fetch(require('node:url').pathToFileURL(target).href);
  });
- handle('fg-warehouse-station-get',async()=>{let station=savedStation();if(!station){station=await importLegacyStation({app,BrowserWindow,session,actor});if(station)fs.writeFileSync(stationFile(),safeStorage.encryptString(JSON.stringify(station)));}return station;});
+ handle('fg-warehouse-station-get',warehouseStation);
  handle('fg-warehouse-station-save',(_e,value)=>{if(!value?.id||!value?.token)throw Error('Неверное рабочее место');if(!safeStorage.isEncryptionAvailable())throw Error('Защищённое хранилище недоступно');fs.writeFileSync(stationFile(),safeStorage.encryptString(JSON.stringify(value)));return true;});
  handle('fg-session-get',()=>credentials);
- handle('fg-session-save',async(_e,s)=>{if(!s?.access_token||!s.user_id)throw Error('Неверная сессия');if(actor&&actor!==s.user_id)await warehouseRuntime?.authorize(false);persistSession(s);notify();return true;});
+ handle('fg-session-save',async(_e,s)=>{if(!s?.access_token||!s.user_id)throw Error('Неверная сессия');if(actor&&actor!==s.user_id)await warehouseRuntime?.authorize(false);persistSession(s);notify();void authorizeWarehouse();return true;});
  handle('fg-session-clear',async()=>{await warehouseRuntime?.authorize(false);persistSession(null);notify();return true;});
  handle('fg-request',request);
  handle('fg-diagnostics',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(!['owner','developer'].includes(member?.role))throw Error('Доступно только владельцу');return store.diagnostics(actor);});
@@ -112,7 +125,7 @@ app.whenReady().then(()=>{
  warehouseRuntime=createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow:()=>win,updates:()=>updates,warehouseCall:async action=>{const station=savedStation();if(!station||!actor)return [];try{return(await cloud('/functions/v1/fastgo-warehouse',{action,device_id:station.id,device_token:station.token})).data;}catch(e){if([401,403].includes(e.status))await warehouseRuntime.authorize(false);return [];}}});
  win.webContents.on('did-finish-load',()=>warehouseRuntime.loaded());
  win.loadURL('fastgo://app/workshop.html#home');
- const bound=savedStation();if(bound&&actor)cloud('/functions/v1/fastgo-warehouse',{action:'info',device_id:bound.id,device_token:bound.token}).then(r=>warehouseRuntime.authorize(r.data?.terminal_allowed===true)).catch(()=>{});
+ void authorizeWarehouse();setInterval(()=>void authorizeWarehouse(),30000);
  // Never put printing behind a database upload or its network timeout.
  setInterval(()=>{if(actor&&!updateInstalling&&!updateDraining)sync.run(actor).catch(()=>{});},5000);
  setInterval(()=>{if(actor){localPrints();pollPrint();}},1000);

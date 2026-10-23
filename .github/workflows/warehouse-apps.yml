@@ -24,6 +24,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-live-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-receipt-cancel-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-auto-open-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-safe-refresh-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-product-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-master-stock-browser.cjs
@@ -45,6 +46,12 @@ jobs:
       Expand-Archive adb.zip -DestinationPath warehouse-desktop
    - run: npm run build
      working-directory: warehouse-desktop
+   - name: Verify installed warehouse assets without internet
+     shell: pwsh
+     run: |
+      npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
+      $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/warehouse-playwright"
+      node scripts/check-warehouse-bundled-desktop.cjs
    - uses: actions/upload-artifact@v4
      with:
       name: warehouse-windows
@@ -87,5 +94,5 @@ jobs:
       fi
       mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад 1.0.12: удаление позиций и отмена непроведённого прихода без движения остатков; закрытие и повторное открытие черновика. Общий интерфейс с разделом «Склад» в FastGo Windows 1.0.15, адресная работа ТСД на двух разрешённых ноутбуках. FastGo Склад: проверка обновлений без перезагрузки открытых документов; восстановление прихода, оплаты, количества, выбранного способа оплаты и ручной суммы после перезапуска. USB-установка отдельного FastGo ТСД 2.0 с проверкой SHA-256 без удаления старой оболочки и её документов. Сохранены корзинка удаления позиции прихода, ручная сумма и учёт запчастей мастеров. Старый APK приложен только для совместимости; для нового интерфейса установите FastGo ТСД 2.0 через USB.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад 1.0.13: автоматическое открытие прихода, продажи и оплаты ремонта от ТСД из списка остатков; защита редактируемых форм, сохранение черновиков и восстановление свёрнутого окна. QR ремонта в режиме продажи распознаётся сервером и передаётся кассиру без автоматического списания денег. удаление позиций и отмена непроведённого прихода без движения остатков; закрытие и повторное открытие черновика. Общий интерфейс с разделом «Склад» в FastGo Windows 1.0.16, адресная работа ТСД на двух разрешённых ноутбуках. FastGo Склад: проверка обновлений без перезагрузки открытых документов; восстановление прихода, оплаты, количества, выбранного способа оплаты и ручной суммы после перезапуска. USB-установка отдельного FastGo ТСД 2.0 с проверкой SHA-256 без удаления старой оболочки и её документов. Сохранены корзинка удаления позиции прихода, ручная сумма и учёт запчастей мастеров. Старый APK приложен только для совместимости; для нового интерфейса установите FastGo ТСД 2.0 через USB.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       python3 scripts/publish-warehouse-feed.py

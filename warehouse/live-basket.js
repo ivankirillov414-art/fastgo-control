@@ -6,6 +6,9 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  const $=id=>document.getElementById(id),key=kind=>'live:'+kind+':'+(terminal?'terminal':'station');
  let draft=null,current=null,kind='',active=false,locked=false,stop=null,timer=null,pollTimer=null,syncing=null,polling=false,overrides={},dismissed='',lastId='',scanChain=Promise.resolve();
  const product=x=>parts().find(p=>p.id===x?.part_id);
+ const shown=new Map();
+ const jobStamp=value=>String(value?.payload.updated_at||value?.created_at||'');
+ function suspend(){if(current)dismissed=current.id+':'+current.payload.revision;checkpoint();cleanup();}
  const rejected=text=>Object.assign(Error(text),{rejected:true});
  const remaining=(local,job)=>local&&local.id===job.id&&local.revision>job.payload.revision?local.items.map(x=>({...x,quantity:x.quantity-(job.payload.items.find(y=>y.part_id===x.part_id)?.quantity||0)})).filter(x=>x.quantity>0):[];
  function rememberUSB(local){if(local?.usb_ids?.length)save("usb:accepted",[...(load("usb:accepted")||[]),...local.usb_ids].slice(-10000));}
@@ -102,7 +105,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(draft){cache();lastId=draft.last_part_id||'';overrides=load('live-edits:'+draft.id)||{};}
   active=true;mount();if(draft)void sync().catch(e=>feedback(e.message,true));
  }
- async function openMirror(value){cleanup();kind=value.payload.kind;draft=null;current=value;locked=value.state==='processing';overrides=load('live-edits:'+value.id)||{};active=true;mount();if(value.checkout?.payment_method){const el=document.querySelector('input[name="live-method"][value="'+value.checkout.payment_method+'"]');if(el)el.checked=true;}}
+ async function openMirror(value){cleanup();kind=value.payload.kind;draft=null;current=value;shown.set(value.id,value.payload.revision);locked=value.state==='processing';overrides=load('live-edits:'+value.id)||{};active=true;mount();if(value.checkout?.payment_method){const el=document.querySelector('input[name="live-method"][value="'+value.checkout.payment_method+'"]');if(el)el.checked=true;}}
  async function addCode(code,usbId){
   if(!code)return;
   if(!active||locked)throw Error('Дождитесь завершения операции');
@@ -111,7 +114,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(/^https?:\/\//i.test(code)){
    if(kind!=='sale')throw rejected('QR ремонта сканируется в «Оплате»');
    if(draft?.items.length)throw Error('Завершите оплату товаров перед сканированием ремонта');
-   const quote=await call('repair_quote',{code});if(!quote.payable)throw Error(quote.due<=0?'Ремонт уже оплачен':'Ремонт закрыт');
+   const quote=await call('repair_quote',{code});
    if(draft){await sync();await call('draft_close',{id:draft.id});save(key(kind),null);draft=null;}
    cleanup();await (terminal?repair(quote):stationRepair(quote,usbId));return {name:'Ремонт № '+quote.number+' · '+quote.vehicle,price:quote.due};
   }
@@ -132,11 +135,11 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   }finally{polling=false;}
  }
  async function pollMirror(){
-  if(terminal||!canOpen()||active&&(current||draft?.items.length))return;
-  const jobs=await call('live_jobs');if(!canOpen()||active&&(locked||current||draft?.items.length))return;
+  if(terminal||!canOpen()||active&&(locked||draft?.items.length))return;
+  const jobs=await call('live_jobs');if(!canOpen()||active&&(locked||draft?.items.length))return;
   const candidates=jobs.filter(j=>j.state!=='done').sort((a,b)=>String(b.payload.updated_at||b.created_at).localeCompare(String(a.payload.updated_at||a.created_at)));
-  const found=candidates.find(j=>(!j.station_id||j.terminal_id!==j.station_id)&&j.id+':'+j.payload.revision!==dismissed);
-  if(found){await openMirror(found);return;}
+  const found=candidates.find(j=>(!j.station_id||j.terminal_id!==j.station_id)&&j.id!==current?.id&&shown.get(j.id)!==j.payload.revision&&j.id+':'+j.payload.revision!==dismissed&&(!active||!current||jobStamp(j)>jobStamp(current)));
+  if(found){suspend();await openMirror(found);void window.warehouseDesktop?.showIncoming?.();return;}
   const target=$('live-terminal-panel');if(target){target.textContent='';for(const saved of candidates){const button=document.createElement('button');button.type='button';button.textContent=(saved.payload.kind==='receipt'?'Приход':'Оплата')+' · Открыть черновик';button.onclick=()=>run(()=>saved.terminal_id&&saved.terminal_id===saved.station_id?open(saved.payload.kind):openMirror(saved));target.append(button);}}
  }
  async function cancelReceipt(){
@@ -171,5 +174,5 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    save('live-edits:'+id,null);save('live-total:'+id,null);finished({id,payload:value,result});
   }catch(e){const r=await call('job',{id}).catch(()=>null);if(r?.state==='done'){finished(r);return;}if(r){if(current)current=r;locked=r.state==='processing';}else locked=true;draw();throw e;}
  }
- return {open,cleanup,checkpoint,restore,pollMirror,hasDraft:()=>active&&(!!current||locked)||!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!locked&&!current?.payload.items.length&&!draft?.items.length,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
+ return {open,cleanup,suspend,checkpoint,restore,pollMirror,hasDraft:()=>active&&(!!current||locked)||!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!locked&&!draft?.items.length&&!current?.checkout,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
 }

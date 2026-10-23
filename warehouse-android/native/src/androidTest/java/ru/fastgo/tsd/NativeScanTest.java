@@ -7,6 +7,18 @@ import android.widget.EditText;import android.view.inputmethod.*;import org.json
 @RunWith(AndroidJUnit4.class) public final class NativeScanTest {
  private Object field(Object object,String name)throws Exception{Field f=object.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(object);}
  private void invoke(Object object,String name,Class<?>[] types,Object... args)throws Exception{Method m=object.getClass().getDeclaredMethod(name,types);m.setAccessible(true);m.invoke(object,args);}
+ @Test public void apkInstallWaitsForAllDocumentsIncludingHiddenAndCancelledPendingDocuments()throws Exception{
+  try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");AppUpdates updates=(AppUpdates)field(a,"updates");JSONObject receipt=store.open("receipt"),repair=store.open("repair");store.scan(receipt.getString("id"),"FGP-UPDATE-BLOCKER");store.scan(repair.getString("id"),"QR-UPDATE-BLOCKER");store.put("active_document","");assertFalse(updates.canInstall());store.requestCancel(receipt.getString("id"));assertFalse(updates.canInstall());store.complete(receipt.getString("id"),store.doc(receipt.getString("id")).getInt("revision"));assertFalse(updates.canInstall());store.requestCancel(repair.getString("id"));store.complete(repair.getString("id"),store.doc(repair.getString("id")).getInt("revision"));assertTrue(updates.canInstall());store.put("active_document","empty-screen");assertFalse(updates.canInstall());store.put("active_document","");assertTrue(updates.canInstall());}catch(Exception e){throw new AssertionError(e);}});
+  }
+ }
+ @Test public void receiptAndRepairHaveDurableCancellationBeforeServerConfirmation()throws Exception{
+  try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");for(String kind:new String[]{"receipt","repair"}){invoke(a,"open",new Class[]{String.class},kind);assertTrue(((android.widget.Button)field(a,"cancel")).getText().toString().contains(kind.equals("receipt")?"приход":"ремонта"));String id=(String)field(a,"documentId");store.requestCancel(id);invoke(a,"refresh",new Class[]{});assertFalse(((android.widget.Button)field(a,"cancel")).isEnabled());assertTrue(store.doc(id).getBoolean("cancel_requested"));store.complete(id,store.doc(id).getInt("revision"));assertEquals(0,ScanDocument.count(store.open(kind)));}}catch(Exception e){throw new AssertionError(e);}});
+  }
+ }
  @Test public void nativeEditorAcceptsImeScanWithoutSoftKeyboardAndPersistsIt()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();

@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('fastgoDesktop',Object.freeze({
 
 
 contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
+ showIncoming:()=>ipcRenderer.invoke('warehouse:incoming'),
  openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open'),
  desktopStatus:()=>ipcRenderer.invoke('warehouse-usb:status'),
  checkUpdates:()=>ipcRenderer.invoke('warehouse-usb:checkUpdates'),

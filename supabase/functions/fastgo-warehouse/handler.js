@@ -1,4 +1,6 @@
 import {unknownScan} from './unknown.js';
+import {repairScan} from './repair-scan.js';
+import {cancelDocument} from './cancel.js';
 import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
@@ -47,6 +49,8 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
  const activeMaster=async masterId=>{const m=(await db('workshop_members','profile_id=eq.'+masterId+'&active=eq.true&role=eq.mechanic&select=profile_id,name'))[0];if(!m)fail('Выберите активного мастера');return m;};
  const mutate=async(a,params)=>{if(!id(params.request_id))fail('Неверный код операции');const body={...params};delete body.__request_fingerprint;const fingerprint=await digest(JSON.stringify({action:a,params:body}));const old=await g('operation_retry',{request_id:params.request_id,action:a,fingerprint});if(old.status==='committed')return old.result;return g(a,{...params,__request_fingerprint:fingerprint});};
+ const cancelled=await cancelDocument(action,p,{db,actor,device,stationId});if(cancelled!==undefined)return out({data:cancelled});
+ const repairScanResult=await repairScan(action,p,{db,actor,device,stationId,key});if(repairScanResult!==undefined)return out({data:repairScanResult});
  const unknown=await unknownScan(action,p,{db,actor,device,stationId,g,mutate});if(unknown!==undefined)return out({data:unknown});
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
  if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
@@ -63,7 +67,6 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
   const old=(await db('workshop_warehouse_queue','id=eq.'+p.request_id))[0];
   if(old){if(old.terminal_id!==device.id||old.payload.kind!=='repair'||old.payload.repair_id!==p.repair_id)fail('Код документа уже использован',409);return out({data:{id:old.id,state:old.state}});}
   const quote=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),p.repair_id,actor);
-  if(!quote.payable)fail(quote.due<=0?'Ремонт уже оплачен или сумма не назначена':'Ремонт закрыт',409);
   await db('workshop_warehouse_queue','','POST',{id:p.request_id,station_id:stationId,terminal_id:device.id,created_by:user.id,payload:{kind:'repair',repair_id:quote.id,repair:quote,items:[]}});
   return out({data:{id:p.request_id,state:'queued'}});
  }
