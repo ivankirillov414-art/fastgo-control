@@ -4,7 +4,7 @@ import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-incremental-sync-2026-10-14';
+const RELEASE = 'workshop-warehouse-pricing-2026-10-23';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -344,6 +344,7 @@ async function main(req){
       }
       p.items=[...merged.values()];
       const subtotal=p.items.reduce((s,x)=>s+x.price*x.quantity,0);p.discount=numeric(p.discount??0,'скидку',0,subtotal);if(p.discount&&!admin(me))fail('Скидку задаёт администратор',403);
+      if(p.total_override!==undefined){const n=p.total_override;if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1e8||Math.abs(n*100-Math.round(n*100))>.00001)fail('Проверьте итоговую сумму');}
     }
     if(action==='part_save'){
       required(p,['name']);const existing=p.id?(await g('catalog')).parts.find(x=>x.id===p.id):null;if(p.id&&!existing)fail('Товар не найден',404);
@@ -379,7 +380,11 @@ async function main(req){
           const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
           if(['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
           if(['diagnostics','waiting_parts','repair'].includes(targetStatus))p.quality_checked=false;
-          const amount=[...(p.works||r.works||[]),...(p.parts||r.parts||[])].reduce((s,x)=>s+x.price*x.quantity,0)-p.discount;
+          const manual=p.total_override===undefined?r.total_override??null:p.total_override;
+          if(p.total_override!==undefined&&!manager(me))fail('Нет права изменять стоимость ремонта',403);
+          if(manual!==null&&(typeof manual!=='number'||!Number.isFinite(manual)||manual<0||manual>1e8||Math.abs(manual*100-Math.round(manual*100))>.00001))fail('Проверьте итоговую стоимость ремонта');
+          const amount=manual??Math.round(([...(p.works||r.works||[]),...(p.parts||r.parts||[])].reduce((s,x)=>s+x.price*x.quantity,0)-p.discount)*100)/100;
+          if(amount<Number(r.paid_amount||0))fail('Стоимость меньше уже внесённой оплаты. Сначала оформите возврат',409);
           if(p.approve&&!text(p.approval_note))fail('Укажите как согласована стоимость');
           const approved=p.approve?amount:(Math.abs(Number(r.total_amount||0)-amount)<.005?Number(r.approved_amount):NaN);
           if(['repair','ready','issued'].includes(targetStatus)&&amount>0&&Math.abs(approved-amount)>.005)fail('Сначала согласуйте текущую стоимость с клиентом',409);

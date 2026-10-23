@@ -1,3 +1,4 @@
+import {priceAdjustment} from './price-adjustment.js';
 import {bindScanner} from './scanner.js';
 import {esc,money,uuid,matchBarcode} from './client.js';
 
@@ -21,7 +22,8 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  const signature=()=>JSON.stringify(source().items);
  const baseTotal=()=>Math.round(source().items.reduce((sum,x)=>sum+x.quantity*amount(x),0)*100)/100;
  function totalEdit(){const saved=load('live-total:'+documentId());return saved?.signature===signature()?saved:null;}
- function totalValue(){if(current?.checkout?.total_override!==undefined)return current.checkout.total_override;const edit=totalEdit();if(!edit)return baseTotal();const raw=String(edit.value).trim().replace(',','.');return /^\d+(?:\.\d{1,2})?$/.test(raw)&&Number(raw)<=1e8?Number(raw):null;}
+ const price=priceAdjustment({prefix:'live',base:baseTotal,read:()=>current?.checkout?.total_override!==undefined?{value:String(current.checkout.total_override)}:totalEdit(),write:edit=>save('live-total:'+documentId(),edit?{...edit,signature:signature()}:null),locked:()=>locked||!!current?.checkout});
+ const totalValue=()=>price.total();
  const amount=x=>(x.custom_price?Number(x.unit_price):Number(product(x)?.retail_price||0));
  function cleanup(){active=false;stop?.();stop=null;clearTimeout(timer);clearInterval(pollTimer);pollTimer=null;}
  function changed(){draft.revision++;cache();clearTimeout(timer);timer=setTimeout(()=>void sync().catch(e=>feedback(e.message,true)),120);}
@@ -75,12 +77,11 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   for(const row of [...host.children])if(!seen.has(row.dataset.part))row.remove();
   if($('live-cancel'))$('live-cancel').disabled=locked;
   $('scan-empty').hidden=!!items.length;$('live-payment').hidden=value.kind!=='sale'||!items.length;$('live-submit').hidden=!items.length;
-  $('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());
-  $('live-total-edit').disabled=locked;const edit=totalEdit();$('live-total-field').hidden=!edit;if(document.activeElement!==$('live-total-input'))$('live-total-input').value=edit?.value??'';$('live-total-input').disabled=locked;$('live-total-reset').disabled=locked;
+  price.draw();
   for(const el of document.querySelectorAll('input[name="live-method"]'))el.disabled=locked;
  }
  function documentId(){return current?.id||draft?.id||'';}
- function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Закрыть и сохранить черновик">'+(terminal?'←':'← К списку')+'</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden><div class="total"><span>Итого <button type="button" id="live-total-edit" class="total-pencil" aria-label="Изменить итоговую сумму" title="Изменить итоговую сумму">✎</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>Сумма к оплате, ₽<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Сумма к оплате"></label><button type="button" id="live-total-reset">По каталогу</button></div><fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>'+(k==='receipt'?'<button type="button" class="live-cancel" id="live-cancel">Отменить весь приход</button>':''));}
+ function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Закрыть и сохранить черновик">'+(terminal?'←':'← К списку')+'</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden>'+price.markup()+'<fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>'+(k==='receipt'?'<button type="button" class="live-cancel" id="live-cancel">Отменить весь приход</button>':''));}
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
   $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;if($('scan-received'))$('scan-received').textContent='Получен код: '+code;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
@@ -95,7 +96,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    if(focus)input.focus();
   }
   if(terminal){let enabled=load('scanner:compat')===true;if(enabled)compatible(true);$('scanner-compat').onclick=()=>{enabled=!enabled;save('scanner:compat',enabled);compatible(enabled,true);};}
-  if(!terminal){if($('live-cancel'))$('live-cancel').onclick=()=>run(cancelReceipt);$('live-submit').onclick=()=>run(finish);$('live-total-edit').onclick=()=>{if(locked)return;if(!totalEdit())save('live-total:'+documentId(),{signature:signature(),value:String(baseTotal())});draw();$('live-total-input').focus();$('live-total-input').select();};$('live-total-input').oninput=()=>{save('live-total:'+documentId(),{signature:signature(),value:$('live-total-input').value});$('live-total').textContent=totalValue()===null?'Проверьте сумму':money(totalValue());};$('live-total-reset').onclick=()=>{save('live-total:'+documentId(),null);draw();};const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
+  if(!terminal){if($('live-cancel'))$('live-cancel').onclick=()=>run(cancelReceipt);$('live-submit').onclick=()=>run(finish);price.bind();const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
  }
  async function open(k){

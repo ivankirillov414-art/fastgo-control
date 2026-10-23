@@ -1,0 +1,26 @@
+const {chromium}=require('playwright'),assert=require('node:assert/strict');
+const {serve,backend,launchOptions}=require('./warehouse-browser-fixture.cjs');
+(async()=>{const {server,base}=await serve(),browser=await chromium.launch(launchOptions);try{
+ const api=backend(),context=await browser.newContext({viewport:{width:1366,height:900}});await api.connect(context,false);
+ const page=await context.newPage(),errors=[];page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
+ const photo={id:'77777777-7777-4777-8777-777777777777',path:'native:products/existing',primary:true};api.state.parts[0].primary_photo_path=photo.path;api.state.partPhotos.set(api.state.parts[0].id,[photo]);api.state.expirePhotoOnce=true;
+ await page.goto(base+'/warehouse.html');await page.locator('#inventory').click();await page.waitForFunction(()=>document.querySelector('.inventory-photo img')?.naturalWidth>0);assert.ok(api.state.imageRequests>=2,'expired signed URL is refreshed');
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=32;c.height=32;const x=c.getContext('2d');x.fillStyle='#29b7f0';x.fillRect(0,0,32,32);return c.toDataURL('image/png').split(',')[1];});
+ const file={name:'part.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')};
+ await page.locator('.inventory-item').first().click();const card=page.locator('.product-dialog');await card.locator('.product-photo-card img').waitFor();
+ api.state.failPhotoResponse=true;await card.locator('input[type=file]').setInputFiles(file);await card.locator('.photo-retry').waitFor();await card.locator('.photo-retry').click();await page.waitForFunction(()=>document.querySelectorAll('.product-photo-card').length===2);
+ assert.equal(api.state.photoUploads[0].request_id,api.state.photoUploads[1].request_id);assert.equal(api.state.photoReceipts.size,1);assert.equal(api.state.partPhotos.get(api.state.parts[0].id).length,2);
+ await page.screenshot({path:'/tmp/fastgo-warehouse-restored-photos.png'});await card.getByRole('button',{name:'Закрыть карточку'}).click();
+ await page.getByRole('button',{name:'Добавить запчасть',exact:true}).click();const form=page.locator('.new-part-dialog');
+ await form.locator('[name=name]').fill('Амортизатор новый');await form.locator('[name=category]').fill('Амортизаторы');await form.locator('[name=model]').fill('M4');await form.locator('[name=sku]').fill('TEST-NEW');await form.locator('[name=unit_cost]').fill('100');await form.locator('[name=retail_price]').fill('150.50');await form.locator('[name=initial_quantity]').fill('3');await form.locator('[name=photo]').setInputFiles(file);
+ api.state.failPhotoResponse=true;await form.getByRole('button',{name:'Создать запчасть'}).click();await form.locator('.new-part-status').filter({hasText:'Нет связи'}).waitFor();assert.equal(api.state.productSaves.length,1);assert.equal(api.state.stockIntakes.length,1);
+ // A reload after a lost photo response resumes the same three-step intake.
+ await form.getByRole('button',{name:'Закрыть',exact:true}).click();await page.reload();await page.locator('#inventory').click();await page.getByRole('button',{name:'Добавить запчасть',exact:true}).click();assert.equal(await form.locator('[name=name]').inputValue(),'Амортизатор новый');assert.equal(await form.locator('[name=name]').isDisabled(),true);
+ await form.locator('[name=photo]').setInputFiles(file);await form.getByRole('button',{name:'Продолжить сохранение'}).click();await card.waitFor();assert.match(await card.locator('h2').innerText(),/Амортизатор новый/);
+ assert.equal(api.state.productSaves.length,1);assert.equal(api.state.stockIntakes.length,1);assert.equal(api.state.parts.at(-1).quantity,3);assert.equal(api.state.photoUploads.at(-1).request_id,api.state.photoUploads.at(-2).request_id);
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'/tmp/fastgo-warehouse-photos-mobile.png'});await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Добавить запчасть',exact:true}).click();assert.equal(await form.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);await page.keyboard.press('Escape');
+ const view=await browser.newContext({viewport:{width:1280,height:800}});await api.connect(view,false,{unified:true,readonly:true});const unbound=await view.newPage();await unbound.goto(base+'/warehouse.html?unified=1&section=inventory');await unbound.getByRole('button',{name:'Добавить запчасть',exact:true}).click();assert.equal(await unbound.locator('[name=initial_quantity]').isDisabled(),true);assert.equal(await unbound.locator('#nav-pay').isDisabled(),true);await view.close();
+ api.state.role='seller';await page.reload();await page.locator('#inventory').click();assert.equal(await page.locator('#new-part').count(),0);await page.locator('.inventory-item').first().click();assert.equal(await card.locator('input[type=file]').count(),0);
+ assert.deepEqual(errors,[]);console.log('PASS: restored private thumbnails/gallery, expired URL recovery, same-ID photo retry, new part + stock + photo resume after reload without duplicates, readonly station separation, seller permissions, mobile layout');
+ }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
