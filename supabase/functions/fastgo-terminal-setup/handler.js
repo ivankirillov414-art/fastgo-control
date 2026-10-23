@@ -10,7 +10,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{
   const userResponse=await fetcher(base+'/auth/v1/user',{headers:{apikey:key,Authorization:auth},signal:AbortSignal.timeout(10000)});
   if(!userResponse.ok)fail('Войдите в FastGo',401);const user=await userResponse.json();
   const service={apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'};
-  async function json(path,method='GET',body){const r=await fetcher(base+path,{method,headers:service,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok)fail('Не удалось подготовить подключение',503);return r.status===204?null:r.json();}
+  async function json(path,method='GET',body){const r=await fetcher(base+path,{method,headers:service,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok)fail('Не удалось подготовить подключение',503);const text=await r.text();return text?JSON.parse(text):null;}
   const members=await json('/rest/v1/workshop_members?profile_id=eq.'+user.id+'&active=eq.true&select=role');
   if(!members.some(x=>['owner','developer'].includes(x.role)))fail('Настроить терминал может владелец',403);
   const raw=await req.text();if(raw.length>5000)fail('Слишком большой запрос');let p;try{p=JSON.parse(raw);}catch{fail('Некорректный запрос');}
