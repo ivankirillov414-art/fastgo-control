@@ -14,17 +14,25 @@ jobs:
    - uses: actions/checkout@v4
    - uses: actions/setup-java@v4
      with: {distribution: temurin, java-version: '17'}
+   - uses: actions/setup-node@v4
+     with: {node-version: '24'}
+   - run: node --test tests/terminal-setup.test.mjs
    - uses: android-actions/setup-android@v3
      with: {packages: platform-tools}
    - uses: gradle/actions/setup-gradle@v4
      with: {gradle-version: '8.9'}
    - name: Compile native app and test document protocol
-     run: gradle :native:testDebugUnitTest :native:assembleRelease --no-daemon
+     run: |
+      gradle :native:testDebugUnitTest :native:assembleRelease --no-daemon
+      mkdir -p native/build/release-package
+      cp native/build/outputs/apk/release/native-release-unsigned.apk native/build/release-package/FastGo-TSD-2.1.1-unsigned.apk
+      gradle :native:assembleRelease -PfastgoVersionCode=3 -PfastgoVersionName=2.1.0 --no-daemon
+      cp native/build/outputs/apk/release/native-release-unsigned.apk native/build/release-package/FastGo-TSD-2.1.0-unsigned.apk
      working-directory: warehouse-android
    - uses: actions/upload-artifact@v4
      with:
       name: fastgo-tsd-native-unsigned
-      path: warehouse-android/native/build/outputs/apk/release/native-release-unsigned.apk
+      path: warehouse-android/native/build/release-package/*.apk
       retention-days: 14
 
  emulator:
@@ -49,9 +57,12 @@ jobs:
       arch: x86_64
       profile: Nexus 5
       disable-animations: true
-      script: cd warehouse-android && gradle :native:connectedDebugAndroidTest --no-daemon
+      script: |
+       cd warehouse-android && gradle :native:assembleDebug -PfastgoVersionCode=5 -PfastgoVersionName=2.1.2 --no-daemon && mkdir -p native/src/androidTest/assets && cp native/build/outputs/apk/debug/native-debug.apk native/src/androidTest/assets/update-fixture.apk && gradle :native:connectedDebugAndroidTest --no-daemon && cd .. && node scripts/check-native-apk-install.cjs
    - uses: actions/upload-artifact@v4
      if: always()
      with:
       name: fastgo-tsd-native-tests
-      path: warehouse-android/native/build/reports/androidTests
+      path: |
+       warehouse-android/native/build/reports/androidTests
+       warehouse-android/native/build/upgrade-test
