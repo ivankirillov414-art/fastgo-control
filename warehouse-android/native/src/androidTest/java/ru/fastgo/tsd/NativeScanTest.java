@@ -28,8 +28,7 @@ import android.widget.EditText;import android.view.inputmethod.*;import org.json
    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
    scenario.onActivity(a->{try{android.widget.Button cancel=(android.widget.Button)field(a,"cancel");android.graphics.Rect visible=new android.graphics.Rect();assertTrue(cancel.getGlobalVisibleRect(visible));assertEquals(cancel.getHeight(),visible.height());assertTrue(cancel.isEnabled());a.onBackPressed();}catch(Exception error){throw new AssertionError(error);}});
    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-   android.view.accessibility.AccessibilityNodeInfo root=InstrumentationRegistry.getInstrumentation().getUiAutomation().getRootInActiveWindow();assertNotNull(root);
-   java.util.List<android.view.accessibility.AccessibilityNodeInfo> buttons=root.findAccessibilityNodeInfosByText("ДА, ОТМЕНИТЬ");assertFalse(buttons.isEmpty());assertTrue(buttons.get(0).performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+   androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Да, отменить")).inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog()).perform(androidx.test.espresso.action.ViewActions.click());
    Thread.sleep(300);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
    scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");assertTrue(store.doc(id[0]).getBoolean("cancel_requested"));assertFalse(((android.widget.Button)field(a,"cancel")).isEnabled());store.complete(id[0],store.doc(id[0]).getInt("revision"));}catch(Exception error){throw new AssertionError(error);}});
   }
