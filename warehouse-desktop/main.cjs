@@ -1,3 +1,5 @@
+// Installer and helper launches can outlive their console pipes.
+if(typeof process!=='undefined')for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
 const {app,BrowserWindow,shell,Menu,ipcMain,dialog,protocol,session,net,safeStorage}=require('electron'),{Updates}=require('./updates.cjs');
 protocol.registerSchemesAsPrivileged([{scheme:'fastgo',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);app.setName('FastGo Склад');if(!app.requestSingleInstanceLock())app.quit();let win,terminalWindow,bootstrapping=true;
 const path=require('node:path'),{TerminalUpdate}=require('./terminal-update.cjs');

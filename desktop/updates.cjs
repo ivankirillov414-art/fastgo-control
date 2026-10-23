@@ -2,6 +2,8 @@
 class Updates{
  constructor({updater,canInstall,prepare,changed=()=>{}}){
   Object.assign(this,{updater,canInstall,prepare,changed});this.state={status:'idle',version:'',progress:0,error:'',immediate:false,waitReason:'',transferred:0,total:0,bytesPerSecond:0};this.checking=false;this.installing=false;
+  // Detached Windows launches may inherit a closed stdout pipe. Update status uses events.
+  updater.logger=null;
   updater.autoDownload=true;updater.autoInstallOnAppQuit=false;updater.allowPrerelease=false;updater.allowDowngrade=false;
   updater.on('checking-for-update',()=>this.set({status:'checking',error:'',waitReason:''}));
   updater.on('update-available',info=>this.set({status:'downloading',version:info.version,error:'',progress:0,waitReason:'',transferred:0,total:0,bytesPerSecond:0}));

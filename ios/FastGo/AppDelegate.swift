@@ -72,6 +72,29 @@ final class FastGoController: UIViewController, WKNavigationDelegate, WKUIDelega
         }} catch { failed(error.localizedDescription) }
     }
     private func failed(_ message: String) { let label = UILabel(); label.text = "Не удалось открыть FastGo: \(message)"; label.textColor = .white; label.numberOfLines = 0; label.frame = view.bounds.insetBy(dx: 24, dy: 80); view.addSubview(label) }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(error.localizedDescription) }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error.localizedDescription) }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["FASTGO_SMOKE_TEST"] == "1" { inspectInstalledUI() }
+        #endif
+    }
+    #if DEBUG
+    private func inspectInstalledUI(_ attempt: Int = 0) {
+        let script = """
+        (() => { const visible = el => { if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; }; return { url: location.href, title: document.title, readyState: document.readyState, text: document.body.innerText.slice(0, 4000), ready: visible(document.querySelector('#login input[type=email]')) && visible(document.querySelector('#login button[type=submit]')), buttons: [...document.querySelectorAll('button')].filter(visible).map(el => el.innerText) }; })()
+        """
+        browser.evaluateJavaScript(script) { [weak self] result, error in
+            var report = result as? [String: Any] ?? ["ready": false]
+            report["attempt"] = attempt
+            if let error = error { report["error"] = error.localizedDescription }
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]), let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                try? data.write(to: cache.appendingPathComponent("fastgo-ui-smoke.json"), options: .atomic)
+            }
+            if report["ready"] as? Bool != true && attempt < 60 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self?.inspectInstalledUI(attempt + 1) } }
+        }
+    }
+    #endif
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
         if url.scheme == "about" || url.scheme == "blob" || url.host == "127.0.0.1" && url.port == 17861 { decisionHandler(.allow); return }
