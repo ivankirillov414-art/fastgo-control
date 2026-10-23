@@ -10,6 +10,9 @@ public final class UpdateJob extends JobService {
  private final ExecutorService executor=Executors.newSingleThreadExecutor();
  private final java.util.Set<Integer> stopped=java.util.concurrent.ConcurrentHashMap.newKeySet();
  public static void schedule(Context context,boolean immediate){
+  // Instrumentation uses a signed fixture channel; do not race it with the live
+  // production manifest. Release APKs always schedule the real network job.
+  if((context.getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0)return;
   JobScheduler scheduler=(JobScheduler)context.getSystemService(JOB_SCHEDULER_SERVICE);
   ComponentName service=new ComponentName(context,UpdateJob.class);
   if(scheduler.getPendingJob(PERIODIC)==null)
