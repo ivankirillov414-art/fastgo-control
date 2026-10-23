@@ -80,13 +80,13 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  station();if(!id(p.id))fail('Неверная корзина');let job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId))[0];if(!job)fail('Корзина не найдена',404);if(job.payload.live)fail('Откройте текущую корзину терминала',409);if(job.state==='done')return out({data:job.result});
  if(job.payload.kind==='repair'){
   if(!job.checkout){
-   const c={mode:'repair',actor_id:user.id,repair_id:job.payload.repair_id,amount:p.amount,method:p.payment_method,expected_revision:p.expected_revision};
+   const c={mode:'repair',actor_id:user.id,repair_id:job.payload.repair_id,amount:p.amount,method:p.payment_method,expected_revision:p.expected_revision,...(p.total_override!==undefined?{total_override:p.total_override}:{})};
    prepareRepairPayment(await db('rpc/workshop_native_snapshot','','POST',{}),{...c,request_id:job.id},actor);
    const changed=await db('workshop_warehouse_queue','id=eq.'+job.id+'&state=eq.queued&checkout=is.null','PATCH',{checkout:c,state:'processing'},'return=representation');
    job=changed[0]||(await db('workshop_warehouse_queue','id=eq.'+job.id))[0];
   }
   const c=job.checkout;if(c?.actor_id!==user.id)fail('Эту оплату завершает другой кассир',409);
-  const params={request_id:job.id,repair_id:c.repair_id,amount:c.amount,method:c.method,expected_revision:c.expected_revision},fp=await digest(JSON.stringify(params));
+  const params={request_id:job.id,repair_id:c.repair_id,amount:c.amount,method:c.method,expected_revision:c.expected_revision,...(c.total_override!==undefined?{total_override:c.total_override}:{})},fp=await digest(JSON.stringify(params));
   const receipt=async()=>{const old=(await db('workshop_native_receipts','request_id=eq.'+job.id))[0];if(!old)return null;if(old.actor_id!==user.id||old.action!=='warehouse_repair_payment'||old.fingerprint!==fp)fail('Конфликт операции',409);return old.result;};
   let result=await receipt();
   if(!result){for(let i=0;i<4;i++){

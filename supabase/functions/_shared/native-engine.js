@@ -364,7 +364,7 @@ function mapRepair_(r){
     last_name:n.last_name,first_name:n.first_name,middle_name:n.middle_name,phone:intake['Телефон'],email:intake['Email']||client['Email']||'',
     vehicle_type:intake['Тип техники']||'Электротранспорт',brand:vehicle[0]||'',model:vehicle.slice(1).join(' '),serial_number:intake['Серийный номер']||'',
     issue_description:intake['Описание неисправности']||'',accessories:intake['Комплектность']||'',condition_notes:intake['Состояние при приёмке']||'',
-    status:normStatus_(r['Статус'],'repair'),paid_amount:num_(r['Оплачено']),created_at:r['Создано'],issued_at:r['Выдано']||'',total_amount:num_(r['Итого']),
+    status:normStatus_(r['Статус'],'repair'),paid_amount:num_(r['Оплачено']),created_at:r['Создано'],issued_at:r['Выдано']||'',total_amount:num_(r['Итого']),total_override:repairManualTotal_(r),
     assigned_master:r['Мастер'],assigned_master_id:r.master_id||'',promised_date:r['Плановая дата']||intake['Плановая дата']||'',
     quality_checked:bool_(r['Контроль качества']),storage_id:r.storage_id||'',diagnostics_notes:r['Диагностика']||'',
     works:parseJson_(r['Работы'],[]),parts:parseJson_(r['Строки запчастей'],[]),discount:num_(r['Скидка']),
@@ -435,11 +435,12 @@ function updateOrder_(p,actor){
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
   const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
   reconcileMasterParts_(parts,oldParts,r,p,actor);
-  const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), total=Math.max(0,worksTotal+partsTotal-num_(p.discount));
+  const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), pricing=repairPricing_(r,p,works,parts),total=pricing.total,previousTotal=num_(r['Итого']);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
   if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
   const fromStatus=normStatus_(r['Статус'],'repair'), sameTotal=Math.abs(num_(r['Итого'])-total)<.005, approvalAmount=bool_(p.approve)?total:(sameTotal?r['Согласовано, ₽']:''), approvalNote=bool_(p.approve)?String(p.approval_note||''):(sameTotal?r['Примечание согласования']:'');
-  patchRow_(SHEETS.repairs,r.__row,{'Статус':humanStatus_(status,'repair'),'Мастер':staff?staff['ФИО']:String(p.assigned_master||r['Мастер']||''),'Диагностика':p.diagnostics_notes===undefined?r['Диагностика']:String(p.diagnostics_notes||''),'Работы':JSON.stringify(works),'Стоимость работ':worksTotal,'Запчасти':partsTotal,'Скидка':num_(p.discount),'Итого':total,'Гарантия, дней':num_(p.warranty_days),'Начато':!r['Начато']&&['diagnostics','repair','waiting_parts'].includes(status)?now_():r['Начато'],'Завершено':status==='ready'?now_():r['Завершено'],'Выдано':status==='issued'?now_():r['Выдано'],'Примечание':status==='issued'?String(p.handover_notes||r['Примечание']||''):status==='cancelled'?String(p.note||r['Примечание']||''):(p.note===undefined?r['Примечание']:String(p.note||'')),updated_at:now_(),'Строки запчастей':JSON.stringify(parts),master_id:masterId,'Контроль качества':['diagnostics','waiting_parts','repair'].includes(status)?false:(p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked)),'Плановая дата':p.promised_date===undefined?r['Плановая дата']:String(p.promised_date||''),revision:rev+1,'Согласовано, ₽':approvalAmount,'Примечание согласования':approvalNote});
+  patchRow_(SHEETS.repairs,r.__row,{'Статус':humanStatus_(status,'repair'),'Мастер':staff?staff['ФИО']:String(p.assigned_master||r['Мастер']||''),'Диагностика':p.diagnostics_notes===undefined?r['Диагностика']:String(p.diagnostics_notes||''),'Работы':JSON.stringify(works),'Стоимость работ':worksTotal,'Запчасти':partsTotal,'Скидка':pricing.discount,'Итого':total,'Гарантия, дней':num_(p.warranty_days),'Начато':!r['Начато']&&['diagnostics','repair','waiting_parts'].includes(status)?now_():r['Начато'],'Завершено':status==='ready'?now_():r['Завершено'],'Выдано':status==='issued'?now_():r['Выдано'],'Примечание':status==='issued'?String(p.handover_notes||r['Примечание']||''):status==='cancelled'?String(p.note||r['Примечание']||''):(p.note===undefined?r['Примечание']:String(p.note||'')),updated_at:now_(),'Строки запчастей':JSON.stringify(parts),master_id:masterId,'Контроль качества':['diagnostics','waiting_parts','repair'].includes(status)?false:(p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked)),'Плановая дата':p.promised_date===undefined?r['Плановая дата']:String(p.promised_date||''),revision:rev+1,'Согласовано, ₽':approvalAmount,'Примечание согласования':approvalNote});
+  if(p.total_override!==undefined&&p.total_override!==repairManualTotal_(r))addEvent_(kind,p.id,'price',actor,{total_override:p.total_override,total,previous_total:previousTotal});
   addEvent_(kind,p.id,'update',actor,{from_status:fromStatus,to_status:status,note:String(p.reopen_reason||p.handover_notes||p.note||'')});
   return mapRepair_(find_(SHEETS.repairs,'repair_id',p.id));
 }
@@ -572,6 +573,29 @@ const REPAIR_TRANSITIONS_={
 };
 
 function requireRepairTransition_(from,to){if(!REPAIR_TRANSITIONS_[from]?.has(to))throw httpError_('Сначала пройдите предыдущий этап ремонта',409);}
+
+function repairPricing_(r,p,works,parts){
+ const gross=Math.round([...works,...parts].reduce((sum,x)=>sum+Number(x.price||0)*Number(x.quantity||1),0)*100)/100;
+ const manual=p.total_override===undefined?repairManualTotal_(r):p.total_override;
+ if(manual!==null&&(typeof manual!=='number'||!Number.isFinite(manual)||manual<0||manual>1e8||Math.abs(manual*100-Math.round(manual*100))>.00001))throw httpError_('Проверьте итоговую стоимость ремонта',400);
+ const discount=manual===null?num_(p.discount===undefined?r['Скидка']:p.discount):Math.max(0,Math.round((gross-manual)*100)/100);
+ const total=manual===null?Math.round((gross-discount)*100)/100:manual;
+ if(total<num_(r['Оплачено']))throw httpError_('Стоимость меньше уже внесённой оплаты. Сначала оформите возврат',409);
+ return {total,discount,override:manual};
+}
+
+// The same atomic audit ledger mirrors to Google without adding spreadsheet
+// columns or requiring a change to installed replication workers.
+
+function repairManualTotal_(repair){
+ let found=null,row=-1;
+ for(const event of rows_(SHEETS.events)){
+  if(event['Тип']!=='repair'||event.record_id!==repair.repair_id||!['price','payment'].includes(event['Действие']))continue;
+  let detail;try{detail=JSON.parse(String(event['Детали']||'{}'));}catch{continue;}if(!detail||!Object.prototype.hasOwnProperty.call(detail,'total_override'))continue;
+  const order=Number(event.__row)||0;if(order>=row){row=order;found=detail.total_override===null?null:Number(detail.total_override);}
+ }
+ return found;
+}
 function assertOpen_(r,kind){if(['issued','returned','cancelled'].includes(normStatus_(r['Статус'],kind)))throw httpError_('Заказ закрыт',409);}
 
 function validateOrderUpdate_(p,actor){
@@ -594,7 +618,8 @@ function validateOrderUpdate_(p,actor){
   if(['waiting_parts','repair','ready','issued'].includes(status)&&!diagnostics.trim())throw httpError_('Сначала заполните результат диагностики',409);
   const works=p.works||parseJson_(r['Работы'],[]),parts=p.parts||parseJson_(r['Строки запчастей'],[]);
   for(const line of [...works,...parts])if(!Number.isInteger(Number(line.quantity))||Number(line.quantity)<1||!Number.isFinite(Number(line.price))||Number(line.price)<0)throw httpError_('Проверьте количество и цену',400);
-  const discount=num_(p.discount===undefined?r['Скидка']:p.discount),amount=[...works,...parts].reduce((s,x)=>s+Number(x.price)*Number(x.quantity),0)-discount;
+  const pricing=repairPricing_(r,p,works,parts),discount=pricing.discount,amount=pricing.total;
+  if(p.total_override!==undefined&&!isManager_(actor))throw httpError_('Нет права изменять стоимость ремонта',403);
   if(amount<0||discount<0)throw httpError_('Неверная скидка',400);
   if(!isManager_(actor)&&(p.approve||discount!==num_(r['Скидка'])))throw httpError_('Нет права согласования или скидки',403);
   if(p.approve&&!String(p.approval_note||'').trim())throw httpError_('Укажите согласование',400);

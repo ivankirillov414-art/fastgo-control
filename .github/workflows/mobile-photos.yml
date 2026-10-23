@@ -1,7 +1,7 @@
 name: Mobile parts photo upload
 on:
   push:
-    paths: ['workshop/**', 'workshop.html', 'workshop.css', 'tests/media-change.test.mjs', 'scripts/check-mobile-photos.cjs', 'scripts/check-stock-search.cjs', '.github/workflows/mobile-photos.yml']
+    paths: ['workshop/**', 'warehouse/**', 'scripts/warehouse-browser-fixture.cjs', 'scripts/check-warehouse-catalog-browser.cjs', 'workshop.html', 'workshop.css', 'tests/media-change.test.mjs', 'scripts/check-mobile-photos.cjs', 'scripts/check-stock-search.cjs', '.github/workflows/mobile-photos.yml']
   workflow_dispatch:
 permissions:
   contents: read

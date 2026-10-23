@@ -2,9 +2,9 @@ name: FastGo Warehouse Apps
 on:
  push:
   branches: [main]
-  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -27,6 +27,9 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-auto-open-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-safe-refresh-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-product-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-catalog-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-price-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-workshop-sale-price-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-master-stock-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-native-unknown-browser.cjs
  windows:
@@ -65,15 +68,19 @@ jobs:
   runs-on: ubuntu-latest
   steps:
    - uses: actions/checkout@v4
-   - name: Reuse verified signed terminal APK
-     env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
+   - name: Package the verified in-place TSD update
      run: |
-      mkdir -p warehouse-android/app/build/outputs/apk/debug
-      gh release download fastgo-warehouse-v1.0.1 --pattern FastGo-Terminal-1.0.1-test.apk --dir /tmp/terminal
-      echo '2f4059cab05592dbd84e98908e646944ee8728c913510a080858347e4e345d31  /tmp/terminal/FastGo-Terminal-1.0.1-test.apk' | sha256sum -c -
-      cp /tmp/terminal/FastGo-Terminal-1.0.1-test.apk warehouse-android/app/build/outputs/apk/debug/app-debug.apk
+      mkdir -p warehouse-android/release
+      python3 - <<'PY'
+      import json,hashlib,pathlib,shutil
+      c=json.load(open('warehouse/native-update.json'))['channels']['ru.fastgo.tsd.app']
+      p=pathlib.Path('warehouse/native')/pathlib.Path(c['url']).name
+      assert hashlib.sha256(p.read_bytes()).hexdigest()==c['sha256']
+      shutil.copy2(p,pathlib.Path('warehouse-android/release')/p.name)
+      PY
    - uses: actions/upload-artifact@v4
-     with: {name: warehouse-android, path: warehouse-android/app/build/outputs/apk/debug/app-debug.apk}
+     with: {name: warehouse-android, path: warehouse-android/release/*.apk}
+
  publish:
   needs: [windows,android]
   runs-on: ubuntu-latest
@@ -92,7 +99,6 @@ jobs:
         echo "This tested version is already published; keep its original binaries and feed."
         exit 0
       fi
-      mv warehouse-release/app-debug.apk "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад 1.0.15: автоматическое открытие прихода, продажи и оплаты ремонта от ТСД из списка остатков; защита редактируемых форм, сохранение черновиков и восстановление свёрнутого окна. QR ремонта в режиме продажи распознаётся сервером и передаётся кассиру без автоматического списания денег. удаление позиций и отмена непроведённого прихода без движения остатков; закрытие и повторное открытие черновика. Общий интерфейс с разделом «Склад» в FastGo Windows 1.0.18, адресная работа ТСД на двух разрешённых ноутбуках. FastGo Склад: проверка обновлений без перезагрузки открытых документов; восстановление прихода, оплаты, количества, выбранного способа оплаты и ручной суммы после перезапуска. USB-установка отдельного FastGo ТСД 2.0 с проверкой SHA-256 без удаления старой оболочки и её документов. Сохранены корзинка удаления позиции прихода, ручная сумма и учёт запчастей мастеров. Старый APK приложен только для совместимости; для нового интерфейса установите FastGo ТСД 2.0 через USB.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml "warehouse-release/FastGo-Terminal-1.0.1-test.apk"
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Добавление запчастей с фото и начальным приходом, фотографии в остатках и карточке, скидки в рублях и процентах и изменение итоговой цены продажи и ремонта. Полная стоимость ремонта сохраняется в заказе, платёж учитывает ранее внесённую оплату. В комплекте тот же подписанный FastGo ТСД 2.1.3 для обновления существующего приложения через интернет.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py

@@ -16,8 +16,9 @@ export function repairActions(status, permissions = {}) {
  return (transitions[status] || []).filter(next => !rights[next] || permissions[rights[next]]);
 }
 export function repairAmount(values) {
+ if(values.total_override!==null&&values.total_override!==undefined)return Number(values.total_override);
  return [...(values.works || []), ...(values.parts || [])]
-  .reduce((sum, line) => sum + Number(line.price || 0) * Number(line.quantity || 1), 0);
+  .reduce((sum, line) => sum + Number(line.price || 0) * Number(line.quantity || 1), 0)-Number(values.discount||0);
 }
 // Request missing information in the same dialog as the action, instead of
 // requiring the user to discover fields in other collapsed panels.

@@ -18,3 +18,5 @@ warehouse-desktop/web/
 ios/web/
 ios/build/
 desktop/inspect-nsis-build.cjs
+
+browser-results/

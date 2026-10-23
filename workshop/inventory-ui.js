@@ -1,3 +1,4 @@
+import {priceAdjustment} from '../warehouse/price-adjustment.js';
 import {preparePartPhoto,fileBase64} from './photo-upload.js';
 import {displayPrivatePhoto} from './private-photo.js';
 import {uploadStatus,holdUpload} from './upload-ui.js';
@@ -14,10 +15,10 @@ let me=null;
 let catalogCache=null;
 let enhancing=false;
 const cart=new Map();
-let pendingSale=null,saleBusy=false;
+let pendingSale=null,saleBusy=false,saleAdjustment=null,cartPrice=null;
 const saleStore=()=> 'fastgo_sale_draft_v1:'+me.profile_id;
-function saveSale(){if(me)localStorage.setItem(saleStore(),JSON.stringify({cart:[...cart.values()],pendingSale}));}
-function restoreSale(){if(!me||cart.size)return;try{const d=JSON.parse(localStorage.getItem(saleStore())||'null');if(d){for(const x of d.cart||[])cart.set(x.part.id,x);pendingSale=d.pendingSale||null;}}catch{}}
+function saveSale(){if(me)localStorage.setItem(saleStore(),JSON.stringify({cart:[...cart.values()],pendingSale,saleAdjustment}));}
+function restoreSale(){if(!me||cart.size)return;try{const d=JSON.parse(localStorage.getItem(saleStore())||'null');if(d){for(const x of d.cart||[])cart.set(x.part.id,x);pendingSale=d.pendingSale||null;saleAdjustment=d.saleAdjustment||null;}}catch{}}
 
 
 const $=id=>document.getElementById(id);
@@ -236,17 +237,19 @@ export async function newPartForm(prefill='',{equipment=false}={}){
   };
 }
 
+const cartSignature=()=>JSON.stringify([...cart.values()].map(x=>[x.part.id,x.qty,salePrice(x)]));
 const salePrice=x=>x.priceMode==='free'?Number(x.freePrice):Number(x.part.retail_price||0);
 function renderCart(){
   saveSale();
   const host=$('sales-cart');if(!host)return;
-  const rows=[...cart.values()];const total=rows.reduce((s,x)=>s+x.qty*salePrice(x),0);
-  host.innerHTML=rows.length?rows.map(x=>`<div class="cart-row"><div><b>${esc(x.part.name)}</b><small>${esc(x.part.barcode)} · остаток ${x.part.quantity}</small><div class="sale-price-options"><label><input type="radio" name="price-${x.part.id}" data-price-mode="${x.part.id}" value="base" ${x.priceMode!=='free'?'checked':''}> Основная цена · ${money(x.part.retail_price)}</label><label><input type="radio" name="price-${x.part.id}" data-price-mode="${x.part.id}" value="free" ${x.priceMode==='free'?'checked':''}> Свободная цена</label>${x.priceMode==='free'?`<input aria-label="Свободная цена, ₽" data-free-price="${x.part.id}" type="number" min="0" max="1000000000" step="0.01" value="${esc(x.freePrice??x.part.retail_price)}">`: ''}</div></div><div class="cart-qty"><button data-minus="${x.part.id}">−</button><strong>${x.qty}</strong><button data-plus="${x.part.id}">+</button></div><b>${money(x.qty*salePrice(x))}</b><button class="inv-icon" data-remove="${x.part.id}">✕</button></div>`).join('')+`<div class="cart-total"><span>Итого</span><strong>${money(total)}</strong></div>`:`<div class="empty"><strong>Корзина пустая</strong><p>Сканируйте штрих-код товара или найдите его вручную.</p></div>`;
+  const rows=[...cart.values()];cartPrice=priceAdjustment({prefix:'sale',base:()=>[...cart.values()].reduce((s,x)=>s+x.qty*salePrice(x),0),read:()=>pendingSale?.payload?.total_override!==undefined?{value:String(pendingSale.payload.total_override)}:saleAdjustment?.signature===cartSignature()?saleAdjustment:null,write:edit=>{saleAdjustment=edit?{...edit,signature:cartSignature()}:null;saveSale();},locked:()=>!!pendingSale||saleBusy});
+  host.innerHTML=rows.length?rows.map(x=>`<div class="cart-row"><div><b>${esc(x.part.name)}</b><small>${esc(x.part.barcode)} · остаток ${x.part.quantity}</small><div class="sale-price-options"><label><input type="radio" name="price-${x.part.id}" data-price-mode="${x.part.id}" value="base" ${x.priceMode!=='free'?'checked':''}> Основная цена · ${money(x.part.retail_price)}</label><label><input type="radio" name="price-${x.part.id}" data-price-mode="${x.part.id}" value="free" ${x.priceMode==='free'?'checked':''}> Свободная цена</label>${x.priceMode==='free'?`<input aria-label="Свободная цена, ₽" data-free-price="${x.part.id}" type="number" min="0" max="1000000000" step="0.01" value="${esc(x.freePrice??x.part.retail_price)}">`: ''}</div></div><div class="cart-qty"><button data-minus="${x.part.id}">−</button><strong>${x.qty}</strong><button data-plus="${x.part.id}">+</button></div><b>${money(x.qty*salePrice(x))}</b><button class="inv-icon" data-remove="${x.part.id}">✕</button></div>`).join('')+cartPrice.markup():`<div class="empty"><strong>Корзина пустая</strong><p>Сканируйте штрих-код товара или найдите его вручную.</p></div>`;
   host.querySelectorAll('[data-minus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.minus);if(x){x.qty--;if(x.qty<1)cart.delete(b.dataset.minus);renderCart();}});
   host.querySelectorAll('[data-plus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.plus);if(x&&x.qty<x.part.quantity){x.qty++;renderCart();}else notice('Больше остатка на складе добавить нельзя','bad');});
   host.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{cart.delete(b.dataset.remove);renderCart();});
   host.querySelectorAll('[data-price-mode]').forEach(input=>input.onchange=()=>{const x=cart.get(input.dataset.priceMode);x.priceMode=input.value;x.freePrice??=Number(x.part.retail_price||0);renderCart();});
-  host.querySelectorAll('[data-free-price]').forEach(input=>{input.oninput=()=>{const x=cart.get(input.dataset.freePrice);x.freePrice=input.value;saveSale();const total=[...cart.values()].reduce((s,x)=>s+x.qty*salePrice(x),0);host.querySelector('.cart-total strong').textContent=money(total);input.closest('.cart-row').querySelector(':scope > b').textContent=money(x.qty*salePrice(x));};});
+  host.querySelectorAll('[data-free-price]').forEach(input=>{input.oninput=()=>{const x=cart.get(input.dataset.freePrice);x.freePrice=input.value;saveSale();cartPrice.draw();input.closest('.cart-row').querySelector(':scope > b').textContent=money(x.qty*salePrice(x));};});
+  if(rows.length)cartPrice.bind();
   document.querySelectorAll('[name="sale-payment-choice"]').forEach(input=>input.disabled=!!pendingSale||saleBusy);
   host.querySelectorAll('input').forEach(input=>input.disabled=!!pendingSale||saleBusy);
   if($('sale-checkout'))$('sale-checkout').hidden=!rows.length;
@@ -316,7 +319,7 @@ export async function openSales(shiftId,partId){
   if(!pendingSale&&!partId&&(matchMedia('(pointer: coarse)').matches||matchMedia('(max-width: 700px)').matches))setMode('camera');
   $('sale-complete').onclick=async()=>{
     if(saleBusy)return;if([...cart.values()].some(x=>x.priceMode==='free'&&(x.freePrice===''||!Number.isFinite(salePrice(x))||salePrice(x)<0||salePrice(x)>1e9||Math.abs(salePrice(x)*100-Math.round(salePrice(x)*100))>0.0001)))return notice('Введите цену в рублях, не более двух знаков после запятой','bad');saleBusy=true;camera.stop();renderCart();
-    try{await scanQueue;if(!cart.size)return;const payload={shift_id:shift?.id,payment_method:$('sale-payment').value,items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty,price_mode:x.priceMode==='free'?'free':'base',...(x.priceMode==='free'?{unit_price:salePrice(x)}:{})}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;cart.clear();saveSale();catalogCache=null;closeDialog();window.dispatchEvent(new Event('workshop-data-changed'));notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');}finally{saleBusy=false;renderCart();}
+    try{await scanQueue;if(!cart.size)return;const total=cartPrice?.total();if(total===null)throw Object.assign(Error('Проверьте сумму или скидку'),{status:400});const payload={shift_id:shift?.id,payment_method:$('sale-payment').value,...(saleAdjustment?.signature===cartSignature()?{total_override:total}:{}),items:[...cart.values()].map(x=>({part_id:x.part.id,quantity:x.qty,price_mode:x.priceMode==='free'?'free':'base',...(x.priceMode==='free'?{unit_price:salePrice(x)}:{})}))};const signature=JSON.stringify(payload);if(!pendingSale)pendingSale={signature,id:crypto.randomUUID(),payload};saveSale();const result=await api('sale',{request_id:pendingSale.id,...(pendingSale.payload||payload)});pendingSale=null;saleAdjustment=null;cart.clear();saveSale();catalogCache=null;closeDialog();window.dispatchEvent(new Event('workshop-data-changed'));notice(`Продажа №${result.sale_number} · ${money(result.total)}`);}catch(e){if([400,403,404,409,413,422].includes(e.status))pendingSale=null;saveSale();notice(e.message,'bad');}finally{saleBusy=false;renderCart();}
   };
 }
 

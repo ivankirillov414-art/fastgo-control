@@ -2,6 +2,31 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {createHandler,digest} from '../supabase/functions/fastgo-warehouse/handler.js';
 import {masterIssue,items,masterHoldings} from '../supabase/functions/fastgo-warehouse/model.js';
 function seedRepair(h){const id=randomUUID();h.snap.sheets['Ремонты'].rows.push({__row:2,repair_id:id,'Номер ремонта':26,'Статус':'В ремонте','Итого':1500,'Оплачено':500,revision:2});return id;}
+test('cash repair final price and discounted balance commit together and retry the frozen amount once',async()=>{
+ for(const total of [750.45,1800]){
+  const h=await harness(),repair=seedRepair(h),request_id=randomUUID(),raw=h.snap.sheets['Ремонты'].rows[0];raw['Стоимость работ']=1500;
+  await h.request('enqueue_repair',{request_id,repair_id:repair},'terminal');h.loseCompletion();
+  const p={id:request_id,payment_method:'card',amount:Math.round((total-500)*100)/100,expected_revision:2,total_override:total};
+  assert.equal((await h.request('checkout',p)).status,503);
+  const result=await h.request('checkout',{...p,total_override:999,amount:499});assert.equal(result.status,200,result.error);
+  assert.equal(result.data.total,total);assert.equal(result.data.amount,p.amount);assert.equal(h.snap.sheets['Оплаты'].rows.length,1);
+  const saved=h.snap.sheets['Ремонты'].rows[0];assert.equal(saved['Итого'],total);assert.equal(JSON.parse(h.snap.sheets['События'].rows[0]['Детали']).total_override,total);assert.equal(saved['Оплачено'],total);assert.equal(saved.revision,3);assert.equal(saved['Скидка'],Math.max(0,Math.round((1500-total)*100)/100));
+  assert.equal(h.snap.sheets['Оплаты'].rows[0]['Сумма'],p.amount);assert.match(h.snap.sheets['Оплаты'].rows[0]['Комментарий'],/Итого вручную/);
+ }
+});
+test('repair price edits reject malformed, stale, overpaid, closed and terminal requests before recording payment',async()=>{
+ const h=await harness(),repair=seedRepair(h),request_id=randomUUID();await h.request('enqueue_repair',{request_id,repair_id:repair},'terminal');
+ const p={id:request_id,payment_method:'cash',amount:500,expected_revision:2,total_override:1000};
+ for(const total_override of [-1,'1000',null,.001,100000001])assert.equal((await h.request('checkout',{...p,total_override})).status,400);
+ for(const patch of [{total_override:499,amount:-1},{expected_revision:1},{amount:1000}])assert.equal((await h.request('checkout',{...p,...patch})).status,409);
+ assert.equal((await h.request('checkout',p,'terminal')).status,403);
+ h.snap.sheets['Ремонты'].rows[0]['Статус']='Выдан';assert.equal((await h.request('checkout',p)).status,409);
+ assert.equal(h.receipts.length,0);assert.equal(h.queue[0].checkout,undefined);assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
+});
+test('zero estimate can receive an explicit final cost at checkout',async()=>{
+ const h=await harness(),repair=seedRepair(h),request_id=randomUUID(),raw=h.snap.sheets['Ремонты'].rows[0];raw['Итого']=0;raw['Оплачено']=0;
+ await h.request('enqueue_repair',{request_id,repair_id:repair},'terminal');const result=await h.request('checkout',{id:request_id,payment_method:'transfer',amount:600.01,total_override:600.01,expected_revision:2});assert.equal(result.status,200,result.error);assert.equal(result.data.total,600.01);
+});
 const repairCode=id=>'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+id;
 for(const kind of ['receipt','sale','repair'])test('TSD cancellation of '+kind+' survives offline first delivery and rejects late replays',async()=>{
  const h=await harness(),id=randomUUID();const cancelled=await h.request('cancel_document',{id,kind,revision:2},'terminal');assert.equal(cancelled.status,200,cancelled.error);assert.equal(cancelled.data.result.cancelled,true);

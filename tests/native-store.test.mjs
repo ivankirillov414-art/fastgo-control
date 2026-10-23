@@ -22,6 +22,17 @@ function harness(){
  return {call,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
+test('cash final repair price survives subsequent repair and issue updates, then can be explicitly reset',async()=>{
+ const h=harness();let r=await h.call('create',intake());
+ r=await h.call('update',{id:r.id,revision:r.revision,status:'diagnostics',works:[{name:'Диагностика',price:1000,quantity:1}],parts:[],discount:0});
+ h.seed('События',{'Тип':'repair',record_id:r.id,'Действие':'payment','Детали':JSON.stringify({total_override:750.45})});
+ const raw=h.sheets['Ремонты'].rows[0];Object.assign(raw,{'Итого':750.45,'Скидка':249.55,'Оплачено':750.45,'Согласовано, ₽':750.45});
+ r=await h.call('update',{id:r.id,revision:r.revision,status:'repair',diagnostics_notes:'Проверено'});assert.equal(r.total_amount,750.45);assert.equal(r.total_override,750.45);assert.equal(r.discount,249.55);
+ r=await h.call('update',{id:r.id,revision:r.revision,status:'ready',quality_checked:true});assert.equal(r.total_amount,750.45);
+ r=await h.call('update',{id:r.id,revision:r.revision,status:'issued',quality_checked:true,handover_notes:'Комплектность проверена'});assert.equal(r.total_amount,750.45);
+ const other=await h.call('create',intake());let open=await h.call('update',{id:other.id,revision:other.revision,works:[{name:'Работа',price:1000,quantity:1}],parts:[],discount:0,total_override:1200});
+ assert.equal(open.total_amount,1200);open=await h.call('update',{id:other.id,revision:open.revision,total_override:null,discount:0});assert.equal(open.total_amount,1000);assert.equal(open.total_override,null);
+});
 test('offline desktop intake retains a stable UUID and retries do not create duplicates',async()=>{const h=harness(),id=randomUUID(),p={...intake(),request_id:id,desktop_id:id};const a=await h.call('create',p),b=await h.call('create',p);assert.equal(a.id,id);assert.equal(b.id,id);assert.equal(h.sheets['Ремонты'].rows.length,1);});
 test('cash shift totals separate cash, card and transfer and freeze at close',async()=>{
  const h=harness(),seller={...manager,role:'seller'};h.sheets['Товары'].rows[0]['Остаток, шт.']=10;

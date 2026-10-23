@@ -1,11 +1,13 @@
 import {unknownScans} from './unknown-scans.js';
 import {productPanel} from './product-panel.js';
+import {partPhotos} from './part-photos.js';
+import {newPartForm} from './new-part.js';
 import {startWebUpdates} from './web-update.js';
 import {repairPayment} from './repair-payment.js?v=20261016-scan-2';
 import {liveBasket} from './live-basket.js?v=20261016-scan-2';
 import {bindUSBInbox} from './usb-client.js';
 import {bindScanner} from './scanner.js';
-import {api,login,logout,userId,esc,money,uuid,matchBarcode} from './client.js';
+import {api,serviceApi,login,logout,userId,esc,money,uuid,matchBarcode} from './client.js';
 const formValues=form=>{const p={};new FormData(form).forEach((v,k)=>p[k]=v);return p;};
 const $=id=>document.getElementById(id),terminal=document.body.dataset.mode==='terminal';let device,parts=[],staff=[],screen='home',draft,job,busy=false,polling=false,memberRole='',lastActivity=Date.now();
 let stopScanner,stopUSB;
@@ -41,7 +43,7 @@ async function connectTerminal(){
 async function start(){
  if(!userId())return signIn();
  device=load(terminal?'terminal':'station');draft=load('draft:'+document.body.dataset.mode);$('logout').hidden=false;
- if(!device){if(!terminal&&new URLSearchParams(location.search).get('unified')==='1'){document.body.dataset.readonly='true';memberRole='viewer';await catalog();$('connection').textContent='Просмотр склада · общее приложение';home();await inventory();message('Приход, оплата и подключение ТСД доступны на двух разрешённых ноутбуках.');return;}if(!terminal)return setup();try{return await connectTerminal();}catch(e){return connectionError(e);}}
+ if(!device){if(!terminal&&new URLSearchParams(location.search).get('unified')==='1'){document.body.dataset.readonly='true';memberRole=(await serviceApi('me')).role;await catalog();$('connection').textContent='Каталог склада · общее приложение';home();await inventory();message('Приход, оплата и подключение ТСД доступны на двух разрешённых ноутбуках.');return;}if(!terminal)return setup();try{return await connectTerminal();}catch(e){return connectionError(e);}}
  try{const info=await call('info');memberRole=info.member.role;$('connection').textContent=info.device.name+' · интернет';await catalog();home();if(!terminal){if(new URLSearchParams(location.search).get('section')==='inventory')await inventory();await live.restore();}}
  catch(e){
   if(e.status===401){signIn();message('Войдите снова. Сохранённый документ останется на устройстве.',true);return;}
@@ -90,8 +92,13 @@ async function checkout(value){if(value.payload.kind==='repair')return repair.ch
  const calc=()=>{$('sale-fields').hidden=$('mode').value==='master';$('master-fields').hidden=$('mode').value!=='master';$('total').textContent=money($('mode').value==='master'?0:job.payload.items.reduce((n,x)=>n+x.quantity*Number(document.querySelector('[data-price="'+x.part_id+'"]').value),0));};$('mode').onchange=calc;document.querySelectorAll('[data-price]').forEach(x=>x.oninput=calc);calc();$('checkout').onclick=()=>run(async()=>{const p={id:job.id,mode:$('mode').value,shift_id:$('cash-shift').value,payment_method:$('method').value,master_id:$('master').value,items:job.payload.items.map(x=>({...x,unit_price:Number(document.querySelector('[data-price="'+x.part_id+'"]').value)}))};await call('checkout',p);job=null;await catalog();home();message(p.mode==='master'?'Запчасти выданы мастеру. Оплата 0 ₽.':'Продажа проведена.');});}
 function shift(){screen='shift';shell(nav()+'<h1>Открыть смену</h1><form id="shift-form" class="panel"><label>Касса<input name="register" value="'+esc(device.name)+'" required></label><label>Наличные на начало, ₽<input name="opening_cash" type="number" min="0" step="0.01" value="0" required></label><button class="primary">Открыть</button></form>');bindNav();const request_id=uuid();$('shift-form').onsubmit=e=>{e.preventDefault();const p=formValues(e.target);run(async()=>{await call('shift_open',{...p,request_id});home();message('Смена открыта');});};}
 let drawInventory=()=>{};
-const product=productPanel({parts:()=>parts,editable:()=>['owner','developer'].includes(memberRole),call:(a,p)=>call(a,p),run,changed:()=>drawInventory(),message});
-async function inventory(){await catalog();screen='inventory';shell(nav()+'<h1>Остатки общей базы</h1><label class="inventory-search"><span class="sr-only">Поиск</span><input id="filter" type="search" placeholder="Поиск по названию, артикулу или штрихкоду…"></label><div class="inventory-table"><div class="inventory-columns"><span>Название</span><span>Артикул</span><span>Остаток</span><span>Цена</span></div><div id="stock-list"></div></div>');bindNav();drawInventory=()=>{if(!$('stock-list'))return;const q=$('filter').value.toLowerCase(),matches=parts.filter(x=>[x.name,x.barcode,x.sku].join(' ').toLowerCase().includes(q));$('stock-list').innerHTML=matches.slice(0,100).map(x=>'<button type="button" class="inventory-item" data-part="'+esc(x.id)+'"><strong>'+esc(x.name)+'</strong><span>'+esc(x.sku||'—')+'</span><span>'+x.quantity+' шт.</span><span>'+money(x.retail_price)+'</span></button>').join('')+(matches.length?'':'<p class="muted inventory-empty">Ничего не найдено</p>');$('stock-list').querySelectorAll('[data-part]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.inventory-item').forEach(x=>x.classList.toggle('selected',x===b));product.open(parts.find(x=>x.id===b.dataset.part));});};$('filter').oninput=drawInventory;drawInventory();}
+const canManageParts=()=>!terminal&&['owner','developer','admin'].includes(memberRole);
+const canReceiveParts=()=>!terminal&&!!device&&document.body.dataset.readonly!=='true';
+const refreshParts=async()=>{await catalog();drawInventory();};
+const photos=partPhotos({api:serviceApi,editable:canManageParts,run,changed:refreshParts,message});
+const product=productPanel({parts:()=>parts,editable:()=>!!device&&['owner','developer'].includes(memberRole),call:(a,p)=>call(a,p),run,changed:()=>drawInventory(),message,photos});
+const createPart=newPartForm({actor:userId,api:serviceApi,photos,parts:()=>parts,canReceive:canReceiveParts,run,refresh:refreshParts,openProduct:p=>product.open(p),message});
+async function inventory(){await catalog();screen='inventory';shell(nav()+'<div class="inventory-toolbar"><h1>Остатки общей базы</h1>'+(canManageParts()?'<button id="new-part" class="primary">Добавить запчасть</button>':'')+'</div><label class="inventory-search"><span class="sr-only">Поиск</span><input id="filter" type="search" placeholder="Поиск по названию, артикулу или штрихкоду…"></label><div class="inventory-table"><div class="inventory-columns"><span>Название</span><span>Артикул</span><span>Остаток</span><span>Цена</span></div><div id="stock-list"></div></div>');bindNav();drawInventory=()=>{if(!$('stock-list'))return;const q=$('filter').value.toLowerCase(),matches=parts.filter(x=>[x.name,x.barcode,x.sku,x.model].join(' ').toLowerCase().includes(q));$('stock-list').innerHTML=matches.slice(0,100).map(x=>'<button type="button" class="inventory-item" data-part="'+esc(x.id)+'"><span class="inventory-name">'+photos.thumbnail(x)+'<strong>'+esc(x.name)+'</strong></span><span>'+esc(x.sku||'—')+'</span><span>'+x.quantity+' шт.</span><span>'+money(x.retail_price)+'</span></button>').join('')+(matches.length?'':'<p class="muted inventory-empty">Ничего не найдено</p>');photos.bindThumbnails($('stock-list'),parts);$('stock-list').querySelectorAll('[data-part]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.inventory-item').forEach(x=>x.classList.toggle('selected',x===b));product.open(parts.find(x=>x.id===b.dataset.part));});};if($('new-part'))$('new-part').onclick=createPart;$('filter').oninput=drawInventory;drawInventory();}
 
 async function holdings(){
  const rows=await api('holdings');screen='holdings';

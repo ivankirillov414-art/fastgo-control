@@ -32,7 +32,7 @@
   // warehouse-desktop/update-clock.cjs
   var require_update_clock = __commonJS({
     "warehouse-desktop/update-clock.cjs"(exports, module) {
-      function createDailyCheck2({ read, write, check, now = () => Date.now() }) {
+      function createDailyCheck2({ read, write: write2, check, now = () => Date.now() }) {
         let last = read() || "", running = false;
         return async function daily() {
           const local = new Date(now() + 5 * 60 * 60 * 1e3), day = local.toISOString().slice(0, 10);
@@ -40,7 +40,7 @@
           running = true;
           last = day;
           try {
-            write(day);
+            write2(day);
             await check();
             return true;
           } finally {
@@ -98,13 +98,22 @@
     if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
     });
   }
+  var serviceActions = /* @__PURE__ */ new Set(["catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
+  var serviceApi = (action, params = {}) => {
+    if (!serviceActions.has(action)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
+    return api("service_" + action, params);
+  };
   async function api(action, params = {}) {
     if (!session) throw Object.assign(Error("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo"), { status: 401 });
     if (session.expires_at * 1e3 < Date.now() + 6e4) {
       if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
       await refreshing;
     }
-    if (action === "service_catalog") return (await request("/functions/v1/fastgo-workshop-api", { action: "catalog", params: {} }, session.access_token)).data;
+    if (action.startsWith("service_")) {
+      const operation = action.slice(8);
+      if (!serviceActions.has(operation)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
+      return (await request("/functions/v1/fastgo-workshop-api", { action: operation, params }, session.access_token)).data;
+    }
     return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
   }
   var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
@@ -190,9 +199,12 @@
 
   // warehouse/product-panel.js
   var pencil = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
-  function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2 }) {
-    let dialog, selected, editing = "", pending;
+  function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2, photos: photos2 }) {
+    let dialog, selected, editing = "", pending, stopPhotos;
     function close() {
+      if ((dialog == null ? void 0 : dialog.dataset.uploading) === "true") return;
+      stopPhotos == null ? void 0 : stopPhotos();
+      stopPhotos = null;
       if (dialog == null ? void 0 : dialog.open) dialog.close();
       dialog == null ? void 0 : dialog.remove();
       dialog = null;
@@ -201,6 +213,7 @@
       pending = null;
     }
     function open(part) {
+      if ((dialog == null ? void 0 : dialog.dataset.uploading) === "true") return;
       close();
       selected = part;
       dialog = document.createElement("dialog");
@@ -216,9 +229,14 @@
         if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close();
       };
       const owned = dialog;
+      dialog.oncancel = (e) => {
+        if (owned.dataset.uploading === "true") e.preventDefault();
+      };
       dialog.onclose = () => {
         owned.remove();
         if (dialog === owned) {
+          stopPhotos == null ? void 0 : stopPhotos();
+          stopPhotos = null;
           dialog = null;
           selected = null;
         }
@@ -230,6 +248,11 @@
     function draw() {
       if (!dialog || !selected) return;
       dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><h2>' + esc(selected.name) + '</h2><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430", money(selected.retail_price)) + '</div><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc(selected.barcode || "") + '</b></div><p class="product-error" role="alert"></p>';
+      stopPhotos == null ? void 0 : stopPhotos();
+      const gallery = document.createElement("section");
+      gallery.className = "product-photos";
+      dialog.querySelector(".product-error").before(gallery);
+      stopPhotos = photos2 == null ? void 0 : photos2.mount(gallery, selected);
       dialog.querySelector("[data-close]").onclick = close;
       dialog.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => edit(b.dataset.edit));
       if (selected.barcode) {
@@ -286,6 +309,387 @@
       };
     }
     return { open, close };
+  }
+
+  // workshop/photo-upload.js
+  var videoType = (file) => file.type || ({ "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm" }[file.name.split(".").pop().toLowerCase()] || "");
+  var preparedParts = /* @__PURE__ */ new WeakMap();
+  var preparePartPhoto = (file) => prepareImage(file, preparedParts, true);
+  async function prepareImage(file, cache, compact = false) {
+    if (cache.has(file)) return cache.get(file);
+    const task = (async () => {
+      if (file.size > 25 * 1024 * 1024) throw new Error("\u0424\u043E\u0442\u043E " + file.name + " \u0431\u043E\u043B\u044C\u0448\u0435 25 \u041C\u0411");
+      const url = URL.createObjectURL(file), img = new Image();
+      try {
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C " + file.name + ". \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043D\u0438\u043C\u043E\u043A \u0432 JPG, PNG \u0438\u043B\u0438 WebP."));
+          img.src = url;
+        });
+        const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        let blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+        if (compact) for (const quality of [0.72, 0.62, 0.52]) {
+          if (!blob || blob.size <= 750 * 1024) break;
+          blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        }
+        if (!blob) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E " + file.name);
+        if (blob.size >= file.size && ["image/jpeg", "image/png", "image/webp"].includes(videoType(file)) && scale === 1) return file;
+        return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: file.lastModified });
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    })();
+    cache.set(file, task);
+    return task;
+  }
+  var fileBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u0430\u0439\u043B"));
+    reader.readAsDataURL(file);
+  });
+
+  // workshop/private-photo.js
+  function displayPrivatePhoto(img, { getUrl, url, isCurrent = () => img.isConnected, onLoad = () => {
+  }, onError = () => {
+  } }) {
+    let retries = 0, stopped = false, refreshing2 = false;
+    img.loading = "eager";
+    img.decoding = "async";
+    const current = () => !stopped && isCurrent();
+    const fail = () => {
+      if (current()) {
+        stopped = true;
+        onError();
+      }
+    };
+    const refresh = async () => {
+      if (!current() || refreshing2) return;
+      refreshing2 = true;
+      try {
+        const next = await getUrl();
+        if (!next) throw new Error("Missing photo URL");
+        if (current()) img.src = next;
+      } catch (e) {
+        fail();
+      } finally {
+        refreshing2 = false;
+      }
+    };
+    img.onload = () => {
+      if (current()) {
+        retries = 0;
+        onLoad();
+      }
+    };
+    img.onerror = () => {
+      if (!current()) return;
+      if (retries++ < 1) refresh();
+      else fail();
+    };
+    if (url) img.src = url;
+    else refresh();
+    return () => {
+      stopped = true;
+      img.onload = img.onerror = null;
+    };
+  }
+
+  // warehouse/part-photos.js
+  function partPhotos({ api: api2, editable, run: run2, changed, message: message2 }) {
+    let observer;
+    const placeholder = '<span aria-hidden="true">\u25A7</span>';
+    function thumbnail(part) {
+      return '<span class="inventory-photo" data-photo="' + esc(part.id) + '">' + (part.primary_photo_path ? '<img alt="\u0424\u043E\u0442\u043E: ' + esc(part.name) + '">' : placeholder) + "</span>";
+    }
+    function bindThumbnails(host, parts2) {
+      observer == null ? void 0 : observer.disconnect();
+      const load2 = (el) => {
+        const part = parts2.find((p) => p.id === el.dataset.photo), img = el.querySelector("img");
+        if (!img || !part) return;
+        displayPrivatePhoto(img, { getUrl: async () => (await api2("part_photo_url", { part_id: part.id })).url, onError: () => {
+          if (el.isConnected) {
+            el.innerHTML = placeholder;
+            el.title = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443 \u0434\u043B\u044F \u043F\u043E\u0432\u0442\u043E\u0440\u0430.";
+          }
+        } });
+      };
+      if (typeof IntersectionObserver === "undefined") {
+        host.querySelectorAll("[data-photo]").forEach(load2);
+        return;
+      }
+      observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) if (entry.isIntersecting) {
+          observer.unobserve(entry.target);
+          load2(entry.target);
+        }
+      }, { rootMargin: "180px" });
+      host.querySelectorAll("[data-photo]").forEach((el) => observer.observe(el));
+    }
+    async function upload(part, file, requestId = uuid(), primaryForCategory = false, onProgress = () => {
+    }) {
+      if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 25 * 1024 * 1024) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 JPG, PNG \u0438\u043B\u0438 WebP \u043D\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 25 \u041C\u0411");
+      onProgress("\u041F\u043E\u0434\u0433\u043E\u0442\u0430\u0432\u043B\u0438\u0432\u0430\u0435\u043C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E\u2026");
+      const prepared = await preparePartPhoto(file);
+      if (prepared.size > 5 * 1024 * 1024) throw Error("\u0424\u043E\u0442\u043E \u043F\u043E\u0441\u043B\u0435 \u0441\u0436\u0430\u0442\u0438\u044F \u0434\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C \u043D\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 5 \u041C\u0411");
+      onProgress("\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u0444\u043E\u0442\u043E \xB7 " + Math.ceil(prepared.size / 1024) + " \u041A\u0411\u2026");
+      const result = await api2("part_photo_upload", { part_id: part.id, request_id: requestId, content_type: prepared.type, content_base64: await fileBase64(prepared), primary_for_category: primaryForCategory });
+      if (!(result == null ? void 0 : result.path)) throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0443.");
+      part.primary_photo_path = result.path;
+      return result;
+    }
+    function mount(host, part) {
+      let pending = null, saving = false, stopped = false;
+      const cleanups = [];
+      host.innerHTML = '<div class="product-photo-heading"><h3>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438</h3>' + (editable() ? '<label class="photo-upload-button">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E<input type="file" accept="image/jpeg,image/png,image/webp" aria-label="\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438"></label>' : "") + '</div><div class="product-photo-gallery">\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438\u2026</div><p class="photo-status" role="status" aria-live="polite"></p><button type="button" class="photo-retry" hidden>\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0443</button>';
+      const gallery = host.querySelector(".product-photo-gallery"), status = host.querySelector(".photo-status"), input = host.querySelector("input"), retry = host.querySelector(".photo-retry");
+      const current = () => !stopped && host.isConnected;
+      const busy2 = (value) => {
+        saving = value;
+        host.closest("dialog").dataset.uploading = String(value);
+        if (input) input.disabled = value;
+        gallery.querySelectorAll("button").forEach((b) => b.disabled = value || b.dataset.unavailable === "true");
+        retry.disabled = value;
+      };
+      async function save3() {
+        if (saving || !pending) return;
+        await run2(async () => {
+          busy2(true);
+          retry.hidden = true;
+          try {
+            if (pending.file) await upload(part, pending.file, pending.id, false, (text) => {
+              if (current()) status.textContent = text;
+            });
+            else {
+              status.textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043E\u0441\u043D\u043E\u0432\u043D\u0443\u044E \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E\u2026";
+              const result = await api2("part_photo_primary", { part_id: part.id, photo_id: pending.photo.id, request_id: pending.id });
+              part.primary_photo_path = result.path;
+            }
+            pending = null;
+            if (current()) status.textContent = "\u0424\u043E\u0442\u043E \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E";
+            await changed(part);
+            if (current()) await load2();
+            message2("\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435");
+          } catch (error) {
+            if (current()) {
+              status.textContent = error.message;
+              retry.hidden = false;
+            }
+            throw error;
+          } finally {
+            if (current()) busy2(false);
+          }
+        });
+      }
+      async function load2() {
+        try {
+          const photos2 = await api2("part_photos", { part_id: part.id });
+          if (!current()) return;
+          cleanups.splice(0).forEach((stop) => stop());
+          gallery.textContent = photos2.length ? "" : "\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442";
+          for (const photo of photos2) {
+            const card = document.createElement("div");
+            card.className = "product-photo-card";
+            card.innerHTML = '<img alt="' + esc(part.name) + '">' + (editable() ? '<button type="button" ' + (photo.primary ? "disabled" : "") + ">" + (photo.primary ? "\u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" : "\u0421\u0434\u0435\u043B\u0430\u0442\u044C \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C") + "</button>" : "");
+            gallery.append(card);
+            cleanups.push(displayPrivatePhoto(card.querySelector("img"), { isCurrent: () => current() && card.isConnected, getUrl: async () => (await api2("part_photo_url", { part_id: part.id, photo_id: photo.id })).url, onError: () => {
+              card.querySelector("img").alt = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E";
+            } }));
+            const choose = card.querySelector("button");
+            if (choose) {
+              choose.dataset.unavailable = String(!!photo.primary);
+              choose.onclick = () => {
+                pending = { photo, id: uuid() };
+                void save3();
+              };
+            }
+          }
+        } catch (error) {
+          if (current()) {
+            gallery.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438: " + error.message;
+            const reload = document.createElement("button");
+            reload.type = "button";
+            reload.textContent = "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438";
+            reload.onclick = () => void load2();
+            gallery.append(reload);
+          }
+        }
+      }
+      if (input) input.onchange = () => {
+        const file = input.files[0];
+        if (file) {
+          pending = { file, id: uuid() };
+          void save3();
+        }
+      };
+      retry.onclick = () => void save3();
+      void load2();
+      return () => {
+        stopped = true;
+        cleanups.forEach((stop) => stop());
+      };
+    }
+    return { thumbnail, bindThumbnails, mount, upload };
+  }
+
+  // workshop/product-intake.js
+  var keyFor = (actor) => "fastgo_product_intake_v1:" + actor;
+  var write = (storage, key2, value) => {
+    const encoded = JSON.stringify(value);
+    storage.setItem(key2, encoded);
+    if (storage.getItem(key2) !== encoded) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0445\u043E\u0434 \u043F\u0440\u0438\u0451\u043C\u043A\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.");
+  };
+  function loadProductIntake(storage, actor) {
+    var _a, _b, _c;
+    const raw = storage.getItem(keyFor(actor));
+    if (!raw) return null;
+    let value;
+    try {
+      value = JSON.parse(raw);
+    } catch (e) {
+      throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u0443\u044E \u043F\u0440\u0438\u0451\u043C\u043A\u0443. \u041D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0435\u0451 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E; \u0441\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u043A\u043B\u0430\u0434.");
+    }
+    if (value.version !== 1 || !value.product || !((_a = value.ids) == null ? void 0 : _a.product) || !((_b = value.ids) == null ? void 0 : _b.stock) || !((_c = value.ids) == null ? void 0 : _c.photo)) throw new Error("\u041D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u0430\u044F \u043F\u0440\u0438\u0451\u043C\u043A\u0430 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0441\u0432\u0435\u0440\u043A\u0438 \u0441\u043A\u043B\u0430\u0434\u0430.");
+    return value;
+  }
+  function startProductIntake(storage, actor, { product: product2, quantity, photo = null }) {
+    const existing = loadProductIntake(storage, actor);
+    if (existing) return existing;
+    if (!String(product2.name || "").trim() || !String(product2.category || "").trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 1e5) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435, \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044E \u0438 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E (\u043E\u0442 0 \u0434\u043E 100000).");
+    for (const name of ["unit_cost", "retail_price"]) if (!Number.isFinite(product2[name]) || product2[name] < 0 || product2[name] > 1e9) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0446\u0435\u043D\u0443 \u0442\u043E\u0432\u0430\u0440\u0430.");
+    const state = { version: 1, product: product2, quantity, photo, ids: { product: crypto.randomUUID(), stock: crypto.randomUUID(), photo: crypto.randomUUID() }, part: null, received: false, photoSaved: false };
+    write(storage, keyFor(actor), state);
+    return state;
+  }
+  async function continueProductIntake(storage, actor, { api: api2, uploadPhoto, onProgress = () => {
+  } }) {
+    const key2 = keyFor(actor), state = loadProductIntake(storage, actor);
+    if (!state) throw new Error("\u041D\u0435\u0442 \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u043E\u0439 \u043F\u0440\u0438\u0451\u043C\u043A\u0438.");
+    if (!state.part) {
+      onProgress("\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u0442\u043E\u0432\u0430\u0440\u2026");
+      try {
+        state.part = await api2("part_save", { ...state.product, request_id: state.ids.product });
+      } catch (error) {
+        if ([400, 403, 404, 409, 413, 422].includes(error.status)) storage.removeItem(key2);
+        throw error;
+      }
+      write(storage, key2, state);
+    }
+    if (state.quantity > 0 && !state.received) {
+      onProgress("\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0437\u0434\u0430\u043D. \u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u2026");
+      await api2("stock", { part_id: state.part.id, movement_type: "receipt", quantity: state.quantity, note: "\u041F\u0435\u0440\u0432\u0438\u0447\u043D\u0430\u044F \u0440\u0443\u0447\u043D\u0430\u044F \u043F\u0440\u0438\u0451\u043C\u043A\u0430", request_id: state.ids.stock });
+      state.received = true;
+      write(storage, key2, state);
+    }
+    if (state.photo && !state.photoSaved) {
+      onProgress("\u0422\u043E\u0432\u0430\u0440 \u0438 \u043F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u0435 \u0444\u043E\u0442\u043E\u2026");
+      await uploadPhoto(state.part, state.photo, state.ids.photo);
+      state.photoSaved = true;
+      write(storage, key2, state);
+    }
+    storage.removeItem(key2);
+    return state.part;
+  }
+
+  // warehouse/new-part.js
+  function newPartForm({ actor, api: api2, photos: photos2, parts: parts2, canReceive, run: run2, refresh, openProduct, message: message2 }) {
+    return function open() {
+      const dialog = document.createElement("dialog");
+      dialog.className = "new-part-dialog";
+      dialog.setAttribute("aria-label", "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C");
+      const categories = [...new Set(parts2().map((p) => p.category).filter(Boolean))].sort();
+      dialog.innerHTML = '<form><h2>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</h2><div class="new-part-fields"><label>\u041D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435<input name="name" required maxlength="200"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required maxlength="100" list="new-part-categories"><datalist id="new-part-categories">' + categories.map((c) => '<option value="' + esc(c) + '">').join("") + '</datalist></label><label>\u041C\u043E\u0434\u0435\u043B\u044C / \u0440\u0430\u0437\u043C\u0435\u0440<input name="model" maxlength="120"></label><label>\u0410\u0440\u0442\u0438\u043A\u0443\u043B / SKU<input name="sku" maxlength="100"></label><label>\u0417\u0430\u043A\u0443\u043F\u043A\u0430, \u20BD<input name="unit_cost" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041F\u0440\u043E\u0434\u0430\u0436\u0430, \u20BD<input name="retail_price" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u0440\u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438<input name="initial_quantity" type="number" min="0" max="100000" step="1" value="0" ' + (canReceive() ? "" : "disabled") + '></label><label>\u0415\u0434\u0438\u043D\u0438\u0446\u0430 \u0438\u0437\u043C\u0435\u0440\u0435\u043D\u0438\u044F<input name="unit" value="\u0448\u0442" maxlength="20" required></label></div><p class="muted">\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 FastGo \u043F\u0440\u0438\u0441\u0432\u043E\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.' + (canReceive() ? " \u041D\u0430\u0447\u0430\u043B\u044C\u043D\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u043E\u043C." : " \u041F\u0440\u0438\u0445\u043E\u0434 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.") + '</p><label>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><img class="new-part-preview" alt="\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" hidden><label class="new-part-category-photo"><input name="category_primary" type="checkbox"> \u0421\u0434\u0435\u043B\u0430\u0442\u044C \u0444\u043E\u0442\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C \u0434\u043B\u044F \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0438</label><p class="new-part-status" role="status" aria-live="polite"></p><div class="actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button class="primary" type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button></div></form>';
+      document.body.append(dialog);
+      dialog.showModal();
+      const form = dialog.querySelector("form"), submit = dialog.querySelector("[type=submit]"), status = dialog.querySelector("[role=status]"), close = dialog.querySelector("[data-close]"), fileInput = form.elements.photo;
+      let preview = "", saving = false;
+      const restore = () => {
+        var _a;
+        const state = loadProductIntake(localStorage, actor());
+        if (!state) return null;
+        for (const [name, value] of Object.entries({ ...state.product, initial_quantity: state.quantity })) {
+          const input = form.elements.namedItem(name);
+          if (input) {
+            input.value = value;
+            input.disabled = true;
+          }
+        }
+        form.elements.category_primary.checked = !!((_a = state.photo) == null ? void 0 : _a.primary);
+        form.elements.category_primary.disabled = true;
+        submit.textContent = "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435";
+        return state;
+      };
+      try {
+        if (restore()) status.textContent = "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u043C \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u043E\u0435 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0435. \u0422\u043E\u0432\u0430\u0440 \u0438 \u043F\u0440\u0438\u0445\u043E\u0434 \u043D\u0435 \u0431\u0443\u0434\u0443\u0442 \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u044B \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E.";
+      } catch (error) {
+        status.textContent = error.message;
+        submit.disabled = true;
+        submit.dataset.unavailable = "true";
+      }
+      close.onclick = () => dialog.close();
+      dialog.addEventListener("cancel", (e) => {
+        if (saving) e.preventDefault();
+      });
+      dialog.onclose = () => {
+        if (preview) URL.revokeObjectURL(preview);
+        dialog.remove();
+      };
+      fileInput.onchange = () => {
+        if (preview) URL.revokeObjectURL(preview);
+        const file = fileInput.files[0], image = dialog.querySelector(".new-part-preview");
+        image.hidden = !file;
+        if (file) {
+          preview = URL.createObjectURL(file);
+          image.src = preview;
+        } else image.removeAttribute("src");
+      };
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        if (saving || !form.reportValidity()) return;
+        void run2(async () => {
+          saving = true;
+          submit.disabled = true;
+          close.disabled = true;
+          fileInput.disabled = true;
+          try {
+            const fields = new FormData(form), file = fileInput.files[0];
+            let photo = null;
+            if (file) {
+              if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 25 * 1024 * 1024) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 JPG, PNG \u0438\u043B\u0438 WebP \u043D\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 25 \u041C\u0411");
+              const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()));
+              photo = { sha256: [...hash].map((v) => v.toString(16).padStart(2, "0")).join(""), type: file.type, primary: form.elements.category_primary.checked };
+            }
+            let state = loadProductIntake(localStorage, actor());
+            if (!state) state = startProductIntake(localStorage, actor(), { product: { name: String(fields.get("name") || "").trim(), category: String(fields.get("category") || "").trim(), model: String(fields.get("model") || "").trim(), sku: String(fields.get("sku") || "").trim(), unit_cost: Number(fields.get("unit_cost") || 0), retail_price: Number(fields.get("retail_price") || 0), unit: String(fields.get("unit") || "\u0448\u0442") }, quantity: Number(fields.get("initial_quantity") || 0), photo });
+            restore();
+            if (state.quantity > 0 && !canReceive()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u0445\u043E\u0434 \u043D\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u043E\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.");
+            if (state.photo && !state.photoSaved && (!photo || photo.sha256 !== state.photo.sha256 || photo.type !== state.photo.type)) throw Error("\u0414\u043B\u044F \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u044F \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E \u0436\u0435 \u0444\u043E\u0442\u043E. \u0422\u043E\u0432\u0430\u0440 \u0438 \u043F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B.");
+            const part = await continueProductIntake(localStorage, actor(), { api: api2, onProgress: (text) => status.textContent = text, uploadPhoto: (part2, metadata, id) => photos2.upload(part2, file, id, metadata.primary, (text) => status.textContent = text) });
+            await refresh();
+            dialog.close();
+            openProduct(parts2().find((p) => p.id === part.id) || part);
+            message2("\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C \u0441\u043E\u0437\u0434\u0430\u043D\u0430. " + (state.quantity > 0 ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. " : "") + (state.photo ? "\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430." : ""));
+          } catch (error) {
+            if (dialog.isConnected) status.textContent = error.message;
+            throw error;
+          } finally {
+            saving = false;
+            if (dialog.isConnected) {
+              submit.disabled = false;
+              close.disabled = false;
+              fileInput.disabled = false;
+            }
+          }
+        });
+      };
+      form.elements.name.focus();
+    };
   }
 
   // warehouse/web-update.js
@@ -402,6 +806,71 @@
     return updater;
   }
 
+  // warehouse/price-adjustment.js
+  var money2 = (n) => Number(n || 0).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
+  function adjustedTotal(base, edit) {
+    var _a;
+    const cents = Math.round(base * 100);
+    if (!edit) return cents / 100;
+    const raw = String((_a = edit.value) != null ? _a : "").trim().replace(",", ".");
+    if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value > 1e8) return null;
+    if (edit.mode !== "discount") return value;
+    if (edit.unit === "percent") return value <= 100 ? Math.round(cents * (1e4 - Math.round(value * 100)) / 1e4) / 100 : null;
+    const off = Math.round(value * 100);
+    return off <= cents ? (cents - off) / 100 : null;
+  }
+  function priceAdjustment({ prefix, base, read, write: write2, locked = () => false, changed = () => {
+  }, label = "\u0418\u0442\u043E\u0433\u043E", inputLabel = "\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435", resetLabel = "\u041F\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443" }) {
+    const $2 = (name) => document.getElementById(prefix + "-" + name);
+    const total = () => adjustedTotal(base(), read());
+    const markup = () => '<div class="price-adjustment"><div class="total"><span>' + label + '</span><b id="' + prefix + '-total"></b></div><div class="price-actions"><button type="button" id="' + prefix + '-total-edit">\u270E \u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u0443\u043C\u043C\u0443</button><button type="button" id="' + prefix + '-discount-edit">% \u0421\u043A\u0438\u0434\u043A\u0430</button></div><div id="' + prefix + '-total-field" hidden><label>' + inputLabel + ', \u20BD<input id="' + prefix + '-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="' + inputLabel + '"></label></div><div id="' + prefix + '-discount-field" hidden><label>\u0420\u0430\u0437\u043C\u0435\u0440 \u0441\u043A\u0438\u0434\u043A\u0438<input id="' + prefix + '-discount-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0420\u0430\u0437\u043C\u0435\u0440 \u0441\u043A\u0438\u0434\u043A\u0438"></label><label>\u0421\u043A\u0438\u0434\u043A\u0430 \u0432<select id="' + prefix + '-discount-unit" aria-label="\u0421\u043A\u0438\u0434\u043A\u0430 \u0432"><option value="rub">\u0420\u0443\u0431\u043B\u044F\u0445</option><option value="percent">\u041F\u0440\u043E\u0446\u0435\u043D\u0442\u0430\u0445</option></select></label></div><p id="' + prefix + '-price-note" class="muted" role="status"></p><button type="button" id="' + prefix + '-total-reset" hidden>' + resetLabel + "</button></div>";
+    function draw() {
+      var _a;
+      if (!$2("total")) return;
+      const edit = read(), value = total(), discount = (edit == null ? void 0 : edit.mode) === "discount";
+      $2("total").textContent = value === null ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0443\u043C\u043C\u0443" : money2(value);
+      $2("total-field").hidden = !edit || discount;
+      $2("discount-field").hidden = !discount;
+      $2("total-reset").hidden = !edit;
+      for (const [name, v] of [["total-input", discount ? "" : (_a = edit == null ? void 0 : edit.value) != null ? _a : ""], ["discount-input", discount ? edit.value : ""], ["discount-unit", (edit == null ? void 0 : edit.unit) || "rub"]]) if (document.activeElement !== $2(name)) $2(name).value = v;
+      $2("price-note").textContent = value === null ? "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0443\u044E \u0441\u0443\u043C\u043C\u0443. \u0421\u043A\u0438\u0434\u043A\u0430 \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u043F\u0440\u0435\u0432\u044B\u0448\u0430\u0442\u044C \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C." : edit ? "\u0414\u043E \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F: " + money2(base()) + (value < base() ? " \xB7 \u0421\u043A\u0438\u0434\u043A\u0430: " + money2(Math.round((base() - value) * 100) / 100) : "") : "";
+      for (const name of ["total-edit", "discount-edit", "total-input", "discount-input", "discount-unit", "total-reset"]) {
+        $2(name).disabled = locked();
+        $2(name).dataset.unavailable = String(locked());
+      }
+    }
+    function bind() {
+      const update = (edit) => {
+        if (locked()) return;
+        write2(edit);
+        draw();
+        changed();
+      };
+      $2("total-edit").onclick = () => {
+        var _a;
+        if (locked()) return;
+        update({ mode: "total", value: String((_a = total()) != null ? _a : base()) });
+        $2("total-input").focus();
+        $2("total-input").select();
+      };
+      $2("discount-edit").onclick = () => {
+        if (locked()) return;
+        update({ mode: "discount", unit: "rub", value: "0" });
+        $2("discount-input").focus();
+        $2("discount-input").select();
+      };
+      $2("total-input").oninput = () => update({ mode: "total", value: $2("total-input").value });
+      const discount = () => update({ mode: "discount", value: $2("discount-input").value, unit: $2("discount-unit").value });
+      $2("discount-input").oninput = discount;
+      $2("discount-unit").onchange = discount;
+      $2("total-reset").onclick = () => update(null);
+      draw();
+    }
+    return { markup, draw, bind, total };
+  }
+
   // warehouse/repair-payment.js?v=20261016-scan-2
   function repairPayment({ call: call2, render, home: home2, run: run2, message: message2, load: load2, save: save3 }) {
     let watching = 0;
@@ -456,7 +925,7 @@
       await checkout2(await call2("job", { id: pending.request_id }));
     }
     async function checkout2(job2) {
-      var _a;
+      var _a, _b;
       const latest = await call2("job", { id: job2.id });
       if (!latest) throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
       if (latest.state === "done") {
@@ -465,45 +934,64 @@
         return;
       }
       const q = latest.repair || await call2("repair_quote", { repair_id: latest.payload.repair_id }), fixed = latest.checkout;
-      render('<div class="live-heading"><button id="repair-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>\u041E\u043F\u043B\u0430\u0442\u0430</h1></div>' + summary(q) + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([value, label]) => '<label><input type="radio" name="repair-method" value="' + value + '">' + label + "</label>").join("") + '</fieldset><button class="primary" id="repair-pay">\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button>');
-      $2("repair-back").onclick = home2;
-      if (fixed) {
-        const selected = document.querySelector('input[name="repair-method"][value="' + fixed.method + '"]');
-        if (selected) selected.checked = true;
-        document.querySelectorAll('input[name="repair-method"]').forEach((el) => el.disabled = true);
+      const cacheKey = "repair-price:" + latest.id, methodKey = "repair-method:" + latest.id, signature = JSON.stringify([q.total, q.paid, q.revision]);
+      let stale = false, submitting = false;
+      const read = () => {
+        if ((fixed == null ? void 0 : fixed.total_override) !== void 0) return { value: String(fixed.total_override) };
+        const saved = load2(cacheKey);
+        return (saved == null ? void 0 : saved.signature) === signature ? saved : null;
+      };
+      const editable = (_b = q.price_editable) != null ? _b : !["issued", "cancelled", "returned"].includes(q.status);
+      const price = priceAdjustment({ prefix: "repair", base: () => q.total, read, write: (edit) => save3(cacheKey, edit ? { ...edit, signature } : null), locked: () => !!fixed || submitting || stale || !editable, changed: drawBalance, label: "\u041F\u043E\u043B\u043D\u0430\u044F \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430", inputLabel: "\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430", resetLabel: "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0437\u0430\u043A\u0430\u0437\u0430" });
+      render('<div class="live-heading"><button id="repair-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</h1></div><section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + "</p>" + price.markup() + '<div class="total"><span>\u0423\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D\u043E</span><b>' + money(q.paid) + '</b></div><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b id="repair-due"></b></div></section><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([value, label]) => '<label><input type="radio" name="repair-method" value="' + value + '">' + label + "</label>").join("") + '</fieldset><p id="repair-state" class="muted" role="status"></p><button type="button" id="repair-refresh" hidden>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u0443\u043C\u043C\u0443 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</button><button class="primary" id="repair-pay">\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button>');
+      function drawBalance() {
+        if (!$2("repair-pay")) return;
+        const total = price.total(), due = total === null ? null : (Math.round(total * 100) - Math.round(q.paid * 100)) / 100;
+        $2("repair-due").textContent = due === null || due < 0 ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C" : money(due);
+        const disabled = stale || submitting || !fixed && (!editable || due === null || due <= 0);
+        $2("repair-pay").disabled = disabled;
+        $2("repair-pay").dataset.unavailable = String(disabled);
+        $2("repair-pay").textContent = read() && !fixed ? "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0446\u0435\u043D\u0443 \u0438 \u043F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443";
+        if (!stale) $2("repair-state").textContent = !editable ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442. \u041F\u0440\u0438\u0451\u043C \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D." : due < 0 ? "\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u043C\u0435\u043D\u044C\u0448\u0435 \u0443\u0436\u0435 \u0432\u043D\u0435\u0441\u0451\u043D\u043D\u043E\u0439 \u043E\u043F\u043B\u0430\u0442\u044B. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0435 \u0432\u043E\u0437\u0432\u0440\u0430\u0442." : due === 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u043E\u043F\u043B\u0430\u0447\u0435\u043D. \u0414\u043B\u044F \u043D\u043E\u0432\u043E\u0439 \u0441\u0443\u043C\u043C\u044B \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u0435 \u043F\u043E\u043B\u043D\u0443\u044E \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C." : read() ? "\u041D\u043E\u0432\u0430\u044F \u043F\u043E\u043B\u043D\u0430\u044F \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u043E\u043F\u043B\u0430\u0442\u043E\u0439. \u041E\u0441\u0442\u0430\u0442\u043E\u043A \u0434\u043E\u043B\u0433\u0430 \u0431\u0443\u0434\u0435\u0442 \u043F\u0435\u0440\u0435\u0441\u0447\u0438\u0442\u0430\u043D." : "";
       }
-      $2("repair-pay").disabled = !q.payable && !fixed;
-      $2("repair-pay").dataset.unavailable = String(!q.payable && !fixed);
-      const note = document.createElement("p");
-      note.id = "repair-state";
-      note.className = "muted";
-      note.textContent = q.payable ? "" : q.total === 0 ? "\u0421\u0443\u043C\u043C\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0435\u0449\u0451 \u043D\u0435 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0430. \u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0432 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430." : q.due <= 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D." : "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442. \u041F\u0440\u0438\u0451\u043C \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.";
-      $2("repair-pay").before(note);
+      price.bind();
+      drawBalance();
+      $2("repair-back").onclick = home2;
+      $2("repair-refresh").onclick = () => run2(() => checkout2(latest));
+      const method = (fixed == null ? void 0 : fixed.method) || load2(methodKey);
+      for (const input of document.querySelectorAll('input[name="repair-method"]')) {
+        input.checked = input.value === method;
+        input.disabled = !!fixed;
+        input.onchange = () => save3(methodKey, input.value);
+      }
       const token = ++watching;
       let polling2 = false;
       const timer = setInterval(async () => {
-        var _a2, _b;
+        var _a2;
         if (token !== watching || !$2("repair-pay")) {
           clearInterval(timer);
           return;
         }
-        if (polling2) return;
+        if (polling2 || submitting) return;
         polling2 = true;
         try {
           const status = await call2("job", { id: latest.id });
           if (token !== watching || !$2("repair-pay")) return;
           if ((status == null ? void 0 : status.state) === "done") {
             clearInterval(timer);
+            save3(cacheKey, null);
+            save3(methodKey, null);
             home2();
             message2(((_a2 = status.result) == null ? void 0 : _a2.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u043D\u0430 \u0422\u0421\u0414" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
-          } else if ((status == null ? void 0 : status.repair) && JSON.stringify(status.repair) !== JSON.stringify(q)) {
-            const selected = (_b = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _b.value;
+          } else if ((status == null ? void 0 : status.checkout) && !fixed) {
             clearInterval(timer);
             await checkout2(status);
-            if (selected) {
-              const input = document.querySelector('input[name="repair-method"][value="' + selected + '"]');
-              if (input) input.checked = true;
-            }
+          } else if ((status == null ? void 0 : status.repair) && JSON.stringify([status.repair.total, status.repair.paid, status.repair.revision]) !== signature) {
+            stale = true;
+            price.draw();
+            drawBalance();
+            $2("repair-state").textContent = "\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0438\u043B\u0438 \u0434\u0430\u043D\u043D\u044B\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C \u043D\u0430 \u0434\u0440\u0443\u0433\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u0443\u043C\u043C\u0443 \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u043A\u0438\u0434\u043A\u0443 \u043F\u0435\u0440\u0435\u0434 \u043E\u043F\u043B\u0430\u0442\u043E\u0439.";
+            $2("repair-refresh").hidden = false;
           }
         } catch (e) {
           if ($2("repair-state")) $2("repair-state").textContent = e.message;
@@ -512,16 +1000,25 @@
         }
       }, 1e3);
       $2("repair-pay").onclick = () => run2(async () => {
-        var _a2, _b, _c;
-        const method = (fixed == null ? void 0 : fixed.method) || ((_a2 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a2.value);
-        if (!method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
+        var _a2, _b2, _c;
+        const method2 = (fixed == null ? void 0 : fixed.method) || ((_a2 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a2.value);
+        if (!method2) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
+        const total = price.total();
+        if (total === null || stale) throw Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430");
+        submitting = true;
+        price.draw();
+        drawBalance();
         try {
-          await call2("checkout", { id: latest.id, payment_method: method, amount: (_b = fixed == null ? void 0 : fixed.amount) != null ? _b : q.due, expected_revision: (_c = fixed == null ? void 0 : fixed.expected_revision) != null ? _c : q.revision });
+          await call2("checkout", { id: latest.id, payment_method: method2, amount: (_b2 = fixed == null ? void 0 : fixed.amount) != null ? _b2 : (Math.round(total * 100) - Math.round(q.paid * 100)) / 100, expected_revision: (_c = fixed == null ? void 0 : fixed.expected_revision) != null ? _c : q.revision, ...read() ? { total_override: total } : {} });
+          save3(cacheKey, null);
+          save3(methodKey, null);
           home2();
           message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u2116 " + q.number + " \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u0430");
         } catch (e) {
           await checkout2(latest);
           throw e;
+        } finally {
+          submitting = false;
         }
       });
     }
@@ -688,14 +1185,11 @@
       const saved = load2("live-total:" + documentId());
       return (saved == null ? void 0 : saved.signature) === signature() ? saved : null;
     }
-    function totalValue() {
+    const price = priceAdjustment({ prefix: "live", base: baseTotal, read: () => {
       var _a;
-      if (((_a = current == null ? void 0 : current.checkout) == null ? void 0 : _a.total_override) !== void 0) return current.checkout.total_override;
-      const edit = totalEdit();
-      if (!edit) return baseTotal();
-      const raw = String(edit.value).trim().replace(",", ".");
-      return /^\d+(?:\.\d{1,2})?$/.test(raw) && Number(raw) <= 1e8 ? Number(raw) : null;
-    }
+      return ((_a = current == null ? void 0 : current.checkout) == null ? void 0 : _a.total_override) !== void 0 ? { value: String(current.checkout.total_override) } : totalEdit();
+    }, write: (edit) => save3("live-total:" + documentId(), edit ? { ...edit, signature: signature() } : null), locked: () => locked || !!(current == null ? void 0 : current.checkout) });
+    const totalValue = () => price.total();
     const amount = (x) => {
       var _a;
       return x.custom_price ? Number(x.unit_price) : Number(((_a = product2(x)) == null ? void 0 : _a.retail_price) || 0);
@@ -783,7 +1277,7 @@
       if (draft2 === local && local.acked < local.revision && !locked) return sync();
     }
     function draw() {
-      var _a, _b, _c;
+      var _a, _b;
       if (!active || !$2("live-items")) return;
       const value = source(), items = value.items.filter((x) => {
         var _a2;
@@ -841,20 +1335,14 @@
       $2("scan-empty").hidden = !!items.length;
       $2("live-payment").hidden = value.kind !== "sale" || !items.length;
       $2("live-submit").hidden = !items.length;
-      $2("live-total").textContent = totalValue() === null ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0443\u043C\u043C\u0443" : money(totalValue());
-      $2("live-total-edit").disabled = locked;
-      const edit = totalEdit();
-      $2("live-total-field").hidden = !edit;
-      if (document.activeElement !== $2("live-total-input")) $2("live-total-input").value = (_c = edit == null ? void 0 : edit.value) != null ? _c : "";
-      $2("live-total-input").disabled = locked;
-      $2("live-total-reset").disabled = locked;
+      price.draw();
       for (const el of document.querySelectorAll('input[name="live-method"]')) el.disabled = locked;
     }
     function documentId() {
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden><div class="total"><span>\u0418\u0442\u043E\u0433\u043E <button type="button" id="live-total-edit" class="total-pencil" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443" title="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0443\u043C\u043C\u0443">\u270E</button></span><b id="live-total"></b></div><div id="live-total-field" hidden><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input id="live-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435"></label><button type="button" id="live-total-reset">\u041F\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443</button></div><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>" + (k === "receipt" ? '<button type="button" class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434</button>' : ""));
+      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>" + (k === "receipt" ? '<button type="button" class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434</button>' : ""));
     }
     function mount() {
       var _a;
@@ -900,21 +1388,7 @@
       if (!terminal2) {
         if ($2("live-cancel")) $2("live-cancel").onclick = () => run2(cancelReceipt);
         $2("live-submit").onclick = () => run2(finish);
-        $2("live-total-edit").onclick = () => {
-          if (locked) return;
-          if (!totalEdit()) save3("live-total:" + documentId(), { signature: signature(), value: String(baseTotal()) });
-          draw();
-          $2("live-total-input").focus();
-          $2("live-total-input").select();
-        };
-        $2("live-total-input").oninput = () => {
-          save3("live-total:" + documentId(), { signature: signature(), value: $2("live-total-input").value });
-          $2("live-total").textContent = totalValue() === null ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0443\u043C\u043C\u0443" : money(totalValue());
-        };
-        $2("live-total-reset").onclick = () => {
-          save3("live-total:" + documentId(), null);
-          draw();
-        };
+        price.bind();
         const method = ((_a = current == null ? void 0 : current.checkout) == null ? void 0 : _a.payment_method) || load2("live-method:" + documentId());
         for (const el of document.querySelectorAll('input[name="live-method"]')) {
           el.checked = el.value === method;
@@ -1416,9 +1890,9 @@
     if (!device) {
       if (!terminal && new URLSearchParams(location.search).get("unified") === "1") {
         document.body.dataset.readonly = "true";
-        memberRole = "viewer";
+        memberRole = (await serviceApi("me")).role;
         await catalog();
-        $("connection").textContent = "\u041F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430 \xB7 \u043E\u0431\u0449\u0435\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435";
+        $("connection").textContent = "\u041A\u0430\u0442\u0430\u043B\u043E\u0433 \u0441\u043A\u043B\u0430\u0434\u0430 \xB7 \u043E\u0431\u0449\u0435\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435";
         home();
         await inventory();
         message("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.");
@@ -1732,21 +2206,31 @@
   }
   var drawInventory = () => {
   };
-  var product = productPanel({ parts: () => parts, editable: () => ["owner", "developer"].includes(memberRole), call: (a, p) => call(a, p), run, changed: () => drawInventory(), message });
+  var canManageParts = () => !terminal && ["owner", "developer", "admin"].includes(memberRole);
+  var canReceiveParts = () => !terminal && !!device && document.body.dataset.readonly !== "true";
+  var refreshParts = async () => {
+    await catalog();
+    drawInventory();
+  };
+  var photos = partPhotos({ api: serviceApi, editable: canManageParts, run, changed: refreshParts, message });
+  var product = productPanel({ parts: () => parts, editable: () => !!device && ["owner", "developer"].includes(memberRole), call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos });
+  var createPart = newPartForm({ actor: userId, api: serviceApi, photos, parts: () => parts, canReceive: canReceiveParts, run, refresh: refreshParts, openProduct: (p) => product.open(p), message });
   async function inventory() {
     await catalog();
     screen = "inventory";
-    shell(nav() + '<h1>\u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u044B</h1><label class="inventory-search"><span class="sr-only">\u041F\u043E\u0438\u0441\u043A</span><input id="filter" type="search" placeholder="\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044E, \u0430\u0440\u0442\u0438\u043A\u0443\u043B\u0443 \u0438\u043B\u0438 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u0443\u2026"></label><div class="inventory-table"><div class="inventory-columns"><span>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435</span><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><span>\u041E\u0441\u0442\u0430\u0442\u043E\u043A</span><span>\u0426\u0435\u043D\u0430</span></div><div id="stock-list"></div></div>');
+    shell(nav() + '<div class="inventory-toolbar"><h1>\u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u044B</h1>' + (canManageParts() ? '<button id="new-part" class="primary">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button>' : "") + '</div><label class="inventory-search"><span class="sr-only">\u041F\u043E\u0438\u0441\u043A</span><input id="filter" type="search" placeholder="\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044E, \u0430\u0440\u0442\u0438\u043A\u0443\u043B\u0443 \u0438\u043B\u0438 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u0443\u2026"></label><div class="inventory-table"><div class="inventory-columns"><span>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435</span><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><span>\u041E\u0441\u0442\u0430\u0442\u043E\u043A</span><span>\u0426\u0435\u043D\u0430</span></div><div id="stock-list"></div></div>');
     bindNav();
     drawInventory = () => {
       if (!$("stock-list")) return;
-      const q = $("filter").value.toLowerCase(), matches = parts.filter((x) => [x.name, x.barcode, x.sku].join(" ").toLowerCase().includes(q));
-      $("stock-list").innerHTML = matches.slice(0, 100).map((x) => '<button type="button" class="inventory-item" data-part="' + esc(x.id) + '"><strong>' + esc(x.name) + "</strong><span>" + esc(x.sku || "\u2014") + "</span><span>" + x.quantity + " \u0448\u0442.</span><span>" + money(x.retail_price) + "</span></button>").join("") + (matches.length ? "" : '<p class="muted inventory-empty">\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E</p>');
+      const q = $("filter").value.toLowerCase(), matches = parts.filter((x) => [x.name, x.barcode, x.sku, x.model].join(" ").toLowerCase().includes(q));
+      $("stock-list").innerHTML = matches.slice(0, 100).map((x) => '<button type="button" class="inventory-item" data-part="' + esc(x.id) + '"><span class="inventory-name">' + photos.thumbnail(x) + "<strong>" + esc(x.name) + "</strong></span><span>" + esc(x.sku || "\u2014") + "</span><span>" + x.quantity + " \u0448\u0442.</span><span>" + money(x.retail_price) + "</span></button>").join("") + (matches.length ? "" : '<p class="muted inventory-empty">\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E</p>');
+      photos.bindThumbnails($("stock-list"), parts);
       $("stock-list").querySelectorAll("[data-part]").forEach((b) => b.onclick = () => {
         document.querySelectorAll(".inventory-item").forEach((x) => x.classList.toggle("selected", x === b));
         product.open(parts.find((x) => x.id === b.dataset.part));
       });
     };
+    if ($("new-part")) $("new-part").onclick = createPart;
     $("filter").oninput = drawInventory;
     drawInventory();
   }
