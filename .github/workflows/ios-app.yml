@@ -67,4 +67,12 @@ jobs:
    - uses: actions/download-artifact@v4
      with: {name: FastGo-iPhone-unsigned, path: release}
    - env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
-     run: gh release create fastgo-ios-v1.0.1 --target "$GITHUB_SHA" --latest=false --title 'FastGo для iPhone 1.0.1' --notes 'Скомпилированное приложение iPhone с интерфейсом внутри IPA. Нужна подпись через Sideloadly или Apple Developer. Проверено в симуляторе; установка и камера на физическом iPhone требуют проверки.' release/*.ipa release/SHA256SUMS.txt
+     run: |
+      test -s release/package/FastGo-1.0.1-unsigned.ipa
+      cd release/package
+      sha256sum -c SHA256SUMS.txt
+      if gh release view fastgo-ios-v1.0.1 >/dev/null 2>&1; then
+       echo 'This version is already published; never replace an installed IPA.'
+       exit 0
+      fi
+      gh release create fastgo-ios-v1.0.1 --target "$GITHUB_SHA" --latest=false --title 'FastGo для iPhone 1.0.1' --notes 'Скомпилированное приложение iPhone с интерфейсом внутри IPA. Нужна подпись через Sideloadly или Apple Developer. Проверены установленный пакет и видимая форма входа в симуляторе; установка и камера на физическом iPhone требуют проверки.' FastGo-1.0.1-unsigned.ipa SHA256SUMS.txt
