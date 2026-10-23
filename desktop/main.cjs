@@ -1,5 +1,5 @@
 // Installer and helper launches can outlive their console pipes.
-for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
+if(typeof process!=='undefined')for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
 const {app,BrowserWindow,Menu,ipcMain,protocol,net,shell,safeStorage,session}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
