@@ -1,0 +1,13 @@
+# Managed native TSD update channel
+
+The production Android package is `ru.fastgo.tsd.app` (Java namespace `ru.fastgo.tsd`). Version 2.1.1/code 4 starts this update line. An intermediate 2.1.0/code 3 package verifies a real data-preserving upgrade during migration. The installed old `ru.fastgo.tsd` 2.0.0 is not removed or modified: Android rejects a different signer and its non-debuggable private database cannot be migrated over ADB. Server-synced documents remain available at their station; unsynced old documents remain in the old app.
+
+Both Windows applications discover the authorized iData/i3 USB device, download the signed APK from `warehouse/native-update.json`, verify its digest, and use Android's package installer. Existing native documents and an active scan screen block USB updates. The native application's own HTTPS updater separately checks the package, digest, newer version and matching signer, waits for all documents, and opens the normal Android confirmation screen. Silent installation without Android authorization is not claimed.
+
+The manifest retains the old `ru.fastgo.tsd` fields at its root, so the old app can still finish its private documents without receiving a different-package update. Managed releases are listed under `channels["ru.fastgo.tsd.app"]`; new Windows and Android clients select this entry.
+
+Initial setup uses the existing owner login and an allowed laptop credential. The `fastgo-terminal-setup` function validates both, selects the configured cash station (slot 1) unless an allowed destination is explicitly supplied, and creates an independent session for the same verified user without sending email. Windows and Android never share a rotating refresh token. The DUMP-protected Android receiver accepts initial credentials only, encrypts them atomically, and refuses replacement of an existing connection or pending documents. No credentials are returned by its diagnostic status.
+
+Signing material is stored outside the repository under the Windows protected release-signing folder. Its password is protected with Windows DPAPI; an encrypted private Supabase Vault backup permits recovery without asking the operator to locate a key. Neither the keystore, its password nor any device/account tokens belong in releases, logs or reports.
+
+The emulator workflow stages a real signed APK after testing the document gate, invokes Android's installer, then verifies the installed version and retained SQLite/encrypted values. This proves the update mechanism on Android; physical scanner optics, the locked device's visible screen, and the remote cash laptop remain separate field checks.

@@ -1,12 +1,14 @@
 const path=require('node:path');
 const {TerminalUpdate}=require('./warehouse-native/terminal-update.cjs');
+const {createAutoTerminal}=require('./warehouse-native/auto-terminal.cjs');
 const {USBScanner}=require('./warehouse-native/usb-scanner.cjs');
 const {registerUSBBridge}=require('./warehouse-native/usb-bridge.cjs');
 const {registerTerminalLauncher,registerWarehouseAttention}=require('./warehouse-native/warehouse-bridge.cjs');
-function createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow,updates,warehouseCall=async()=>[]}){
+function createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow,updates,warehouseCall=async()=>[],setupTerminal=async()=>''}){
  let usb=null,authorized=false,control,updaterWindow,opening=false,lastMode='',usbError='',authChain=Promise.resolve();
  const openedCloud=new Set();
  const terminal=new TerminalUpdate({adb:path.join(process.resourcesPath,'platform-tools','adb.exe'),dir:path.join(app.getPath('userData'),'terminal-update')});
+ let nextNativeCheck=Date.now()+15000;const autoTerminal=createAutoTerminal({terminal,blocked:()=>!authorized||!!usb&&(usb.state.pending.length>0||!!usb.target),afterUpdate:serial=>setupTerminal(terminal,serial)});
  const assets=path.join(__dirname,'warehouse-native');
  const show=(kind)=>{const old=kind==='usb'?control:updaterWindow;if(old&&!old.isDestroyed()){old.focus();return;}
  const child=new BrowserWindow({parent:getWindow(),width:720,height:760,webPreferences:{preload:path.join(assets,kind==='usb'?'usb-preload.cjs':'terminal-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
@@ -24,6 +26,7 @@ function createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow,updates,war
  }
  async function tick(){
   if(opening||!authorized)return;
+  if(Date.now()>=nextNativeCheck){nextNativeCheck=Date.now()+60000;void autoTerminal.tick();}
   const win=getWindow();if(!win||win.isDestroyed())return;
   const url=win.webContents.getURL(),kind=usb?.state.mode,request=kind+':'+(usb?.state.modeRevision||0);
   const modePending=['receipt','sale'].includes(kind)&&request!==lastMode;

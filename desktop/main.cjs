@@ -6,6 +6,8 @@ const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=requ
 const {Updates}=require('./updates.cjs');
 const {createWarehouseRuntime}=require('./warehouse-runtime.cjs');
 let warehouseRuntime;
+let terminalProvisioner;
+async function setupTerminal(terminal,serial){if(!actor)return '';if(!terminalProvisioner)terminalProvisioner=require('./warehouse-native/terminal-provision.cjs').createTerminalProvisioner({terminal,dir:app.getPath('userData'),safeStorage,account:warehouseStation,request:p=>cloud('/functions/v1/fastgo-terminal-setup',p)});return terminalProvisioner(serial);}
 const {importLegacyStation}=require('./warehouse-station.cjs');
 const stationFile=()=>path.join(app.getPath('userData'),'warehouse-station.bin');
 function savedStation(){try{return JSON.parse(safeStorage.decryptString(fs.readFileSync(stationFile())));}catch{return null;}}
@@ -124,7 +126,7 @@ app.whenReady().then(()=>{
  win.setMenu(null);
  win.webContents.setWindowOpenHandler(({url})=>{if(url.startsWith('https://'))shell.openExternal(url);return {action:'deny'};});
  win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('fastgo://app/')){event.preventDefault();if(url.startsWith('https://'))shell.openExternal(url);}});
- warehouseRuntime=createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow:()=>win,updates:()=>updates,warehouseCall:async action=>{const station=savedStation();if(!station||!actor)return [];try{return(await cloud('/functions/v1/fastgo-warehouse',{action,device_id:station.id,device_token:station.token})).data;}catch(e){if([401,403].includes(e.status))await warehouseRuntime.authorize(false);return [];}}});
+ warehouseRuntime=createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow:()=>win,updates:()=>updates,setupTerminal,warehouseCall:async action=>{const station=savedStation();if(!station||!actor)return [];try{return(await cloud('/functions/v1/fastgo-warehouse',{action,device_id:station.id,device_token:station.token})).data;}catch(e){if([401,403].includes(e.status))await warehouseRuntime.authorize(false);return [];}}});
  win.webContents.on('did-finish-load',()=>warehouseRuntime.loaded());
  win.loadURL('fastgo://app/workshop.html#home');
  void authorizeWarehouse();setInterval(()=>void authorizeWarehouse(),30000);

@@ -1,10 +1,10 @@
 package ru.fastgo.tsd;
 import android.content.*;import android.content.pm.*;import android.net.Uri;import android.os.Build;import android.provider.Settings;import org.json.*;import java.io.*;import java.net.*;import java.security.*;import java.util.*;
 public final class AppUpdates {
- private final Context context;private final LocalStore store;
+ private final Context context;private final LocalStore store;interface Source{byte[] read(String url,int limit)throws Exception;}private final Source source;
  private static final String MANIFEST="https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native-update.json";
- public AppUpdates(Context c,LocalStore s){context=c;store=s;}
- private byte[] get(String url,int limit)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(15000);c.setReadTimeout(25000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Cache-Control","no-cache");try{if(c.getResponseCode()!=200)throw new IOException("Канал обновлений недоступен");try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Размер обновления превышен");out.write(b,0,n);}return out.toByteArray();}}finally{c.disconnect();}}
+ public AppUpdates(Context c,LocalStore s){this(c,s,null);} AppUpdates(Context c,LocalStore s,Source transport){context=c;store=s;source=transport;}
+ private byte[] get(String url,int limit)throws Exception{if(source!=null){byte[] bytes=source.read(url,limit);if(bytes.length>limit)throw new IOException("Update too large");return bytes;}HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(15000);c.setReadTimeout(25000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Cache-Control","no-cache");try{if(c.getResponseCode()!=200)throw new IOException("Канал обновлений недоступен");try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Размер обновления превышен");out.write(b,0,n);}return out.toByteArray();}}finally{c.disconnect();}}
  private String blockers()throws Exception{int count=store.blockingDocuments();if(count>0)return "Завершите или отмените незакрытые документы: "+count;if(!store.get("active_document").isEmpty())return "Закройте экран сканирования кнопкой «Назад»";return "";}
  public boolean canInstall(){try{return blockers().isEmpty();}catch(Exception e){return false;}}
  private String notice()throws Exception{String version=store.get("update_pending_version");if(version.isEmpty())return "";String blocked=blockers();return blocked.isEmpty()?(ready()?"Загружено обновление "+version:""):"Доступно обновление "+version+". "+blocked;}
@@ -17,7 +17,7 @@ public final class AppUpdates {
  public synchronized String check(boolean manual)throws Exception{
   long last=0;try{last=Long.parseLong(store.get("update_last_check"));}catch(NumberFormatException ignored){}
   if(!manual&&System.currentTimeMillis()-last<60000)return notice();
-  JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));PackageInfo own=context.getPackageManager().getPackageInfo(context.getPackageName(),0);
+  JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));JSONObject channels=meta.optJSONObject("channels");if(channels!=null&&channels.optJSONObject(context.getPackageName())!=null)meta=channels.getJSONObject(context.getPackageName());PackageInfo own=context.getPackageManager().getPackageInfo(context.getPackageName(),0);
   if(!context.getPackageName().equals(meta.getString("package")))throw new IOException("Канал обновлений относится к другому приложению");
   store.put("update_last_check",Long.toString(System.currentTimeMillis()));
   if(meta.getInt("versionCode")<=own.versionCode){new File(context.getCacheDir(),"update.apk").delete();store.put("update_pending_version","");return manual?"Установлена актуальная версия "+own.versionName:"";}
