@@ -46,6 +46,11 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcut = Join-Path $desktop 'FastGo Склад.lnk'
 if (!(Test-Path -LiteralPath $shortcut)) { throw 'The corrected desktop shortcut was not created' }
 $wsh = New-Object -ComObject WScript.Shell
-if ($wsh.CreateShortcut($shortcut).TargetPath -ne $exe) { throw 'Corrected shortcut points to the wrong executable' }
+$shortcutTarget = $wsh.CreateShortcut($shortcut).TargetPath
+Write-Output "Shortcut target: $shortcutTarget; expected installed executable: $exe"
+if (!(Test-Path -LiteralPath $shortcutTarget)) { throw 'Corrected shortcut target does not exist' }
+# Windows can return a valid 8.3 alias through WScript; resolve real files first.
+& node -e "const fs=require('node:fs'),a=fs.realpathSync.native(process.argv[1]),b=fs.realpathSync.native(process.argv[2]);if(a.toLowerCase()!==b.toLowerCase()){console.error({shortcut:a,expected:b});process.exit(1)}" $shortcutTarget $exe
+if ($LASTEXITCODE -ne 0) { throw 'Corrected shortcut points to a different executable' }
 @{version=$pkg.version;display_name=$after[0].DisplayName;existing_installation_updated=$true;executable_path_preserved=$true;app_data_preserved=$true;shortcut_verified=$true;background_discovery_verified=$true} | ConvertTo-Json | Set-Content -Encoding utf8 "$PSScriptRoot/../dist/warehouse-upgrade-verification.json"
 Write-Output 'PASS: real legacy warehouse installer upgrades in place; corrected Russian name and shortcut, one installation entry, preserved executable path and app data'
