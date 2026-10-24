@@ -3,7 +3,7 @@ const asar=require('@electron/asar'),yaml=require('js-yaml'),{_electron}=require
 const pkg=require('./package.json'),dist=path.join(__dirname,'dist'),unpacked=path.join(dist,'win-unpacked'),exe=path.join(unpacked,fs.readdirSync(unpacked).find(n=>n.endsWith('.exe'))),archive=path.join(unpacked,'resources/app.asar');
 const manifest=yaml.load(fs.readFileSync(path.join(dist,'latest.yml'),'utf8')),entry=manifest.files.find(x=>x.url===`FastGo-Warehouse-Setup-${pkg.version}-Windows-x64.exe`);
 assert(entry);assert.equal(manifest.version,pkg.version);assert.equal(crypto.createHash('sha512').update(fs.readFileSync(path.join(dist,entry.url))).digest('base64'),entry.sha512);assert(fs.existsSync(path.join(dist,entry.url+'.blockmap')));
-assert(asar.extractFile(archive,'backup-replica.cjs').toString().includes('class BackupReplica'));assert(asar.extractFile(archive,'web/warehouse/app-compat.js').toString().includes('warehouseUpdateSafe'));
+assert(asar.extractFile(archive,'backup-replica.cjs').toString().includes('class BackupReplica'));assert(asar.extractFile(archive,path.join('web','warehouse','app-compat.js')).toString().includes('warehouseUpdateSafe'));
 (async()=>{
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-warehouse-package-')),app=await _electron.launch({executablePath:exe,args:['--user-data-dir='+profile],timeout:60000});
  try{
