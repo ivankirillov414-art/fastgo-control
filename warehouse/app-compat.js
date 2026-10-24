@@ -261,11 +261,14 @@
     };
     window.addEventListener("fastgo-open-avito", external);
     const controller = { actor, refresh, stop() {
+      var _a2;
       stopped = true;
       clearInterval(timer);
       bell.remove();
       drawer.remove();
+      (_a2 = document.querySelector(".fg-notice-toast")) == null ? void 0 : _a2.remove();
       window.removeEventListener("fastgo-open-avito", external);
+      if (window.fastgoNotifications === controller) delete window.fastgoNotifications;
     } };
     window.fastgoNotifications = controller;
     const timer = setInterval(() => void refresh(), 15e3);
@@ -2231,6 +2234,8 @@
     message(e.message, true);
   }
   function signIn() {
+    var _a;
+    (_a = window.fastgoNotifications) == null ? void 0 : _a.stop();
     screen = "login";
     $("logout").hidden = true;
     shell("<h1>" + (terminal ? "\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B FastGo" : "FastGo \u0421\u043A\u043B\u0430\u0434") + '</h1><form id="login" class="panel" style="max-width:420px"><label>\u041F\u043E\u0447\u0442\u0430 \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430<input name="email" type="email" autocomplete="username" required></label><label>\u041F\u0430\u0440\u043E\u043B\u044C<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">\u0412\u043E\u0439\u0442\u0438</button></form>' + (terminal ? usbHelp() : ""));
