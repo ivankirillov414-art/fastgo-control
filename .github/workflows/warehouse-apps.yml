@@ -42,6 +42,8 @@ jobs:
   needs: test
   runs-on: windows-latest
   timeout-minutes: 12
+  env:
+   FASTGO_PLAYWRIGHT: '${{ runner.temp }}/warehouse-playwright'
   steps:
    - uses: actions/checkout@v4
    - uses: actions/setup-node@v4
@@ -55,14 +57,19 @@ jobs:
       Expand-Archive adb.zip -DestinationPath warehouse-desktop
    - run: npm run build
      working-directory: warehouse-desktop
-   - name: Verify installed warehouse assets without internet
+   - name: Install desktop verification tools
      shell: pwsh
      run: |
       npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
-      $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/warehouse-playwright"
-      node scripts/check-warehouse-bundled-desktop.cjs
-      node warehouse-desktop/tests/network-windows-probe.cjs
-      node warehouse-desktop/check-package.cjs
+   - name: Verify bundled warehouse UI without internet
+     timeout-minutes: 2
+     run: node scripts/check-warehouse-bundled-desktop.cjs
+   - name: Verify native Windows network probe
+     timeout-minutes: 1
+     run: node warehouse-desktop/tests/network-windows-probe.cjs
+   - name: Verify installed warehouse assets without internet
+     timeout-minutes: 3
+     run: node warehouse-desktop/check-package.cjs
    - name: Verify in-place upgrade and correct Russian installation name
      shell: pwsh
      run: ./warehouse-desktop/tests/installer-upgrade.ps1
@@ -76,6 +83,7 @@ jobs:
        warehouse-desktop/dist/latest.yml
        warehouse-desktop/dist/warehouse-package-verification.json
        warehouse-desktop/dist/warehouse-window.png
+       warehouse-desktop/dist/warehouse-printer-window.png
        warehouse-desktop/dist/network-window.png
        warehouse-desktop/dist/warehouse-upgrade-verification.json
  android:
