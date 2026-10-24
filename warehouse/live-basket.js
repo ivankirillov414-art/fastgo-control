@@ -75,13 +75,13 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    else{row.querySelector('[data-count]').textContent=x.quantity+' шт.';row.querySelector('[data-price]').textContent=money(amount(x)*x.quantity);}
   }
   for(const row of [...host.children])if(!seen.has(row.dataset.part))row.remove();
-  if($('live-cancel'))$('live-cancel').disabled=locked;
+  if($('live-cancel')){$('live-cancel').disabled=locked;$('live-cancel').dataset.unavailable=String(locked);}
   $('scan-empty').hidden=!!items.length;$('live-payment').hidden=value.kind!=='sale'||!items.length;$('live-submit').hidden=!items.length;
   price.draw();
   for(const el of document.querySelectorAll('input[name="live-method"]'))el.disabled=locked;
  }
  function documentId(){return current?.id||draft?.id||'';}
- function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Закрыть и сохранить черновик">'+(terminal?'←':'← К списку')+'</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden>'+price.markup()+'<fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>'+(k==='receipt'?'<button type="button" class="live-cancel" id="live-cancel">Отменить весь приход</button>':''));}
+ function markup(k){return '<div class="live-heading"><button id="live-back" aria-label="Закрыть и сохранить черновик">'+(terminal?'←':'← К списку')+'</button><h1>'+(k==='receipt'?'Приход':'Оплата')+'</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">Ожидаем сканирование</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>'+(terminal?'<button id="scanner-compat">Сканер не вводит код?</button><small id="scan-received" role="status"></small>':'')+''+(terminal?'':'<section id="live-payment" hidden>'+price.markup()+'<fieldset class="payment-options"><legend>Способ оплаты</legend>'+[['cash','Наличные'],['card','Безналичный расчёт'],['transfer','Перевод']].map(([v,label])=>'<label><input type="radio" name="live-method" value="'+v+'">'+label+'</label>').join('')+'</fieldset></section><button class="primary" id="live-submit" hidden>'+(k==='receipt'?'Оформить приход':'Принять оплату')+'</button>'+'<button type="button" class="live-cancel" id="live-cancel">'+(k==='receipt'?'Отменить весь приход':'Отменить оплату')+'</button>');}
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
   $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;if($('scan-received'))$('scan-received').textContent='Получен код: '+code;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
@@ -96,7 +96,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    if(focus)input.focus();
   }
   if(terminal){let enabled=load('scanner:compat')===true;if(enabled)compatible(true);$('scanner-compat').onclick=()=>{enabled=!enabled;save('scanner:compat',enabled);compatible(enabled,true);};}
-  if(!terminal){if($('live-cancel'))$('live-cancel').onclick=()=>run(cancelReceipt);$('live-submit').onclick=()=>run(finish);price.bind();const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
+  if(!terminal){if($('live-cancel'))$('live-cancel').onclick=()=>run(cancelCurrent);$('live-submit').onclick=()=>run(finish);price.bind();const method=current?.checkout?.payment_method||load('live-method:'+documentId());for(const el of document.querySelectorAll('input[name="live-method"]')){el.checked=el.value===method;el.onchange=()=>{save('live-method:'+documentId(),el.value);checkpoint();};}}
   pollTimer=setInterval(()=>void poll().catch(e=>{if(active&&$('live-sync'))$('live-sync').textContent=e.message;}),1000);
  }
  async function open(k){
@@ -143,16 +143,17 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(found){suspend();await openMirror(found);void window.warehouseDesktop?.showIncoming?.();return;}
   const target=$('live-terminal-panel');if(target){target.textContent='';for(const saved of candidates){const button=document.createElement('button');button.type='button';button.textContent=(saved.payload.kind==='receipt'?'Приход':'Оплата')+' · Открыть черновик';button.onclick=()=>run(()=>saved.terminal_id&&saved.terminal_id===saved.station_id?open(saved.payload.kind):openMirror(saved));target.append(button);}}
  }
- async function cancelReceipt(){
-  if(terminal||kind!=='receipt')return;
-  if(locked)throw Error('Приход уже проводится. Дождитесь результата');
-  if(!confirm('Отменить весь приход? Складские остатки не изменятся.'))return;
+ async function cancelCurrent(){
+  if(terminal)return;
+  const receipt=kind==='receipt';
+  if(locked)throw Error('Документ уже проводится. Дождитесь результата');
+  if(!confirm(receipt?'Отменить весь приход? Складские остатки не изменятся.':'Отменить оплату? Продажа не будет проведена, остатки и расчёты не изменятся.'))return;
   await scanChain;if(draft)await sync();
   const id=documentId(),value=source();
-  if(!id){cleanup();home();message('Пустой приход закрыт');return;}
+  if(!id){cleanup();home();message(receipt?'Пустой приход закрыт':'Пустая оплата закрыта');return;}
   locked=true;draw();
   try{
-   const result=await call('draft_close',{id,revision:value.revision});
+   const result=await call(receipt?'draft_close':'cancel_document',{id,kind,revision:value.revision});
    if(result?.state!=='done')throw Error('Сервер не подтвердил отмену. Повторите');
    save('live-edits:'+id,null);save('live-total:'+id,null);finished(result);
   }catch(e){
