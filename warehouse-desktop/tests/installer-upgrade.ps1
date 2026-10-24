@@ -36,7 +36,9 @@ $marker = Join-Path $appData 'ci-keep-documents.txt'
 Install-TestPackage $newInstaller @('/S','/currentuser','--updated')
 $after = @(Find-TestInstallation | Sort-Object -Property PSPath -Unique)
 if ($after.Count -ne 1 -or $after[0].PSPath -ne $before[0].PSPath) { throw 'Upgrade created a second application instead of updating the existing entry' }
-if ($after[0].DisplayName -ne 'FastGo Склад' -or $after[0].DisplayVersion -ne $pkg.version) { throw 'Installed application name or version is incorrect' }
+$expectedDisplayName = "FastGo Склад $($pkg.version)"
+if ($after[0].DisplayName -ne $expectedDisplayName -or $after[0].DisplayVersion -ne $pkg.version) { throw "Installed application name or version is incorrect: $($after[0].DisplayName), $($after[0].DisplayVersion)" }
+Write-Output "Verified installed display name: $($after[0].DisplayName)"
 if (!$after[0].InstallLocation -or $after[0].InstallLocation.TrimEnd('\') -ne $installDir) { throw 'Background updater cannot discover the installed warehouse' }
 if ([IO.File]::ReadAllText($marker) -ne 'Keep drafts, settings and login') { throw 'Upgrade changed existing application data' }
 if (!(Test-Path -LiteralPath $exe)) { throw 'Upgrade broke the existing executable path' }
