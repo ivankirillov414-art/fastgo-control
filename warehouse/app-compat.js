@@ -1355,15 +1355,19 @@
       };
       const editable = (_b = q.price_editable) != null ? _b : !["issued", "cancelled", "returned"].includes(q.status);
       const price = priceAdjustment({ prefix: "repair", base: () => q.total, read, write: (edit) => save3(cacheKey, edit ? { ...edit, signature } : null), locked: () => !!fixed || submitting || stale || !editable, changed: drawBalance, label: "\u041F\u043E\u043B\u043D\u0430\u044F \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430", inputLabel: "\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430", resetLabel: "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0437\u0430\u043A\u0430\u0437\u0430" });
-      render('<div class="live-heading"><button id="repair-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</h1></div><section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + "</p>" + price.markup() + '<div class="total"><span>\u0423\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D\u043E</span><b>' + money(q.paid) + '</b></div><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b id="repair-due"></b></div></section><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([value, label]) => '<label><input type="radio" name="repair-method" value="' + value + '">' + label + "</label>").join("") + '</fieldset><p id="repair-state" class="muted" role="status"></p><button type="button" id="repair-refresh" hidden>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u0443\u043C\u043C\u0443 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</button><button class="primary" id="repair-pay">\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button>');
+      render('<div class="live-heading"><button id="repair-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</h1></div><section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + "</p>" + price.markup() + '<div class="total"><span>\u0423\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D\u043E</span><b>' + money(q.paid) + '</b></div><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b id="repair-due"></b></div></section><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([value, label]) => '<label><input type="radio" name="repair-method" value="' + value + '">' + label + "</label>").join("") + '</fieldset><p id="repair-state" class="muted" role="status"></p><button type="button" id="repair-refresh" hidden>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u0443\u043C\u043C\u0443 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</button><button class="primary" id="repair-pay">\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><button type="button" class="live-cancel" id="repair-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button>');
+      const renderedPayment = $2("repair-pay");
       function drawBalance() {
-        if (!$2("repair-pay")) return;
+        if ($2("repair-pay") !== renderedPayment) return;
         const total = price.total(), due = total === null ? null : (Math.round(total * 100) - Math.round(q.paid * 100)) / 100;
         $2("repair-due").textContent = due === null || due < 0 ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C" : money(due);
         const disabled = stale || submitting || !fixed && (!editable || due === null || due <= 0);
         $2("repair-pay").disabled = disabled;
         $2("repair-pay").dataset.unavailable = String(disabled);
         $2("repair-pay").textContent = read() && !fixed ? "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0446\u0435\u043D\u0443 \u0438 \u043F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443";
+        const cancellingBlocked = !!fixed || submitting || latest.state !== "queued";
+        $2("repair-cancel").disabled = cancellingBlocked;
+        $2("repair-cancel").dataset.unavailable = String(cancellingBlocked);
         if (!stale) $2("repair-state").textContent = !editable ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u0437\u0430\u043A\u0440\u044B\u0442. \u041F\u0440\u0438\u0451\u043C \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D." : due < 0 ? "\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u043C\u0435\u043D\u044C\u0448\u0435 \u0443\u0436\u0435 \u0432\u043D\u0435\u0441\u0451\u043D\u043D\u043E\u0439 \u043E\u043F\u043B\u0430\u0442\u044B. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0435 \u0432\u043E\u0437\u0432\u0440\u0430\u0442." : due === 0 ? "\u0420\u0435\u043C\u043E\u043D\u0442 \u043E\u043F\u043B\u0430\u0447\u0435\u043D. \u0414\u043B\u044F \u043D\u043E\u0432\u043E\u0439 \u0441\u0443\u043C\u043C\u044B \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u0435 \u043F\u043E\u043B\u043D\u0443\u044E \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C." : read() ? "\u041D\u043E\u0432\u0430\u044F \u043F\u043E\u043B\u043D\u0430\u044F \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u043E\u043F\u043B\u0430\u0442\u043E\u0439. \u041E\u0441\u0442\u0430\u0442\u043E\u043A \u0434\u043E\u043B\u0433\u0430 \u0431\u0443\u0434\u0435\u0442 \u043F\u0435\u0440\u0435\u0441\u0447\u0438\u0442\u0430\u043D." : "";
       }
       price.bind();
@@ -1394,7 +1398,7 @@
             save3(cacheKey, null);
             save3(methodKey, null);
             home2();
-            message2(((_a3 = status.result) == null ? void 0 : _a3.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u043D\u0430 \u0422\u0421\u0414" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
+            message2(((_a3 = status.result) == null ? void 0 : _a3.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
           } else if ((status == null ? void 0 : status.checkout) && !fixed) {
             clearInterval(timer);
             await checkout2(status);
@@ -1411,6 +1415,37 @@
           polling2 = false;
         }
       }, 1e3);
+      $2("repair-cancel").onclick = () => run2(async () => {
+        if (fixed || submitting || latest.state !== "queued") throw Error("\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430");
+        if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443 \u0440\u0435\u043C\u043E\u043D\u0442\u0430? \u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0438 \u0443\u0436\u0435 \u0432\u043D\u0435\u0441\u0451\u043D\u043D\u044B\u0435 \u0441\u0443\u043C\u043C\u044B \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) return;
+        submitting = true;
+        drawBalance();
+        const complete = (result) => {
+          var _a3, _b2;
+          if ((result == null ? void 0 : result.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435");
+          watching++;
+          clearInterval(timer);
+          save3(cacheKey, null);
+          save3(methodKey, null);
+          if (((_a3 = load2("repair:terminal")) == null ? void 0 : _a3.request_id) === latest.id) save3("repair:terminal", null);
+          home2();
+          message2(((_b2 = result.result) == null ? void 0 : _b2.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
+        };
+        try {
+          complete(await call2("cancel_document", { id: latest.id, kind: "repair", revision: 1, repair_id: q.id }));
+        } catch (error) {
+          const status = await call2("job", { id: latest.id }).catch(() => null);
+          if ((status == null ? void 0 : status.state) === "done") {
+            complete(status);
+            return;
+          }
+          if (status == null ? void 0 : status.checkout) await checkout2(status);
+          throw error;
+        } finally {
+          submitting = false;
+          drawBalance();
+        }
+      });
       $2("repair-pay").onclick = () => run2(async () => {
         var _a3, _b2, _c;
         const method2 = (fixed == null ? void 0 : fixed.method) || ((_a3 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a3.value);
@@ -1743,7 +1778,10 @@
         }
       }
       for (const row of [...host.children]) if (!seen.has(row.dataset.part)) row.remove();
-      if ($2("live-cancel")) $2("live-cancel").disabled = locked;
+      if ($2("live-cancel")) {
+        $2("live-cancel").disabled = locked;
+        $2("live-cancel").dataset.unavailable = String(locked);
+      }
       $2("scan-empty").hidden = !!items.length;
       $2("live-payment").hidden = value.kind !== "sale" || !items.length;
       $2("live-submit").hidden = !items.length;
@@ -1754,7 +1792,7 @@
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>" + (k === "receipt" ? '<button type="button" class="live-cancel" id="live-cancel">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434</button>' : ""));
+      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + '</button><button type="button" class="live-cancel" id="live-cancel">' + (k === "receipt" ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
     }
     function mount() {
       var _a2;
@@ -1798,7 +1836,7 @@
         };
       }
       if (!terminal2) {
-        if ($2("live-cancel")) $2("live-cancel").onclick = () => run2(cancelReceipt);
+        if ($2("live-cancel")) $2("live-cancel").onclick = () => run2(cancelCurrent);
         $2("live-submit").onclick = () => run2(finish);
         price.bind();
         const method = ((_a2 = current == null ? void 0 : current.checkout) == null ? void 0 : _a2.payment_method) || load2("live-method:" + documentId());
@@ -1977,23 +2015,24 @@
         }
       }
     }
-    async function cancelReceipt() {
-      if (terminal2 || kind !== "receipt") return;
-      if (locked) throw Error("\u041F\u0440\u0438\u0445\u043E\u0434 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430");
-      if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434? \u0421\u043A\u043B\u0430\u0434\u0441\u043A\u0438\u0435 \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) return;
+    async function cancelCurrent() {
+      if (terminal2) return;
+      const receipt = kind === "receipt";
+      if (locked) throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430");
+      if (!confirm(receipt ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434? \u0421\u043A\u043B\u0430\u0434\u0441\u043A\u0438\u0435 \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F." : "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443? \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u0438 \u0440\u0430\u0441\u0447\u0451\u0442\u044B \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) return;
       await scanChain;
       if (draft2) await sync();
       const id = documentId(), value = source();
       if (!id) {
         cleanup();
         home2();
-        message2("\u041F\u0443\u0441\u0442\u043E\u0439 \u043F\u0440\u0438\u0445\u043E\u0434 \u0437\u0430\u043A\u0440\u044B\u0442");
+        message2(receipt ? "\u041F\u0443\u0441\u0442\u043E\u0439 \u043F\u0440\u0438\u0445\u043E\u0434 \u0437\u0430\u043A\u0440\u044B\u0442" : "\u041F\u0443\u0441\u0442\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u0437\u0430\u043A\u0440\u044B\u0442\u0430");
         return;
       }
       locked = true;
       draw();
       try {
-        const result = await call2("draft_close", { id, revision: value.revision });
+        const result = await call2(receipt ? "draft_close" : "cancel_document", { id, kind, revision: value.revision });
         if ((result == null ? void 0 : result.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435");
         save3("live-edits:" + id, null);
         save3("live-total:" + id, null);
@@ -2947,7 +2986,7 @@
       var _a2, _b, _c;
       const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a2 = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a2.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
       return "<label>" + esc((p == null ? void 0 : p.name) || x.part_id) + " \xB7 " + x.quantity + ' \u0448\u0442.<input type="number" min="0" step="0.01" value="' + price + '" data-price="' + x.part_id + '" ' + (fixed ? "disabled" : "") + "></label>";
-    }).join("") + '<div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="total"></b></div></section><section class="panel"><label>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F<select id="mode" ' + (fixed ? "disabled" : "") + '><option value="sale">\u041F\u0440\u043E\u0434\u0430\u0436\u0430</option>' + ((fixed == null ? void 0 : fixed.mode) === "master" ? '<option value="master">\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044C \u043F\u0440\u0435\u0436\u043D\u044E\u044E \u0432\u044B\u0434\u0430\u0447\u0443 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \xB7 0 \u20BD</option>' : "") + '</select></label><div id="sale-fields"><label>\u0421\u043C\u0435\u043D\u0430<select id="cash-shift">' + state.shifts.filter((x) => x.status === "open").map((x) => '<option value="' + x.id + '">' + esc(x.register) + " \xB7 \u2116 " + x.number + "</option>").join("") + '</select></label><label>\u041E\u043F\u043B\u0430\u0442\u0430<select id="method"><option value="cash">\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option><option value="card">\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option></select></label><p class="muted">\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u043C \u0443\u0447\u0451\u0442 \u043F\u0440\u043E\u0434\u0430\u0436\u0438. \u0411\u0430\u043D\u043A\u043E\u0432\u0441\u043A\u0438\u0439 \u043F\u043B\u0430\u0442\u0451\u0436 \u0438 \u0444\u0438\u0441\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0447\u0435\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0441\u0441\u0435.</p></div><label id="master-fields" hidden>\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0430<select id="master">' + staff.map((x) => '<option value="' + x.profile_id + '">' + esc(x.name) + "</option>").join("") + '</select></label><button class="primary" id="checkout">\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438</button><p class="muted">\u0412\u044B\u0434\u0430\u0447\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u0443\u043C\u0435\u043D\u044C\u0448\u0430\u0435\u0442 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A \u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430, \u0431\u0435\u0437 \u0434\u0435\u043D\u0435\u0436\u043D\u043E\u0439 \u0432\u044B\u0440\u0443\u0447\u043A\u0438.</p></section></div>');
+    }).join("") + '<div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="total"></b></div></section><section class="panel"><label>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F<select id="mode" ' + (fixed ? "disabled" : "") + '><option value="sale">\u041F\u0440\u043E\u0434\u0430\u0436\u0430</option>' + ((fixed == null ? void 0 : fixed.mode) === "master" ? '<option value="master">\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044C \u043F\u0440\u0435\u0436\u043D\u044E\u044E \u0432\u044B\u0434\u0430\u0447\u0443 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \xB7 0 \u20BD</option>' : "") + '</select></label><div id="sale-fields"><label>\u0421\u043C\u0435\u043D\u0430<select id="cash-shift">' + state.shifts.filter((x) => x.status === "open").map((x) => '<option value="' + x.id + '">' + esc(x.register) + " \xB7 \u2116 " + x.number + "</option>").join("") + '</select></label><label>\u041E\u043F\u043B\u0430\u0442\u0430<select id="method"><option value="cash">\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option><option value="card">\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option></select></label><p class="muted">\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u043C \u0443\u0447\u0451\u0442 \u043F\u0440\u043E\u0434\u0430\u0436\u0438. \u0411\u0430\u043D\u043A\u043E\u0432\u0441\u043A\u0438\u0439 \u043F\u043B\u0430\u0442\u0451\u0436 \u0438 \u0444\u0438\u0441\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0447\u0435\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0441\u0441\u0435.</p></div><label id="master-fields" hidden>\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0430<select id="master">' + staff.map((x) => '<option value="' + x.profile_id + '">' + esc(x.name) + "</option>").join("") + '</select></label><button class="primary" id="checkout">\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438</button><button type="button" class="live-cancel" id="checkout-cancel" ' + (fixed || job.state !== "queued" ? 'disabled data-unavailable="true"' : "") + '>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p class="muted">\u0412\u044B\u0434\u0430\u0447\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u0443\u043C\u0435\u043D\u044C\u0448\u0430\u0435\u0442 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A \u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430, \u0431\u0435\u0437 \u0434\u0435\u043D\u0435\u0436\u043D\u043E\u0439 \u0432\u044B\u0440\u0443\u0447\u043A\u0438.</p></section></div>');
     bindNav();
     if (fixed) {
       $("mode").value = fixed.mode;
@@ -2956,6 +2995,28 @@
       $("master").value = fixed.master_id;
       for (const id of ["method", "cash-shift", "master"]) $(id).disabled = true;
     }
+    $("checkout-cancel").onclick = () => run(async () => {
+      if (fixed || job.state !== "queued") throw Error("\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F. \u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430");
+      if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443? \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u0438 \u0440\u0430\u0441\u0447\u0451\u0442\u044B \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) return;
+      const currentId = job.id;
+      const finish = (value2) => {
+        var _a2;
+        if ((value2 == null ? void 0 : value2.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435");
+        job = null;
+        home();
+        message(((_a2 = value2.result) == null ? void 0 : _a2.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
+      };
+      try {
+        finish(await call("cancel_document", { id: currentId, kind: "sale", revision: job.payload.revision || 1 }));
+      } catch (error) {
+        const latest = await call("job", { id: currentId }).catch(() => null);
+        if ((latest == null ? void 0 : latest.state) === "done") {
+          finish(latest);
+          return;
+        }
+        throw error;
+      }
+    });
     const calc = () => {
       $("sale-fields").hidden = $("mode").value === "master";
       $("master-fields").hidden = $("mode").value !== "master";
