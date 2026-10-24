@@ -52,6 +52,12 @@ async function request(event,{path:pathname,body={}}){
  if(pathname.endsWith('fastgo-avito')||pathname.endsWith('fastgo-backups'))return cloud(pathname,body);
  if(pathname.endsWith('fastgo-print-api'))return {data:await remotePrint(body.action,body.params||{})};
  const action=body.action,p=body.params||{},account=actor;
+ // A preorder is confirmed only after the primary database commits it. A cached
+ // prior response must never turn a failed save into an apparent success.
+ if(action==='preorder_save'){
+  try{const data=await remote(action,p,account);store.db.prepare("DELETE FROM cache WHERE actor=? AND (key LIKE 'preorders:%' OR key LIKE 'preorder_get:%')").run(account);lastError='';notify({dataChanged:true});return {data};}
+  catch(error){if(transient(error)){online=false;lastError=error.message;notify();}throw error;}
+ }
  if(writes.has(action)){
   const me=store.cache(account,'me')||await remote('me',{},account);if(!['developer','owner','admin','receiver','manager','mechanic'].includes(me.role)||store.cache(account,'request_access')?.active===false)throw Object.assign(Error('Нет доступа к приёмкам мастерской'),{status:403});
   if(action==='payment'&&Number(p.amount)<0&&!['developer','owner','admin'].includes(me.role))throw Object.assign(Error('Возврат доступен администратору'),{status:403});

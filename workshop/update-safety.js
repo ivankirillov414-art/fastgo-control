@@ -7,9 +7,9 @@ export function installUpdateSafety({window,document,now=()=>Date.now()}){
   if(typeof window.fastgoHasUnsavedChanges!=='function')return 'Дожидаемся загрузки приложения';
   if(window.fastgoHasUnsavedChanges())return 'Сохраните изменения в карточке и дождитесь загрузки файлов';
   const route=(window.location.hash.slice(1)||'home').split('?')[0];
-  if(!['home','repairs','storage',...(immediate?['order']:[])].includes(route))return 'Завершите работу на этой странице и откройте главную';
+  if(!['home','repairs','storage','preorders',...(immediate?['order']:[])].includes(route))return 'Завершите работу на этой странице и откройте главную';
   if(document.querySelector('dialog[open]:not(#desktop-update-progress),.modal'))return 'Закройте открытое окно редактирования';
-  if(document.activeElement?.matches('input,textarea,select,[contenteditable]'))return 'Завершите ввод в поле';
+  if(document.activeElement?.matches('input,textarea,select,[contenteditable]')&&!document.activeElement.closest?.('.preorder-filters'))return 'Завершите ввод в поле';
   if(!immediate&&now()-lastInteraction<120000)return 'Ожидаем две минуты бездействия';
   return '';
  };

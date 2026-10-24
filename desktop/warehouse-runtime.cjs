@@ -18,7 +18,7 @@ function createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow,updates,war
  const getScanner=()=>{if(!authorized||!usb)throw Error('Этот ноутбук не разрешён для ТСД. Откройте склад и подключите рабочее место.');return usb;};
  registerTerminalLauncher(ipcMain,getWindow,()=>{getScanner();show('terminal');});
  registerWarehouseAttention(ipcMain,getWindow);
- require('./warehouse-native/barcode-print.cjs').registerBarcodePrinting({ipcMain,BrowserWindow,getWindow});
+ const barcodePrinting=require('./warehouse-native/barcode-print.cjs').registerBarcodePrinting({app,ipcMain,BrowserWindow,getWindow});
  require('./warehouse-native/avito-toast.cjs').registerAvitoToasts({ipcMain,BrowserWindow,screen:require('electron').screen,getWindow});
  for(const [name,fn] of Object.entries({devices:()=>terminal.devices(),install:s=>terminal.install(s),installNative:s=>terminal.installNative(s)}))ipcMain.handle('terminal:'+name,(e,...args)=>{if(!updaterWindow||updaterWindow.isDestroyed()||e.sender!==updaterWindow.webContents||e.senderFrame!==updaterWindow.webContents.mainFrame)throw Error('Недоступно');getScanner();return fn(...args);});
  registerUSBBridge({ipcMain,getWindow,getControl:()=>control,getScanner,terminal,open:()=>{getScanner();show('usb');},getDesktopStatus:()=>({version:app.getVersion(),host:require('node:os').hostname(),background:getWindow()?.isVisible?.()===false,update:updates()?.state||{status:'development'},usb:authorized&&usb?usb.snapshot():{status:usbError||'ТСД на этом ноутбуке не подключён',pending:0}}),checkUpdates:async()=>{await updates()?.check();return updates()?.state;}});
@@ -50,6 +50,6 @@ function createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow,updates,war
   }finally{opening=false;}
  }
  const timer=setInterval(()=>void tick().catch(()=>{}),800);
- return {authorize,loaded:()=>{},busy:()=>terminal.busy||!!usb&&(usb.state.pending.length>0||!!usb.target),close:()=>{clearInterval(timer);void usb?.close();}};
+ return {authorize,loaded:()=>{},busy:()=>terminal.busy||barcodePrinting.busy()||!!usb&&(usb.state.pending.length>0||!!usb.target),close:()=>{clearInterval(timer);void usb?.close();}};
 }
 module.exports={createWarehouseRuntime};

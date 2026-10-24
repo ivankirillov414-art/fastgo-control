@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "ru.fastgo.warehouse",
-    "productName": "FastGo РЎРєР»Р°Рґ",
+    "productName": "FastGo Склад",
     "directories": {
       "output": "dist"
     },
@@ -47,7 +47,15 @@
       "barcode-print.cjs",
       "avito-toast.cjs",
       "avito-toast-preload.cjs",
-      "backup-replica.cjs"
+      "backup-replica.cjs",
+      "network-diagnostics.cjs",
+      "network-window.cjs",
+      "network-preload.cjs",
+      "network-snapshot.ps1",
+      "network.html",
+      "network.css",
+      "network-ui.js",
+      "printer-profiles.cjs"
     ],
     "win": {
       "target": "nsis",
@@ -55,11 +63,12 @@
       "signAndEditExecutable": false
     },
     "nsis": {
+      "include": "installer.nsh",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "FastGo РЎРєР»Р°Рґ",
+      "shortcutName": "FastGo Склад",
       "perMachine": false
     },
     "forceCodeSigning": false,
@@ -73,6 +82,7 @@
         "from": "platform-tools",
         "to": "platform-tools"
       }
-    ]
+    ],
+    "executableName": "FastGo РЎРєР»Р°Рґ"
   }
 }

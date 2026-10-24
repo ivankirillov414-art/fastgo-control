@@ -1,7 +1,10 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
+ openNetworkDiagnostics:()=>ipcRenderer.invoke('warehouse-network:open'),
  notifyAvito:p=>ipcRenderer.invoke('warehouse:notifyAvito',p),
  printBarcode:p=>ipcRenderer.invoke('warehouse:printBarcode',p),
+ printers:()=>ipcRenderer.invoke('warehouse:printers'),
+ savePrinter:p=>ipcRenderer.invoke('warehouse:printerSave',p),
  showIncoming:()=>ipcRenderer.invoke('warehouse:incoming'),
  openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open'),
  desktopStatus:()=>ipcRenderer.invoke('warehouse-usb:status'),

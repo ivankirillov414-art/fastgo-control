@@ -8,6 +8,9 @@ a.update({k:v for k,v in functions(root/'scripts/native-engine-overrides.gs').it
 b.update({k:v for k,v in functions(root/'scripts/native-engine-overrides.gs').items() if k in b})
 excluded={'doGet','doPost','route_','ss_','sh_','rows_','headers_','append_','patchRow_','uid_','now_','json_','upload_','documents_','signedUrl_'}
 code='\n\n'.join(v for k,v in a.items() if k not in excluded)
+route='function routeUnlocked_(action,p,actor){'
+assert code.count(route)==1
+code=code.replace(route,route+"\n  if(['preorders','preorder_get','preorder_suggestions','preorder_save'].includes(action)){const prepared=preorderOperation(sheets,action,p,actor,{uuid:uid_,now:now_});if(prepared.event)append_(SHEETS.events,prepared.event);return prepared.result;}")
 code=re.sub(r"  const root=DriveApp.getFolderById.*?assertPrivate_\(folder\);", "  const folderUrl='', created=now_();",code)
 code=code.replace("'Работа, ₽':num_(p.labor_price),updated_at", "'Работа, ₽':num_(p.labor_price),'Итого, ₽':num_(p.labor_price)+num_(r['Запчасти, ₽']),updated_at")
 extra='\n\n'.join(b[n] for n in ['assertOpen_','validateOrderUpdate_','partPhotoPrimary_','partPhotos_','migrationManifest_'])
