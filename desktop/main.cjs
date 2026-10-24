@@ -1,6 +1,6 @@
 // Installer and helper launches can outlive their console pipes.
 if(typeof process!=='undefined')for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
-const {app,BrowserWindow,Menu,ipcMain,protocol,net,shell,safeStorage,session}=require('electron');
+const {app,BrowserWindow,Menu,Tray,nativeImage,ipcMain,protocol,net,shell,safeStorage,session}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
 const {Updates}=require('./updates.cjs');
@@ -45,10 +45,11 @@ function wrapError(error){return {__desktopError:true,message:error.message,stat
 function handle(channel,fn){ipcMain.handle(channel,async(event,...args)=>{try{if(!String(event.senderFrame?.url||'').startsWith('fastgo://app/'))throw Error('Недоверенное окно');if(updateInstalling&&channel!=='fg-state')throw Error('FastGo обновляется. Приложение сейчас откроется снова.');const tracked=!['fg-state','fg-update-check','fg-update-now'].includes(channel);if(tracked)activeRequests++;try{return await fn(event,...args);}finally{if(tracked)activeRequests--;}}catch(e){return wrapError(e);}});}
 function warm(options={}){if(updateInstalling||updateDraining||!actor)return;if(warmPromise)return warmPromise;warming=true;const account=actor;warmPromise=(async()=>{try{await sync.warm(account,options);online=true;lastError='';}catch(e){online=false;lastError=e.message;}finally{warming=false;warmPromise=null;notify();}})();return warmPromise;}
 async function request(event,{path:pathname,body={}}){
- if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api|fastgo-warehouse)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
+ if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api|fastgo-warehouse|fastgo-avito)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
  if(pathname.startsWith('/auth/'))return cloud(pathname,body);
  if(!actor)throw Object.assign(Error('Войдите в FastGo'),{status:401});
  if(pathname.endsWith('fastgo-warehouse')){const result=await cloud(pathname,body);if(body.action==='info')await warehouseRuntime?.authorize(result.data?.terminal_allowed===true);return result;}
+ if(pathname.endsWith('fastgo-avito'))return cloud(pathname,body);
  if(pathname.endsWith('fastgo-print-api'))return {data:await remotePrint(body.action,body.params||{})};
  const action=body.action,p=body.params||{},account=actor;
  if(writes.has(action)){
@@ -72,7 +73,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  if(printBusy)throw Error('Принтер занят. Повторите после завершения текущего листа.');printBusy=true;
  let hidden,entry;try{
   const me=store.cache(account,'me')||await remote('me',{}).catch(e=>{if(!transient(e))throw e;return store.read(account,'me');});
-  hidden=new BrowserWindow({show:false,width:1100,height:1400,webPreferences:{backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  hidden=new BrowserWindow({show:false,width:1100,height:1400,webPreferences:{backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   entry={local:!cloudRecord,cloud:cloudRecord,context:{kind:p.kind||'repair',id:p.id,me},resolve:null,reject:null};printWindows.set(hidden.webContents.id,entry);
   const ready=new Promise((resolve,reject)=>{entry.resolve=resolve;entry.reject=reject;});
   const deadline=setTimeout(()=>entry.reject(Error('Документ не успел загрузиться')),90000);
@@ -110,7 +111,7 @@ app.whenReady().then(()=>{
  handle('fg-request',request);
  handle('fg-diagnostics',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(!['owner','developer'].includes(member?.role))throw Error('Доступно только владельцу');return store.diagnostics(actor);});
  handle('fg-home-data',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(store.cache(actor,'request_access')?.active===false||!['developer','owner','admin','receiver','manager','mechanic'].includes(member?.role))throw Error('Нет доступа к мастерской');return store.homeData(actor);});
- handle('fg-state',()=>({version:app.getVersion(),update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
+ handle('fg-state',()=>({version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
  handle('fg-update-check',async()=>{await updates?.check();return updates?.state;});
  handle('fg-update-now',()=>{if(!updates)throw Error('Обновления доступны в установленной версии FastGo');setTimeout(()=>updates.now(),0);return true;});
  handle('fg-sync',async()=>{nextProbe=0;await sync.run(actor);await warm({force:true});return true;});
@@ -122,7 +123,8 @@ app.whenReady().then(()=>{
  handle('fg-print-context',event=>{const context=printWindows.get(event.sender.id)?.context;if(!context)throw Error('Не печатное окно');return context;});
  handle('fg-print-ready',event=>{const job=printWindows.get(event.sender.id);if(!job)throw Error('Не печатное окно');job.resolve();return true;});
  Menu.setApplicationMenu(null);
- win=new BrowserWindow({width:1380,height:900,minWidth:800,minHeight:600,title:'FastGo',backgroundColor:'#0b1726',autoHideMenuBar:true,titleBarStyle:'hidden',titleBarOverlay:{color:'#0c1522',symbolColor:'#dce8f5',height:47},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ win=new BrowserWindow({show:!process.argv.includes('--background'),width:1380,height:900,minWidth:800,minHeight:600,title:'FastGo',backgroundColor:'#0b1726',autoHideMenuBar:true,titleBarStyle:'hidden',titleBarOverlay:{color:'#0c1522',symbolColor:'#dce8f5',height:47},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+ const background=require('./warehouse-native/background.cjs').createBackground({app,getWindow:()=>win,Tray,Menu,nativeImage,icon:path.join(webRoot,'fastgo-logo.png'),checkUpdates:()=>updates?.now()});background.attach(win);
  win.setMenu(null);
  win.webContents.setWindowOpenHandler(({url})=>{if(url.startsWith('https://'))shell.openExternal(url);return {action:'deny'};});
  win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('fastgo://app/')){event.preventDefault();if(url.startsWith('https://'))shell.openExternal(url);}});

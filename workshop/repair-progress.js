@@ -30,6 +30,7 @@ export function repairRequirements(record, values) {
   && Math.abs(Number(record.approved_amount) - amount) < .005;
  if ((['repair', 'ready', 'issued'].includes(status) && amount > 0 && !approved && !values.approve)
   || (values.approve && !String(values.approval_note || '').trim())) required.push('approval');
+ if (['ready', 'issued'].includes(status) && !(values.parts||record.parts||[]).length && values.no_parts!==true && record.parts_status?.mode!=='none') required.push('parts');
  if (['ready', 'issued'].includes(status) && !values.quality_checked) required.push('quality');
  if (status === 'issued' && !String(values.handover_notes || '').trim()) required.push('handover');
  if (status === 'cancelled' && !String(values.note || '').trim()) required.push('cancel');

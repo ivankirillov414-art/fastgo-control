@@ -1,6 +1,8 @@
 import {unknownScan} from './unknown.js';
 import {repairScan} from './repair-scan.js';
 import {cancelDocument} from './cancel.js';
+import {deviceStatus} from './device-status.js';
+import {partsIssue} from './parts-issue.js';
 import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
@@ -46,6 +48,8 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(!permittedIds.has(stationId))fail('Этот ноутбук не разрешён для ТСД',403);
  if(device.kind==='terminal'&&!(await db('workshop_warehouse_devices','id=eq.'+stationId+'&active=eq.true&select=id')).length)fail('Складское рабочее место отключено',403);
  const station=()=>{if(device.kind!=='station')fail('Операция доступна только складскому ноутбуку',403);};
+ const diagnostic=await deviceStatus(action,p,{db,device,stationId});if(diagnostic!==undefined)return out({data:diagnostic});
+ const issue=await partsIssue(action,p,{db,actor,device,stationId,key,digest});if(issue!==undefined)return out({data:issue});
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
  const activeMaster=async masterId=>{const m=(await db('workshop_members','profile_id=eq.'+masterId+'&active=eq.true&role=eq.mechanic&select=profile_id,name'))[0];if(!m)fail('Выберите активного мастера');return m;};
  const mutate=async(a,params)=>{if(!id(params.request_id))fail('Неверный код операции');const body={...params};delete body.__request_fingerprint;const fingerprint=await digest(JSON.stringify({action:a,params:body}));const old=await g('operation_retry',{request_id:params.request_id,action:a,fingerprint});if(old.status==='committed')return old.result;return g(a,{...params,__request_fingerprint:fingerprint});};
@@ -78,6 +82,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(action==='shift_open'){station();return out({data:await mutate('shift_open',{request_id:p.request_id,register:String(p.register||device.name).slice(0,80),opening_cash:Number(p.opening_cash)})});}
  if(action==='checkout'){
  station();if(!id(p.id))fail('Неверная корзина');let job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId))[0];if(!job)fail('Корзина не найдена',404);if(job.payload.live)fail('Откройте текущую корзину терминала',409);if(job.state==='done')return out({data:job.result});
+ if(!job.checkout&&p.mode==='master')fail('Выдавайте запчасти в ремонт через «Выдача запчастей» на ТСД и QR мастера',403);
  if(job.payload.kind==='repair'){
   if(!job.checkout){
    const c={mode:'repair',actor_id:user.id,repair_id:job.payload.repair_id,amount:p.amount,method:p.payment_method,expected_revision:p.expected_revision,...(p.total_override!==undefined?{total_override:p.total_override}:{})};

@@ -68,7 +68,7 @@ const printStyle = `<style>
 
 export async function renderFriendlyRepair(ctx,p,token,r){
  let customerUrl='';
- try{customerUrl=await customerRepairLink(r.id);}catch(error){if(!window.fastgoDesktop)throw error;}
+ try{customerUrl=await customerRepairLink(r.id);}catch(error){const fallback=new URL('https://ivankirillov414-art.github.io/fastgo-control/repair-status.html');fallback.hash='repair='+r.id;customerUrl=fallback.href;}
  const n=number(r,'repair'),vehicle=[r.brand,r.model].filter(Boolean).join(' '),rows=[...(r.works||[]),...(r.parts||[])];
  const html=`${printStyle}<div class="print-tools"><button class="btn" id="print-document">Печать</button><a class="btn secondary" href="${ctx.href('order',{kind:'repair',id:r.id})}">К карточке</a></div>
  <article class="print-page fg-repair-print"><div class="fg-print-content"><section class="fg-client-copy">

@@ -1,10 +1,10 @@
 name: FastGo Native TSD
 on:
  pull_request:
-  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','.github/workflows/tsd-native.yml']
+  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','scripts/check-native-apk-install.cjs','.github/workflows/tsd-native.yml']
  push:
   branches: [main]
-  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','.github/workflows/tsd-native.yml']
+  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','scripts/check-native-apk-install.cjs','.github/workflows/tsd-native.yml']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -25,9 +25,9 @@ jobs:
      run: |
       gradle :native:testDebugUnitTest :native:assembleRelease --no-daemon
       mkdir -p native/build/release-package
-      cp native/build/outputs/apk/release/native-release-unsigned.apk native/build/release-package/FastGo-TSD-2.1.2-unsigned.apk
-      gradle :native:assembleRelease -PfastgoVersionCode=6 -PfastgoVersionName=2.1.3 --no-daemon
-      cp native/build/outputs/apk/release/native-release-unsigned.apk native/build/release-package/FastGo-TSD-2.1.3-unsigned.apk
+      cp native/build/outputs/apk/release/native-release-unsigned.apk native/build/release-package/FastGo-TSD-2.1.5-unsigned.apk
+      gradle :native:assembleRelease -PfastgoVersionCode=9 -PfastgoVersionName=2.1.6 --no-daemon
+      cp native/build/outputs/apk/release/native-release-unsigned.apk native/build/release-package/FastGo-TSD-2.1.6-unsigned.apk
      working-directory: warehouse-android
    - uses: actions/upload-artifact@v4
      with:
@@ -53,12 +53,12 @@ jobs:
       sudo udevadm trigger --name-match=kvm
    - uses: reactivecircus/android-emulator-runner@v2
      with:
-      api-level: 28
+      api-level: 29
       arch: x86_64
       profile: Nexus 5
       disable-animations: true
       script: |
-       cd warehouse-android && gradle :native:assembleDebug -PfastgoVersionCode=6 -PfastgoVersionName=2.1.3 --no-daemon && mkdir -p native/src/androidTest/assets && cp native/build/outputs/apk/debug/native-debug.apk native/src/androidTest/assets/update-fixture.apk && gradle :native:connectedDebugAndroidTest --no-daemon && cd .. && node scripts/check-native-apk-install.cjs
+       cd warehouse-android && gradle :native:assembleDebug -PfastgoVersionCode=9 -PfastgoVersionName=2.1.6 --no-daemon && mkdir -p native/src/androidTest/assets && cp native/build/outputs/apk/debug/native-debug.apk native/src/androidTest/assets/update-fixture.apk && gradle :native:connectedDebugAndroidTest --no-daemon && cd .. && node scripts/check-native-apk-install.cjs
    - uses: actions/upload-artifact@v4
      if: always()
      with:

@@ -42,7 +42,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(syncing){await syncing;if(draft&&draft.acked<draft.revision)return sync();return;}
   if(!draft||locked||draft.acked>=draft.revision)return;
   const local=draft,body=JSON.parse(JSON.stringify(local));
-  syncing=call('draft_sync',{request_id:body.id,kind:body.kind,revision:body.revision,items:body.items,note:body.note||''}).then(r=>{
+  syncing=call('draft_sync',{request_id:body.id,kind:body.kind,revision:body.revision,items:body.items,note:body.note||'',active:active&&draft===local}).then(r=>{
    if(r.state==='done'){if(draft===local)finished(r);return;}
    if(r.state!=='queued')throw Error('Операция проводится на ноутбуке');
    local.acked=Math.max(local.acked||0,r.payload.revision);save(key(local.kind),local);

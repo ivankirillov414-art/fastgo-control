@@ -9,9 +9,10 @@ test('next repair actions advance after saving and retain role permissions',()=>
  assert.equal(repairActions('repair',{}).includes('ready'),false);
  assert.deepEqual(repairActions('issued',{can_mark_ready:true,can_issue:true}),[]);
 });
-test('empty parts and a customer part permit completion after approval and quality',()=>{
+test('empty parts require explicit no-replacement confirmation and issued parts permit completion',()=>{
  const values={status:'ready',works:[{price:600,quantity:1}],parts:[],diagnostics_notes:'Прокол камеры',quality_checked:true};
- assert.deepEqual(repairRequirements({approved_amount:600},values),[]);
+ assert.deepEqual(repairRequirements({approved_amount:600},values),['parts']);
+ assert.deepEqual(repairRequirements({approved_amount:600},{...values,no_parts:true}),[]);
  values.parts.push({name:'Камера клиента',price:0,quantity:1});
  assert.deepEqual(repairRequirements({approved_amount:600},values),[]);
 });

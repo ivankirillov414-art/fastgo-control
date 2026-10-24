@@ -1,4 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {randomUUID,createHash} from 'node:crypto';
+import {preparePartsIssue} from '../supabase/functions/fastgo-warehouse/parts-issue.js';
 import {nativeClient} from '../supabase/functions/_shared/native-client.js';
 const owner={id:'11111111-1111-4111-8111-111111111111',role:'owner',email:'owner@example.invalid'},manager={id:'22222222-2222-4222-8222-222222222222',role:'manager',email:'manager@example.invalid'},part='33333333-3333-4333-8333-333333333333',mechanicId='44444444-4444-4444-8444-444444444444';
 function harness(){
@@ -19,7 +20,8 @@ function harness(){
  };
  const client=actor=>nativeClient({db,actor,google:async()=>{googleCalls++;throw Error('Google unavailable');},storage:{put:async()=>{},sign:async p=>'signed:'+p}});
  const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['stock_receive','shift_open','shift_close','storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
- return {call,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
+ const issue=async repairId=>{const p={request_id:randomUUID(),items:[{part_id:part,quantity:1}]},raw=sheets['Ремонты'].rows.find(x=>x.repair_id===repairId);const prepared=preparePartsIssue({sheets},p,{id:randomUUID(),repair_id:repairId,master_id:raw.master_id},owner);await db('rpc/workshop_native_commit','','POST',{p_actor:owner.id,p_action:'warehouse_parts_issue',p_request_id:p.request_id,p_fingerprint:'fixture',p_version:version,p_changes:prepared.changes,p_result:prepared.result});return (await call('get',{kind:'repair',id:repairId})).record;};
+ return {call,issue,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
 test('cash final repair price survives subsequent repair and issue updates, then can be explicitly reset',async()=>{
@@ -28,7 +30,7 @@ test('cash final repair price survives subsequent repair and issue updates, then
  h.seed('События',{'Тип':'repair',record_id:r.id,'Действие':'payment','Детали':JSON.stringify({total_override:750.45})});
  const raw=h.sheets['Ремонты'].rows[0];Object.assign(raw,{'Итого':750.45,'Скидка':249.55,'Оплачено':750.45,'Согласовано, ₽':750.45});
  r=await h.call('update',{id:r.id,revision:r.revision,status:'repair',diagnostics_notes:'Проверено'});assert.equal(r.total_amount,750.45);assert.equal(r.total_override,750.45);assert.equal(r.discount,249.55);
- r=await h.call('update',{id:r.id,revision:r.revision,status:'ready',quality_checked:true});assert.equal(r.total_amount,750.45);
+ r=await h.call('update',{id:r.id,revision:r.revision,status:'ready',no_parts:true,quality_checked:true});assert.equal(r.total_amount,750.45);
  r=await h.call('update',{id:r.id,revision:r.revision,status:'issued',quality_checked:true,handover_notes:'Комплектность проверена'});assert.equal(r.total_amount,750.45);
  const other=await h.call('create',intake());let open=await h.call('update',{id:other.id,revision:other.revision,works:[{name:'Работа',price:1000,quantity:1}],parts:[],discount:0,total_override:1200});
  assert.equal(open.total_amount,1200);open=await h.call('update',{id:other.id,revision:open.revision,total_override:null,discount:0});assert.equal(open.total_amount,1000);assert.equal(open.total_override,null);
@@ -70,20 +72,20 @@ test('all primary screens read Postgres while Google is unavailable',async()=>{c
 test('repair intake follows diagnostics, approval, repair, quality, ready and issue without Google',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
  const diagnosed=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Неисправен контроллер',works:[],parts:[],discount:0});
- const details={kind:'repair',id:r.id,revision:diagnosed.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Неисправен контроллер',works:[{name:'Диагностика',price:200,quantity:1}],parts:[{part_id:part,name:'Запчасть',price:100,quantity:1}],discount:0};
+ const received=await h.issue(r.id);const details={kind:'repair',id:r.id,revision:received.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Неисправен контроллер',works:[{name:'Диагностика',price:200,quantity:1}],parts:received.parts,discount:0};
  const fixed=await h.call('update',{...details,approve:true,approval_note:'Согласовано с клиентом'});
- const ready=await h.call('update',{...details,revision:fixed.revision,status:'ready',quality_checked:true});
+ const ready=await h.call('update',{...details,revision:fixed.revision,status:'ready',no_parts:details.parts.length===0,quality_checked:true});
  await h.call('payment',{kind:'repair',id:r.id,amount:300,method:'cash'});const paid=(await h.call('get',{kind:'repair',id:r.id})).record;
  await h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true,handover_notes:'Техника и комплектность проверены, выдано клиенту'});
  const issued=(await h.call('get',{kind:'repair',id:r.id})).record;
- assert.equal(issued.status,'issued');assert.equal(issued.handover_notes,'Техника и комплектность проверены, выдано клиенту');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);assert.equal(h.outbox.length,6);assert.equal(h.googleCalls(),0);
+ assert.equal(issued.status,'issued');assert.equal(issued.handover_notes,'Техника и комплектность проверены, выдано клиенту');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);assert.equal(h.outbox.length,7);assert.equal(h.googleCalls(),0);
 });
 test('repair issue requires handover note',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
  const diagnosed=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика выполнена',works:[],parts:[],discount:0});
  const details={kind:'repair',id:r.id,revision:diagnosed.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика выполнена',works:[{name:'Диагностика',price:100,quantity:1}],parts:[],discount:0};
  const fixed=await h.call('update',{...details,approve:true,approval_note:'Согласовано'});
- await h.call('update',{...details,revision:fixed.revision,status:'ready',quality_checked:true});
+ await h.call('update',{...details,revision:fixed.revision,status:'ready',no_parts:details.parts.length===0,quality_checked:true});
  await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'});
  const paid=(await h.call('get',{kind:'repair',id:r.id})).record;
  await assert.rejects(h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true}),/комплектности/);
@@ -117,17 +119,17 @@ test('changing price during repair invalidates old approval until re-approved',a
 test('ready status requires quality control and can only follow repair',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
  const diagnostics=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0});
- await assert.rejects(h.call('update',{kind:'repair',id:r.id,revision:diagnostics.revision,status:'ready',assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0,quality_checked:true}),/предыдущий этап/);
+ await assert.rejects(h.call('update',{kind:'repair',id:r.id,revision:diagnostics.revision,status:'ready',no_parts:true,assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0,quality_checked:true}),/предыдущий этап/);
  const started=await h.call('update',{kind:'repair',id:r.id,revision:diagnostics.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0});
- await assert.rejects(h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0}),/контроль качества/);
- const ready=await h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0,quality_checked:true});
+ await assert.rejects(h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',no_parts:true,assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0}),/контроль качества/);
+ const ready=await h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',no_parts:true,assigned_master_id:mechanicId,diagnostics_notes:'Готово',works:[],parts:[],discount:0,quality_checked:true});
  assert.equal(ready.status,'ready');
 });
 test('returning from ready to repair resets quality control',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
  const diagnostics=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0});
  const started=await h.call('update',{kind:'repair',id:r.id,revision:diagnostics.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0});
- const ready=await h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0,quality_checked:true});
+ const ready=await h.call('update',{kind:'repair',id:r.id,revision:started.revision,status:'ready',no_parts:true,assigned_master_id:mechanicId,diagnostics_notes:'Диагностика готова',works:[],parts:[],discount:0,quality_checked:true});
  const reopened=await h.call('update',{kind:'repair',id:r.id,revision:ready.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Нужна доработка',works:[],parts:[],discount:0,quality_checked:true});
  assert.equal(reopened.status,'repair');assert.equal(reopened.quality_checked,false);
 });
@@ -248,7 +250,7 @@ test('single master completes an unassigned repair from intake through payment a
  const change=async(status,extras={})=>{r=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status,works:[{name:'Диагностика',price:100,quantity:1}],parts:[],discount:0,diagnostics_notes:'Проверено',...extras},master);};
  await change('diagnostics');
  await change('repair',{approve:true,approval_note:'Клиент согласовал'});
- await change('ready',{quality_checked:true});
+ await change('ready',{quality_checked:true,no_parts:true});
  await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'},master);
  r=(await h.call('get',{kind:'repair',id:r.id},master)).record;
  await change('issued',{quality_checked:true,handover_notes:'Выдано клиенту, комплектность проверена'});
@@ -287,9 +289,9 @@ test('explicit individual permissions enable cash and catalogue, while stock adm
 
 test('repair with no stock parts or a customer-supplied tube reaches ready without stock movement',async()=>{
  for(const parts of [[],[{name:'Камера клиента',quantity:1,price:0}]]){
-  const h=harness();let r=await h.call('create',intake());
+  const h=harness();let r=await h.call('create',intake());if(parts.length)h.sheets['Ремонты'].rows[0]['Строки запчастей']=JSON.stringify(parts);
   const work={kind:'repair',id:r.id,diagnostics_notes:'Прокол камеры',works:[{name:'Замена камеры',quantity:1,price:600}],parts};
-  for(const status of ['diagnostics','repair','ready'])r=await h.call('update',{...work,revision:r.revision,status,...(status==='repair'?{approve:true,approval_note:'Согласовано'}:{}),quality_checked:status==='ready'});
+  for(const status of ['diagnostics','repair','ready'])r=await h.call('update',{...work,revision:r.revision,status,...(status==='repair'?{approve:true,approval_note:'Согласовано'}:{}),quality_checked:status==='ready',no_parts:parts.length===0});
   assert.equal(r.status,'ready');assert.equal(r.total_amount,600);assert.deepEqual(r.parts,parts);
   assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],1);
   assert.equal(h.outbox.flat().some(change=>change.sheet==='Товары'),false);

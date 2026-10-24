@@ -35,7 +35,7 @@ async function launch(){const app=await _electron.launch({executablePath:require
  await opened.page.locator('#f-flow_diagnostics').fill('Прокол камеры, деталь клиента');
  await opened.page.locator('[name="flow_approved"]').check();await opened.page.locator('#f-flow_approval_note').fill('Согласовано');
  await save(()=>opened.page.locator('#modal-form button[type="submit"]').click());
- await transition('Ремонт готов');await opened.page.locator('[name="flow_quality"]').check();
+ await transition('Ремонт готов');await opened.page.locator('[name="flow_quality"]').check();await opened.page.locator('[name="flow_no_parts"]').check();
  await save(()=>opened.page.locator('#modal-form button[type="submit"]').click());
  assert.equal(await opened.page.locator('#part-rows .cost-row').count(),0);
  assert.match(await opened.page.locator('.order-detail-status').innerText(),/Готов/);

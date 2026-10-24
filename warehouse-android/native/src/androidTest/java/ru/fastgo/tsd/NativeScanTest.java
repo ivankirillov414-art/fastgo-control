@@ -5,8 +5,22 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;import org.junit.runner.RunWith;import static org.junit.Assert.*;
 import android.widget.EditText;import android.view.inputmethod.*;import org.json.*;import java.lang.reflect.*;
 @RunWith(AndroidJUnit4.class) public final class NativeScanTest {
+ @Test public void backgroundCompletionClearsOnlyTheCompletedActiveScreen()throws Exception{
+  try(LocalStore store=new LocalStore(InstrumentationRegistry.getInstrumentation().getTargetContext())){
+   String previous=store.get("active_document");JSONObject first=ScanDocument.create("repair"),second=ScanDocument.create("receipt");store.save(first);store.save(second);store.put("active_document",second.getString("id"));store.complete(first.getString("id"),1);assertEquals(second.getString("id"),store.get("active_document"));store.requestCancel(second.getString("id"));store.complete(second.getString("id"),1);assertEquals("",store.get("active_document"));store.put("active_document",previous);
+  }
+ }
  private Object field(Object object,String name)throws Exception{Field f=object.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(object);}
  private void invoke(Object object,String name,Class<?>[] types,Object... args)throws Exception{Method m=object.getClass().getDeclaredMethod(name,types);m.setAccessible(true);m.invoke(object,args);}
+ @Test public void partsIssueBufferSurvivesRecreationAndRequiresRepairQrBeforeIssue()throws Exception{
+  final String[] id={""};
+  try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   Thread.sleep(600);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.onActivity(a->{try{LocalStore s=(LocalStore)field(a,"store");s.catalog(new JSONArray().put(new JSONObject().put("id","native-parts-fixture").put("barcode","FGP-PARTS-FIXTURE").put("name","Камера 10 × 2,5").put("quantity",5)));invoke(a,"open",new Class[]{String.class},"parts");id[0]=(String)field(a,"documentId");invoke(a,"scan",new Class[]{String.class},"FGP-PARTS-FIXTURE");invoke(a,"scan",new Class[]{String.class},"FGP-PARTS-FIXTURE");assertEquals(2,ScanDocument.items(s.doc(id[0])).getJSONObject(0).getInt("quantity"));assertEquals(android.view.View.GONE,((android.widget.Button)field(a,"issue")).getVisibility());JSONObject doc=s.doc(id[0]);doc.put("pickup_code","FGPARTS1.fixture.signed").put("pickup",new JSONObject().put("number","0044").put("vehicle","Kugoo M4").put("master_name","Мастер"));s.save(doc);invoke(a,"refresh",new Class[]{});assertEquals(android.view.View.VISIBLE,((android.widget.Button)field(a,"issue")).getVisibility());assertTrue(((android.widget.TextView)field(a,"last")).getText().toString().contains("0044"));}catch(Exception e){throw new AssertionError(e);}});
+   scenario.recreate();Thread.sleep(300);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.onActivity(a->{try{LocalStore s=(LocalStore)field(a,"store");invoke(a,"open",new Class[]{String.class},"parts");assertEquals(id[0],field(a,"documentId"));assertTrue(s.doc(id[0]).has("pickup"));invoke(a,"undo",new Class[]{});assertEquals(1,ScanDocument.items(s.doc(id[0])).getJSONObject(0).getInt("quantity"));assertFalse(s.doc(id[0]).has("pickup"));assertEquals(android.view.View.GONE,((android.widget.Button)field(a,"issue")).getVisibility());s.requestCancel(id[0]);s.complete(id[0],s.doc(id[0]).getInt("revision"));}catch(Exception e){throw new AssertionError(e);}});
+  }
+ }
  @Test public void apkInstallWaitsForAllDocumentsIncludingHiddenAndCancelledPendingDocuments()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();

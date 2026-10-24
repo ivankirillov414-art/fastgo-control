@@ -366,7 +366,7 @@ function mapRepair_(r){
     issue_description:intake['Описание неисправности']||'',accessories:intake['Комплектность']||'',condition_notes:intake['Состояние при приёмке']||'',
     status:normStatus_(r['Статус'],'repair'),paid_amount:num_(r['Оплачено']),created_at:r['Создано'],issued_at:r['Выдано']||'',total_amount:num_(r['Итого']),total_override:repairManualTotal_(r),
     assigned_master:r['Мастер'],assigned_master_id:r.master_id||'',promised_date:r['Плановая дата']||intake['Плановая дата']||'',
-    quality_checked:bool_(r['Контроль качества']),storage_id:r.storage_id||'',diagnostics_notes:r['Диагностика']||'',
+    parts_status:repairPartsStatus_(r),quality_checked:bool_(r['Контроль качества']),storage_id:r.storage_id||'',diagnostics_notes:r['Диагностика']||'',
     works:parseJson_(r['Работы'],[]),parts:parseJson_(r['Строки запчастей'],[]),discount:num_(r['Скидка']),
     warranty_days:num_(r['Гарантия, дней']),revision:Math.max(1,num_(r.revision)||1),note:r['Примечание']||'',handover_notes:r['Примечание']||'',
     approved_amount:r['Согласовано, ₽']===''||r['Согласовано, ₽']===null?null:num_(r['Согласовано, ₽']),approval_note:r['Примечание согласования']||'',
@@ -434,12 +434,13 @@ function updateOrder_(p,actor){
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
   const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
-  reconcileMasterParts_(parts,oldParts,r,p,actor);
+  if(parts.length!==oldParts.length)returnRepairParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), pricing=repairPricing_(r,p,works,parts),total=pricing.total,previousTotal=num_(r['Итого']);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
   if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
   const fromStatus=normStatus_(r['Статус'],'repair'), sameTotal=Math.abs(num_(r['Итого'])-total)<.005, approvalAmount=bool_(p.approve)?total:(sameTotal?r['Согласовано, ₽']:''), approvalNote=bool_(p.approve)?String(p.approval_note||''):(sameTotal?r['Примечание согласования']:'');
   patchRow_(SHEETS.repairs,r.__row,{'Статус':humanStatus_(status,'repair'),'Мастер':staff?staff['ФИО']:String(p.assigned_master||r['Мастер']||''),'Диагностика':p.diagnostics_notes===undefined?r['Диагностика']:String(p.diagnostics_notes||''),'Работы':JSON.stringify(works),'Стоимость работ':worksTotal,'Запчасти':partsTotal,'Скидка':pricing.discount,'Итого':total,'Гарантия, дней':num_(p.warranty_days),'Начато':!r['Начато']&&['diagnostics','repair','waiting_parts'].includes(status)?now_():r['Начато'],'Завершено':status==='ready'?now_():r['Завершено'],'Выдано':status==='issued'?now_():r['Выдано'],'Примечание':status==='issued'?String(p.handover_notes||r['Примечание']||''):status==='cancelled'?String(p.note||r['Примечание']||''):(p.note===undefined?r['Примечание']:String(p.note||'')),updated_at:now_(),'Строки запчастей':JSON.stringify(parts),master_id:masterId,'Контроль качества':['diagnostics','waiting_parts','repair'].includes(status)?false:(p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked)),'Плановая дата':p.promised_date===undefined?r['Плановая дата']:String(p.promised_date||''),revision:rev+1,'Согласовано, ₽':approvalAmount,'Примечание согласования':approvalNote});
+  if(p.no_parts===true&&!parts.length&&repairPartsStatus_(r).mode!=='none')addEvent_(kind,p.id,'parts_not_needed',actor,{master_id:masterId,note:'Без замены запчастей'});
   if(p.total_override!==undefined&&p.total_override!==repairManualTotal_(r))addEvent_(kind,p.id,'price',actor,{total_override:p.total_override,total,previous_total:previousTotal});
   addEvent_(kind,p.id,'update',actor,{from_status:fromStatus,to_status:status,note:String(p.reopen_reason||p.handover_notes||p.note||'')});
   return mapRepair_(find_(SHEETS.repairs,'repair_id',p.id));
@@ -596,6 +597,29 @@ function repairManualTotal_(repair){
  }
  return found;
 }
+
+function repairPartsStatus_(repair){
+ const parts=parseJson_(repair['Строки запчастей'],[]);
+ if(parts.length)return {mode:parts.some(x=>x.tsd_issue_id)?'issued':'legacy'};
+ const event=rows_(SHEETS.events).filter(x=>x['Тип']==='repair'&&x.record_id===repair.repair_id&&['parts_not_needed','parts_issued'].includes(x['Действие'])).sort((a,b)=>Number(b.__row)-Number(a.__row))[0];
+ let details={};try{details=JSON.parse(String(event?.['Детали']||'{}'));}catch{}
+ return event&&event['Действие']==='parts_not_needed'&&details.master_id===String(repair.master_id||'')?{mode:'none',confirmed_by:event.actor_id,at:event['Дата']}:{mode:'pending'};
+}
+
+function repairPartsSubset_(parts,before){
+ const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+ const available=before.map(stable);return parts.every(line=>{const at=available.indexOf(stable(line));if(at<0)return false;available.splice(at,1);return true;});
+}
+
+function returnRepairParts_(parts,oldParts,repair,p,actor){
+ const kept=parts.filter(x=>x.tsd_issue_id).map(x=>JSON.stringify(x));
+ for(const line of oldParts.filter(x=>x.tsd_issue_id)){
+  const index=kept.indexOf(JSON.stringify(line));if(index>=0){kept.splice(index,1);continue;}
+  stock_({part_id:line.part_id,movement_type:'return',quantity:line.quantity,note:'Возврат выдачи ТСД из ремонта '+repair['Номер ремонта'],reference_id:repair.repair_id},actor);
+ }
+ const legacy=parts.filter(x=>!x.tsd_issue_id),oldLegacy=oldParts.filter(x=>!x.tsd_issue_id);
+ if(legacy.length!==oldLegacy.length)reconcileMasterParts_(legacy,oldLegacy,repair,p,actor);
+}
 function assertOpen_(r,kind){if(['issued','returned','cancelled'].includes(normStatus_(r['Статус'],kind)))throw httpError_('Заказ закрыт',409);}
 
 function validateOrderUpdate_(p,actor){
@@ -617,6 +641,9 @@ function validateOrderUpdate_(p,actor){
   const diagnostics=p.diagnostics_notes===undefined?String(r['Диагностика']||''):String(p.diagnostics_notes||'');
   if(['waiting_parts','repair','ready','issued'].includes(status)&&!diagnostics.trim())throw httpError_('Сначала заполните результат диагностики',409);
   const works=p.works||parseJson_(r['Работы'],[]),parts=p.parts||parseJson_(r['Строки запчастей'],[]);
+  if(p.parts!==undefined&&!repairPartsSubset_(p.parts,parseJson_(r['Строки запчастей'],[])))throw httpError_('Запчасти в ремонт выдаются только через ТСД на кассе',403);
+  if(p.no_parts===true&&(parts.length||actor.id!==masterId&&!(role_(actor)==='mechanic'&&!masterId)&&!['owner','developer'].includes(role_(actor))))throw httpError_('Отметку «Без замены запчастей» ставит мастер ремонта',403);
+  if(['ready','issued'].includes(status)&&!parts.length&&p.no_parts!==true&&repairPartsStatus_(r).mode!=='none')throw httpError_('Получите запчасти через ТСД или подтвердите «Без замены запчастей»',409);
   for(const line of [...works,...parts])if(!Number.isInteger(Number(line.quantity))||Number(line.quantity)<1||!Number.isFinite(Number(line.price))||Number(line.price)<0)throw httpError_('Проверьте количество и цену',400);
   const pricing=repairPricing_(r,p,works,parts),discount=pricing.discount,amount=pricing.total;
   if(p.total_override!==undefined&&!isManager_(actor))throw httpError_('Нет права изменять стоимость ремонта',403);

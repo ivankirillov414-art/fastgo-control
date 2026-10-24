@@ -26,6 +26,7 @@ const server=createServer((req,res)=>{
    const {action,params}=req.postDataJSON();let data={};
    if(action==='request_access')data={active:true};
    if(action==='me')data={role:'owner',name:'Тест',profile_id:'progress-fixture',active:true,status_permissions:permission};
+   if(action==='parts_pickup')data={code:'FGPARTS1.fixture.signed',number:16,vehicle:'Kugoo M4',master_name:'Мастер'};
    if(action==='get')data={record,events:[],payments:[],linked:[]};
    if(action==='signed_url')data={url:'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="'+(params.path==='photo-one.jpg'?'#24455c':'#416a73')+'"/><text x="80" y="300" fill="white">'+params.path+'</text></svg>')};
    if(action==='catalog')data={services:[{id:'tube',title:'Замена камеры',labor_price:600,active:true},{id:'brake',title:'Настройка тормозов',labor_price:400,active:true}],parts:personalStock?[{id:'22222222-2222-4222-8222-222222222222',name:'Камера мастера',retail_price:300,quantity:0,active:true}]:[],master_holdings:personalStock?[{master_id:'progress-fixture',part_id:'22222222-2222-4222-8222-222222222222',name:'Камера мастера',quantity:2}]:[],staff:[],categories:[]};
@@ -35,7 +36,7 @@ const server=createServer((req,res)=>{
     assert.equal(params.revision,record.revision);
     updates.push(structuredClone(params));record={...record,...params,revision:record.revision+1};
     record.total_amount=[...record.works,...record.parts].reduce((sum,x)=>sum+x.price*x.quantity,0);
-    if(params.approve)record.approved_amount=record.total_amount;
+    if(params.approve)record.approved_amount=record.total_amount;if(params.no_parts)record.parts_status={mode:'none'};
     if(['diagnostics','waiting_parts','repair'].includes(record.status))record.quality_checked=false;
     data=record;
    }
@@ -92,15 +93,11 @@ const server=createServer((req,res)=>{
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'repair');assert.deepEqual(record.parts,[]);
    await transition('Ремонт готов');
-   await page.locator('[name="flow_quality"]').check();
+   await page.locator('[name="flow_quality"]').check();await page.locator('[name="flow_no_parts"]').check();
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'ready');assert.deepEqual(record.parts,[]);
    assert.equal(await page.locator('[data-repair-status=issued]').count(),1);
-   // An optional customer part has zero price and no inventory reference.
-   await page.locator('.repair-part-tools > summary').click();await page.locator('#customer-part').click();
-   await page.locator('#part-rows [data-prop="name"]').fill('Камера клиента');
-   await saved(()=>page.locator('#repair-save').click());
-   assert.deepEqual(record.parts,[{name:'Камера клиента',price:0,quantity:1}]);
+   assert.equal(await page.locator('#part-picker,#scan-part,#customer-part,#add-part').count(),0);
    // Price edits at an advanced stage offer approval here, not in a hidden panel.
    await page.locator('#work-rows [data-prop="price"]').first().fill('550');
    await page.locator('#repair-save').click();await page.locator('[name="flow_approved"]').check();
@@ -127,8 +124,8 @@ const server=createServer((req,res)=>{
    record.status='stored';await page.goto(origin+'/workshop.html#order?kind=storage&id=progress-fixture');
    await page.getByRole('button',{name:'Хранение и выдача'}).click();
    assert.ok(await page.locator('#f-status').isVisible());assert.ok(await page.locator('#f-planned_return_date').isVisible());
-   personalStock=true;record.status='accepted';record.assigned_master_id='progress-fixture';await open();await page.locator('[data-held-part]').click();assert.ok(await page.locator('#part-rows [data-prop="name"]').filter({visible:true}).count());assert.equal(await page.locator('#part-rows [data-prop="name"]').last().inputValue(),'Камера мастера');
-   assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, inline layout and saving, diagnostics → repair → ready without parts, customer parts, price approval, conflict, permissions and storage`);
+   personalStock=true;record.status='accepted';record.assigned_master_id='progress-fixture';await open();assert.equal(await page.locator('[data-held-part]').count(),0);await page.locator('#take-parts').click();await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor();assert.ok(await page.locator('[data-pickup-qr] svg').count());await page.getByRole('dialog',{name:'Взять запчасти'}).getByRole('button',{name:'Закрыть',exact:true}).click();
+   assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, inline layout and saving, diagnostics → repair → ready without parts, pickup QR, manual parts removed, price approval, conflict, permissions and storage`);
   }catch(error){console.error('PAGE',await page.locator('body').innerText(),errors);throw error;}finally{await context.close();}
  }}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

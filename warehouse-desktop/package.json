@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "ru.fastgo.warehouse",
-    "productName": "FastGo Склад",
+    "productName": "FastGo РЎРєР»Р°Рґ",
     "directories": {
       "output": "dist"
     },
@@ -42,7 +42,11 @@
       "auto-terminal.cjs",
       "terminal-provision.cjs",
       "bundled-ui.cjs",
-      "web/**/*"
+      "web/**/*",
+      "background.cjs",
+      "barcode-print.cjs",
+      "avito-toast.cjs",
+      "avito-toast-preload.cjs"
     ],
     "win": {
       "target": "nsis",
@@ -54,7 +58,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "FastGo Склад",
+      "shortcutName": "FastGo РЎРєР»Р°Рґ",
       "perMachine": false
     },
     "forceCodeSigning": false,

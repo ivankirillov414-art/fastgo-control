@@ -1,3 +1,4 @@
+import {pickupCode} from '../_shared/parts-pickup-code.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // FastGo storage adapter: Google during staging, Postgres after verified cutover.
@@ -117,7 +118,7 @@ async function rolePermission(role){
 const statusPermissionKey=status=>status==='ready'?'can_mark_ready':status==='issued'?'can_issue':status==='cancelled'?'can_cancel':'';
 const repairTransitions={accepted:new Set(['accepted','diagnostics','cancelled']),diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),ready:new Set(['ready','repair','issued','cancelled']),issued:new Set(['issued']),cancelled:new Set(['cancelled'])};
 function requireRepairTransition(from,to){if(!repairTransitions[from]?.has(to))fail('Сначала пройдите предыдущий этап ремонта',409);}
-const readActions=new Set(['stock_receipts','catalog','part_by_barcode','stock_history','cash_state','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
+const readActions=new Set(['parts_pickup','stock_receipts','catalog','part_by_barcode','stock_history','cash_state','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
 const writeActions=new Set(['stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','stock','payment','extend','contact','legacy']);
 const administrationActions=new Set(['part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
@@ -269,6 +270,20 @@ async function main(req){
     }}):remote;
     if(['storage_close','storage_delete'].includes(action)&&c.storage_mode!=='postgres')fail('Обновление хранения ещё не установлено',503);
     const backend=c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE';
+    if(action==='parts_pickup'){
+      if(c.storage_mode!=='postgres'||p.kind!=='repair'||!uuid(p.id))fail('Откройте рабочий ремонт',400);
+      let repair=(await g('get',{kind:'repair',id:p.id})).record;
+      if(!repair.assigned_master_id&&me.role==='mechanic'){
+        const request_id=crypto.randomUUID(),params={kind:'repair',id:p.id,revision:repair.revision,status:repair.status,assigned_master_id:user.id,request_id};
+        const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(params)));
+        repair=await g('update',{...params,__request_fingerprint:[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('')});
+      }
+      if(!repair.assigned_master_id)fail('Сначала назначьте мастера ремонта',409);
+      if(repair.assigned_master_id!==user.id&&!admin(me))fail('QR может открыть назначенный мастер',403);
+      if(['ready','issued','cancelled'].includes(repair.status))fail('Ремонт уже готов или закрыт',409);
+      await requireActiveMechanic(repair.assigned_master_id);
+      return out({data:await pickupCode(repair,KEY)});
+    }
     if(action==='health')return out({data:{...await g('health'),release:RELEASE}});
     if(action==='stock')integer(p.quantity,'количество');
     let reliable=false;
