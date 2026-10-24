@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -46,7 +46,8 @@
       "background.cjs",
       "barcode-print.cjs",
       "avito-toast.cjs",
-      "avito-toast-preload.cjs"
+      "avito-toast-preload.cjs",
+      "backup-replica.cjs"
     ],
     "win": {
       "target": "nsis",

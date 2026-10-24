@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('fastgoDesktop',Object.freeze({
  warehouseStation:()=>invoke('fg-warehouse-station-get'),saveWarehouseStation:value=>invoke('fg-warehouse-station-save',value),
  version:'1.0.11',getSession:()=>invoke('fg-session-get'),saveSession:s=>invoke('fg-session-save',s),clearSession:()=>invoke('fg-session-clear'),
  request:(path,body)=>ipcRenderer.invoke('fg-request',{path,body}),state:()=>invoke('fg-state'),homeData:()=>invoke('fg-home-data'),diagnostics:()=>invoke('fg-diagnostics'),sync:()=>invoke('fg-sync'),
- checkUpdates:()=>invoke('fg-update-check'),updateNow:()=>invoke('fg-update-now'),onUpdate:callback=>{const listener=()=>callback();ipcRenderer.on('fg-update-changed',listener);return ()=>ipcRenderer.removeListener('fg-update-changed',listener);},
+ checkBackups:()=>invoke('fg-backups-check'),checkUpdates:()=>invoke('fg-update-check'),updateNow:()=>invoke('fg-update-now'),onUpdate:callback=>{const listener=()=>callback();ipcRenderer.on('fg-update-changed',listener);return ()=>ipcRenderer.removeListener('fg-update-changed',listener);},
  printers:()=>invoke('fg-printers'),configure:p=>invoke('fg-configure',p),conflicts:()=>invoke('fg-conflicts'),resolve:(seq,choice)=>invoke('fg-resolve',{seq,choice}),
  printIntake:p=>invoke('fg-print',{...p,intake:true}),printManual:p=>invoke('fg-print',p),printContext:()=>invoke('fg-print-context'),printReady:()=>invoke('fg-print-ready'),
  onChanged:callback=>{const listener=(_event,change)=>callback(change);ipcRenderer.on('fg-changed',listener);return ()=>ipcRenderer.removeListener('fg-changed',listener);}

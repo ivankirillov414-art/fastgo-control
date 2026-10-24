@@ -18,5 +18,6 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  await d.locator('#inventory').click();await d.locator('#stock-list').waitFor();assert.equal(await d.evaluate(()=>window.warehouseUpdateSafe(true)),true);
  await d.locator('#filter').fill('Камера');assert.equal(await d.evaluate(()=>window.warehouseUpdateSafe(true)),true);
  const input=await d.evaluate(()=>{const el=document.createElement('input');document.body.append(el);el.focus();return window.warehouseUpdateSafe(true);});assert.equal(input,false);
+ const loginContext=await browser.newContext(),loginPage=await loginContext.newPage();await loginPage.goto(base+'/warehouse.html');await loginPage.locator('#login').waitFor();assert.equal(await loginPage.evaluate(()=>window.warehouseUpdateSafe(true)),true);await loginPage.locator('[name=email]').fill('unfinished@example.invalid');assert.equal(await loginPage.evaluate(()=>window.warehouseUpdateSafe(true)),false);await loginContext.close();
  console.log('PASS: active documents block updates and survive restart; read-only stock and search allow a safe update; editable input still blocks');
  }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

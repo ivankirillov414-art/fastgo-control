@@ -5,7 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
 const {Updates}=require('./updates.cjs');
 const {createWarehouseRuntime}=require('./warehouse-runtime.cjs');
-let warehouseRuntime;
+let warehouseRuntime,backupReplica,warehouseUpdater;
 let terminalProvisioner;
 async function setupTerminal(terminal,serial){if(!actor)return '';if(!terminalProvisioner)terminalProvisioner=require('./warehouse-native/terminal-provision.cjs').createTerminalProvisioner({terminal,dir:app.getPath('userData'),safeStorage,account:warehouseStation,request:p=>cloud('/functions/v1/fastgo-terminal-setup',p)});return terminalProvisioner(serial);}
 const {importLegacyStation}=require('./warehouse-station.cjs');
@@ -45,11 +45,11 @@ function wrapError(error){return {__desktopError:true,message:error.message,stat
 function handle(channel,fn){ipcMain.handle(channel,async(event,...args)=>{try{if(!String(event.senderFrame?.url||'').startsWith('fastgo://app/'))throw Error('Недоверенное окно');if(updateInstalling&&channel!=='fg-state')throw Error('FastGo обновляется. Приложение сейчас откроется снова.');const tracked=!['fg-state','fg-update-check','fg-update-now'].includes(channel);if(tracked)activeRequests++;try{return await fn(event,...args);}finally{if(tracked)activeRequests--;}}catch(e){return wrapError(e);}});}
 function warm(options={}){if(updateInstalling||updateDraining||!actor)return;if(warmPromise)return warmPromise;warming=true;const account=actor;warmPromise=(async()=>{try{await sync.warm(account,options);online=true;lastError='';}catch(e){online=false;lastError=e.message;}finally{warming=false;warmPromise=null;notify();}})();return warmPromise;}
 async function request(event,{path:pathname,body={}}){
- if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api|fastgo-warehouse|fastgo-avito)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
+ if(!/^\/(functions\/v1\/(fastgo-workshop-api|fastgo-print-api|fastgo-warehouse|fastgo-avito|fastgo-backups)|auth\/v1\/(token\?grant_type=(password|refresh_token)|logout(\?scope=local)?|recover(\?redirect_to=.*)?|verify|signup))$/.test(pathname))throw Error('Недопустимый адрес');
  if(pathname.startsWith('/auth/'))return cloud(pathname,body);
  if(!actor)throw Object.assign(Error('Войдите в FastGo'),{status:401});
  if(pathname.endsWith('fastgo-warehouse')){const result=await cloud(pathname,body);if(body.action==='info')await warehouseRuntime?.authorize(result.data?.terminal_allowed===true);return result;}
- if(pathname.endsWith('fastgo-avito'))return cloud(pathname,body);
+ if(pathname.endsWith('fastgo-avito')||pathname.endsWith('fastgo-backups'))return cloud(pathname,body);
  if(pathname.endsWith('fastgo-print-api'))return {data:await remotePrint(body.action,body.params||{})};
  const action=body.action,p=body.params||{},account=actor;
  if(writes.has(action)){
@@ -96,6 +96,8 @@ async function pollPrint(){if(updateInstalling||updateDraining||remoteBusy||prin
  }catch(e){lastError=e.message;if(job&&!['dispatched','submitted'].includes(store.printExists(actor,job.id)?.state))await remotePrint('fail',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),job_id:job.id,error:e.message}).catch(()=>{});}
  finally{remoteBusy=false;notify();}
 }
+async function backupTick(){if(!actor||!backupReplica||updateInstalling||updateDraining)return;try{store.backup();const me=store.cache(actor,'me');if(me)await backupReplica.tick({actor,owner:['owner','developer'].includes(me.role)});}catch(error){backupReplica.state={...backupReplica.state,status:'error',error:error.message};}}
+async function reportDevice(){if(!actor||updateInstalling||updateDraining)return;const station=savedStation();if(!station)return;try{await cloud('/functions/v1/fastgo-warehouse',{action:'device_status',device_id:station.id,device_token:station.token,app:'desktop',version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update_status:updates?.state.status||'development',latest_version:updates?.state.version||app.getVersion(),blocking_reason:updates?.state.waitReason||'',pending_writes:store.stats(actor).pending});}catch{}}
 app.whenReady().then(()=>{
  store=new Store(path.join(app.getPath('userData'),'FastGo.sqlite'));if(!store.setting('station_id'))store.setting('station_id',randomUUID());store.setting('claim_token',randomUUID());
  try{credentials=JSON.parse(safeStorage.decryptString(fs.readFileSync(credentialFile())));actor=credentials?.user_id||'';}catch{}
@@ -111,7 +113,8 @@ app.whenReady().then(()=>{
  handle('fg-request',request);
  handle('fg-diagnostics',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(!['owner','developer'].includes(member?.role))throw Error('Доступно только владельцу');return store.diagnostics(actor);});
  handle('fg-home-data',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(store.cache(actor,'request_access')?.active===false||!['developer','owner','admin','receiver','manager','mechanic'].includes(member?.role))throw Error('Нет доступа к мастерской');return store.homeData(actor);});
- handle('fg-state',()=>({version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
+ handle('fg-state',()=>({warehouseUpdate:warehouseUpdater?.state,recovery:backupReplica?.state,version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
+ handle('fg-backups-check',async()=>{if(!actor)throw Error('Войдите в FastGo');await backupTick();return backupReplica.state;});
  handle('fg-update-check',async()=>{await updates?.check();return updates?.state;});
  handle('fg-update-now',()=>{if(!updates)throw Error('Обновления доступны в установленной версии FastGo');setTimeout(()=>updates.now(),0);return true;});
  handle('fg-sync',async()=>{nextProbe=0;await sync.run(actor);await warm({force:true});return true;});
@@ -132,6 +135,13 @@ app.whenReady().then(()=>{
  win.webContents.on('did-finish-load',()=>warehouseRuntime.loaded());
  win.loadURL('fastgo://app/workshop.html#home');
  void authorizeWarehouse();setInterval(()=>void authorizeWarehouse(),30000);
+ backupReplica=new (require('./warehouse-native/backup-replica.cjs').BackupReplica)({dir:path.join(app.getPath('userData'),'recovery'),secure:{encrypt:s=>{if(!safeStorage.isEncryptionAvailable())throw Error('Windows не предоставил защищённое хранилище');return safeStorage.encryptString(s);},decrypt:b=>safeStorage.decryptString(b)},call:async(action,p)=>(await cloud('/functions/v1/fastgo-backups',{action,...p})).data,fetcher:net.fetch.bind(net),allowedOrigins:[BASE],app:'desktop',host:require('node:os').hostname()});
+ setTimeout(()=>void backupTick(),30000);setInterval(()=>void backupTick(),60000);
+ setInterval(()=>void reportDevice(),60000);
+ if(app.isPackaged&&process.platform==='win32'){
+  warehouseUpdater=new (require('./warehouse-updater.cjs').WarehouseUpdater)({dir:path.join(app.getPath('userData'),'warehouse-update'),fetcher:net.fetch.bind(net),canInstall:()=>!updates||!['ready','preparing','installing'].includes(updates.state.status),report:async state=>{const station=savedStation();if(!actor||!station||!state.version)return;await cloud('/functions/v1/fastgo-warehouse',{action:'device_status',device_id:station.id,device_token:station.token,app:'warehouse',version:state.version,host:require('node:os').hostname(),update_status:state.status,latest_version:state.latest_version,error:state.error,blocking_reason:state.blocking_reason,observer:'companion'});}});
+  setTimeout(()=>void warehouseUpdater.tick(),45000);setInterval(()=>void warehouseUpdater.tick(),300000);
+ }
  // Never put printing behind a database upload or its network timeout.
  setInterval(()=>{if(actor&&!updateInstalling&&!updateDraining)sync.run(actor).catch(()=>{});},5000);
  setInterval(()=>{if(actor){localPrints();pollPrint();}},1000);
@@ -146,7 +156,7 @@ app.whenReady().then(()=>{
     // must not starve installation forever, but any claimed print must finish first.
     updateDraining=idle;
     // Queued jobs are durable and resume after restart; only active work must drain.
-    const busy=()=>warehouseRuntime?.busy()?'Завершите документ склада и передачу сканов':printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
+    const busy=()=>warehouseUpdater?.state.status==='installing'?'Завершаем обновление склада':backupReplica?.busy?'Завершаем резервную копию':warehouseRuntime?.busy()?'Завершите документ склада и передачу сканов':printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
     const waiting=rendererReason||busy();if(waiting)return {allowed:false,reason:waiting};
     // Recheck on the renderer thread and block new input atomically before quitting.
     const locked=await win.webContents.executeJavaScript('window.fastgoLockForUpdate?.('+Boolean(immediate)+') === true');
