@@ -24,3 +24,13 @@ test('issuing a link requires staff access to that exact repair',async()=>{
 test('all repair stages map without returning parts',()=>{
  for(const [raw,expected] of Object.entries({'Принят':'accepted','Диагностика':'diagnostics','Ждём запчасти':'waiting','В ремонте':'repair','Готов':'ready','Выдан':'issued','Отменён':'cancelled'}))assert.equal(clientStage(raw),expected);
 });
+
+test('old paper UUID shows only public stage, while authenticated staff gets its exact card',async()=>{
+ let staff=false;const handler=createStatusHandler({base:'https://test',key:'test-secret',fetcher:async(url,options)=>{
+  if(url.includes('fastgo-workshop-api'))return staff?Response.json({data:{record:{id,parts:['PRIVATE']}}}):Response.json({error:'denied'},{status:401});
+  const q=new URL(url).searchParams;assert.equal(q.get('select'),'status:data->>Статус,number:data->>Номер ремонта');assert.equal(q.get('data->>repair_id'),'eq.'+id);return Response.json([{status:'Готов',number:'FGR-0044',phone:'PRIVATE'}]);
+ }});
+ const anonymous=new Request('https://test',{method:'POST',body:JSON.stringify({action:'open',legacy_id:id})});assert.deepEqual(await (await handler(anonymous)).json(),{data:{number:'0044',stage:'ready'}});
+ assert.deepEqual(await (await handler(request({action:'open',legacy_id:id}))).json(),{data:{number:'0044',stage:'ready'}});
+ staff=true;assert.deepEqual(await (await handler(request({action:'open',legacy_id:id}))).json(),{data:{staff_url:'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+id}});
+});

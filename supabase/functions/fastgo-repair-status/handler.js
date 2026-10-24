@@ -29,10 +29,19 @@ export function createStatusHandler({base,key,fetcher=fetch}){
     const signature=hex(await crypto.subtle.sign('HMAC',await signingKey,payload(p.id)));
     return out({data:{token:p.id+'.'+signature}});
    }
-   const [id,signature,...extra]=String(p.token||'').split('.');
-   if(extra.length||!uuid.test(id||'')||!/^[a-f0-9]{64}$/.test(signature||''))return out({error:'Ссылка недействительна'},404);
-   const bytes=Uint8Array.from(signature.match(/../g),x=>parseInt(x,16));
-   if(!await crypto.subtle.verify('HMAC',await signingKey,bytes,payload(id)))return out({error:'Ссылка недействительна'},404);
+   const legacy=typeof p.legacy_id==='string'&&uuid.test(p.legacy_id),[signedId,signature,...extra]=String(p.token||'').split('.'),id=legacy?p.legacy_id:signedId;
+   if(!legacy){
+    if(extra.length||!uuid.test(id||'')||!/^[a-f0-9]{64}$/.test(signature||''))return out({error:'Ссылка недействительна'},404);
+    const bytes=Uint8Array.from(signature.match(/../g),x=>parseInt(x,16));
+    if(!await crypto.subtle.verify('HMAC',await signingKey,bytes,payload(id)))return out({error:'Ссылка недействительна'},404);
+   }
+   // Old paper forms contain an unguessable repair UUID. They expose the same
+   // coarse status only; staff must still pass the authenticated workshop API.
+   const auth=req.headers.get('authorization');
+   if(p.action==='open'&&auth?.startsWith('Bearer ')){
+    const check=await fetcher(base+'/functions/v1/fastgo-workshop-api',{method:'POST',headers:{Authorization:auth,apikey:key,'Content-Type':'application/json'},body:JSON.stringify({action:'get',params:{kind:'repair',id}}),signal:AbortSignal.timeout(25000)});
+    if(check.ok){const result=await check.json();if(result?.data?.record?.id===id)return out({data:{staff_url:'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+id}});}
+   }
    // Fetch only the two allowed columns of the exact signed repair.
    const query=new URLSearchParams({sheet:'eq.Ремонты','data->>repair_id':'eq.'+id,select:'status:data->>Статус,number:data->>Номер ремонта',limit:'1'});
    const response=await fetcher(base+'/rest/v1/workshop_native_rows?'+query,{headers:{apikey:key,Authorization:'Bearer '+key},signal:AbortSignal.timeout(15000)});

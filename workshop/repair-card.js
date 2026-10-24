@@ -71,15 +71,7 @@ export function layoutRepairCard(){
  client.querySelector('#edit-intake')?.replaceChildren(document.createTextNode('Изменить'));
 
  // A single search and a compact tools menu replace the wide parts toolbar.
- const picker=$('part-picker'),toolbar=picker.closest('.toolbar');searchSelect(picker);picker.hidden=true;
- const search=toolbar.querySelector('input[type="search"]'),searchBox=make('div','repair-part-search');
- search.placeholder='Начните вводить название запчасти…';searchBox.append(search,toolbar.querySelector('.fg-suggestions'),picker);
- const tools=make('details','repair-part-tools');const toolsSummary=document.createElement('summary');toolsSummary.className='btn ghost small';toolsSummary.textContent='+ Добавить запчасть';
- const toolButtons=make('div','repair-part-tool-buttons');toolButtons.append($('scan-part'),$('customer-part'),$('add-part'));tools.append(toolsSummary,toolButtons);
- tools.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>tools.open=false));toolbar.append(searchBox,tools);
- const partSection=toolbar.closest('.repair-flow-costs');partSection.classList.add('repair-parts-section');
- const help=make('details','repair-part-help');help.innerHTML='<summary>Деталь клиента и списание со склада</summary>';
- help.append(...partSection.querySelectorAll(':scope > p'));detailBody.append(help);
+ const partSection=$('part-rows').closest('.repair-flow-costs');partSection.classList.add('repair-parts-section');
  progress.querySelectorAll('.row-labels').forEach(labels=>{const no=document.createElement('span');no.textContent='№';labels.prepend(no);});
  const footer=progress.querySelector('.repair-progress-footer');
  if(footer){footer.classList.add('repair-card-save');$('repair-save').setAttribute('form','order-form');$('repair-save').insertAdjacentHTML('afterbegin',icon('save'));}

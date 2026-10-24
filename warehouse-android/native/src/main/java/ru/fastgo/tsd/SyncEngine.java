@@ -10,6 +10,15 @@ public final class SyncEngine {
    String id=snapshot.getString("id"),kind=snapshot.getString("kind");
    boolean active=id.equals(store.get("active_document"))&&!"false".equals(store.get("activity_resumed"));
    if(!snapshot.optBoolean("cancel_requested")&&ScanDocument.count(snapshot)==0&&!active)continue;
+   if(kind.equals("parts")){
+    if(snapshot.optBoolean("issue_requested")){
+     JSONObject result;
+     try{result=(JSONObject)api.call("parts_issue",new JSONObject().put("request_id",id).put("code",snapshot.getString("pickup_code")).put("items",ScanDocument.items(snapshot)));}
+     catch(WarehouseApi.ApiError e){if(e.status==400||e.status==403||e.status==404||e.status==409){JSONObject current=store.doc(id);if(current!=null&&current.optString("state").equals("open")){current.remove("issue_requested");current.remove("pickup");current.remove("pickup_code");store.save(current);}}throw e;}
+     store.put("issue_result:"+id,result.toString());store.complete(id,snapshot.getInt("revision"));
+    }else if(snapshot.optBoolean("cancel_requested")){store.put("cancelled:"+id,"true");store.complete(id,snapshot.getInt("revision"));}
+    continue;
+   }
    if(snapshot.optBoolean("cancel_requested")){
     JSONObject result;
     try{result=(JSONObject)api.call("cancel_document",new JSONObject().put("id",id).put("kind",kind).put("revision",snapshot.getInt("revision")));}

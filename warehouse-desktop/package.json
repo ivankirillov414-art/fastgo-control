@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "ru.fastgo.warehouse",
-    "productName": "FastGo Склад",
+    "productName": "FastGo РЎРєР»Р°Рґ",
     "directories": {
       "output": "dist"
     },
@@ -43,7 +43,8 @@
       "terminal-provision.cjs",
       "bundled-ui.cjs",
       "web/**/*",
-      "background.cjs"
+      "background.cjs",
+      "barcode-print.cjs"
     ],
     "win": {
       "target": "nsis",
@@ -55,7 +56,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "FastGo Склад",
+      "shortcutName": "FastGo РЎРєР»Р°Рґ",
       "perMachine": false
     },
     "forceCodeSigning": false,

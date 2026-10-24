@@ -1,5 +1,6 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
+ printBarcode:p=>ipcRenderer.invoke('warehouse:printBarcode',p),
  showIncoming:()=>ipcRenderer.invoke('warehouse:incoming'),
  openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open'),
  desktopStatus:()=>ipcRenderer.invoke('warehouse-usb:status'),

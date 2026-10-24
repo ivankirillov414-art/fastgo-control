@@ -37,8 +37,16 @@ public final class AppUpdates {
  private boolean installLocked()throws Exception{
   String blocked=blockers();if(!blocked.isEmpty())throw new IOException(blocked);File apk=new File(context.getCacheDir(),"update.apk");verify(apk,new JSONObject(store.get("update_meta")));
   if(Build.VERSION.SDK_INT>=26&&!context.getPackageManager().canRequestPackageInstalls()){context.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+context.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return false;}
-  Uri uri=Uri.parse("content://"+context.getPackageName()+".updates/update.apk");Intent install=new Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri,"application/vnd.android.package-archive").putExtra(Intent.EXTRA_RETURN_RESULT,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  PackageInstaller installer=context.getPackageManager().getPackageInstaller();PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);params.setAppPackageName(context.getPackageName());params.setSize(apk.length());
+  int sessionId=installer.createSession(params);boolean committed=false;
+  try(PackageInstaller.Session session=installer.openSession(sessionId)){
+   try(InputStream in=new FileInputStream(apk);OutputStream out=session.openWrite("base.apk",0,apk.length())){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);session.fsync(out);}
+   Intent result=new Intent(context,InstallResultActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+   int flags=android.app.PendingIntent.FLAG_UPDATE_CURRENT;if(Build.VERSION.SDK_INT>=31)flags|=android.app.PendingIntent.FLAG_MUTABLE;
+   android.app.PendingIntent callback=android.app.PendingIntent.getActivity(context,sessionId,result,flags);
+   session.commit(callback.getIntentSender());committed=true;
+  }finally{if(!committed)installer.abandonSession(sessionId);}
   store.put("update_install_started_at",Long.toString(System.currentTimeMillis()));
-  if(context instanceof android.app.Activity)((android.app.Activity)context).startActivityForResult(install,7301);else context.startActivity(install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return true;
+  return true;
  }
 }
