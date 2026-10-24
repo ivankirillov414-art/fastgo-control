@@ -90,6 +90,17 @@ class Store{
   return {...this.stats(actor),printPending,printErrors,backup};
  }
  stats(actor){return {pending:this.pending(actor).filter(x=>!['conflict','failed'].includes(x.status)).length,conflicts:this.conflicts(actor).length,records:this.db.prepare('SELECT count(*) AS n FROM records WHERE actor=?').get(actor).n};}
- backup(label=new Date().toISOString().slice(0,10)){const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+String(label).replace(/[^a-zA-Z0-9-]/g,'')+'.sqlite');if(!fs.existsSync(target))this.db.exec("VACUUM INTO '"+target.replace(/'/g,"''")+"'");return target;}
+ backup(label){
+  const automatic=label===undefined;if(automatic)label='auto-'+new Date(Math.floor(Date.now()/900000)*900000).toISOString().replace(/[^0-9]/g,'').slice(0,12);
+  const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+String(label).replace(/[^a-zA-Z0-9-]/g,'')+'.sqlite');
+  if(!fs.existsSync(target)){
+   const temporary=target+'.partial';if(fs.existsSync(temporary))fs.rmSync(temporary);this.db.exec("VACUUM INTO '"+temporary.replace(/'/g,"''")+"'");
+   const check=new DatabaseSync(temporary,{readOnly:true});try{if(check.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')throw Error('Резервная копия локальной базы повреждена');}finally{check.close();}
+   fs.renameSync(temporary,target);const sha256=require('node:crypto').createHash('sha256').update(fs.readFileSync(target)).digest('hex');
+   fs.writeFileSync(target+'.json',JSON.stringify({created_at:new Date().toISOString(),sha256,bytes:fs.statSync(target).size,integrity:'ok'}));
+   if(automatic){const older=fs.readdirSync(folder).filter(n=>/^FastGo-auto-\d{12}\.sqlite$/.test(n)).sort().reverse().slice(192);for(const name of older){fs.rmSync(path.join(folder,name));fs.rmSync(path.join(folder,name+'.json'),{force:true});}}
+  }
+  return target;
+ }
 }
 module.exports={Store,writes,stable};

@@ -9,3 +9,5 @@ const resources=path.join(dist,'win-unpacked/resources'),feed=yaml.load(fs.readF
 assert.equal(feed.provider,'generic');assert.equal(feed.url,pkg.build.publish.url);
 const archive=path.join(resources,'app.asar');assert.match(asar.extractFile(archive,'updates.cjs').toString(),/quitAndInstall/);assert.equal(JSON.parse(asar.extractFile(archive,path.join('node_modules','electron-updater','package.json')).toString()).version,pkg.dependencies['electron-updater']);
 console.log('PASS: packaged updater, public update feed, installer checksum and blockmap');
+
+assert(asar.extractFile(archive,'warehouse-updater.cjs').toString().includes('class WarehouseUpdater'));assert(asar.extractFile(archive,'warehouse-native/backup-replica.cjs').toString().includes('class BackupReplica'));

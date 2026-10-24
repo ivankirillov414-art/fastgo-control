@@ -118,3 +118,5 @@ export async function printApi(action,params={},retried=false){
   return response.data;
  }catch(e){if(e.status===401&&!retried&&await refresh())return printApi(action,params,true);throw e;}
 }
+
+export async function backupApi(action,params={},retried=false){if(session?.expires_at&&session.expires_at*1000<Date.now()+45000)await refresh();try{const r=await request('/functions/v1/fastgo-backups',{action,...params},session?.access_token);if(!r?.data)throw Error('Сервер резервирования не подтвердил ответ');return r.data;}catch(e){if(e.status===401&&!retried&&await refresh())return backupApi(action,params,true);throw e;}}
