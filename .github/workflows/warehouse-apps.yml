@@ -42,8 +42,6 @@ jobs:
   needs: test
   runs-on: windows-latest
   timeout-minutes: 12
-  env:
-   FASTGO_PLAYWRIGHT: '${{ runner.temp }}/warehouse-playwright'
   steps:
    - uses: actions/checkout@v4
    - uses: actions/setup-node@v4
@@ -61,6 +59,7 @@ jobs:
      shell: pwsh
      run: |
       npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
+      "FASTGO_PLAYWRIGHT=$env:RUNNER_TEMP/warehouse-playwright" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
    - name: Verify bundled warehouse UI without internet
      timeout-minutes: 2
      run: node scripts/check-warehouse-bundled-desktop.cjs
