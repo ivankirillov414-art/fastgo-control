@@ -1,0 +1,2 @@
+const test=require('node:test'),assert=require('node:assert/strict'),{validPayload}=require('../../warehouse-desktop/avito-toast.cjs');
+test('cashier popup receives bounded text and chat identity, never a script or external URL',()=>{const p={id:'message-1',chat_id:'u2i-customer',title:'Клиент · Авито',body:'Есть камера?'};assert.deepEqual(validPayload(p),p);for(const patch of [{chat_id:'https://bad.invalid'},{body:'x'.repeat(5001)},{id:5}])assert.throws(()=>validPayload({...p,...patch}));});

@@ -16,7 +16,7 @@ jobs:
    - uses: actions/setup-node@v4
      with: {node-version: '24'}
    - run: node scripts/build-warehouse-web.cjs --check
-   - run: node --test tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs desktop/tests/barcode-print.test.cjs
+   - run: node --test tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs tests/avito.test.mjs desktop/tests/barcode-print.test.cjs desktop/tests/avito-toast.test.cjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
@@ -34,6 +34,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-native-unknown-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-barcode-print.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-avito-notifications.cjs
  windows:
   if: github.event_name != 'pull_request'
   needs: test
@@ -102,5 +103,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад 1.0.17: обновления продолжаются в фоне и не требуют переключения с просмотра остатков. Пустые шаблоны терминала не создают зависшие документы. Защита незавершённых операций сохранена. В комплекте подписанный FastGo ТСД 2.1.4 с фоновой синхронизацией отмен и подтверждением фактически установленной версии.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад 1.0.17 и ТСД 2.1.5: выдача запчастей по QR мастера с привязкой к ремонту, печать этикеток с выбором количества и принтера, уведомления Авито после подключения аккаунта. Обновления приложений работают в фоне и ждут закрытия документов.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py

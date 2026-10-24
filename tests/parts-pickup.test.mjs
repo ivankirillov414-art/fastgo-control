@@ -70,3 +70,11 @@ test('returning an issued line restores stock without permitting manual replacem
  const h=fixture();await partsIssue('parts_issue',{request_id:randomUUID(),code:await code(),items:[{part_id:part,quantity:2}]},h.context);
  const engine=createNativeEngine(h.sheets);const r=engine.run('update',{kind:'repair',id:repair,revision:2,status:'diagnostics',parts:[]},owner);assert.equal(r.parts.length,0);assert.equal(engine.sheets['Товары'].rows[0]['Остаток, шт.'],5);assert.equal(r.parts_status.mode,'pending');
 });
+
+test('returning TSD parts does not consume an older personal holding of the same SKU',async()=>{
+ const h=fixture();h.seed('События',{'Тип':'warehouse','Действие':'master_issue','Детали':JSON.stringify({master_id:master,items:[{part_id:part,name:'Камера',quantity:3,unit_cost:50}]})});
+ await partsIssue('parts_issue',{request_id:randomUUID(),code:await code(),items:[{part_id:part,quantity:2}]},h.context);
+ const engine=createNativeEngine(h.sheets),r=engine.run('update',{kind:'repair',id:repair,revision:2,status:'diagnostics',parts:[]},owner);
+ assert.equal(r.parts.length,0);assert.equal(engine.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+ assert.ok(!engine.changes().some(x=>['master_stock_consume','master_stock_restore'].includes(x.values['Действие'])));
+});

@@ -53,7 +53,7 @@ jobs:
             exit 0
           fi
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          FastGo Windows 1.0.20: приложение запускается при входе в Windows и продолжает принимать сканы и проверять обновления в фоне после закрытия окна. Просмотр остатков больше не задерживает безопасное обновление. Открытые документы, ввод, печать и синхронизация защищены. Сервер получает подтверждение установленной версии с привязкой к рабочему месту; номера версий вручную вводить не нужно.
+          FastGo Windows 1.0.20: единый склад, выдача запчастей через ТСД по QR ремонта, печать этикеток с количеством и выбором принтера, публичный статус по клиентскому QR и карточка для сотрудников. Колокольчик и уведомления Авито после подключения аккаунта владельцем. Автозапуск, работа в трее и безопасные обновления с подтверждением установленной версии.
           NOTES
           gh release create "$tag" --draft --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest

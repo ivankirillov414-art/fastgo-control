@@ -434,7 +434,7 @@ function updateOrder_(p,actor){
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
   const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
-  if(parts.length!==oldParts.length)reconcileMasterParts_(parts,oldParts,r,p,actor);
+  if(parts.length!==oldParts.length)returnRepairParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), pricing=repairPricing_(r,p,works,parts),total=pricing.total,previousTotal=num_(r['Итого']);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
   if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
@@ -609,6 +609,16 @@ function repairPartsStatus_(repair){
 function repairPartsSubset_(parts,before){
  const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
  const available=before.map(stable);return parts.every(line=>{const at=available.indexOf(stable(line));if(at<0)return false;available.splice(at,1);return true;});
+}
+
+function returnRepairParts_(parts,oldParts,repair,p,actor){
+ const kept=parts.filter(x=>x.tsd_issue_id).map(x=>JSON.stringify(x));
+ for(const line of oldParts.filter(x=>x.tsd_issue_id)){
+  const index=kept.indexOf(JSON.stringify(line));if(index>=0){kept.splice(index,1);continue;}
+  stock_({part_id:line.part_id,movement_type:'return',quantity:line.quantity,note:'Возврат выдачи ТСД из ремонта '+repair['Номер ремонта'],reference_id:repair.repair_id},actor);
+ }
+ const legacy=parts.filter(x=>!x.tsd_issue_id),oldLegacy=oldParts.filter(x=>!x.tsd_issue_id);
+ if(legacy.length!==oldLegacy.length)reconcileMasterParts_(legacy,oldLegacy,repair,p,actor);
 }
 function assertOpen_(r,kind){if(['issued','returned','cancelled'].includes(normStatus_(r['Статус'],kind)))throw httpError_('Заказ закрыт',409);}
 

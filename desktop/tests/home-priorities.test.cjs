@@ -17,6 +17,7 @@ test('native homepage reflects pending local edits and isolates accounts without
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fg-home-')),store=new Store(path.join(dir,'db.sqlite'));t.after(()=>{store.close();fs.rmSync(dir,{recursive:true,force:true});});
  store.remember('a','repair',{id:'r',revision:1,status:'repair',brand:'Kugoo',model:'M4',works:[{price:1000,quantity:1}],parts:[],total_amount:1000,approved_amount:null,fault_photo_paths:['private-photo'],phone:'private-phone'});
  store.remember('b','repair',{id:'secret',status:'accepted'});store.remember('a','repair',{id:'done',status:'issued'});
- store.localWrite('a','update',{id:'r',kind:'repair',revision:1,status:'ready',approve:true});
+ store.cache('a','me',{role:'mechanic'});
+ store.localWrite('a','update',{id:'r',kind:'repair',revision:1,status:'ready',approve:true,no_parts:true});
  const data=store.homeData('a');assert.equal(data.repairs.length,1);assert.equal(data.repairs[0].status,'ready');assert.equal(data.repairs[0].approved_amount,1000);assert.equal(data.repairs[0].fault_photo_paths,undefined);assert.equal(data.repairs[0].phone,undefined);assert.equal(store.pending('a').length,1);assert.equal(store.homeData('b').repairs[0].id,'secret');assert.deepEqual(store.homeData('unknown'),{repairs:[],storage:[]});
 });

@@ -32,7 +32,7 @@ class Store{
  rebuild(actor,kind,id){const row=this.row(actor,kind,id);if(!row)return;let record=JSON.parse(row.base);for(const op of this.pending(actor).filter(x=>x.kind===kind&&x.record_id===id))record=this.apply(record,op.action,op.patch,op.params);this.db.prepare('UPDATE records SET local=? WHERE actor=? AND kind=? AND id=?').run(stable(record),actor,kind,id);return record;}
  apply(record,action,patch,p){let r={...record};
   if(action==='create')return {...record,...patch};
-  if(['update','contact'].includes(action)){Object.assign(r,patch);if(action==='update')r.total_amount=Math.max(0,[...(r.works||[]),...(r.parts||[])].reduce((s,x)=>s+Number(x.price||0)*Number(x.quantity||1),0)-Number(r.discount||0));if(p.approve){r.approved_amount=r.total_amount;r.approval_note=p.approval_note||'';}}
+  if(['update','contact'].includes(action)){Object.assign(r,patch);if(action==='update'){const gross=[...(r.works||[]),...(r.parts||[])].reduce((s,x)=>s+Number(x.price||0)*Number(x.quantity||1),0);r.total_amount=r.total_override??Math.max(0,gross-Number(r.discount||0));if(r.total_override!=null)r.discount=Math.max(0,Math.round((gross-r.total_override)*100)/100);if(p.no_parts===true&&!(r.parts||[]).length)r.parts_status={mode:'none',pending:true};else if(!(r.parts||[]).length&&(record.parts_status?.mode!=='none'||r.assigned_master_id!==record.assigned_master_id))r.parts_status={mode:'pending'};}if(p.approve){r.approved_amount=r.total_amount;r.approval_note=p.approval_note||'';}}
   if(action==='payment')r.paid_amount=Number(r.paid_amount||0)+Number(p.amount);
   if(action==='extend'){r.storage_amount=Number(r.storage_amount||0)+Number(p.months)*1990;r.extension_months=Number(r.extension_months||0)+Number(p.months);r.extension_amount=Number(r.extension_amount||0)+Number(p.months)*1990;const d=new Date(r.planned_return_date+'T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+Number(p.months));r.planned_return_date=d.toISOString().slice(0,10);}
   if(action==='storage_close'){r.status='returned';r.handover_notes=p.note;r.issued_at=new Date().toISOString();}
@@ -51,6 +51,12 @@ class Store{
   }else{
    before=this.record(actor,kind,id);if(p.revision!==undefined&&Number(p.revision)!==Number(before.revision))throw Object.assign(Error('Карточка уже изменена в приложении. Обновите её.'),{status:409});
    if(final.has(before.status)&&!['upload','documents'].includes(action)&&!p.reopen_reason)throw Error('Заказ закрыт. Откройте его повторно перед изменением.');
+   if(kind==='repair'&&action==='update'){
+    if(p.parts!==undefined){const available=(before.parts||[]).map(contentKey);if(!Array.isArray(p.parts)||!p.parts.every(line=>{const at=available.indexOf(contentKey(line));if(at<0)return false;available.splice(at,1);return true;}))throw Error('Запчасти в ремонт выдаются только через ТСД на кассе');}
+    const master=p.assigned_master_id??before.assigned_master_id,member=this.cache(actor,'me');
+    if(p.no_parts===true&&((p.parts||before.parts||[]).length||actor!==master&&!(member?.role==='mechanic'&&!master)&&!['owner','developer'].includes(member?.role)))throw Error('Отметку «Без замены запчастей» ставит мастер ремонта');
+    if(['ready','issued'].includes(p.status||before.status)&&!(p.parts||before.parts||[]).length&&p.no_parts!==true&&(before.parts_status?.mode!=='none'||master!==before.assigned_master_id))throw Error('Получите запчасти через ТСД или подтвердите «Без замены запчастей»');
+   }
    if(['update','contact'].includes(action))for(const [key,value] of Object.entries(p))if(!omit.has(key)&&stable(value)!==stable(before[key]))patch[key]=value;
    if(action==='payment'){if(!Number.isFinite(Number(p.amount))||!Number(p.amount))throw Error('Укажите сумму оплаты');if(!['cash','card','transfer'].includes(p.method))throw Error('Выберите способ оплаты');}
    if(action==='upload'){const ext=({'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','application/pdf':'.pdf','video/mp4':'.mp4','video/quicktime':'.mov','video/webm':'.webm'})[p.content_type];if(!ext)throw Error('Неподдерживаемый файл');patch.paths=['desktop:'+p.request_id+ext];}

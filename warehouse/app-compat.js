@@ -52,6 +52,227 @@
     }
   });
 
+  // workshop/notifications.js
+  var escape = (value) => String(value != null ? value : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var clock = (value) => value ? new Date(value).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+  var styles = ".fg-notice-bell{position:fixed;right:20px;top:76px;z-index:80;width:46px;height:46px;border:1px solid #3c6581;border-radius:50%;background:#152b40;color:#eef7ff;display:grid;place-items:center;box-shadow:0 4px 20px #0004;cursor:pointer}.fg-notice-bell svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7}.fg-notice-bell b{position:absolute;right:-5px;top:-5px;min-width:21px;height:21px;padding:2px 5px;border-radius:14px;background:#008cff;color:white;font:700 12px Arial}.fg-notice-bell b[hidden]{display:none}.fg-notice-drawer{position:fixed;right:16px;top:132px;bottom:20px;width:min(430px,calc(100vw - 32px));z-index:180;border:1px solid #456078;border-radius:16px;background:#122338;color:#edf5ff;box-shadow:0 20px 80px #0009;overflow:auto;padding:20px;font:15px/1.45 Arial,sans-serif}.fg-notice-drawer[hidden]{display:none}.fg-notice-drawer h2{font-size:23px;margin:0 0 8px}.fg-notice-drawer button{cursor:pointer;background:#173c59;color:#edf5ff;border:1px solid #456078;border-radius:9px;padding:10px 14px;font:inherit}.fg-notice-head{display:flex;justify-content:space-between;gap:12px}.fg-notice-drawer .fg-notice-item{display:block;width:100%;text-align:left;margin:10px 0;padding:14px;background:#132e46}.fg-notice-item.unread{border-color:#1c99ff;background:#123858}.fg-notice-item strong,.fg-notice-item span,.fg-notice-item small{display:block;overflow-wrap:anywhere}.fg-notice-item small,.fg-notice-help{color:#aabed0;font-size:13px}.fg-notice-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.fg-notice-drawer label{display:block;margin:12px 0}.fg-notice-drawer input,.fg-notice-drawer select{box-sizing:border-box;width:100%;margin-top:5px;padding:11px;border:1px solid #456078;border-radius:8px;background:#0c1b2d;color:white}.fg-notice-error{color:#ffb7ac;white-space:pre-wrap}.fg-chat-message{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 30px 10px 0;padding:10px 14px;border-radius:12px;background:#1b3a54}.fg-chat-message.out{margin:10px 0 10px 30px;background:#1b5265}.fg-notice-toast{position:fixed;right:20px;top:16px;z-index:300;width:min(350px,calc(100vw - 40px));padding:16px 20px;border:1px solid #168dce;border-radius:14px;background:#123449;color:#fff;box-shadow:0 10px 36px #0008;cursor:pointer;font:15px/1.4 Arial,sans-serif}.fg-notice-toast strong,.fg-notice-toast span{display:block}.fg-notice-toast span{margin-top:5px;overflow-wrap:anywhere}.fg-notice-toast small{color:#a5d7f0}@media(max-width:650px){.fg-notice-bell{right:16px;top:70px}.fg-notice-drawer{top:124px;bottom:80px}}";
+  function startNotifications({ call: call2, station = async () => null, actor = "" }) {
+    var _a, _b;
+    if (((_a = window.fastgoNotifications) == null ? void 0 : _a.actor) === actor) return window.fastgoNotifications;
+    (_b = window.fastgoNotifications) == null ? void 0 : _b.stop();
+    if (!document.getElementById("fg-notification-style")) {
+      const style = document.createElement("style");
+      style.id = "fg-notification-style";
+      style.textContent = styles;
+      document.head.append(style);
+    }
+    let state = null, busy2 = false, stopped = false, screen2 = "list", selected = "", initialized = false;
+    const seenKey = "fastgo_avito_seen:" + actor;
+    let seen = /* @__PURE__ */ new Set();
+    try {
+      seen = new Set(JSON.parse(localStorage.getItem(seenKey) || "[]"));
+      initialized = localStorage.getItem(seenKey) !== null;
+    } catch (e) {
+    }
+    const bell = document.createElement("button");
+    bell.type = "button";
+    bell.className = "fg-notice-bell";
+    bell.setAttribute("aria-label", "\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u0410\u0432\u0438\u0442\u043E");
+    bell.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><b hidden></b>';
+    document.body.append(bell);
+    const drawer = document.createElement("section");
+    drawer.className = "fg-notice-drawer";
+    drawer.hidden = true;
+    drawer.setAttribute("aria-label", "\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u0410\u0432\u0438\u0442\u043E");
+    document.body.append(drawer);
+    const note = (message2, error = false) => {
+      const target = drawer.querySelector("[data-notice-state]");
+      if (target) {
+        target.textContent = message2;
+        target.className = error ? "fg-notice-error" : "fg-notice-help";
+      }
+    };
+    const request2 = async (action, p = {}) => {
+      const binding = action === "list" ? await station().catch(() => null) : null;
+      return call2(action, { ...p, ...binding ? { device_id: binding.id, device_token: binding.token } : {} });
+    };
+    const mark = async (ids) => {
+      if (!ids.length) return;
+      await request2("read", { message_ids: ids });
+      state.notifications.forEach((n) => {
+        if (ids.includes(n.message_id)) n.read = true;
+      });
+      badge();
+    };
+    function badge() {
+      const unread = ((state == null ? void 0 : state.notifications) || []).filter((n) => !n.read).length, b = bell.querySelector("b");
+      b.hidden = !unread;
+      b.textContent = unread > 99 ? "99+" : String(unread);
+      bell.setAttribute("aria-label", "\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u0410\u0432\u0438\u0442\u043E: " + unread);
+    }
+    function toast(item) {
+      var _a2;
+      if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.notifyAvito) {
+        void window.warehouseDesktop.notifyAvito({ id: item.message_id, title: item.sender + " \xB7 \u0410\u0432\u0438\u0442\u043E", body: item.body, chat_id: item.chat_id }).catch(() => {
+        });
+        return;
+      }
+      const old = document.querySelector(".fg-notice-toast");
+      old == null ? void 0 : old.remove();
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "fg-notice-toast";
+      el.innerHTML = "<small>\u0410\u0432\u0438\u0442\u043E \xB7 " + escape(item.title) + "</small><strong>" + escape(item.sender) + "</strong><span>" + escape(item.body.slice(0, 160)) + "</span>";
+      el.onclick = () => {
+        el.remove();
+        void openChat(item);
+      };
+      document.body.append(el);
+      setTimeout(() => el.remove(), 7e3);
+    }
+    async function refresh() {
+      if (busy2 || stopped) return;
+      busy2 = true;
+      try {
+        const next = await request2("list");
+        if (stopped) return;
+        state = next;
+        bell.hidden = false;
+        badge();
+        const fresh = (next.notifications || []).filter((n) => !seen.has(n.message_id));
+        if (initialized && next.popups_allowed) fresh.filter((n) => !n.read).slice().reverse().slice(-5).forEach(toast);
+        for (const item of next.notifications || []) seen.add(item.message_id);
+        seen = new Set([...seen].slice(-1e3));
+        localStorage.setItem(seenKey, JSON.stringify([...seen]));
+        initialized = true;
+        if (!drawer.hidden && screen2 === "list") drawList();
+      } catch (e) {
+        if (e.status === 401 || e.status === 403) {
+          bell.hidden = true;
+          drawer.hidden = true;
+        } else if (!drawer.hidden) note(e.message, true);
+      } finally {
+        busy2 = false;
+      }
+    }
+    function heading(title) {
+      drawer.innerHTML = '<div class="fg-notice-head"><h2>' + escape(title) + '</h2><button type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F">\xD7</button></div><p data-notice-state role="status"></p><div data-notice-content></div>';
+      drawer.querySelector("[data-close]").onclick = () => drawer.hidden = true;
+      return drawer.querySelector("[data-notice-content]");
+    }
+    function drawList() {
+      var _a2;
+      screen2 = "list";
+      const host = heading("\u0410\u0432\u0438\u0442\u043E"), notifications2 = (state == null ? void 0 : state.notifications) || [];
+      note((state == null ? void 0 : state.connected) ? "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E: " + state.label + (state.last_synced_at ? " \xB7 " + clock(state.last_synced_at) : "") : "\u0410\u0432\u0438\u0442\u043E \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D");
+      host.innerHTML = '<div class="fg-notice-actions"><button type="button" data-refresh>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C</button><button type="button" data-read-all>\u041F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0432\u0441\u0435</button>' + ((state == null ? void 0 : state.owner) ? '<button type="button" data-settings>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435</button>' : "") + "</div>" + ((state == null ? void 0 : state.error) ? '<p class="fg-notice-error">' + escape(state.error) + "</p>" : "") + (notifications2.length ? notifications2.map((n, i) => '<button type="button" class="fg-notice-item' + (n.read ? "" : " unread") + '" data-message="' + i + '"><small>' + escape(n.title) + " \xB7 " + clock(n.created_at) + "</small><strong>" + escape(n.sender) + "</strong><span>" + escape(n.body.slice(0, 220)) + "</span></button>").join("") : '<p class="fg-notice-help">\u0417\u0434\u0435\u0441\u044C \u043F\u043E\u044F\u0432\u044F\u0442\u0441\u044F \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432 \u0410\u0432\u0438\u0442\u043E.</p>');
+      host.querySelector("[data-refresh]").onclick = () => void refresh();
+      host.querySelector("[data-read-all]").onclick = async () => {
+        try {
+          await mark(notifications2.filter((n) => !n.read).map((n) => n.message_id));
+          drawList();
+        } catch (e) {
+          note(e.message, true);
+        }
+      };
+      (_a2 = host.querySelector("[data-settings]")) == null ? void 0 : _a2.addEventListener("click", drawSettings);
+      host.querySelectorAll("[data-message]").forEach((button) => button.onclick = () => void openChat(notifications2[Number(button.dataset.message)]));
+    }
+    function drawSettings() {
+      var _a2, _b2, _c;
+      screen2 = "settings";
+      const host = heading("\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0410\u0432\u0438\u0442\u043E");
+      host.innerHTML = '<button type="button" data-back>\u2190 \u041A \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\u043C</button><p class="fg-notice-help">\u0412\u043B\u0430\u0434\u0435\u043B\u0435\u0446 \u043E\u0434\u0438\u043D \u0440\u0430\u0437 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0435\u0442 API \u0441\u0432\u043E\u0435\u0433\u043E \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430. \u0414\u0430\u043B\u044C\u0448\u0435 FastGo \u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F \u0438 \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p><form><label>Client ID<input name="client_id" autocomplete="off" required maxlength="500"></label><label>Client Secret<input name="client_secret" type="password" autocomplete="new-password" required maxlength="4000"></label><p class="fg-notice-help">\u0414\u0430\u043D\u043D\u044B\u0435 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u0432 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0435 \u0410\u0432\u0438\u0442\u043E: \xAB\u0414\u043B\u044F \u043F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u043E\u0432\xBB \u2192 API.</p><button type="submit">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0410\u0432\u0438\u0442\u043E</button></form>' + ((state == null ? void 0 : state.connected) ? '<div class="fg-notice-actions"><button type="button" data-disconnect>\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439</button></div>' : "") + (((_a2 = state == null ? void 0 : state.stations) == null ? void 0 : _a2.length) ? "<label>\u0412\u0441\u043F\u043B\u044B\u0432\u0430\u044E\u0449\u0438\u0435 \u043E\u043A\u043D\u0430 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435<select data-station>" + state.stations.map((s, i) => '<option value="' + escape(s.station_id) + '" ' + (state.popup_station_id === s.station_id ? "selected" : "") + ">" + (s.slot === 1 ? "\u041A\u0430\u0441\u0441\u0430 / \u0441\u043A\u043B\u0430\u0434 \xB7 \u0414\u0440\u0430\u0433\u043D\u0438\u0440" : "\u0412\u0442\u043E\u0440\u043E\u0439 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0439 \u043D\u043E\u0443\u0442\u0431\u0443\u043A") + "</option>").join("") + "</select></label>" : "");
+      host.querySelector("[data-back]").onclick = drawList;
+      host.querySelector("form").onsubmit = async (e) => {
+        e.preventDefault();
+        const button = host.querySelector("[type=submit]");
+        button.disabled = true;
+        note("\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\u2026");
+        try {
+          const form = e.target;
+          await request2("connect", { client_id: form.elements.client_id.value, client_secret: form.elements.client_secret.value });
+          form.reset();
+          screen2 = "list";
+          await refresh();
+          drawList();
+        } catch (error) {
+          note(error.message, true);
+        } finally {
+          button.disabled = false;
+        }
+      };
+      (_b2 = host.querySelector("[data-disconnect]")) == null ? void 0 : _b2.addEventListener("click", async () => {
+        try {
+          await request2("disconnect");
+          screen2 = "list";
+          await refresh();
+          drawList();
+        } catch (e) {
+          note(e.message, true);
+        }
+      });
+      (_c = host.querySelector("[data-station]")) == null ? void 0 : _c.addEventListener("change", async (e) => {
+        try {
+          await request2("popup_station", { station_id: e.target.value });
+          note("\u041D\u043E\u0443\u0442\u0431\u0443\u043A \u0434\u043B\u044F \u0432\u0441\u043F\u043B\u044B\u0432\u0430\u044E\u0449\u0438\u0445 \u043E\u043A\u043E\u043D \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D");
+        } catch (error) {
+          note(error.message, true);
+        }
+      });
+    }
+    async function openChat(item) {
+      selected = item.chat_id;
+      screen2 = "chat";
+      drawer.hidden = false;
+      const host = heading(item.sender || "\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0410\u0432\u0438\u0442\u043E");
+      host.innerHTML = '<button type="button" data-back>\u2190 \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F</button><p>' + escape(item.title) + "</p><div data-messages></div>";
+      host.querySelector("[data-back]").onclick = drawList;
+      note("\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u043F\u0435\u0440\u0435\u043F\u0438\u0441\u043A\u0443\u2026");
+      try {
+        await mark([item.message_id]);
+        const list = await request2("messages", { chat_id: item.chat_id });
+        if (stopped || selected !== item.chat_id || screen2 !== "chat") return;
+        host.querySelector("[data-messages]").innerHTML = list.slice().sort((a, b) => a.created - b.created).map((m) => '<div class="fg-chat-message ' + (m.direction === "out" ? "out" : "") + '">' + escape(m.text) + "<br><small>" + clock(new Date(m.created * 1e3).toISOString()) + "</small></div>").join("");
+        note("\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0438\u0437 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u0433\u043E \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430 \u0410\u0432\u0438\u0442\u043E");
+      } catch (e) {
+        note(e.message, true);
+      }
+    }
+    bell.onclick = () => {
+      drawer.hidden = !drawer.hidden;
+      if (!drawer.hidden) {
+        drawList();
+        void refresh();
+      }
+    };
+    const external = (e) => {
+      var _a2;
+      const item = (_a2 = state == null ? void 0 : state.notifications) == null ? void 0 : _a2.find((n) => {
+        var _a3;
+        return n.chat_id === ((_a3 = e.detail) == null ? void 0 : _a3.chat_id);
+      });
+      if (item) void openChat(item);
+      else {
+        drawer.hidden = false;
+        drawList();
+        void refresh();
+      }
+    };
+    window.addEventListener("fastgo-open-avito", external);
+    const controller = { actor, refresh, stop() {
+      stopped = true;
+      clearInterval(timer);
+      bell.remove();
+      drawer.remove();
+      window.removeEventListener("fastgo-open-avito", external);
+    } };
+    window.fastgoNotifications = controller;
+    const timer = setInterval(() => void refresh(), 15e3);
+    void refresh();
+    return controller;
+  }
+
   // warehouse/client.js
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
@@ -115,6 +336,14 @@
       return (await request("/functions/v1/fastgo-workshop-api", { action: operation, params }, session.access_token)).data;
     }
     return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
+  }
+  async function avitoApi(action, params = {}) {
+    if (!session) throw Object.assign(Error("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo"), { status: 401 });
+    if (session.expires_at * 1e3 < Date.now() + 6e4) {
+      if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
+      await refreshing;
+    }
+    return (await request("/functions/v1/fastgo-avito", { action, ...params }, session.access_token)).data;
   }
   var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
   function matchBarcode(parts2, value) {
@@ -1896,6 +2125,9 @@
     if ($("shift")) $("shift").onclick = shift;
     if ($("master-stock")) $("master-stock").onclick = () => run(holdings);
   }
+  function notifications() {
+    if (!terminal) startNotifications({ actor: userId(), call: avitoApi, station: async () => device });
+  }
   async function catalog() {
     const c = await call("catalog");
     parts = c.parts;
@@ -1961,6 +2193,7 @@
     try {
       const info = await call("info");
       memberRole = info.member.role;
+      notifications();
       $("connection").textContent = info.device.name + " \xB7 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442";
       await catalog();
       home();

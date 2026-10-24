@@ -44,7 +44,9 @@
       "bundled-ui.cjs",
       "web/**/*",
       "background.cjs",
-      "barcode-print.cjs"
+      "barcode-print.cjs",
+      "avito-toast.cjs",
+      "avito-toast-preload.cjs"
     ],
     "win": {
       "target": "nsis",

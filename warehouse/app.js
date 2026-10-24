@@ -1,3 +1,5 @@
+import {startNotifications} from '../workshop/notifications.js';
+import {avitoApi} from './client.js';
 import {unknownScans} from './unknown-scans.js';
 import {productPanel} from './product-panel.js';
 import {partPhotos} from './part-photos.js';
@@ -29,6 +31,7 @@ window.addEventListener('beforeunload',e=>{try{live.checkpoint();}catch(error){m
 function shell(html){document.body.dataset.screen=screen;const section=document.getElementById('warehouse-section');if(section)section.textContent=({home:'Главная',inventory:'Остатки',receipt:'Приход',live:'Оплата',repair:'Оплата ремонта'})[screen]||'';if(stopUSB){stopUSB();stopUSB=null;}if(stopScanner){stopScanner();stopScanner=null;}$('app').innerHTML=html;message('');if(!terminal)bindNav();}
 function nav(){if(!terminal)return '';return '<div class="subnav"><button id="back">← Главное</button>'+(!terminal?'<button id="inventory">Остатки</button><button id="shift">Открыть смену</button>'+(['owner','developer'].includes(memberRole)?'<button id="master-stock">Запчасти на мастерах</button>':'')+'':'')+'</div>';}
 function bindNav(){if($('nav-receipt'))$('nav-receipt').onclick=()=>run(()=>live.open('receipt'));if($('nav-pay'))$('nav-pay').onclick=()=>run(()=>live.open('sale'));if($('master-stock'))$('master-stock').hidden=!['owner','developer'].includes(memberRole);document.querySelectorAll('.warehouse-sidebar button').forEach(b=>b.classList.toggle('active',b.id===(screen==='inventory'?'inventory':screen==='holdings'?'master-stock':screen==='shift'?'shift':screen==='live'?(live.kind()==='receipt'?'nav-receipt':'nav-pay'):'back')));applyReadOnly();if($('back'))$('back').onclick=home;if($('inventory'))$('inventory').onclick=()=>run(inventory);if($('shift'))$('shift').onclick=shift;if($('master-stock'))$('master-stock').onclick=()=>run(holdings);}
+function notifications(){if(!terminal)startNotifications({actor:userId(),call:avitoApi,station:async()=>device});}
 async function catalog(){const c=await call('catalog');parts=c.parts;staff=c.staff;try{save('catalog:'+document.body.dataset.mode,{device_id:device?.id,parts,staff,role:memberRole});}catch{message('Не удалось сохранить каталог для работы без сети.',true);}}
 function usbHelp(){return '<details class="panel"><summary>Подключение по USB</summary><p>На ноутбуке откройте «Сканер по USB» и нажмите «Открыть сканер на терминале». На iData должен открыться отдельный экран «FastGo · USB» с кнопками «Приход» и «Оплата».</p><p>Для USB интернет на терминале не нужен. Разрешите USB-отладку и выберите браузер, если Android его предложит.</p></details>';}
 async function connectTerminal(){
@@ -44,7 +47,7 @@ async function start(){
  if(!userId())return signIn();
  device=load(terminal?'terminal':'station');draft=load('draft:'+document.body.dataset.mode);$('logout').hidden=false;
  if(!device){if(!terminal&&new URLSearchParams(location.search).get('unified')==='1'){document.body.dataset.readonly='true';memberRole=(await serviceApi('me')).role;await catalog();$('connection').textContent='Каталог склада · общее приложение';home();await inventory();message('Приход, оплата и подключение ТСД доступны на двух разрешённых ноутбуках.');return;}if(!terminal)return setup();try{return await connectTerminal();}catch(e){return connectionError(e);}}
- try{const info=await call('info');memberRole=info.member.role;$('connection').textContent=info.device.name+' · интернет';await catalog();home();if(!terminal){if(new URLSearchParams(location.search).get('section')==='inventory')await inventory();await live.restore();}}
+ try{const info=await call('info');memberRole=info.member.role;notifications();$('connection').textContent=info.device.name+' · интернет';await catalog();home();if(!terminal){if(new URLSearchParams(location.search).get('section')==='inventory')await inventory();await live.restore();}}
  catch(e){
   if(e.status===401){signIn();message('Войдите снова. Сохранённый документ останется на устройстве.',true);return;}
   if(e.status!==403){const cached=load('catalog:'+document.body.dataset.mode);if(cached?.device_id===device.id&&Array.isArray(cached.parts)){parts=cached.parts;staff=cached.staff||[];memberRole=cached.role||'';home();if(!terminal)await live.restore();$('connection').textContent='Нет связи · сканы сохраняются';message('Можно продолжать сканировать. Передайте документ после восстановления связи.',true);return;}}

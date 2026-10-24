@@ -23,18 +23,34 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
   await pause(2000);
  }
  if(!installed)throw Error('Android package installer did not install the new APK');
- let resumed='';for(let n=0;n<15;n++){resumed=adb(['shell','dumpsys','activity','activities']);if(resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity'))break;await pause(1000);}
+ let resumed='',restartMode='automatic';for(let n=0;n<10;n++){resumed=adb(['shell','dumpsys','activity','activities']);if(resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity'))break;await pause(1000);}
+ if(!resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity')){
+  // Android 10 can block starts from MY_PACKAGE_REPLACED. Exercise the actual
+  // user-facing notification return path, rather than granting a background
+  // launch exemption or starting the scanner with an adb command.
+  restartMode='notification';adb(['shell','cmd','statusbar','expand-notifications']);await pause(1000);
+  let opened=false;
+  for(let n=0;n<5&&!opened;n++){
+   try{
+    adb(['shell','uiautomator','dump','/sdcard/fastgo-reopen.xml']);const xml=adb(['shell','cat','/sdcard/fastgo-reopen.xml']);
+    const notification=[...xml.matchAll(/<node\b[^>]*>/g)].map(m=>Object.fromEntries([...m[0].matchAll(/([\w-]+)="([^"]*)"/g)].map(x=>[x[1],x[2]]))).find(x=>(x.text||'').includes('FastGo обновлён'));
+    if(notification){fs.writeFileSync('warehouse-android/native/build/upgrade-test/update-notification.png',adb(['exec-out','screencap','-p'],true));const bounds=[...notification.bounds.matchAll(/\d+/g)].map(x=>Number(x[0]));adb(['shell','input','tap',String(Math.round((bounds[0]+bounds[2])/2)),String(Math.round((bounds[1]+bounds[3])/2))]);opened=true;}
+   }catch{}
+   await pause(1000);
+  }
+  for(let n=0;n<10;n++){resumed=adb(['shell','dumpsys','activity','activities']);if(resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity'))break;await pause(1000);}
+ }
  if(!resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity')){
   fs.writeFileSync('warehouse-android/native/build/upgrade-test/after-install-activities.txt',resumed);
   const logs=adb(['logcat','-d','-t','600']);fs.writeFileSync('warehouse-android/native/build/upgrade-test/after-install-logcat.txt',logs);
   console.error(resumed.split('\n').filter(line=>/Resumed|focused|fastgo|InstallResult/i.test(line)).join('\n'));
   console.error(logs.split('\n').filter(line=>/fastgo|FATAL EXCEPTION|Background activity|ActivityNotFound|Permission Denial/i.test(line)).join('\n'));
-  throw Error('Updated APK did not restart its scanner activity');
+  throw Error('Updated APK could not reopen its scanner through the update notification');
  }
  const status=adb(['shell','am','broadcast','--user','0','-f','0x20','-n',pkg+'/ru.fastgo.tsd.ProvisionReceiver','--es','operation','status']);
  if(!/update_installed_at[^\d]+\d+/.test(status))throw Error('Replacement APK did not record successful installation');
  const result=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#keepsDataAfterInstall',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);
  if(!/OK \(1 test\)/.test(result))throw Error('Post-update retention check failed: '+result);
- fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:9,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,sqlite_retained:true,encrypted_value_retained:true},null,2));
- console.log('PASS: document gate, APK download/hash/signature, Android installer, new version and retained SQLite/encrypted credentials');
+ fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:9,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,restart_mode:restartMode,sqlite_retained:true,encrypted_value_retained:true},null,2));
+ console.log('PASS: document gate, APK download/hash/signature, Android installer, return via '+restartMode+', new version and retained SQLite/encrypted credentials');
 })().catch(e=>{console.error(e.message);process.exitCode=1;});

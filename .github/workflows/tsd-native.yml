@@ -1,10 +1,10 @@
 name: FastGo Native TSD
 on:
  pull_request:
-  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','.github/workflows/tsd-native.yml']
+  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','scripts/check-native-apk-install.cjs','.github/workflows/tsd-native.yml']
  push:
   branches: [main]
-  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','.github/workflows/tsd-native.yml']
+  paths: ['warehouse-android/native/**','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties','scripts/check-native-apk-install.cjs','.github/workflows/tsd-native.yml']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
