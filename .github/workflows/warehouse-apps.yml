@@ -58,6 +58,7 @@ jobs:
       npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
       $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/warehouse-playwright"
       node scripts/check-warehouse-bundled-desktop.cjs
+      node warehouse-desktop/check-package.cjs
    - uses: actions/upload-artifact@v4
      with:
       name: warehouse-windows
@@ -65,6 +66,8 @@ jobs:
        warehouse-desktop/dist/*.exe
        warehouse-desktop/dist/*.exe.blockmap
        warehouse-desktop/dist/latest.yml
+       warehouse-desktop/dist/warehouse-package-verification.json
+       warehouse-desktop/dist/warehouse-window.png
  android:
   if: github.event_name != 'pull_request'
   needs: test

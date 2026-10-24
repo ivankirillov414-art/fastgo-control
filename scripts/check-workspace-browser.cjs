@@ -19,11 +19,12 @@ const server=createServer((req,res)=>{
  for(const role of ['developer','owner','receiver','admin','manager','mechanic']){
   const context=await browser.newContext(),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'fixture',expires_at:4102444800})));
+  await context.addInitScript(()=>{window.print=()=>{};localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'fixture',expires_at:4102444800}));});
   const me={role,name:'Тестовый сотрудник',profile_id:'fixture',active:true,backend:'POSTGRES_GOOGLE_MIRROR'};
   const record={id:'test',repair_number:1,storage_number:1,status:'stored',revision:1,brand:'Тестовая техника',model:'Модель',last_name:'Тест',first_name:'Клиент',phone:'+70000000000',created_at:'2026-09-21',storage_amount:0,paid_amount:0,total_amount:0,fault_photo_paths:[],signed_document_paths:[],works:[],parts:[]};
   await page.route('**/*',async route=>{
    const req=route.request();if(req.url().startsWith(origin))return route.continue();
+   if(req.url().includes('/functions/v1/fastgo-print-api'))return route.fulfill({json:{data:{enabled:false}},headers:{'Access-Control-Allow-Origin':'*'}});
    if(req.url().includes('/functions/v1/fastgo-workshop-api')){
     if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'}});
     const {action}=req.postDataJSON();
@@ -52,7 +53,7 @@ const server=createServer((req,res)=>{
    // Printing reuses the current authenticated app instead of launching a new one.
    const printLink=page.getByRole('link',{name:'Печать',exact:true});
    assert.equal(await printLink.getAttribute('target'),null);
-   await printLink.click();await page.locator('.print-page #document-qr img').waitFor();
+   await printLink.click();await page.locator('.print-page #document-qr img').waitFor().catch(async e=>{console.error(JSON.stringify({role,url:page.url(),body:(await page.locator('body').innerText()).slice(0,2000),errors}));throw e;});
    assert.equal(context.pages().length,1);
    assert.equal(await page.locator('#login').count(),0);
    assert.equal(await page.getByRole('button',{name:'Печать',exact:true}).count(),1);
