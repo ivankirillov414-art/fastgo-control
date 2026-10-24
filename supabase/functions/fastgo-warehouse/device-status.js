@@ -16,6 +16,10 @@ export async function deviceStatus(action,p,{db,device,stationId}){
   const source=p.network,flag=x=>typeof x==='boolean'?x:null,integer=(x,max)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:null;
   details.network={sampled_at:typeof source.sampled_at==='string'&&Number.isFinite(Date.parse(source.sampled_at))?new Date(source.sampled_at).toISOString():null,online:flag(source.online),wifi_signal_percent:integer(source.wifi_signal_percent,100),disconnects_24h:integer(source.disconnects_24h,100000),api_ok:flag(source.api_ok),feed_ok:flag(source.feed_ok),download_ok:flag(source.download_ok),download_bytes_per_second:integer(Math.round(source.download_bytes_per_second),1e12),stalled_seconds:integer(source.stalled_seconds,86400),codes:Array.isArray(source.codes)?source.codes.filter(x=>['offline','weak_wifi','wifi_history','api_unreachable','feed_unreachable','download_unreachable','dns_failure','download_stalled','reachable','pending'].includes(x)).slice(0,10):[]};
  }
+ if(app!=='tsd'&&p.printing&&typeof p.printing==='object'){
+  const source=p.printing,label=source.profiles?.label,dimension=value=>Number.isFinite(value)&&value>=20&&value<=200?value:null;
+  details.printing={sampled_at:new Date().toISOString(),printers:(Array.isArray(source.printers)?source.printers:[]).slice(0,32).filter(x=>x&&typeof x.name==='string').map(x=>({name:text(x.name,256),displayName:text(x.displayName,256),status:Number.isInteger(x.status)?x.status:0,isDefault:x.isDefault===true})),label:label&&typeof label.deviceName==='string'?{deviceName:text(label.deviceName,256),widthMm:dimension(label.widthMm),heightMm:dimension(label.heightMm)}:null,warning:text(source.warning)};
+ }
  const row={device_id:device.id,app,version:p.version,station_id:stationId,pending_documents:p.pending_documents??null,details,last_seen:new Date().toISOString()};
  await db('workshop_device_status','on_conflict=device_id,app','POST',row,'resolution=merge-duplicates,return=minimal');
  return {device_id:device.id,app,version:row.version,last_seen:row.last_seen};

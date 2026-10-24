@@ -1,3 +1,4 @@
+import {preorderOperation} from './preorders.js';
 export function createNativeEngine(snapshot,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
  const sheets=structuredClone(snapshot),changes=new Map();
  const SHEETS={settings:'Настройки',categories:'Категории',products:'Товары',clients:'Клиенты',intakes:'Приёмки',repairs:'Ремонты',storage:'Зимнее хранение',movements:'Движения склада',sales:'Продажи',saleItems:'Строки продаж',staff:'Сотрудники',services:'Прайс работ',legal:'Реквизиты',payments:'Оплаты',events:'События',files:'Файлы миграции'};

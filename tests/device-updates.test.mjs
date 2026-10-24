@@ -40,3 +40,8 @@ test('warehouse network receipt stores bounded aggregate fields and drops privat
  await deviceStatus('device_status',{app:'warehouse',version:'1.0.19',network},{device:{id:randomUUID(),kind:'desktop'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
  assert.equal(writes[0][3].details.network.online,null);assert.equal(writes[0][3].details.network.wifi_signal_percent,null);assert.equal(writes[0][3].details.network.stalled_seconds,null);assert.equal(writes[0][3].details.network.download_bytes_per_second,null);assert.equal(writes[0][3].details.network.sampled_at,null);
 });
+test('printer diagnostic receipt identifies the cash queues and saved label printer without arbitrary extra fields',async()=>{
+ const writes=[],printing={printers:[{name:'P2',displayName:'DETONGER P2',status:0,isDefault:true,password:'PRIVATE'},null],profiles:{label:{deviceName:'P2',widthMm:50,heightMm:30},a4:{deviceName:'PRIVATE_A4'}},warning:'',token:'PRIVATE_TOKEN'};
+ await deviceStatus('device_status',{app:'warehouse',version:'1.0.19',printing},{device:{id:randomUUID(),kind:'station'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
+ const saved=writes[0][3].details.printing;assert.equal(saved.printers.length,1);assert.equal(saved.printers[0].name,'P2');assert.equal(saved.label.widthMm,50);assert.ok(!JSON.stringify(saved).includes('PRIVATE'));assert.ok(Number.isFinite(Date.parse(saved.sampled_at)));
+});

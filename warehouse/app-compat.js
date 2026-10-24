@@ -322,7 +322,7 @@
     if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
     });
   }
-  var serviceActions = /* @__PURE__ */ new Set(["catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
+  var serviceActions = /* @__PURE__ */ new Set(["preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
   var serviceApi = (action, params = {}) => {
     if (!serviceActions.has(action)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
     return api("service_" + action, params);
@@ -334,9 +334,9 @@
       await refreshing;
     }
     if (action.startsWith("service_")) {
-      const operation = action.slice(8);
-      if (!serviceActions.has(operation)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
-      return (await request("/functions/v1/fastgo-workshop-api", { action: operation, params }, session.access_token)).data;
+      const operation2 = action.slice(8);
+      if (!serviceActions.has(operation2)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
+      return (await request("/functions/v1/fastgo-workshop-api", { action: operation2, params }, session.access_token)).data;
     }
     return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
   }
@@ -2128,6 +2128,343 @@
     };
   }
 
+  // workshop/pending.js
+  function canonical(value) {
+    if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+    if (value && typeof value === "object") return "{" + Object.keys(value).sort().map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
+    return JSON.stringify(value);
+  }
+  async function operation(storage, actor, action, params) {
+    const body = { ...params };
+    delete body.request_id;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical({ action, body })));
+    const signature = Array.from(new Uint8Array(digest), (n) => n.toString(16).padStart(2, "0")).join("");
+    const key2 = "fastgo_pending_v1:" + actor + ":" + signature;
+    let entry;
+    try {
+      entry = JSON.parse(storage.getItem(key2) || "null");
+    } catch (e) {
+    }
+    if (!entry) {
+      entry = { request_id: params.request_id || crypto.randomUUID(), action, created_at: (/* @__PURE__ */ new Date()).toISOString() };
+      storage.setItem(key2, JSON.stringify(entry));
+    }
+    if (!storage.getItem(key2)) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u043E\u0434 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435. \u041E\u0441\u0432\u043E\u0431\u043E\u0434\u0438\u0442\u0435 \u043C\u0435\u0441\u0442\u043E \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
+    return { key: key2, params: { ...params, request_id: entry.request_id }, finish: () => storage.removeItem(key2) };
+  }
+
+  // warehouse/preorders.js
+  var statuses = { waiting: "\u041E\u0436\u0438\u0434\u0430\u0435\u043C", ordered: "\u0417\u0430\u043A\u0430\u0437\u0430\u043D\u043E", arrived: "\u041F\u0440\u0438\u0448\u043B\u043E", issued: "\u0412\u044B\u0434\u0430\u043D\u043E", cancelled: "\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" };
+  var esc2 = (value) => String(value != null ? value : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var money3 = (value) => Number(value || 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " \u20BD";
+  var date = (value, time = false) => value ? new Date(value.length === 10 ? value + "T12:00:00+05:00" : value).toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg", year: "numeric", month: "2-digit", day: "2-digit", ...time ? { hour: "2-digit", minute: "2-digit" } : {} }) : "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430";
+  var options = (values, selected) => Object.entries(values).map(([key2, label]) => '<option value="'.concat(key2, '"').concat(key2 === selected ? " selected" : "", ">").concat(label, "</option>")).join("");
+  var fullName = (r) => [r.last_name, r.first_name, r.middle_name].filter(Boolean).join(" ");
+  var preorderAccess = (me) => ["developer", "owner", "admin", "receiver", "manager", "seller"].includes(me == null ? void 0 : me.role) || (me == null ? void 0 : me.can_sell) === true;
+  function mountPreorders({ root, call: call2, actor, onDirty = () => {
+  } }) {
+    if (!document.getElementById("preorder-styles")) {
+      const style = document.createElement("link");
+      style.id = "preorder-styles";
+      style.rel = "stylesheet";
+      style.href = "warehouse/preorders.css?v=20261024";
+      document.head.append(style);
+    }
+    root.classList.add("fg-preorders");
+    root.innerHTML = '<div class="preorder-toolbar"><p>\u041E\u0436\u0438\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432 \u0438 \u043F\u0440\u0435\u0434\u043E\u043F\u043B\u0430\u0442\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435.</p><button type="button" class="primary btn" data-new>+ \u041D\u043E\u0432\u044B\u0439 \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437</button></div><div class="preorder-filters"><label>\u041F\u043E\u0438\u0441\u043A<input type="search" data-search placeholder="\u0424\u0418\u041E, \u0442\u0435\u043B\u0435\u0444\u043E\u043D, \u0442\u0435\u0445\u043D\u0438\u043A\u0430, \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C \u0438\u043B\u0438 \u043D\u043E\u043C\u0435\u0440" maxlength="200"></label><label>\u0421\u0442\u0430\u0442\u0443\u0441<select data-status>'.concat(options({ active: "\u0412\u0441\u0435 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u0435", ...statuses, archive: "\u0410\u0440\u0445\u0438\u0432", all: "\u0412\u0441\u0435 \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B" }, "active"), '</select></label><label>\u0421\u043E\u0437\u0434\u0430\u043D \u0441<input type="date" data-from></label><label>\u041F\u043E<input type="date" data-to></label><label>\u041F\u043E\u0440\u044F\u0434\u043E\u043A<select data-sort><option value="created">\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043D\u043E\u0432\u044B\u0435</option><option value="expected">\u041F\u043E \u0434\u0430\u0442\u0435 \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u044F</option></select></label></div><p data-message role="status"></p><div data-records aria-live="polite"></div><div class="preorder-pagination"><span data-count></span><div><button type="button" data-prev>\u041D\u0430\u0437\u0430\u0434</button><button type="button" data-next>\u0414\u0430\u043B\u0435\u0435</button></div></div>');
+    const $2 = (selector) => root.querySelector(selector);
+    let offset = 0, generation = 0, searchTimer, poll2, dialog, dirty = false, saving = false, opening = false, disposed = false;
+    const flag = (value) => {
+      dirty = value;
+      onDirty(value || saving);
+    };
+    window.fastgoPreordersDirty = () => root.isConnected && (dirty || saving);
+    const beforeUnload = (e) => {
+      if (root.isConnected && (dirty || saving)) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    function message2(value, error = false) {
+      $2("[data-message]").textContent = value;
+      $2("[data-message]").classList.toggle("error", error);
+    }
+    async function load2() {
+      const current = ++generation;
+      if (disposed || !root.isConnected) return;
+      message2("\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B\u2026");
+      try {
+        const result = await call2("preorders", { search: $2("[data-search]").value, status: $2("[data-status]").value, from: $2("[data-from]").value, to: $2("[data-to]").value, sort: $2("[data-sort]").value, offset });
+        if (current !== generation || disposed || !root.isConnected) return;
+        $2("[data-records]").innerHTML = result.items.length ? '<div class="preorder-table"><table><thead><tr><th>\u041D\u043E\u043C\u0435\u0440 \u0438 \u0434\u0430\u0442\u044B</th><th>\u041A\u043B\u0438\u0435\u043D\u0442</th><th>\u0427\u0442\u043E \u043E\u0436\u0438\u0434\u0430\u0435\u0442</th><th>\u041F\u0440\u0435\u0434\u043E\u043F\u043B\u0430\u0442\u0430</th><th>\u0421\u0442\u0430\u0442\u0443\u0441</th><th></th></tr></thead><tbody>'.concat(result.items.map((r) => "<tr><td><b>".concat(esc2(r.number), "</b><small>\u0421\u043E\u0437\u0434\u0430\u043D ").concat(date(r.created_at), "</small><small>\u041E\u0436\u0438\u0434\u0430\u0435\u043C: ").concat(date(r.expected_on), "</small></td><td>").concat(esc2(fullName(r)), '<small><a href="tel:').concat(esc2(r.phone), '">').concat(esc2(r.phone), "</a></small></td><td>").concat(r.items.map((item) => '<span class="preorder-item-summary">'.concat(esc2(item.name), " \xB7 ").concat(item.quantity, " \u0448\u0442.<small>").concat(item.kind === "equipment" ? "\u0422\u0435\u0445\u043D\u0438\u043A\u0430" : "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C", "</small></span>")).join(""), '</td><td class="preorder-amount">').concat(money3(r.prepayment), '</td><td><span class="preorder-status ').concat(esc2(r.status), '">').concat(esc2(statuses[r.status]), '</span></td><td><button type="button" data-open="').concat(esc2(r.id), '">\u041E\u0442\u043A\u0440\u044B\u0442\u044C</button></td></tr>')).join(""), "</tbody></table></div>") : '<div class="preorder-empty">\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u043E\u0432 \u043F\u043E \u044D\u0442\u0438\u043C \u0443\u0441\u043B\u043E\u0432\u0438\u044F\u043C \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.<br>\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041D\u043E\u0432\u044B\u0439 \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\xBB, \u0447\u0442\u043E\u0431\u044B \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u043A\u043B\u0438\u0435\u043D\u0442\u0430.</div>';
+        $2("[data-count]").textContent = "\u0417\u0430\u043F\u0438\u0441\u0435\u0439: ".concat(result.count, " \xB7 \u041F\u0440\u0435\u0434\u043E\u043F\u043B\u0430\u0442\u0430: ").concat(money3(result.prepayment_total));
+        $2("[data-prev]").disabled = offset <= 0;
+        $2("[data-next]").disabled = offset + result.limit >= result.count;
+        for (const selector of ["[data-prev]", "[data-next]"]) $2(selector).dataset.unavailable = String($2(selector).disabled);
+        root.querySelectorAll("[data-open]").forEach((button) => button.onclick = () => void open(button.dataset.open));
+        message2("");
+      } catch (error) {
+        if (current === generation && !disposed && root.isConnected) message2(error.message, true);
+      }
+    }
+    function close(force = false) {
+      if (saving && !force) return;
+      if (dirty && !force && !confirm("\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437 \u0431\u0435\u0437 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439?")) return;
+      dialog == null ? void 0 : dialog.close();
+      dialog == null ? void 0 : dialog.remove();
+      dialog = null;
+      saving = false;
+      flag(false);
+    }
+    async function open(id) {
+      if (dialog || opening) return;
+      opening = true;
+      let record, history = [], historyCount = 0;
+      try {
+        if (id) {
+          const result = await call2("preorder_get", { id });
+          if (disposed || !root.isConnected) return;
+          record = result.record;
+          history = result.history;
+          historyCount = result.history_count;
+        }
+      } catch (error2) {
+        message2(error2.message, true);
+        return;
+      } finally {
+        opening = false;
+      }
+      const value = record || { id: crypto.randomUUID(), revision: 0, first_name: "", last_name: "", middle_name: "", phone: "", prepayment: 0, expected_on: "", note: "", status: "waiting", items: [] };
+      dialog = document.createElement("dialog");
+      dialog.className = "preorder-dialog fg-preorders";
+      dialog.setAttribute("aria-label", record ? "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437 " + record.number : "\u041D\u043E\u0432\u044B\u0439 \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437");
+      const field = (name, label, type = "text", required = false) => '<label class="preorder-field">'.concat(label, '<input name="').concat(name, '" type="').concat(type, '" value="').concat(esc2(value[name]), '"').concat(required ? " required" : "", " ").concat(type === "text" ? 'maxlength="80"' : "", "></label>");
+      dialog.innerHTML = '<form><div class="preorder-dialog-head"><div><h2>'.concat(record ? esc2(record.number) : "\u041D\u043E\u0432\u044B\u0439 \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437", "</h2>").concat(record ? "<p>\u0421\u043E\u0437\u0434\u0430\u043D ".concat(date(record.created_at, true), " \xB7 \u0418\u0437\u043C\u0435\u043D\u0451\u043D ").concat(date(record.updated_at, true), "</p>") : "", '</div><button type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043E\u043A\u043D\u043E">\xD7</button></div><h3>\u041A\u043B\u0438\u0435\u043D\u0442</h3><div class="preorder-customer">').concat(field("last_name", "\u0424\u0430\u043C\u0438\u043B\u0438\u044F", "text", true)).concat(field("first_name", "\u0418\u043C\u044F", "text", true)).concat(field("middle_name", "\u041E\u0442\u0447\u0435\u0441\u0442\u0432\u043E")).concat(field("phone", "\u0422\u0435\u043B\u0435\u0444\u043E\u043D", "tel", true), '</div><h3>\u0427\u0442\u043E \u043E\u0436\u0438\u0434\u0430\u0435\u0442 \u043A\u043B\u0438\u0435\u043D\u0442</h3><p class="preorder-hint">\u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0438 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043F\u043E\u0434\u0441\u043A\u0430\u0437\u043A\u0443. \u0415\u0441\u043B\u0438 \u0442\u043E\u0432\u0430\u0440\u0430 \u0435\u0449\u0451 \u043D\u0435\u0442 \u0432 \u0431\u0430\u0437\u0435, \u0432\u043F\u0438\u0448\u0438\u0442\u0435 \u0435\u0433\u043E \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0432\u0440\u0443\u0447\u043D\u0443\u044E.</p><div data-lines></div><button type="button" data-add>+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E</button><div class="preorder-payment">').concat(field("prepayment", "\u041F\u0440\u0435\u0434\u043E\u043F\u043B\u0430\u0442\u0430, \u20BD", "number", true)).concat(field("expected_on", "\u041E\u0436\u0438\u0434\u0430\u0435\u043C\u0430\u044F \u0434\u0430\u0442\u0430", "date"), '<label>\u0421\u0442\u0430\u0442\u0443\u0441<select name="status" aria-label="\u0421\u0442\u0430\u0442\u0443\u0441">').concat(options(statuses, value.status), '</select></label></div><label>\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439<textarea name="note" rows="2" maxlength="2000">').concat(esc2(value.note), '</textarea></label><p class="preorder-hint">\u0417\u0434\u0435\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u0441\u0443\u043C\u043C\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u043E\u0439 \u043F\u0440\u0435\u0434\u043E\u043F\u043B\u0430\u0442\u044B. \u0420\u0430\u0441\u0447\u0451\u0442 \u0438 \u0447\u0435\u043A \u043E\u0444\u043E\u0440\u043C\u043B\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0441\u0441\u0435.</p><div data-error role="alert" class="error"></div><div class="preorder-dialog-actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button type="submit" class="primary btn">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437</button></div>').concat(record ? '<section class="preorder-history"><h3>\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439</h3><div data-history></div><button type="button" data-history-more hidden>\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451</button></section>' : "", "</form>");
+      root.append(dialog);
+      dialog.showModal();
+      const form = dialog.querySelector("form"), lines = dialog.querySelector("[data-lines]"), error = dialog.querySelector("[data-error]");
+      let historyOffset = history.length;
+      form.elements.prepayment.min = "0";
+      form.elements.prepayment.max = "100000000";
+      form.elements.prepayment.step = "0.01";
+      form.elements.phone.maxLength = 24;
+      form.addEventListener("input", () => flag(true));
+      form.addEventListener("change", () => flag(true));
+      dialog.querySelectorAll("[data-close]").forEach((button) => button.onclick = () => close());
+      dialog.oncancel = (e) => {
+        e.preventDefault();
+        close();
+      };
+      function suggest(input, { kind, select }) {
+        const box = document.createElement("div");
+        box.className = "preorder-suggestions";
+        box.hidden = true;
+        box.setAttribute("role", "listbox");
+        box.id = "preorder-hints-" + crypto.randomUUID();
+        input.parentElement.append(box);
+        input.setAttribute("role", "combobox");
+        input.setAttribute("aria-autocomplete", "list");
+        input.setAttribute("aria-controls", box.id);
+        input.setAttribute("aria-expanded", "false");
+        let timer, sequence = 0, selected = -1;
+        const hide = () => {
+          box.hidden = true;
+          input.setAttribute("aria-expanded", "false");
+        };
+        input.addEventListener("input", () => {
+          clearTimeout(timer);
+          const q = input.value.trim(), seq = ++sequence;
+          hide();
+          if (q.length < 2) return;
+          timer = setTimeout(async () => {
+            if (!input.isConnected) return;
+            try {
+              const matches = await call2("preorder_suggestions", { kind: typeof kind === "function" ? kind() : kind, search: q });
+              if (seq !== sequence || !input.isConnected) return;
+              selected = -1;
+              box.replaceChildren();
+              for (const match of matches) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.setAttribute("role", "option");
+                button.textContent = match.full_name ? match.full_name + " \xB7 " + match.phone : match.name + (match.sku ? " \xB7 " + match.sku : "") + " \xB7 " + (match.kind === "equipment" ? "\u0422\u0435\u0445\u043D\u0438\u043A\u0430" : "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C");
+                button.onclick = () => {
+                  select(match);
+                  flag(true);
+                  hide();
+                  input.focus();
+                };
+                box.append(button);
+              }
+              box.hidden = !matches.length;
+              input.setAttribute("aria-expanded", String(matches.length > 0));
+            } catch (e) {
+              hide();
+            }
+          }, 180);
+        });
+        input.addEventListener("keydown", (e) => {
+          const buttons = [...box.querySelectorAll("button")];
+          if (box.hidden || !buttons.length) return;
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            hide();
+          } else if (["ArrowDown", "ArrowUp"].includes(e.key)) {
+            e.preventDefault();
+            selected = (selected + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+            buttons.forEach((button, i) => button.classList.toggle("selected", i === selected));
+          } else if (e.key === "Enter" && selected >= 0) {
+            e.preventDefault();
+            buttons[selected].click();
+          }
+        });
+        input.addEventListener("blur", () => setTimeout(() => {
+          if (!box.contains(document.activeElement)) hide();
+        }, 180));
+      }
+      const chooseCustomer = (match) => {
+        const names = match.full_name.split(/\s+/);
+        form.elements.last_name.value = names[0] || "";
+        form.elements.first_name.value = names[1] || "";
+        form.elements.middle_name.value = names.slice(2).join(" ");
+        form.elements.phone.value = match.phone || "";
+      };
+      for (const name of ["last_name", "first_name", "phone"]) suggest(form.elements[name], { kind: "customer", select: chooseCustomer });
+      function addLine(item = { kind: "part", name: "", quantity: 1, product_id: null }) {
+        if (lines.children.length >= 20) {
+          error.textContent = "\u0412 \u043E\u0434\u043D\u043E\u043C \u043F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u0435 \u043C\u043E\u0436\u043D\u043E \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0434\u043E 20 \u043F\u043E\u0437\u0438\u0446\u0438\u0439";
+          return;
+        }
+        const line = document.createElement("div");
+        line.className = "preorder-line";
+        line.dataset.productId = item.product_id || "";
+        line.innerHTML = "<label>\u0422\u0438\u043F<select data-kind>".concat(options({ part: "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C", equipment: "\u0422\u0435\u0445\u043D\u0438\u043A\u0430" }, item.kind), '</select></label><label class="preorder-field preorder-product">\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input data-name value="').concat(esc2(item.name), '" maxlength="200" required autocomplete="off" placeholder="\u041D\u0430\u043F\u0440\u0438\u043C\u0435\u0440: \u043A\u0430\u043C\u0435\u0440\u0430 10 \xD7 2,5"></label><label>\u041A\u043E\u043B-\u0432\u043E<input data-qty type="number" min="1" max="1000" step="1" value="').concat(item.quantity, '" required></label><button type="button" data-remove aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E">\xD7</button>');
+        lines.append(line);
+        const name = line.querySelector("[data-name]"), type = line.querySelector("[data-kind]");
+        name.oninput = () => {
+          line.dataset.productId = "";
+        };
+        type.onchange = () => {
+          line.dataset.productId = "";
+        };
+        line.querySelector("[data-remove]").onclick = () => {
+          line.remove();
+          flag(true);
+        };
+        suggest(name, { kind: () => type.value, select: (match) => {
+          name.value = match.name;
+          type.value = match.kind;
+          line.dataset.productId = match.id;
+        } });
+      }
+      (value.items.length ? value.items : [void 0]).forEach(addLine);
+      dialog.querySelector("[data-add]").onclick = () => {
+        addLine();
+        flag(true);
+      };
+      const showHistory = (entries) => {
+        const target = dialog == null ? void 0 : dialog.querySelector("[data-history]");
+        if (!target) return;
+        for (const entry of entries) {
+          const row = document.createElement("p");
+          row.innerHTML = "<b>".concat(date(entry.at, true), "</b> \xB7 ").concat(esc2(entry.actor_name || "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A"), "<br>").concat(esc2(statuses[entry.status] || entry.status), " \xB7 \u041F\u0440\u0435\u0434\u043E\u043F\u043B\u0430\u0442\u0430 ").concat(money3(entry.prepayment), " \xB7 \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u2116 ").concat(entry.revision);
+          target.append(row);
+        }
+        const more = dialog.querySelector("[data-history-more]");
+        if (more) more.hidden = historyOffset >= historyCount;
+      };
+      if (record) {
+        showHistory(history);
+        dialog.querySelector("[data-history-more]").onclick = async (e) => {
+          e.target.disabled = true;
+          try {
+            const result = await call2("preorder_get", { id: value.id, history_offset: historyOffset });
+            if (!dialog) return;
+            historyCount = result.history_count;
+            historyOffset += result.history.length;
+            showHistory(result.history);
+          } catch (ex) {
+            error.textContent = ex.message;
+          } finally {
+            if (e.target.isConnected) e.target.disabled = false;
+          }
+        };
+      }
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        if (saving || !form.reportValidity()) return;
+        error.textContent = "";
+        if (!lines.children.length) {
+          error.textContent = "\u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0445\u043E\u0442\u044F \u0431\u044B \u043E\u0434\u043D\u0443 \u043F\u043E\u0437\u0438\u0446\u0438\u044E";
+          return;
+        }
+        const payload = { id: value.id, revision: value.revision, first_name: form.elements.first_name.value.trim(), last_name: form.elements.last_name.value.trim(), middle_name: form.elements.middle_name.value.trim(), phone: form.elements.phone.value, prepayment: Number(form.elements.prepayment.value), expected_on: form.elements.expected_on.value, status: form.elements.status.value, note: form.elements.note.value, items: [...lines.children].map((line) => ({ kind: line.querySelector("[data-kind]").value, name: line.querySelector("[data-name]").value, quantity: Number(line.querySelector("[data-qty]").value), product_id: line.dataset.productId || null })) };
+        saving = true;
+        onDirty(true);
+        form.querySelectorAll("button,input,select,textarea").forEach((button) => button.disabled = true);
+        let pending;
+        try {
+          pending = await operation(localStorage, actor, "preorder_save", payload);
+          const result = await call2("preorder_save", pending.params);
+          if (!(result == null ? void 0 : result.id) || !result.revision) throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u0442\u0443 \u0436\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E.");
+          pending.finish();
+          saving = false;
+          flag(false);
+          close(true);
+          await load2();
+          message2("\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437 " + result.number + " \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D");
+        } catch (ex) {
+          if (error.isConnected) error.textContent = ex.message;
+        } finally {
+          saving = false;
+          onDirty(dirty);
+          if (form.isConnected) form.querySelectorAll("button,input,select,textarea").forEach((button) => button.disabled = false);
+        }
+      };
+      flag(false);
+      form.elements.last_name.focus();
+    }
+    $2("[data-new]").onclick = () => void open();
+    $2("[data-search]").oninput = () => {
+      clearTimeout(searchTimer);
+      offset = 0;
+      searchTimer = setTimeout(() => void load2(), 250);
+    };
+    for (const selector of ["[data-status]", "[data-from]", "[data-to]", "[data-sort]"]) $2(selector).onchange = () => {
+      offset = 0;
+      void load2();
+    };
+    $2("[data-prev]").onclick = () => {
+      offset = Math.max(0, offset - 50);
+      void load2();
+    };
+    $2("[data-next]").onclick = () => {
+      offset += 50;
+      void load2();
+    };
+    function dispose() {
+      disposed = true;
+      clearTimeout(searchTimer);
+      clearInterval(poll2);
+      window.removeEventListener("beforeunload", beforeUnload);
+      if (dialog) {
+        dialog.close();
+        dialog.remove();
+        dialog = null;
+      }
+      dirty = saving = false;
+      onDirty(false);
+    }
+    const ready = load2();
+    poll2 = setInterval(() => {
+      if (!root.isConnected) dispose();
+      else if (!dialog && !saving && document.visibilityState !== "hidden") void load2();
+    }, 2e4);
+    return { ready, dispose, hasDraft: () => dirty || saving };
+  }
+
   // warehouse/app.js
   var formValues = (form) => {
     const p = {};
@@ -2148,6 +2485,7 @@
   var lastActivity = Date.now();
   var stopScanner;
   var stopUSB;
+  var preorderView;
   var serviceLink = $("warehouse-service");
   if (serviceLink) serviceLink.hidden = !(window.fastgoDesktop || new URLSearchParams(location.search).get("unified") === "1");
   serviceLink == null ? void 0 : serviceLink.addEventListener("click", (e) => {
@@ -2222,7 +2560,7 @@
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
     var _a2;
-    return !busy && ["home", "inventory", "holdings", "login", "connection"].includes(screen) && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    return !busy && ["home", "inventory", "holdings", "preorders", "login", "connection"].includes(screen) && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
     try {
@@ -2239,9 +2577,13 @@
     }
   });
   function shell(html) {
+    if (preorderView) {
+      preorderView.dispose();
+      preorderView = null;
+    }
     document.body.dataset.screen = screen;
     const section = document.getElementById("warehouse-section");
-    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
+    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
     if (stopUSB) {
       stopUSB();
       stopUSB = null;
@@ -2258,11 +2600,21 @@
     if (!terminal) return "";
     return '<div class="subnav"><button id="back">\u2190 \u0413\u043B\u0430\u0432\u043D\u043E\u0435</button>' + (!terminal ? '<button id="inventory">\u041E\u0441\u0442\u0430\u0442\u043A\u0438</button><button id="shift">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443</button>' + (["owner", "developer"].includes(memberRole) ? '<button id="master-stock">\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</button>' : "") : "") + "</div>";
   }
+  async function showPreorders() {
+    screen = "preorders";
+    shell('<h1>\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B</h1><div id="preorder-root"></div>');
+    preorderView = mountPreorders({ root: $("preorder-root"), call: serviceApi, actor: userId() });
+    await preorderView.ready;
+  }
   function bindNav() {
+    if ($("preorders")) {
+      $("preorders").hidden = !preorderAccess({ role: memberRole });
+      $("preorders").onclick = () => run(showPreorders);
+    }
     if ($("nav-receipt")) $("nav-receipt").onclick = () => run(() => live.open("receipt"));
     if ($("nav-pay")) $("nav-pay").onclick = () => run(() => live.open("sale"));
     if ($("master-stock")) $("master-stock").hidden = !["owner", "developer"].includes(memberRole);
-    document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
+    document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "preorders" ? "preorders" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
     applyReadOnly();
     if ($("back")) $("back").onclick = home;
     if ($("inventory")) $("inventory").onclick = () => run(inventory);
@@ -2556,7 +2908,7 @@
   }
   function canReceiveIncoming() {
     var _a2;
-    return !busy && !job && !draft && ["home", "live", "inventory", "holdings"].includes(screen) && !document.querySelector("dialog[open]") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not(#live-code):not(#filter),textarea,select"));
+    return !busy && !job && !draft && ["home", "live", "inventory", "holdings", "preorders"].includes(screen) && !document.querySelector("dialog[open]") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not(#live-code):not(#filter),textarea,select"));
   }
   var autoQueueSeen = /* @__PURE__ */ new Set();
   async function poll() {
@@ -2700,7 +3052,7 @@
   }
   var lastDeviceStatus = 0;
   async function desktopStatus() {
-    var _a2, _b, _c, _d, _e, _f;
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
     const el = $("desktop-status");
     if (!el) return;
     if (((_a2 = window.fastgoInstalledApp) == null ? void 0 : _a2.platform) === "ios") {
@@ -2715,17 +3067,18 @@
       const s = await window.warehouseDesktop.desktopStatus(), update = s.update || {};
       if (device && userId() && Date.now() - lastDeviceStatus > 6e4) {
         lastDeviceStatus = Date.now();
-        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network }).catch(() => {
+        const printing = await ((_d = (_c = window.warehouseDesktop).printers) == null ? void 0 : _d.call(_c).catch(() => null));
+        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing }).catch(() => {
         });
       }
       let note = "";
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
-      if ((_c = s.terminalUpdate) == null ? void 0 : _c.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
-      if (((_d = s.recovery) == null ? void 0 : _d.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_e = s.recovery) == null ? void 0 : _e.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_f = s.recovery) == null ? void 0 : _f.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
+      if ((_e = s.terminalUpdate) == null ? void 0 : _e.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
+      if (((_f = s.recovery) == null ? void 0 : _f.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_g = s.recovery) == null ? void 0 : _g.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_h = s.recovery) == null ? void 0 : _h.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {

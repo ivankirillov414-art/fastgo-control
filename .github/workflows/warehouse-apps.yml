@@ -2,9 +2,9 @@ name: FastGo Warehouse Apps
 on:
  push:
   branches: [main]
-  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+  paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -16,7 +16,7 @@ jobs:
    - uses: actions/setup-node@v4
      with: {node-version: '24'}
    - run: node scripts/build-warehouse-web.cjs --check
-   - run: node --test tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs tests/avito.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs desktop/tests/barcode-print.test.cjs desktop/tests/avito-toast.test.cjs
+   - run: node --test tests/preorders.test.mjs tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs tests/avito.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs desktop/tests/barcode-print.test.cjs desktop/tests/avito-toast.test.cjs
    - run: node --test warehouse-desktop/tests/*.test.cjs desktop/tests/printer-profiles.test.cjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
@@ -36,6 +36,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-native-unknown-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-barcode-print.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-printer-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-preorders-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-avito-notifications.cjs
  windows:
