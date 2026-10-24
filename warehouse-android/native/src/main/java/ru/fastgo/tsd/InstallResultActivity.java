@@ -7,7 +7,7 @@ public final class InstallResultActivity extends Activity {
  private void handle(Intent intent){
   int status=intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE);
   try(LocalStore store=new LocalStore(this)){
-   if(status==PackageInstaller.STATUS_PENDING_USER_ACTION){Intent confirmation=intent.getParcelableExtra(Intent.EXTRA_INTENT);if(confirmation==null)throw new IllegalStateException("Android не передал подтверждение установки");startActivity(confirmation);finish();return;}
+   if(status==PackageInstaller.STATUS_PENDING_USER_ACTION){Intent confirmation=intent.getParcelableExtra(Intent.EXTRA_INTENT);if(confirmation==null)throw new IllegalStateException("Android не передал подтверждение установки");startActivity(confirmation);return;}
    if(status==PackageInstaller.STATUS_SUCCESS){String version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;store.put("update_installed_version",version);store.put("update_installed_at",Long.toString(System.currentTimeMillis()));store.put("update_check_error","");UpdateJob.schedule(this,true);}
    else store.put("update_check_error",status==PackageInstaller.STATUS_FAILURE_ABORTED?"Установка отложена пользователем":"Android не установил обновление ("+status+")");
   }catch(Exception error){try(LocalStore store=new LocalStore(this)){store.put("update_check_error",error.getMessage()==null?"Ошибка установки APK":error.getMessage());}}
