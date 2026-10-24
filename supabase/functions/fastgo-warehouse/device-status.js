@@ -12,6 +12,10 @@ export async function deviceStatus(action,p,{db,device,stationId}){
  if(Number.isSafeInteger(p.version_code)&&p.version_code>0)details.version_code=p.version_code;
  if(Number.isSafeInteger(p.pending_writes)&&p.pending_writes>=0)details.pending_writes=p.pending_writes;
  if(p.observer==='companion'&&app==='warehouse')details.observer='companion';
+ if(app==='warehouse'&&p.network&&typeof p.network==='object'){
+  const source=p.network,flag=x=>typeof x==='boolean'?x:null,integer=(x,max)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:null;
+  details.network={sampled_at:typeof source.sampled_at==='string'&&Number.isFinite(Date.parse(source.sampled_at))?new Date(source.sampled_at).toISOString():null,online:flag(source.online),wifi_signal_percent:integer(source.wifi_signal_percent,100),disconnects_24h:integer(source.disconnects_24h,100000),api_ok:flag(source.api_ok),feed_ok:flag(source.feed_ok),download_ok:flag(source.download_ok),download_bytes_per_second:integer(Math.round(source.download_bytes_per_second),1e12),stalled_seconds:integer(source.stalled_seconds,86400),codes:Array.isArray(source.codes)?source.codes.filter(x=>['offline','weak_wifi','wifi_history','api_unreachable','feed_unreachable','download_unreachable','dns_failure','download_stalled','reachable','pending'].includes(x)).slice(0,10):[]};
+ }
  const row={device_id:device.id,app,version:p.version,station_id:stationId,pending_documents:p.pending_documents??null,details,last_seen:new Date().toISOString()};
  await db('workshop_device_status','on_conflict=device_id,app','POST',row,'resolution=merge-duplicates,return=minimal');
  return {device_id:device.id,app,version:row.version,last_seen:row.last_seen};

@@ -4,7 +4,7 @@ on:
   branches: [main]
   paths: ['warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/build-warehouse-web.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-warehouse*.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -17,6 +17,7 @@ jobs:
      with: {node-version: '24'}
    - run: node scripts/build-warehouse-web.cjs --check
    - run: node --test tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs tests/avito.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs desktop/tests/barcode-print.test.cjs desktop/tests/avito-toast.test.cjs
+   - run: node --test warehouse-desktop/tests/*.test.cjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
@@ -26,6 +27,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-receipt-cancel-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-auto-open-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-safe-refresh-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-network-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-product-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-catalog-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-price-browser.cjs
@@ -36,7 +38,6 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-avito-notifications.cjs
  windows:
-  if: github.event_name != 'pull_request'
   needs: test
   runs-on: windows-latest
   steps:
@@ -58,7 +59,11 @@ jobs:
       npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
       $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/warehouse-playwright"
       node scripts/check-warehouse-bundled-desktop.cjs
+      node warehouse-desktop/tests/network-windows-probe.cjs
       node warehouse-desktop/check-package.cjs
+   - name: Verify in-place upgrade and correct Russian installation name
+     shell: pwsh
+     run: ./warehouse-desktop/tests/installer-upgrade.ps1
    - uses: actions/upload-artifact@v4
      with:
       name: warehouse-windows
@@ -68,6 +73,8 @@ jobs:
        warehouse-desktop/dist/latest.yml
        warehouse-desktop/dist/warehouse-package-verification.json
        warehouse-desktop/dist/warehouse-window.png
+       warehouse-desktop/dist/network-window.png
+       warehouse-desktop/dist/warehouse-upgrade-verification.json
  android:
   if: github.event_name != 'pull_request'
   needs: test
@@ -88,6 +95,7 @@ jobs:
      with: {name: warehouse-android, path: warehouse-android/release/*.apk}
 
  publish:
+  if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
   needs: [windows,android]
   runs-on: ubuntu-latest
   steps:

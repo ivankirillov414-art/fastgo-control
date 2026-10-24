@@ -12,6 +12,7 @@ warehouse-desktop/node_modules/
 warehouse-desktop/pnpm-lock.yaml
 warehouse-desktop/platform-tools/
 warehouse-desktop/dist/
+warehouse-desktop/test-results/
 
 warehouse-desktop/updates.cjs
 warehouse-desktop/web/

@@ -32,3 +32,11 @@ test('receipt rejects forged app kinds, invalid counts and malformed versions',a
  for(const p of [{app:'desktop',version:'2.1.4'},{app:'tsd',version:'invalid'},{app:'tsd',version:'2.1.4',pending_documents:-1},{app:'other',version:'1.0.0'}])await assert.rejects(()=>deviceStatus('device_status',p,{db:noWrites,device:{id:randomUUID(),kind:'terminal'},stationId:randomUUID()}));
  assert.equal(await deviceStatus('catalog',{},{}),undefined);
 });
+test('warehouse network receipt stores bounded aggregate fields and drops private network details',async()=>{
+ const writes=[],network={sampled_at:'2026-10-24T11:30:00Z',online:true,wifi_signal_percent:28,disconnects_24h:3,api_ok:true,feed_ok:true,download_ok:false,download_bytes_per_second:262144,stalled_seconds:50,codes:['weak_wifi','download_stalled','forged'],ssid:'PRIVATE_SSID',ipv4:'PRIVATE_IP',password:'PRIVATE_PASSWORD',events:['PRIVATE_EVENT']};
+ await deviceStatus('device_status',{app:'warehouse',version:'1.0.19',network},{device:{id:randomUUID(),kind:'desktop'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
+ const details=writes[0][3].details;assert.equal(details.network.wifi_signal_percent,28);assert.deepEqual(details.network.codes,['weak_wifi','download_stalled']);assert(!JSON.stringify(details).includes('PRIVATE_'));
+ network.wifi_signal_percent=101;network.stalled_seconds=-1;network.download_bytes_per_second=Infinity;network.online='true';network.sampled_at='bad';writes.length=0;
+ await deviceStatus('device_status',{app:'warehouse',version:'1.0.19',network},{device:{id:randomUUID(),kind:'desktop'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
+ assert.equal(writes[0][3].details.network.online,null);assert.equal(writes[0][3].details.network.wifi_signal_percent,null);assert.equal(writes[0][3].details.network.stalled_seconds,null);assert.equal(writes[0][3].details.network.download_bytes_per_second,null);assert.equal(writes[0][3].details.network.sampled_at,null);
+});
