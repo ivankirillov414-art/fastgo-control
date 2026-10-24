@@ -17,3 +17,7 @@ test('manual update accepts a saved repair and its own progress window; automati
  assert.equal(x.window.fastgoUpdateSafe(),false);assert.equal(x.window.fastgoUpdateSafe(true),true);
  x.setDirty(true);assert.match(x.window.fastgoUpdateBlockReason(true),/Сохраните/);assert.equal(x.window.fastgoLockForUpdate(true),false);
 });
+test('preorder browsing restarts automatically after idle even with a focused list filter, while a draft or dialog blocks it',()=>{
+ const x=setup();x.window.location.hash='#preorders';x.setTime(120001);x.setFocus(true);x.document.activeElement.closest=()=>({});assert.equal(x.window.fastgoUpdateSafe(),true);
+ x.events.change();assert.equal(x.window.fastgoUpdateSafe(),false);x.setTime(240002);assert.equal(x.window.fastgoUpdateSafe(),true);x.setDirty(true);assert.equal(x.window.fastgoUpdateSafe(),false);x.setDirty(false);x.setModal(true);assert.equal(x.window.fastgoUpdateSafe(),false);
+});
