@@ -106,7 +106,7 @@ test('code-free connection never accepts a request without a user session',async
 
 test('live empty basket reaches its station, revision never rolls back and old checkout cannot charge it',async()=>{
  const h=await harness(),request_id=randomUUID();
- assert.equal((await h.request('draft_sync',{request_id,kind:'sale',revision:1,items:[]},'terminal')).status,200);
+ assert.equal((await h.request('draft_sync',{request_id,kind:'sale',revision:1,items:[],active:true},'terminal')).status,200);
  assert.equal((await h.request('live_jobs')).data.length,1);
  assert.equal((await h.request('draft_sync',{request_id,kind:'sale',revision:2,items:[{part_id:part,quantity:2}]},'terminal')).status,200);
  await h.request('draft_sync',{request_id,kind:'sale',revision:1,items:[]},'terminal');assert.equal(h.queue[0].payload.items[0].quantity,2);
@@ -133,7 +133,7 @@ test('live base price, receipt, cancellation and terminal isolation',async()=>{
  const receipt=randomUUID();await h.request('draft_sync',{request_id:receipt,kind:'receipt',revision:1,items:[{part_id:part,quantity:3}]},'terminal');
  const received=await h.request('live_receive',{id:receipt,revision:1},'terminal');assert.equal(received.status,200);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],7);
  await h.request('live_receive',{id:receipt,revision:1},'terminal');assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],7);
- const empty=randomUUID();await h.request('draft_sync',{request_id:empty,kind:'sale',revision:1,items:[]},'terminal');
+ const empty=randomUUID();await h.request('draft_sync',{request_id:empty,kind:'sale',revision:1,items:[],active:true},'terminal');
  assert.equal((await h.request('draft_close',{id:empty},'terminal')).status,200);assert.equal((await h.request('live_pay',{id:empty,revision:1,payment_method:'cash'},'terminal')).data.cancelled,true);
  const other=randomUUID();h.devices.push({id:other,kind:'terminal',station_id:station,active:true,token_hash:await digest('other')});
  assert.equal((await h.request('live_pay',{id:request_id,device_id:other,device_token:'other',revision:1,payment_method:'cash'},'terminal')).status,403);

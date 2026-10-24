@@ -21,7 +21,7 @@ public final class AppUpdates {
   if(!manual&&System.currentTimeMillis()-last<60000&&!documentsJustClosed)return notice();
   JSONObject meta=new JSONObject(new String(get(MANIFEST+"?t="+System.currentTimeMillis(),16000),"UTF-8"));JSONObject channels=meta.optJSONObject("channels");if(channels!=null&&channels.optJSONObject(context.getPackageName())!=null)meta=channels.getJSONObject(context.getPackageName());PackageInfo own=context.getPackageManager().getPackageInfo(context.getPackageName(),0);
   if(!context.getPackageName().equals(meta.getString("package")))throw new IOException("Канал обновлений относится к другому приложению");
-  store.put("update_last_check",Long.toString(System.currentTimeMillis()));store.put("update_check_error","");
+  store.put("update_last_check",Long.toString(System.currentTimeMillis()));store.put("update_check_error","");store.put("update_background_error","");
   if(meta.getInt("versionCode")<=own.versionCode){new File(context.getCacheDir(),"update.apk").delete();store.put("update_pending_version","");store.put("update_waiting_documents","");return manual?"Установлена актуальная версия "+own.versionName:"";}
   store.put("update_pending_version",meta.getString("versionName"));String blocked=blockers();if(!blocked.isEmpty()){store.put("update_waiting_documents","true");return notice();}store.put("update_waiting_documents","");
   String url=meta.getString("url");if(!url.startsWith("https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/")||!url.endsWith(".apk"))throw new IOException("Недопустимый адрес обновления");

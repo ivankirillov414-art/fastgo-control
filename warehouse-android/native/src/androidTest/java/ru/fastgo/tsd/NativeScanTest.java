@@ -5,6 +5,11 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;import org.junit.runner.RunWith;import static org.junit.Assert.*;
 import android.widget.EditText;import android.view.inputmethod.*;import org.json.*;import java.lang.reflect.*;
 @RunWith(AndroidJUnit4.class) public final class NativeScanTest {
+ @Test public void backgroundCompletionClearsOnlyTheCompletedActiveScreen()throws Exception{
+  try(LocalStore store=new LocalStore(InstrumentationRegistry.getInstrumentation().getTargetContext())){
+   String previous=store.get("active_document");JSONObject first=ScanDocument.create("repair"),second=ScanDocument.create("receipt");store.save(first);store.save(second);store.put("active_document",second.getString("id"));store.complete(first.getString("id"),1);assertEquals(second.getString("id"),store.get("active_document"));store.requestCancel(second.getString("id"));store.complete(second.getString("id"),1);assertEquals("",store.get("active_document"));store.put("active_document",previous);
+  }
+ }
  private Object field(Object object,String name)throws Exception{Field f=object.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(object);}
  private void invoke(Object object,String name,Class<?>[] types,Object... args)throws Exception{Method m=object.getClass().getDeclaredMethod(name,types);m.setAccessible(true);m.invoke(object,args);}
  @Test public void apkInstallWaitsForAllDocumentsIncludingHiddenAndCancelledPendingDocuments()throws Exception{

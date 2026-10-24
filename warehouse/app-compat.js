@@ -1255,7 +1255,7 @@
       }
       if (!draft2 || locked || draft2.acked >= draft2.revision) return;
       const local = draft2, body = JSON.parse(JSON.stringify(local));
-      syncing = call2("draft_sync", { request_id: body.id, kind: body.kind, revision: body.revision, items: body.items, note: body.note || "" }).then((r) => {
+      syncing = call2("draft_sync", { request_id: body.id, kind: body.kind, revision: body.revision, items: body.items, note: body.note || "", active: active && draft2 === local }).then((r) => {
         if (r.state === "done") {
           if (draft2 === local) finished(r);
           return;
@@ -1797,7 +1797,10 @@
     }
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
-  window.warehouseUpdateSafe = (immediate = false) => !busy && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
+  window.warehouseUpdateSafe = (immediate = false) => {
+    var _a;
+    return !busy && ["home", "inventory", "holdings"].includes(screen) && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !((_a = document.activeElement) == null ? void 0 : _a.matches("input:not([type=search]),textarea,select,[contenteditable]")) && (immediate || Date.now() - lastActivity > 15e3);
+  };
   window.addEventListener("beforeunload", (e) => {
     try {
       live.checkpoint();
@@ -2266,6 +2269,7 @@
       };
     });
   }
+  var lastDeviceStatus = 0;
   async function desktopStatus() {
     var _a, _b, _c;
     const el = $("desktop-status");
@@ -2280,6 +2284,11 @@
     }
     try {
       const s = await window.warehouseDesktop.desktopStatus(), update = s.update || {};
+      if (device && userId() && Date.now() - lastDeviceStatus > 6e4) {
+        lastDeviceStatus = Date.now();
+        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason }).catch(() => {
+        });
+      }
       let note = "";
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
@@ -2330,7 +2339,7 @@
     else void poll();
   });
   void start();
-  var webSafe = (immediate = false) => !busy && !polling && screen === "home" && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open]") && (immediate || Date.now() - lastActivity > 15e3);
+  var webSafe = (immediate = false) => !polling && window.warehouseUpdateSafe(immediate);
   var webUpdater = window.warehouseDesktop || window.fastgoInstalledApp ? null : startWebUpdates({ canApply: async (immediate) => {
     var _a, _b, _c, _d;
     if (!webSafe(immediate)) return false;

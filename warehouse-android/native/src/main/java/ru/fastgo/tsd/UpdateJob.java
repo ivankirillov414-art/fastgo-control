@@ -24,12 +24,18 @@ public final class UpdateJob extends JobService {
   stopped.remove(params.getJobId());executor.execute(()->{
    boolean retry=false;
    try(LocalStore store=new LocalStore(this)){
+    WarehouseApi api=new WarehouseApi(new SecurePrefs(this));
+    // Server-side cancellations must drain while the activity is closed, or a
+    // completed document could hold an otherwise safe APK update forever.
+    try{if(api.device()!=null){new SyncEngine(store,api).sync();store.put("background_sync_error","");}}
+    catch(Exception error){store.put("background_sync_error",error.getMessage()==null?"network_error":error.getMessage());}
     try{
      String message=new AppUpdates(this,store).check(true);
      store.put("update_background_checked_at",Long.toString(System.currentTimeMillis()));
      store.put("update_background_error","");
      if(!store.get("update_pending_version").isEmpty())UpdateNotifications.show(this,"Обновление FastGo",message.isEmpty()?"Обновление готово. Откройте FastGo для установки":message);
     }catch(Exception error){store.put("update_background_error",error.getMessage()==null?"network_error":error.getMessage());retry=true;}
+    DeviceStatus.send(this,store,api);
    }finally{if(!stopped.remove(params.getJobId()))jobFinished(params,retry);}
   });return true;
  }

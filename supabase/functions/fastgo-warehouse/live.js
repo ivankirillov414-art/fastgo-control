@@ -17,6 +17,9 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   const normalized=Array.isArray(p.items)&&!p.items.length?[]:items(p.items);
   const prices=normalized.map(x=>{const source=p.items.find(y=>y.part_id===x.part_id);if(source.custom_price===true){const n=source.unit_price;if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1e8||Math.abs(n*100-Math.round(n*100))>0.00001)fail('Проверьте свою цену');return {...x,custom_price:true,unit_price:n};}return x;});
   const payload={live:true,kind:p.kind,revision:p.revision,items:prices,note:String(p.note||'').slice(0,500),updated_at:new Date().toISOString()};
+  // Native clients keep an empty template for the next scan. Acknowledging that
+  // template must not create a document or keep reopening the laptop window.
+  if(!job&&p.active!==true&&p.revision===1&&!prices.length&&!payload.note)return {id:requestId,state:'queued',payload};
   if(!job){try{await db('workshop_warehouse_queue','','POST',{id:requestId,station_id:stationId,terminal_id:device.id,created_by:actor.id,payload});return {id:requestId,state:'queued',payload};}catch(e){if(e.status!==409)throw e;job=await read();}}
   owns();if(job.terminal_id!==device.id)fail('Этот документ сканируется на другом устройстве',403);
   if(job.payload.kind!==p.kind)fail('Тип документа уже задан',409);
