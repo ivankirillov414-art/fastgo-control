@@ -39,5 +39,5 @@ function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-466
  await route.fulfill({status,json:{data,error},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}});});}
  return {connect,jobs,payments,quote,state};
 }
-async function scan(page,code='FGP-00000001',suffix='Enter'){await page.keyboard.type(code,{delay:5});if(suffix)await page.keyboard.press(suffix);}
+async function scan(page,code='FGP-00000001',suffix='Enter'){await page.bringToFront();await page.keyboard.type(code,{delay:5});if(suffix)await page.keyboard.press(suffix);}
 module.exports={actor,part,second,catalog,launchOptions,serve,backend,scan};
