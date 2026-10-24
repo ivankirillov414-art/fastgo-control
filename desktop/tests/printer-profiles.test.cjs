@@ -4,12 +4,12 @@ const {registerBarcodePrinting}=require('../../warehouse-desktop/barcode-print.c
 function fixture(t){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-printer-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  const preferences=new PrinterProfiles(path.join(dir,'printers.json')),handlers={},windows=[],prints=[],parent={isDestroyed:()=>false,webContents:{mainFrame:{url:'fastgo://app/warehouse.html'}}};
- let queues=[{name:'Thermal_System_Queue',displayName:'Термопринтер кассы'},{name:'Laser_A4',displayName:'Бланки A4',isDefault:true}],result=true,reason='',release;
- parent.webContents.getPrintersAsync=async()=>queues;
+ let queues=[{name:'Thermal_System_Queue',displayName:'Термопринтер кассы'},{name:'Laser_A4',displayName:'Бланки A4',isDefault:true}],result=true,reason='',release,stalled=false,reads=0;
+ parent.webContents.getPrintersAsync=async()=>{reads++;return stalled?new Promise(()=>{}):queues;};
  class Window{constructor(options){this.options=options;this.webContents=new EventEmitter();this.webContents.setWindowOpenHandler=()=>{};this.webContents.print=(options,callback)=>{prints.push(options);if(release)release.callback=()=>callback(result,reason);else callback(result,reason);};windows.push(this);}async loadURL(url){this.url=url;}isDestroyed(){return !!this.destroyed;}destroy(){this.destroyed=true;}}
- const control=registerBarcodePrinting({ipcMain:{handle:(key,fn)=>handlers[key]=fn},BrowserWindow:Window,getWindow:()=>parent,preferences});
+ const control=registerBarcodePrinting({ipcMain:{handle:(key,fn)=>handlers[key]=fn},BrowserWindow:Window,getWindow:()=>parent,preferences,listTimeout:20});
  const event={sender:parent.webContents,senderFrame:parent.webContents.mainFrame},payload={name:'Камера',barcode:'FGP-001',quantity:2,format:'label',svg:'<svg><rect x="0" y="0" width="2" height="72"/></svg>'};
- return {dir,preferences,handlers,event,payload,control,windows,prints,queues:set=>queues=set,fail:()=>{result=false;reason='Print job canceled';},hold:()=>release={}};
+ return {dir,preferences,handlers,event,payload,control,windows,prints,queues:set=>queues=set,fail:()=>{result=false;reason='Print job canceled';},hold:()=>release={},stall:()=>stalled=true,reads:()=>reads};
 }
 test('both app sessions retain the same label printer and size without changing the A4 profile',t=>{
  const f=fixture(t);f.preferences.save({format:'a4',deviceName:'Laser_A4'});f.preferences.save({format:'label',deviceName:'Thermal_System_Queue',widthMm:40,heightMm:30});
@@ -39,4 +39,9 @@ test('printer IPC rejects unrelated windows and subframes before listing, config
  const f=fixture(t),iframe={...f.event,senderFrame:{url:'fastgo://app/warehouse.html'}},other={sender:{},senderFrame:{}};
  for(const event of [iframe,other])for(const name of ['warehouse:printers','warehouse:printerSave','warehouse:printBarcode'])await assert.rejects(()=>f.handlers[name](event,f.payload),/Недоступно/);
  await assert.rejects(()=>f.handlers['warehouse:printerSave'](f.event,{format:'label',deviceName:'Forged'}),/принтер не найден/);assert.equal(f.prints.length,0);assert.deepEqual(f.preferences.read().profiles,{});
+});
+test('a stalled Windows printer service returns a bounded error and retains the chosen queue without repeated background reads',async t=>{
+ const f=fixture(t);f.preferences.save({format:'label',deviceName:'Thermal_System_Queue'});f.stall();
+ const first=await f.handlers['warehouse:printers'](f.event),second=await f.handlers['warehouse:printers'](f.event);assert.deepEqual(first.printers,[]);assert.match(first.warning,/Служба печати/);assert.equal(second.profiles.label.deviceName,'Thermal_System_Queue');assert.equal(f.reads(),1);
+ await assert.rejects(()=>f.handlers['warehouse:printBarcode'](f.event,f.payload),/не ответила вовремя/);assert.equal(f.prints.length,0);assert.equal(f.control.busy(),false);
 });
