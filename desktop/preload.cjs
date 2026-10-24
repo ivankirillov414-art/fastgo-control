@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('fastgoDesktop',Object.freeze({
 contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
  notifyAvito:p=>ipcRenderer.invoke('warehouse:notifyAvito',p),
  printBarcode:p=>ipcRenderer.invoke('warehouse:printBarcode',p),
+ printers:()=>ipcRenderer.invoke('warehouse:printers'),
+ savePrinter:p=>ipcRenderer.invoke('warehouse:printerSave',p),
  showIncoming:()=>ipcRenderer.invoke('warehouse:incoming'),
  openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open'),
  desktopStatus:()=>ipcRenderer.invoke('warehouse-usb:status'),

@@ -429,22 +429,148 @@
     return { poll: poll2 };
   }
 
+  // warehouse/printer-settings.js
+  var native = () => window.warehouseDesktop;
+  var printerSetupAvailable = () => {
+    var _a2, _b;
+    return typeof ((_a2 = native()) == null ? void 0 : _a2.printers) === "function" && typeof ((_b = native()) == null ? void 0 : _b.savePrinter) === "function";
+  };
+  function printerFields(root, { format = "label", allowDialog = false, changed = () => {
+  } } = {}) {
+    root.className = "printer-fields";
+    root.innerHTML = '<label>\u041F\u0440\u0438\u043D\u0442\u0435\u0440<select data-printer></select></label><button type="button" data-refresh>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A</button><div class="printer-size"><label>\u0428\u0438\u0440\u0438\u043D\u0430, \u043C\u043C<input data-width type="number" min="30" max="110" step="0.1" value="58" required></label><label>\u0412\u044B\u0441\u043E\u0442\u0430, \u043C\u043C<input data-height type="number" min="20" max="200" step="0.1" value="30" required></label></div>' + (allowDialog ? '<label class="printer-remember"><input type="checkbox" data-remember checked>\u0417\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u044C \u0434\u043B\u044F \u044D\u0442\u043E\u0433\u043E \u0444\u043E\u0440\u043C\u0430\u0442\u0430</label>' : "") + '<p class="muted" data-note role="status"></p>';
+    const select = root.querySelector("[data-printer]"), width = root.querySelector("[data-width]"), height = root.querySelector("[data-height]"), remember = root.querySelector("[data-remember]"), note = root.querySelector("[data-note]"), refresh = root.querySelector("[data-refresh]");
+    let snapshot = { printers: [], profiles: {} }, loading = false;
+    const option = (name, value) => {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = name;
+      return o;
+    };
+    function describe() {
+      if (remember) remember.disabled = !select.value;
+      const found = snapshot.printers.some((p) => p.name === select.value);
+      note.textContent = select.value && !found ? "\u042D\u0442\u043E\u0442 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0435\u0433\u043E \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A." : select.value ? "\u0412\u044B\u0431\u043E\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u0434\u043B\u044F \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0445 \u043F\u0435\u0447\u0430\u0442\u0435\u0439." : allowDialog ? "\u0414\u043B\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0432\u044B\u0431\u043E\u0440\u0430 \u0443\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430." : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043A \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443, \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u0440\u0430\u0439\u0432\u0435\u0440 \u0435\u0433\u043E \u043C\u043E\u0434\u0435\u043B\u0438 \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A.";
+      if (snapshot.warning) note.textContent = snapshot.warning;
+      changed({ loading });
+    }
+    function populate(preserve = false) {
+      var _a2;
+      const saved = (_a2 = snapshot.profiles) == null ? void 0 : _a2[format], wanted = preserve ? select.value : (saved == null ? void 0 : saved.deviceName) || "";
+      select.replaceChildren(option(allowDialog ? "\u0412\u044B\u0431\u043E\u0440 \u0432 \u043E\u043A\u043D\u0435 Windows" : "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440", ""), ...snapshot.printers.map((p) => option(p.displayName + (p.isDefault ? " \xB7 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0432 Windows" : ""), p.name)));
+      if (wanted && !snapshot.printers.some((p) => p.name === wanted)) select.append(option(wanted + " \xB7 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D", wanted));
+      select.value = wanted;
+      root.querySelector(".printer-size").hidden = format !== "label";
+      width.disabled = height.disabled = format !== "label";
+      if (!preserve) {
+        width.value = (saved == null ? void 0 : saved.widthMm) || 58;
+        height.value = (saved == null ? void 0 : saved.heightMm) || 30;
+      }
+      describe();
+    }
+    async function load2(preserve = false) {
+      if (loading) return;
+      loading = true;
+      refresh.disabled = select.disabled = true;
+      changed({ loading });
+      note.textContent = "\u041F\u043E\u043B\u0443\u0447\u0430\u0435\u043C \u0441\u043F\u0438\u0441\u043E\u043A \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432\u2026";
+      try {
+        snapshot = await native().printers();
+        populate(preserve);
+      } catch (e) {
+        note.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A\xBB.";
+      } finally {
+        loading = false;
+        refresh.disabled = select.disabled = false;
+        changed({ loading });
+      }
+    }
+    select.onchange = describe;
+    refresh.onclick = () => void load2(true);
+    const ready = load2();
+    return { ready, setFormat: (next) => {
+      format = next;
+      populate();
+    }, selection: () => {
+      if (loading) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0441\u043F\u0438\u0441\u043A\u0430 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432");
+      const deviceName = select.value;
+      if (deviceName && !snapshot.printers.some((p) => p.name === deviceName)) throw Error("\u041F\u0440\u0438\u043D\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0435\u0433\u043E \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A.");
+      if (!deviceName && !allowDialog) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440");
+      return { deviceName, systemDialog: !deviceName, remember: !!deviceName && !!(remember == null ? void 0 : remember.checked), ...format === "label" ? { widthMm: Number(width.value), heightMm: Number(height.value) } : {} };
+    } };
+  }
+  function setupLabelPrinter() {
+    if (!printerSetupAvailable()) return;
+    const dialog = document.createElement("dialog");
+    dialog.className = "barcode-print-dialog";
+    dialog.setAttribute("aria-label", "\u041F\u0440\u0438\u043D\u0442\u0435\u0440 \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A");
+    dialog.innerHTML = '<form><h2>\u041F\u0440\u0438\u043D\u0442\u0435\u0440 \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A</h2><p>\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0431\u0443\u0434\u0435\u0442 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0432\u044B\u0431\u0438\u0440\u0430\u0442\u044C\u0441\u044F \u0432 \u0441\u043A\u043B\u0430\u0434\u0435 \u0438 \u0432 \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u043B\u0430\u0434\u0430 \u043E\u0431\u0449\u0435\u0433\u043E FastGo.</p><div data-printer-fields></div><p role="alert" class="error"></p><div class="actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button type="button" data-test>\u041F\u0440\u043E\u0431\u043D\u0430\u044F \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0430</button><button type="submit" class="primary">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button></div><p data-result role="status"></p></form>';
+    document.body.append(dialog);
+    dialog.showModal();
+    dialog.onclose = () => dialog.remove();
+    dialog.querySelector("[data-close]").onclick = () => dialog.close();
+    const form = dialog.querySelector("form"), save3 = dialog.querySelector("[type=submit]"), test = dialog.querySelector("[data-test]"), error = dialog.querySelector("[role=alert]"), result = dialog.querySelector("[data-result]");
+    let busy2 = false;
+    const controls = printerFields(dialog.querySelector("[data-printer-fields]"), { changed: ({ loading }) => {
+      save3.disabled = test.disabled = loading || busy2;
+    } });
+    async function run2(testLabel) {
+      if (busy2 || !form.reportValidity()) return;
+      busy2 = true;
+      save3.disabled = test.disabled = true;
+      error.textContent = "";
+      result.textContent = "";
+      try {
+        const selection = controls.selection();
+        if (testLabel) {
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          window.JsBarcode(svg, "FASTGO-TEST", { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 8 });
+          const r = await native().printBarcode({ ...selection, remember: true, format: "label", quantity: 1, name: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0430 FastGo", barcode: "FASTGO-TEST", svg: svg.outerHTML });
+          result.textContent = (r == null ? void 0 : r.warning) || "\u041F\u0440\u043E\u0431\u043D\u0430\u044F \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0430 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443. \u0412\u044B\u0431\u043E\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D.";
+        } else {
+          await native().savePrinter({ format: "label", ...selection });
+          result.textContent = "\u041F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438 \u0440\u0430\u0437\u043C\u0435\u0440 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u043D\u0430 \u044D\u0442\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.";
+        }
+      } catch (e) {
+        error.textContent = e.message;
+      } finally {
+        busy2 = false;
+        save3.disabled = test.disabled = false;
+      }
+    }
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      void run2(false);
+    };
+    test.onclick = () => void run2(true);
+  }
+
   // warehouse/barcode-print.js
   function printBarcode(part) {
     const dialog = document.createElement("dialog");
     dialog.setAttribute("aria-label", "\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432");
     dialog.className = "barcode-print-dialog";
-    dialog.innerHTML = "<form><h2>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</h2><p>" + esc(part.name) + '</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" value="1" required></label><label>\u0424\u043E\u0440\u043C\u0430\u0442<select name="format"><option value="label">\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0430 58 \xD7 30 \u043C\u043C</option><option value="a4">\u041B\u0438\u0441\u0442 A4</option></select></label><p role="alert" class="error"></p><div class="actions"><button type="button" data-close>\u041E\u0442\u043C\u0435\u043D\u0430</button><button type="submit" class="primary">\u041F\u0435\u0447\u0430\u0442\u044C</button></div></form>';
+    dialog.innerHTML = "<form><h2>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</h2><p>" + esc(part.name) + '</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" value="1" required></label><label>\u0424\u043E\u0440\u043C\u0430\u0442<select name="format"><option value="label">\u0422\u0435\u0440\u043C\u043E\u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0430</option><option value="a4">\u041B\u0438\u0441\u0442 A4</option></select></label><div data-printer-fields hidden></div><p role="alert" class="error"></p><div class="actions"><button type="button" data-close>\u041E\u0442\u043C\u0435\u043D\u0430</button><button type="submit" class="primary">\u041F\u0435\u0447\u0430\u0442\u044C</button></div></form>';
     document.body.append(dialog);
     dialog.showModal();
     dialog.onclose = () => dialog.remove();
     dialog.querySelector("[data-close]").onclick = () => dialog.close();
     dialog.querySelector("input").focus();
     dialog.querySelector("input").select();
+    let printers;
+    const formatSelect = dialog.querySelector("[name=format]");
+    if (printerSetupAvailable()) {
+      const root = dialog.querySelector("[data-printer-fields]");
+      root.hidden = false;
+      printers = printerFields(root, { allowDialog: true, changed: ({ loading }) => {
+        dialog.querySelector("[type=submit]").disabled = loading;
+      } });
+      formatSelect.onchange = () => printers.setFormat(formatSelect.value);
+    }
     dialog.querySelector("form").onsubmit = async (event) => {
       var _a2;
       event.preventDefault();
-      const button = dialog.querySelector("[type=submit]"), quantity = Number(dialog.querySelector("input").value), format = dialog.querySelector("select").value;
+      const button = dialog.querySelector("[type=submit]"), quantity = Number(dialog.querySelector("[name=quantity]").value), format = formatSelect.value;
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1e3) return;
       try {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -452,8 +578,12 @@
         const payload = { name: part.name, barcode: String(part.barcode), svg: svg.outerHTML, quantity, format };
         if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.printBarcode) {
           button.disabled = true;
-          await window.warehouseDesktop.printBarcode(payload);
+          const result = await window.warehouseDesktop.printBarcode({ ...payload, ...printers == null ? void 0 : printers.selection() });
           dialog.close();
+          if (result == null ? void 0 : result.warning) {
+            const message2 = document.getElementById("message");
+            if (message2) message2.textContent = result.warning;
+          }
           return;
         }
         const label = '<section class="label"><strong>' + esc(part.name) + "</strong>" + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
@@ -2032,6 +2162,11 @@
   if (networkButton) {
     networkButton.hidden = !((_a = window.warehouseDesktop) == null ? void 0 : _a.openNetworkDiagnostics);
     networkButton.onclick = () => window.warehouseDesktop.openNetworkDiagnostics().catch((e) => message(e.message, true));
+  }
+  var printerButton = $("printer-settings");
+  if (printerButton) {
+    printerButton.hidden = !printerSetupAvailable();
+    printerButton.onclick = setupLabelPrinter;
   }
   var key = (n) => "fgwarehouse:" + userId() + ":" + n;
   var load = (n) => {

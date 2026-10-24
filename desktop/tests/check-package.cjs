@@ -11,3 +11,4 @@ const archive=path.join(resources,'app.asar');assert.match(asar.extractFile(arch
 console.log('PASS: packaged updater, public update feed, installer checksum and blockmap');
 
 assert(asar.extractFile(archive,'warehouse-updater.cjs').toString().includes('class WarehouseUpdater'));assert(asar.extractFile(archive,'warehouse-native/backup-replica.cjs').toString().includes('class BackupReplica'));
+assert(asar.extractFile(archive,path.join('warehouse-native','printer-profiles.cjs')).toString().includes('class PrinterProfiles'));

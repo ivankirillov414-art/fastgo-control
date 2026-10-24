@@ -17,7 +17,7 @@ jobs:
      with: {node-version: '24'}
    - run: node scripts/build-warehouse-web.cjs --check
    - run: node --test tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs tests/avito.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs desktop/tests/barcode-print.test.cjs desktop/tests/avito-toast.test.cjs
-   - run: node --test warehouse-desktop/tests/*.test.cjs
+   - run: node --test warehouse-desktop/tests/*.test.cjs desktop/tests/printer-profiles.test.cjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
@@ -35,6 +35,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-master-stock-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-native-unknown-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-barcode-print.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-printer-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-avito-notifications.cjs
  windows:

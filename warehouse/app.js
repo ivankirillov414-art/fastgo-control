@@ -9,6 +9,7 @@ import {repairPayment} from './repair-payment.js?v=20261016-scan-2';
 import {liveBasket} from './live-basket.js?v=20261016-scan-2';
 import {bindUSBInbox} from './usb-client.js';
 import {bindScanner} from './scanner.js';
+import {setupLabelPrinter,printerSetupAvailable} from './printer-settings.js';
 import {api,serviceApi,login,logout,userId,esc,money,uuid,matchBarcode} from './client.js';
 const formValues=form=>{const p={};new FormData(form).forEach((v,k)=>p[k]=v);return p;};
 const $=id=>document.getElementById(id),terminal=document.body.dataset.mode==='terminal';let device,parts=[],staff=[],screen='home',draft,job,busy=false,polling=false,memberRole='',lastActivity=Date.now();
@@ -16,6 +17,7 @@ let stopScanner,stopUSB;
 const serviceLink=$('warehouse-service');if(serviceLink)serviceLink.hidden=!(window.fastgoDesktop||new URLSearchParams(location.search).get('unified')==='1');
 serviceLink?.addEventListener('click',e=>{if(!window.fastgoWarehouseCanLeave?.()){e.preventDefault();message('Завершите документ перед переходом в сервис',true);}});
 const networkButton=$('network-diagnostics');if(networkButton){networkButton.hidden=!window.warehouseDesktop?.openNetworkDiagnostics;networkButton.onclick=()=>window.warehouseDesktop.openNetworkDiagnostics().catch(e=>message(e.message,true));}
+const printerButton=$('printer-settings');if(printerButton){printerButton.hidden=!printerSetupAvailable();printerButton.onclick=setupLabelPrinter;}
 const key=n=>'fgwarehouse:'+userId()+':'+n;
 const load=n=>{try{return JSON.parse(localStorage.getItem(key(n))||'null');}catch{throw Error('Не удалось прочитать сохранённый документ');}};
 const save=(n,v)=>localStorage.setItem(key(n),JSON.stringify(v));

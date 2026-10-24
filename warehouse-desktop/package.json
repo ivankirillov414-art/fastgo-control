@@ -54,7 +54,8 @@
       "network-snapshot.ps1",
       "network.html",
       "network.css",
-      "network-ui.js"
+      "network-ui.js",
+      "printer-profiles.cjs"
     ],
     "win": {
       "target": "nsis",
