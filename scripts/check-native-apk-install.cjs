@@ -24,7 +24,13 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  }
  if(!installed)throw Error('Android package installer did not install the new APK');
  let resumed='';for(let n=0;n<15;n++){resumed=adb(['shell','dumpsys','activity','activities']);if(resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity'))break;await pause(1000);}
- if(!resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity'))throw Error('Updated APK did not restart its scanner activity');
+ if(!resumed.includes(pkg+'/ru.fastgo.tsd.MainActivity')){
+  fs.writeFileSync('warehouse-android/native/build/upgrade-test/after-install-activities.txt',resumed);
+  const logs=adb(['logcat','-d','-t','600']);fs.writeFileSync('warehouse-android/native/build/upgrade-test/after-install-logcat.txt',logs);
+  console.error(resumed.split('\n').filter(line=>/Resumed|focused|fastgo|InstallResult/i.test(line)).join('\n'));
+  console.error(logs.split('\n').filter(line=>/fastgo|FATAL EXCEPTION|Background activity|ActivityNotFound|Permission Denial/i.test(line)).join('\n'));
+  throw Error('Updated APK did not restart its scanner activity');
+ }
  const status=adb(['shell','am','broadcast','--user','0','-f','0x20','-n',pkg+'/ru.fastgo.tsd.ProvisionReceiver','--es','operation','status']);
  if(!/update_installed_at[^\d]+\d+/.test(status))throw Error('Replacement APK did not record successful installation');
  const result=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#keepsDataAfterInstall',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);
