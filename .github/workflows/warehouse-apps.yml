@@ -65,6 +65,7 @@ jobs:
      shell: pwsh
      run: ./warehouse-desktop/tests/installer-upgrade.ps1
    - uses: actions/upload-artifact@v4
+     if: always()
      with:
       name: warehouse-windows
       path: |
