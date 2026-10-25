@@ -28,6 +28,8 @@ modify('warehouse/app.js',s=>s.replace("device=load(terminal?'terminal':'station
 const native=path.join(__dirname,'warehouse-native');fs.mkdirSync(native,{recursive:true});
 for(const name of ['background.cjs','backup-replica.cjs','avito-toast.cjs','avito-toast-preload.cjs','barcode-print.cjs','printer-profiles.cjs','label-printer-setup.cjs','label-printer-setup.ps1','terminal-update.cjs','auto-terminal.cjs','terminal-provision.cjs','terminal-preload.cjs','terminal.html','terminal-ui.js','warehouse-bridge.cjs','usb-scanner.cjs','usb-bridge.cjs','usb-preload.cjs','usb-control.html','usb-control.js','usb-phone.html','usb-phone.js'])fs.copyFileSync(path.join(__dirname,'../warehouse-desktop',name),path.join(native,name));
 
+fs.cpSync(path.join(root,'warehouse-desktop/p2-driver'),path.join(native,'p2-driver'),{recursive:true});
+
 // The source web updater imports a CJS module for esbuild; native ESM needs its browser export.
 modify('warehouse/web-update.js',s=>s.replace("../warehouse-desktop/update-clock.cjs","./update-clock.js"));
 fs.writeFileSync(path.join(out,'warehouse/update-clock.js'),fs.readFileSync(path.join(root,'warehouse-desktop/update-clock.cjs'),'utf8').replace('module.exports={createDailyCheck};','export {createDailyCheck};'));

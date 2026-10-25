@@ -1,0 +1,197 @@
+; P2.INF
+;
+; INF file for the base WDK sample
+;
+; Copyright 2011 - 2026 ThanMore Corporation
+
+
+[Version]
+Signature="$Windows NT$"
+Provider=%OEM%
+LayoutFile=ntprint.inf
+ClassGUID={4D36E979-E325-11CE-BFC1-08002BE10318}
+Class=Printer
+CatalogFile=P2.cat
+; mm/dd/yyyy,x.x.yyyy.mmdd
+DriverVer=05/08/2026,2.1.2026.0508
+; specify PnpLockdown=1 to prevent external apps from modifying installed driver files
+PnpLockdown=1
+
+;
+; Manufacturer section.
+;
+; This section lists all of the manufacturers 
+; that we will display in the Dialog box
+;
+[Manufacturer]
+%OEM%=DeTong_Printers, NTx86, NTamd64, NTarm64
+
+;
+; OEM URLS
+;
+; This sections gives the URL for manufacturers found in the Manufacturers section
+;
+[OEM URLS]
+%OEM%="https://www.detonger.com/"
+
+;
+; Model sections. 
+; 
+; Each section here corresponds with an entry listed in the
+; [Manufacturer] section, above. The models will be displayed in the order
+; that they appear in the INF file.
+;
+
+; [DeTong_Printers]
+; %DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTong_DP230_Label_PF0F9, DeTong_DP230_Label_PF0F9
+; %DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTongDP230_Label_PrB250, DeTongDP230_Label_PrB250
+; %DeviceDesc_P2S%          = INSTALL_P2S, USBPRINT\DeTong_DP27_Label_Pr9275, DeTong_DP27_Label_Pr9275
+; %DeviceDesc_DP230P%       = INSTALL_P2P, USBPRINT\DeTong_DP230P_Label_9C82, DeTong_DP230P_Label_9C82
+; %DeviceDesc_P2P%          = INSTALL_P2P, USBPRINT\DeTong_DP27P_Label_P1B41, DeTong_DP27P_Label_P1B41
+
+[DeTong_Printers.NTx86]
+%DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTong_DP230_Label_PF0F9, DeTong_DP230_Label_PF0F9
+%DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTongDP230_Label_PrB250, DeTongDP230_Label_PrB250
+%DeviceDesc_P2S%          = INSTALL_P2S, USBPRINT\DeTong_DP27_Label_Pr9275, DeTong_DP27_Label_Pr9275
+%DeviceDesc_DP230P%       = INSTALL_P2P, USBPRINT\DeTong_DP230P_Label_9C82, DeTong_DP230P_Label_9C82
+%DeviceDesc_P2P%          = INSTALL_P2P, USBPRINT\DeTong_DP27P_Label_P1B41, DeTong_DP27P_Label_P1B41
+
+[DeTong_Printers.NTamd64]
+%DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTong_DP230_Label_PF0F9, DeTong_DP230_Label_PF0F9
+%DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTongDP230_Label_PrB250, DeTongDP230_Label_PrB250
+%DeviceDesc_P2S%          = INSTALL_P2S, USBPRINT\DeTong_DP27_Label_Pr9275, DeTong_DP27_Label_Pr9275
+%DeviceDesc_DP230P%       = INSTALL_P2P, USBPRINT\DeTong_DP230P_Label_9C82, DeTong_DP230P_Label_9C82
+%DeviceDesc_P2P%          = INSTALL_P2P, USBPRINT\DeTong_DP27P_Label_P1B41, DeTong_DP27P_Label_P1B41
+
+[DeTong_Printers.NTarm64]
+%DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTong_DP230_Label_PF0F9, DeTong_DP230_Label_PF0F9
+%DeviceDesc_DP230S%       = INSTALL_P2S, USBPRINT\DeTongDP230_Label_PrB250, DeTongDP230_Label_PrB250
+%DeviceDesc_P2S%          = INSTALL_P2S, USBPRINT\DeTong_DP27_Label_Pr9275, DeTong_DP27_Label_Pr9275
+%DeviceDesc_DP230P%       = INSTALL_P2P, USBPRINT\DeTong_DP230P_Label_9C82, DeTong_DP230P_Label_9C82
+%DeviceDesc_P2P%          = INSTALL_P2P, USBPRINT\DeTong_DP27P_Label_P1B41, DeTong_DP27P_Label_P1B41
+
+;
+; Installer Sections
+;
+; These sections control file installation, and reference all files that
+; need to be copied. The section name will be assumed to be the driver
+; file, unless there is an explicit DriverFile section listed.
+; ====================================
+; ===== Start Installer Sections =====
+; ====================================
+
+; ******************************
+; ***** install P2 driver
+; ******************************
+
+[INSTALL_P2S]
+CopyFiles=@P2.GPD
+CopyFiles=@P2.INI
+CopyFiles=BMP_P2S
+DataFile=P2.GPD
+DataSection=UNIDRV_DATA
+Include=NTPRINT.INF
+Needs=UNIDRV.OEM,UNIDRV_DATA
+
+; associated service to Hardware 'xxx Label Printer' using install section 'INSTALL_XXX'.
+[INSTALL_P2S.Services]
+AddService=, 2
+
+[BMP_P2S]
+P2.DLL
+P2UI.DLL
+
+; ******************************
+; ***** install P2P driver
+; ******************************
+
+[INSTALL_P2P]
+CopyFiles=@P2P.GPD
+CopyFiles=@P2P.INI
+CopyFiles=BMP_P2P
+DataFile=P2P.GPD
+DataSection=UNIDRV_DATA
+Include=NTPRINT.INF
+Needs=UNIDRV.OEM,UNIDRV_DATA
+
+; associated service to Hardware 'xxx Label Printer' using install section 'INSTALL_XXX'.
+[INSTALL_P2P.Services]
+AddService=, 2
+
+[BMP_P2P]
+P2P.DLL
+P2PUI.DLL
+
+; ====================================
+; ===== End Installer Sections =====
+; ====================================
+
+; Copy Sections
+;
+; Lists of files that are actually copied. These sections are referenced
+; from the installer sections, above. Only create a section if it contains
+; two or more files (if we only copy a single file, identify it in the
+; installer section, using the @filename notation) or if it's a color
+; profile (since the DestinationDirs can only handle sections, and not
+; individual files).
+;
+
+;
+; Data Sections
+;
+
+; These sections contain data that is shared between devices.
+;
+
+
+
+;
+;  Location of source files not in Layout.inf.
+;
+
+[SourceDisksNames]
+100 = %Disk1%
+
+[SourceDisksFiles.x86]
+P2.dll     = 100,x86
+P2UI.dll   = 100,x86
+P2P.dll     = 100,x86
+P2PUI.dll   = 100,x86
+
+[SourceDisksFiles.amd64]
+P2.dll     = 100,amd64
+P2UI.dll   = 100,amd64
+P2P.dll     = 100,amd64
+P2PUI.dll   = 100,amd64
+
+[SourceDisksFiles.arm64]
+P2.dll     = 100,arm64
+P2UI.dll   = 100,arm64
+P2P.dll     = 100,arm64
+P2PUI.dll   = 100,arm64
+
+[SourceDisksFiles]
+P2.GPD     = 100
+P2.INI     = 100
+P2P.GPD     = 100
+P2P.INI     = 100
+
+;
+; Call SetupSetDirectoryId with 66000 to set the target directory at runtime
+; (depending on which environment drivers are getting installed)
+;
+
+[DestinationDirs]
+DefaultDestDir=66000
+
+;
+; Localizable Strings
+;
+[Strings]
+OEM="DeTong, Shanghai, Inc."
+DeviceDesc_DP230S="DP230 Label Printer"
+DeviceDesc_P2S="P2 Label Printer"
+DeviceDesc_DP230P="DP230P Label Printer"
+DeviceDesc_P2P="P2P Label Printer"
+;
+Disk1="DeTong P2 Driver Setup Disk"

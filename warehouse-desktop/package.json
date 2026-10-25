@@ -57,7 +57,8 @@
       "network-ui.js",
       "printer-profiles.cjs",
       "label-printer-setup.cjs",
-      "label-printer-setup.ps1"
+      "label-printer-setup.ps1",
+      "p2-driver/**/*"
     ],
     "win": {
       "target": "nsis",

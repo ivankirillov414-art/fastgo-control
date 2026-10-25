@@ -56,7 +56,7 @@ jobs:
      run: |
       Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile adb.zip
       Expand-Archive adb.zip -DestinationPath warehouse-desktop
-   - name: Verify the official P2 driver installs silently on a disposable runner
+   - name: Verify the signed P2 driver registers through native Windows tools
      timeout-minutes: 4
      shell: pwsh
      run: ./warehouse-desktop/tests/p2-driver-install.ps1
