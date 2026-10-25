@@ -27,6 +27,12 @@ test('missing saved printer rejects without submitting to another queue or losin
 test('user can explicitly request the Windows dialog while the saved profile remains intact',async t=>{
  const f=fixture(t);f.preferences.save({format:'label',deviceName:'Thermal_System_Queue'});await f.handlers['warehouse:printBarcode'](f.event,{...f.payload,systemDialog:true,remember:true});assert.equal(f.prints[0].silent,false);assert(!('deviceName' in f.prints[0]));assert.equal(f.preferences.read().profiles.label.deviceName,'Thermal_System_Queue');
 });
+test('P2 uses its native dot grid and full scale without changing another printer resolution',async t=>{
+ const f=fixture(t);f.queues([{name:'P2 Label Printer'}]);f.preferences.save({format:'label',deviceName:'P2 Label Printer',widthMm:50,heightMm:27});
+ await f.handlers['warehouse:printBarcode'](f.event,{...f.payload,svg:'<svg viewBox="0 0 300 72"><rect x="20" y="0" width="2" height="72"/></svg>'});
+ assert.deepEqual(f.prints[0].dpi,{horizontal:203,vertical:203});assert.equal(f.prints[0].scaleFactor,100);assert.equal(f.prints[0].pagesPerSheet,1);assert.equal(f.prints[0].color,false);assert.deepEqual(f.prints[0].pageSize,{width:50000,height:27000});assert.match(decodeURIComponent(f.windows[0].url),/shape-rendering:crispEdges/);
+ await assert.rejects(()=>f.handlers['warehouse:printBarcode'](f.event,{...f.payload,svg:'<svg viewBox="0 0 600 72"><rect width="2" height="72"/></svg>'}),/без искажения/);assert.equal(f.prints.length,1);assert.equal(f.control.busy(),false);
+});
 test('cancelled print never changes a saved printer; active printing blocks duplicate submission and settings changes',async t=>{
  const f=fixture(t),pending=f.hold(),first=f.handlers['warehouse:printBarcode'](f.event,{...f.payload,deviceName:'Thermal_System_Queue',remember:true});await new Promise(r=>setImmediate(r));assert(f.control.busy());
  await assert.rejects(()=>f.handlers['warehouse:printBarcode'](f.event,f.payload),/Завершите/);await assert.rejects(()=>f.handlers['warehouse:printerSave'](f.event,{format:'label',deviceName:'Thermal_System_Queue'}),/завершения/);f.fail();pending.callback();await assert.rejects(()=>first,/Печать отменена/);assert.deepEqual(f.preferences.read().profiles,{});assert.equal(f.control.busy(),false);assert.equal(f.prints.length,1);

@@ -586,7 +586,7 @@
         const selection = controls.selection();
         if (testLabel) {
           const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-          window.JsBarcode(svg, "FASTGO-TEST", { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 8 });
+          window.JsBarcode(svg, "FASTGO-TEST", { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20 });
           const r = await native().printBarcode({ ...selection, remember: true, format: "label", quantity: 1, name: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0430 FastGo", barcode: "FASTGO-TEST", svg: svg.outerHTML });
           result.textContent = (r == null ? void 0 : r.warning) || "\u041F\u0440\u043E\u0431\u043D\u0430\u044F \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0430 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443. \u0412\u044B\u0431\u043E\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D.";
         } else {
@@ -636,7 +636,7 @@
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1e3) return;
       try {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 8, background: "#ffffff", lineColor: "#000000" });
+        window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
         const payload = { name: part.name, barcode: String(part.barcode), svg: svg.outerHTML, quantity, format };
         if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.printBarcode) {
           button.disabled = true;
@@ -667,7 +667,7 @@
     };
   }
   function barcodeDocument(label, quantity, format) {
-    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}</style></head><body>" + label.repeat(quantity) + "</body></html>";
+    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
   }
 
   // warehouse/product-panel.js
