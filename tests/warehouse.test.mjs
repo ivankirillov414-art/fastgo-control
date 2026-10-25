@@ -270,3 +270,17 @@ test('a new terminal scan racing laptop cancellation keeps the updated draft ins
  const db=async(_table,query,method)=>{if(method==='PATCH'){job.payload.revision=3;if(query.includes('payload->>revision=eq.2'))return [];cancelled=true;return [{...job,state:'done'}];}return [structuredClone(job)];};
  await assert.rejects(()=>cancelDocument('cancel_document',{id,kind:'sale',revision:2},{db,actor:{id:actor},device:{id:stationId,kind:'station'},stationId}),e=>e.status===409);assert.equal(cancelled,false);assert.equal(job.state,'queued');assert.equal(job.payload.revision,3);
 });
+
+test('cashier cancels one unknown scan idempotently without resolving or moving stock',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),document_id:randomUUID(),code:'CANCEL-UNKNOWN',kind:'sale'};
+ await h.request('scan_unknown',p,'terminal');const second={...p,request_id:randomUUID()};await h.request('scan_unknown',second,'terminal');
+ assert.equal((await h.request('unknown_cancel',{id:p.request_id},'terminal')).status,403);
+ for(let i=0;i<2;i++)assert.equal((await h.request('unknown_cancel',{id:p.request_id})).data.cancelled,true);
+ assert.equal((await h.request('scan_unknown',p,'terminal')).data.result.cancelled,true);
+ assert.equal((await h.request('unknown_scans')).data.length,1);
+ assert.equal((await h.request('scan_unknown',{...p,request_id:randomUUID()},'terminal')).data.state,'queued');
+ assert.equal(h.receipts.length,0);assert.equal(h.snap.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+ h.queue.find(x=>x.id===second.request_id).checkout={actor_id:actor};
+ assert.equal((await h.request('unknown_cancel',{id:second.request_id})).status,409);
+ assert.equal((await h.request('unknown_cancel',{id:randomUUID()})).status,404);
+});
