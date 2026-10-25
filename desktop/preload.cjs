@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
  notifyAvito:p=>ipcRenderer.invoke('warehouse:notifyAvito',p),
  printBarcode:p=>ipcRenderer.invoke('warehouse:printBarcode',p),
  printers:()=>ipcRenderer.invoke('warehouse:printers'),
+ setupPrinter:()=>ipcRenderer.invoke('warehouse:printerSetup'),
  savePrinter:p=>ipcRenderer.invoke('warehouse:printerSave',p),
  showIncoming:()=>ipcRenderer.invoke('warehouse:incoming'),
  openTerminalUpdater:()=>ipcRenderer.invoke('terminal:open'),

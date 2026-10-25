@@ -45,3 +45,9 @@ test('printer diagnostic receipt identifies the cash queues and saved label prin
  await deviceStatus('device_status',{app:'warehouse',version:'1.0.19',printing},{device:{id:randomUUID(),kind:'station'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
  const saved=writes[0][3].details.printing;assert.equal(saved.printers.length,1);assert.equal(saved.printers[0].name,'P2');assert.equal(saved.label.widthMm,50);assert.ok(!JSON.stringify(saved).includes('PRIVATE'));assert.ok(Number.isFinite(Date.parse(saved.sampled_at)));
 });
+
+
+test('P2 setup receipt keeps the driver result but excludes arbitrary helper data',async()=>{
+ const writes=[];await deviceStatus('device_status',{app:'warehouse',version:'1.0.26',printing:{setup:{status:'driver_installed',driver_version:'3.2.2026.1018',message:'USB is missing',attempts:1,busy:false,connected:false,queue_name:'',updated_at:'2026-10-25T12:00:00Z',secret:'PRIVATE',stdout:'PRIVATE'}}},{device:{id:randomUUID(),kind:'station'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
+ const setup=writes[0][3].details.printing.setup;assert.equal(setup.status,'driver_installed');assert.equal(setup.attempts,1);assert.equal(setup.connected,false);assert(!JSON.stringify(setup).includes('PRIVATE'));
+});

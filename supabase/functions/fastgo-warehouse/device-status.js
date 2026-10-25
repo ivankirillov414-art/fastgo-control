@@ -19,6 +19,7 @@ export async function deviceStatus(action,p,{db,device,stationId}){
  if(app!=='tsd'&&p.printing&&typeof p.printing==='object'){
   const source=p.printing,label=source.profiles?.label,dimension=value=>Number.isFinite(value)&&value>=20&&value<=200?value:null;
   details.printing={sampled_at:new Date().toISOString(),printers:(Array.isArray(source.printers)?source.printers:[]).slice(0,32).filter(x=>x&&typeof x.name==='string').map(x=>({name:text(x.name,256),displayName:text(x.displayName,256),status:Number.isInteger(x.status)?x.status:0,isDefault:x.isDefault===true})),label:label&&typeof label.deviceName==='string'?{deviceName:text(label.deviceName,256),widthMm:dimension(label.widthMm),heightMm:dimension(label.heightMm)}:null,warning:text(source.warning)};
+  if(source.setup&&typeof source.setup==='object'){const s=source.setup;details.printing.setup={status:text(s.status,32),message:text(s.message,300),driver_version:text(s.driver_version,32),queue_name:text(s.queue_name,256),connected:s.connected===true,busy:s.busy===true,attempts:Number.isInteger(s.attempts)?Math.max(0,Math.min(100,s.attempts)):0,updated_at:typeof s.updated_at==='string'&&Number.isFinite(Date.parse(s.updated_at))?new Date(s.updated_at).toISOString():null};}
  }
  const row={device_id:device.id,app,version:p.version,station_id:stationId,pending_documents:p.pending_documents??null,details,last_seen:new Date().toISOString()};
  await db('workshop_device_status','on_conflict=device_id,app','POST',row,'resolution=merge-duplicates,return=minimal');
