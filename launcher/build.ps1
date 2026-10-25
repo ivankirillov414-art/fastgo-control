@@ -4,7 +4,7 @@ $taskOut = Join-Path $taskRoot 'dist'
 New-Item -ItemType Directory -Force -Path $taskOut | Out-Null
 $taskCompiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (!(Test-Path -LiteralPath $taskCompiler)) { $taskCompiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
-$taskSources = @('Core.cs','MainForm.cs','Program.cs','JarvisRepair.cs') | ForEach-Object { Join-Path $taskRoot $_ }
+$taskSources = @('Core.cs','MainForm.cs','Program.cs','JarvisRepair.cs','ThermalPrinter.cs') | ForEach-Object { Join-Path $taskRoot $_ }
 Add-Type -AssemblyName System.Drawing
 $taskBitmap = New-Object Drawing.Bitmap(64,64)
 $taskGraphics = [Drawing.Graphics]::FromImage($taskBitmap)
@@ -16,7 +16,7 @@ $taskIcon = [Drawing.Icon]::FromHandle($taskBitmap.GetHicon())
 $taskIconFile = [IO.File]::Create((Join-Path $taskOut 'launcher.ico'))
 $taskIcon.Save($taskIconFile)
 $taskIconFile.Dispose(); $taskIcon.Dispose(); $taskGraphics.Dispose(); $taskFont.Dispose(); $taskBrush.Dispose(); $taskBitmap.Dispose()
-& $taskCompiler /nologo /target:winexe /platform:anycpu /optimize+ /utf8output "/out:$taskOut\FastGo-Warehouse-Launcher.exe" "/win32icon:$taskOut\launcher.ico" "/win32manifest:$taskRoot\app.manifest" "/resource:$taskRoot\repair\FIX_JARVIS_CONSOLE.ps1,FastGo.JarvisRepair" "/resource:$taskRoot\repair\Invoke-JarvisRepair.ps1,FastGo.JarvisRunner" /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll $taskSources
+& $taskCompiler /nologo /target:winexe /platform:anycpu /optimize+ /utf8output "/out:$taskOut\FastGo-Warehouse-Launcher.exe" "/win32icon:$taskOut\launcher.ico" "/win32manifest:$taskRoot\app.manifest" "/resource:$taskRoot\repair\FIX_JARVIS_CONSOLE.ps1,FastGo.JarvisRepair" "/resource:$taskRoot\repair\Invoke-JarvisRepair.ps1,FastGo.JarvisRunner" "/resource:$taskRoot\repair\Setup-DetongerP2.ps1,FastGo.P2Setup" /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll $taskSources
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed' }
 & $taskCompiler /nologo /target:exe /optimize+ /utf8output "/out:$taskOut\Launcher.Tests.exe" /reference:System.dll /reference:System.Core.dll /reference:System.Web.Extensions.dll (Join-Path $taskRoot 'Core.cs') (Join-Path $taskRoot 'Tests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed' }

@@ -13,13 +13,13 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Обновления FastGo Склад с докачкой и диагностикой сети")]
 [assembly: AssemblyCompany("FastGo")]
 [assembly: AssemblyProduct("FastGo Warehouse Launcher")]
-[assembly: AssemblyVersion("1.0.1.0")]
-[assembly: AssemblyFileVersion("1.0.1.0")]
+[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyFileVersion("1.0.2.0")]
 namespace FastGoLauncher {
  static class Program {
   [STAThread] static int Main(string[] args) {
    ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12; ServicePointManager.DefaultConnectionLimit=8;
-   if(args.Length>0 && new[] { "--check","--diagnose","--download","--jarvis-inspect" }.Contains(args[0])) {
+   if(args.Length>0 && new[] { "--check","--diagnose","--download","--jarvis-inspect","--printer-inspect" }.Contains(args[0])) {
     try { Console.OutputEncoding=new UTF8Encoding(false); } catch(IOException) { }
     try { return Headless(args).GetAwaiter().GetResult(); } catch(Exception e) { Console.Error.WriteLine(Format.Error(e)); return 1; }
    }
@@ -37,6 +37,7 @@ namespace FastGoLauncher {
   static async Task<int> Headless(string[] args) {
    var network=new Network(); var updater=new Updater(network); var token=CancellationToken.None;
    if(args[0]=="--jarvis-inspect") { Console.WriteLine(await JarvisRepair.Run(false)); return 0; }
+   if(args[0]=="--printer-inspect") { var result=await ThermalPrinter.Run(false); Console.WriteLine(new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(result)); return result.Status=="error"?1:0; }
    var json=new System.Web.Script.Serialization.JavaScriptSerializer();
    if(args[0]=="--diagnose") { var result=await new Diagnostics(network,updater).Run(p=>Console.WriteLine((p.Ok?"OK ":"FAIL ")+p.Name+": "+p.Detail),token); return result.All(p=>p.Ok)?0:1; }
    var release=await updater.Latest(token); Console.WriteLine(json.Serialize(release));

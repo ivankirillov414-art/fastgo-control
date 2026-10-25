@@ -30,7 +30,7 @@ namespace FastGoLauncher {
   public string Name, Detail; public bool Ok; public long Milliseconds;
  }
  public static class Settings {
-  public const string LauncherVersion = "1.0.1";
+  public const string LauncherVersion = "1.0.2";
   public const string Repo = "ivankirillov414-art/fastgo-control";
   public const string Feed = "https://raw.githubusercontent.com/" + Repo + "/main/warehouse/update/latest.yml";
   public const string ReleasesApi = "https://api.github.com/repos/" + Repo + "/releases?per_page=30";
