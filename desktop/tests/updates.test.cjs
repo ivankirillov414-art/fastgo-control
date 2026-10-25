@@ -19,3 +19,10 @@ test('preparing a backup is awaited and cannot start a second check or installat
  const first=x.updates.tick();await new Promise(setImmediate);assert.equal(x.updates.state.status,'preparing');
  await x.updates.check();await x.updates.tick();assert.deepEqual(x.calls,[]);finish();await first;assert.deepEqual(x.calls,[[true,true]]);
 });
+
+test('failed shutdown restores UI through the error callback instead of locking it forever',async()=>{
+ const updater=new EventEmitter();updater.quitAndInstall=()=>{};let locked=false;
+ const updates=new Updates({updater,canInstall:async()=>{locked=true;return true;},prepare:()=>{},installTimeout:20,changed:()=>{if(updates.state.status==='error')locked=false;}});
+ updater.emit('update-downloaded',{version:'1.0.21'});await updates.tick();assert.equal(locked,true);
+ await new Promise(r=>setTimeout(r,40));assert.equal(updates.state.status,'error');assert.equal(locked,false);
+});

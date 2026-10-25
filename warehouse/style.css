@@ -101,3 +101,10 @@ body.warehouse-native-window header button{-webkit-app-region:no-drag}
 .barcode-print-dialog{max-width:420px;width:calc(100% - 32px);padding:24px;border:1px solid #456078;border-radius:14px;background:#152638;color:#eef6ff}.product-barcode [data-print-barcode]{margin-top:14px;font-size:14px}.barcode-print-dialog label{display:block;margin:16px 0}
 .barcode-print-dialog{max-width:520px;max-height:calc(100vh - 32px);overflow:auto}.printer-size{display:grid;grid-template-columns:1fr 1fr;gap:14px}.printer-size label{min-width:0}.printer-remember{display:flex!important;align-items:center;gap:10px}.printer-remember input{width:20px;min-height:20px;flex:0 0 20px}.printer-fields [data-note]{font-size:13px;overflow-wrap:anywhere}.printer-fields [data-refresh]{width:100%}.printer-fields select{margin-top:6px}.barcode-print-dialog [data-result]{color:#8fe0b9}.barcode-print-dialog [role=alert]:empty{display:none}
 .barcode-print-dialog form{text-align:left}
+
+/* Long scans cannot stretch the window or push actions off screen. */
+#unknown-scans{min-width:0;overflow-wrap:anywhere}.unknown-row{display:flex;align-items:start;gap:8px}#unknown-scans .unknown-row [data-unknown]{flex:1;min-width:0;overflow-wrap:anywhere}#unknown-scans .unknown-row [data-unknown-cancel]{width:auto;flex:0 0 auto}.unknown-dialog p{overflow-wrap:anywhere}
+@media(max-width:700px){.unknown-row{flex-wrap:wrap}#unknown-scans .unknown-row [data-unknown-cancel]{width:100%}}
+/* Keep Windows caption controls above scrolling content at every display scale. */
+body.warehouse-native-window{padding-top:64px}body.warehouse-native-window header{position:fixed;top:0;left:0;right:0;height:64px;min-height:64px;padding:10px 164px 10px 20px;flex-wrap:nowrap;overflow:hidden}body.warehouse-native-window header>#connection{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}body.warehouse-native-window header button{flex-shrink:0}body.warehouse-native-window .warehouse-sidebar{top:64px}
+@media(max-width:1100px){body.warehouse-native-window header>#connection{display:none}body.warehouse-native-window #terminal-update{display:none}}

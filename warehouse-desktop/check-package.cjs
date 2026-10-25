@@ -21,6 +21,15 @@ assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('cla
   await app.context().route('https://**',route=>route.abort());let page;for(let n=0;n<100;n++){page=app.windows().find(p=>p.url()==='fastgo://app/warehouse.html');if(page)break;await new Promise(r=>setTimeout(r,150));}assert(page);await page.locator('#login').waitFor();
   const state=await app.evaluate(({app,BrowserWindow})=>{const win=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html');return {version:app.getVersion(),packaged:app.isPackaged,bounds:win.getBounds(),content:win.getContentBounds()};});
   assert.equal(state.version,pkg.version);assert(state.packaged);assert(state.bounds.height-state.content.height<32,'Standard white title bar remains');assert.equal(await page.evaluate(()=>document.body.classList.contains('warehouse-native-window')),true);assert.equal(await page.evaluate(()=>window.warehouseUpdateSafe(true)),true);
+  step('responsive native caption controls');
+  for(const width of [1250,1000,850]){
+   await app.evaluate(({BrowserWindow},width)=>{BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html').setSize(width,700);},width);
+   await page.waitForTimeout(200);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   assert.equal((await page.locator('header').boundingBox()).height,64);
+   for(const selector of ['#usb-scanner','#printer-settings']){const b=await page.locator(selector).boundingBox();assert(b&&b.x+b.width<=await page.evaluate(()=>innerWidth-148),'Caption overlap: '+selector);}
+  }
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html').setSize(1250,850));
   await page.screenshot({path:path.join(dist,'warehouse-window.png')});
   step('printer discovery and settings');const printers=await page.evaluate(()=>window.warehouseDesktop.printers());assert(Array.isArray(printers.printers));assert(printers.profiles&&typeof printers.profiles==='object');await page.locator('#printer-settings').click();const printerDialog=page.getByRole('dialog',{name:'Принтер этикеток',exact:true});await printerDialog.locator('[data-printer]').waitFor();await page.waitForFunction(()=>document.querySelector('[data-printer]')?.disabled===false,null,{timeout:15000});await page.screenshot({path:path.join(dist,'warehouse-printer-window.png')});await printerDialog.getByRole('button',{name:'Закрыть',exact:true}).click();
   step('network window');

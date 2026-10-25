@@ -30,7 +30,7 @@ const unknown=unknownScans({call:(a,p)=>call(a,p),parts:()=>parts,refresh:catalo
 function message(v,error=false){$('message').textContent=v;$('message').className=error?'error':'';}
 async function run(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(x=>x.disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;document.querySelectorAll('button').forEach(x=>x.disabled=x.dataset.unavailable==='true');applyReadOnly();}}
 for(const e of ['keydown','pointerdown','input','change'])window.addEventListener(e,()=>lastActivity=Date.now(),true);
-window.warehouseUpdateSafe=(immediate=false)=>!busy&&['home','inventory','holdings','preorders','login','connection'].includes(screen)&&!job&&(terminal||!draft&&!live.hasDraft())&&!document.querySelector('#mirror-submit,dialog[open],.modal')&&!(document.activeElement?.matches('input:not([type=search]),textarea,select,[contenteditable]')&&!document.activeElement.closest('.preorder-filters'))&&![...document.querySelectorAll('#login input')].some(input=>input.value)&&(immediate||Date.now()-lastActivity>15000);
+window.warehouseUpdateSafe=(immediate=false)=>!busy&&!usbPolling&&['home','inventory','holdings','preorders','login','connection','live'].includes(screen)&&!job&&(terminal||!draft&&!live.hasDraft())&&!document.querySelector('#mirror-submit,dialog[open],.modal')&&!(document.activeElement?.matches('input:not([type=search]),textarea,select,[contenteditable]')&&!document.activeElement.closest('.preorder-filters'))&&![...document.querySelectorAll('#login input')].some(input=>input.value)&&(immediate||Date.now()-lastActivity>15000);
 window.addEventListener('beforeunload',e=>{try{live.checkpoint();}catch(error){message(error.message,true);e.preventDefault();e.returnValue='';return;}if(busy||screen==='basket'||screen==='checkout'||screen==='live'||screen==='repair'){e.preventDefault();e.returnValue='';}});
 function shell(html){if(preorderView){preorderView.dispose();preorderView=null;}document.body.dataset.screen=screen;const section=document.getElementById('warehouse-section');if(section)section.textContent=({home:'Главная',preorders:'Предзаказы',inventory:'Остатки',receipt:'Приход',live:'Оплата',repair:'Оплата ремонта'})[screen]||'';if(stopUSB){stopUSB();stopUSB=null;}if(stopScanner){stopScanner();stopScanner=null;}$('app').innerHTML=html;message('');if(!terminal)bindNav();}
 function nav(){if(!terminal)return '';return '<div class="subnav"><button id="back">← Главное</button>'+(!terminal?'<button id="inventory">Остатки</button><button id="shift">Открыть смену</button>'+(['owner','developer'].includes(memberRole)?'<button id="master-stock">Запчасти на мастерах</button>':'')+'':'')+'</div>';}
@@ -121,11 +121,11 @@ async function holdings(){
   };
  });
 }
-let lastDeviceStatus=0;
+let lastDeviceStatus=0,nativeUpdatePending=false;
 async function desktopStatus(){
  const el=$('desktop-status');if(!el)return;if(window.fastgoInstalledApp?.platform==='ios'){el.textContent='FastGo для iPhone · '+window.fastgoInstalledApp.version;return;}
  if(!window.warehouseDesktop?.desktopStatus){el.textContent=window.warehouseDesktop?'USB: откройте «Сканер по USB» для проверки подключения.':'Открыта веб-версия. Для USB запустите программу FastGo Склад на Windows.';return;}
- try{const s=await window.warehouseDesktop.desktopStatus(),update=s.update||{};if(device&&userId()&&Date.now()-lastDeviceStatus>60000){lastDeviceStatus=Date.now();const printing=await window.warehouseDesktop.printers?.().catch(()=>null);void call('device_status',{app:window.fastgoDesktop?'desktop':'warehouse',version:s.version,host:s.host,background:s.background,update_status:update.status,latest_version:update.version,blocking_reason:update.waitReason,network:s.network,printing}).catch(()=>{});}let note='';if(update.status==='downloading')note=' · Загружается '+update.version+': '+update.progress+'%';if(update.status==='ready')note=' · Обновление '+update.version+' готово — приложение само перезапустится после завершения документа';if(update.status==='error')note=' · Ошибка обновления: '+update.error;if(s.terminalUpdate?.message)note+=' · ТСД: '+s.terminalUpdate.message;if(s.recovery?.status==='current')note+=' · Копия базы: '+s.recovery.media_present+'/'+s.recovery.media_expected+' файлов';else if(s.recovery?.status==='copying')note+=' · Копируем базу: '+s.recovery.media_present+'/'+s.recovery.media_expected+' файлов';else if(s.recovery?.status==='error')note+=' · Резервная копия: '+s.recovery.error;const value='Windows '+s.version+' · '+s.usb.status+(s.usb.pending?' · Ожидают добавления: '+s.usb.pending:'')+note;if(el.textContent!==value)el.textContent=value;}
+ try{const s=await window.warehouseDesktop.desktopStatus(),update=s.update||{};nativeUpdatePending=['ready','preparing','installing'].includes(update.status);if(device&&userId()&&Date.now()-lastDeviceStatus>60000){lastDeviceStatus=Date.now();const printing=await window.warehouseDesktop.printers?.().catch(()=>null);void call('device_status',{app:window.fastgoDesktop?'desktop':'warehouse',version:s.version,host:s.host,background:s.background,update_status:update.status,latest_version:update.version,blocking_reason:update.waitReason,network:s.network,printing}).catch(()=>{});}let note='';if(update.status==='downloading')note=' · Загружается '+update.version+': '+update.progress+'%';if(update.status==='ready')note=' · Обновление '+update.version+' готово — приложение само перезапустится после завершения документа';if(update.status==='error')note=' · Ошибка обновления: '+update.error;if(s.terminalUpdate?.message)note+=' · ТСД: '+s.terminalUpdate.message;if(s.recovery?.status==='current')note+=' · Копия базы: '+s.recovery.media_present+'/'+s.recovery.media_expected+' файлов';else if(s.recovery?.status==='copying')note+=' · Копируем базу: '+s.recovery.media_present+'/'+s.recovery.media_expected+' файлов';else if(s.recovery?.status==='error')note+=' · Резервная копия: '+s.recovery.error;const value='Windows '+s.version+' · '+s.usb.status+(s.usb.pending?' · Ожидают добавления: '+s.usb.pending:'')+note;if(el.textContent!==value)el.textContent=value;}
  catch(e){el.textContent='Не удалось проверить USB: '+e.message;}
 }
 if(!terminal){void desktopStatus();setInterval(desktopStatus,2500);}
@@ -165,17 +165,17 @@ window.addEventListener('keydown',e=>{if(e.key==='F5'||(e.ctrlKey||e.metaKey)&&e
 if($('screen-refresh'))$('screen-refresh').onclick=updateNow;
 if($('terminal-refresh'))$('terminal-refresh').onclick=updateNow;
 
-let usbPolling=false;
+let usbPolling=false,usbRetryAfter=0;
 async function pollUSB(){
- const bridge=window.warehouseDesktop;if(terminal||!device||!bridge?.usbInbox||usbPolling||busy||!['home','live'].includes(screen))return;
+ const bridge=window.warehouseDesktop;if(terminal||!device||!bridge?.usbInbox||usbPolling||nativeUpdatePending||Date.now()<usbRetryAfter||busy||!['home','live'].includes(screen))return;
  usbPolling=true;try{
   const inbox=await bridge.usbInbox();
   for(const item of inbox.items){if(busy||!['home','live'].includes(screen))break;
    if(!item.kind)continue;if(!live.canUSB(item.kind))break;
    try{const result=await live.acceptUSB(item);await bridge.usbResult(item.id,result);}
-   catch(e){await bridge.usbResult(item.id,{error:e.message,retry:!e.rejected});message(e.message,true);break;}
+   catch(e){usbRetryAfter=Date.now()+5000;await bridge.usbResult(item.id,{error:e.message,retry:!e.rejected});message(e.message,true);break;}
   }
- }catch(e){message(e.message,true);}finally{usbPolling=false;}
+ }catch(e){usbRetryAfter=Date.now()+5000;message(e.message,true);}finally{usbPolling=false;}
 }
 setInterval(()=>void pollUSB(),400);
 

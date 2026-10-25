@@ -357,6 +357,15 @@
   // warehouse/unknown-scans.js
   function unknownScans({ call: call2, parts: parts2, refresh, run: run2, owner, message: message2 }) {
     let loading = false;
+    const cancel = (row) => run2(async () => {
+      var _a2;
+      if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u044D\u0442\u043E \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435? \u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D \u0432 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442.")) return;
+      const result = await call2("unknown_cancel", { id: row.id });
+      if (!(result == null ? void 0 : result.cancelled)) throw Error("\u041A\u043E\u0434 \u0443\u0436\u0435 \u0441\u0432\u044F\u0437\u0430\u043D \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0430 \u0422\u0421\u0414");
+      (_a2 = document.querySelector(".unknown-dialog")) == null ? void 0 : _a2.close();
+      await poll2();
+      message2("\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E");
+    });
     async function poll2() {
       const host = document.getElementById("unknown-scans");
       if (!host || loading) return;
@@ -364,10 +373,17 @@
       try {
         const rows = await call2("unknown_scans");
         if (!host.isConnected) return;
-        host.innerHTML = rows.length ? "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0435 \u043A\u043E\u0434\u044B \u0441 \u0422\u0421\u0414</h2>" + rows.map((x) => '<button data-unknown="' + esc(x.id) + '">' + esc(x.payload.code) + " \xB7 " + (x.payload.document_kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u043E\u0434\u0430\u0436\u0430") + "</button>").join("") : "";
+        const signature = JSON.stringify(rows);
+        if (host._unknownSignature === signature) return;
+        host._unknownSignature = signature;
+        host.innerHTML = rows.length ? "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0435 \u043A\u043E\u0434\u044B \u0441 \u0422\u0421\u0414</h2>" + rows.map((x) => '<div class="unknown-row"><button data-unknown="' + esc(x.id) + '">' + esc(x.payload.code) + " \xB7 " + (x.payload.document_kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u043E\u0434\u0430\u0436\u0430") + '</button><button data-unknown-cancel="' + esc(x.id) + '" ' + (x.state !== "queued" || x.checkout ? 'disabled data-unavailable="true"' : "") + ">\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</button></div>").join("") : "";
         host.querySelectorAll("[data-unknown]").forEach((b) => b.onclick = () => open(rows.find((x) => x.id === b.dataset.unknown)));
+        host.querySelectorAll("[data-unknown-cancel]").forEach((b) => b.onclick = () => cancel(rows.find((x) => x.id === b.dataset.unknownCancel)));
       } catch (e) {
-        if (host.isConnected) host.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0435 \u043A\u043E\u0434\u044B: " + e.message;
+        if (host.isConnected) {
+          host._unknownSignature = null;
+          host.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0435 \u043A\u043E\u0434\u044B: " + e.message;
+        }
       } finally {
         loading = false;
       }
@@ -377,10 +393,11 @@
       const dialog = document.createElement("dialog");
       dialog.className = "unknown-dialog";
       const creating = !!row.checkout;
-      dialog.innerHTML = "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434</h2><p>" + esc(row.payload.code) + '</p><form><label>\u041D\u0430\u0439\u0442\u0438 \u0442\u043E\u0432\u0430\u0440<input id="unknown-filter" placeholder="\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0438\u043B\u0438 \u0430\u0440\u0442\u0438\u043A\u0443\u043B"></label><label>\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F<select id="unknown-part"><option value="">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440</option></select></label><button class="primary" type="submit">\u0421\u0432\u044F\u0437\u0430\u0442\u044C \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C</button></form>' + (owner() ? "<details " + (creating ? "open" : "") + '><summary>\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u043F\u043E\u0437\u0438\u0446\u0438\u044E</summary><form id="unknown-create"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input name="name" required value="' + esc(((_b = (_a2 = row.checkout) == null ? void 0 : _a2.create) == null ? void 0 : _b.name) || "") + '"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required value="' + esc(((_d = (_c = row.checkout) == null ? void 0 : _c.create) == null ? void 0 : _d.category) || "") + '"></label><label>\u0426\u0435\u043D\u0430, \u20BD<input name="retail_price" type="number" min="0" max="100000000" step="0.01" required value="' + esc((_g = (_f = (_e = row.checkout) == null ? void 0 : _e.create) == null ? void 0 : _f.retail_price) != null ? _g : "") + '"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C</button></form></details>' : "") + '<p class="error" role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
+      dialog.innerHTML = "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434</h2><p>" + esc(row.payload.code) + '</p><form><label>\u041D\u0430\u0439\u0442\u0438 \u0442\u043E\u0432\u0430\u0440<input id="unknown-filter" placeholder="\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0438\u043B\u0438 \u0430\u0440\u0442\u0438\u043A\u0443\u043B"></label><label>\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F<select id="unknown-part"><option value="">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440</option></select></label><button class="primary" type="submit">\u0421\u0432\u044F\u0437\u0430\u0442\u044C \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C</button></form>' + (owner() ? "<details " + (creating ? "open" : "") + '><summary>\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u043F\u043E\u0437\u0438\u0446\u0438\u044E</summary><form id="unknown-create"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input name="name" required value="' + esc(((_b = (_a2 = row.checkout) == null ? void 0 : _a2.create) == null ? void 0 : _b.name) || "") + '"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required value="' + esc(((_d = (_c = row.checkout) == null ? void 0 : _c.create) == null ? void 0 : _d.category) || "") + '"></label><label>\u0426\u0435\u043D\u0430, \u20BD<input name="retail_price" type="number" min="0" max="100000000" step="0.01" required value="' + esc((_g = (_f = (_e = row.checkout) == null ? void 0 : _e.create) == null ? void 0 : _f.retail_price) != null ? _g : "") + '"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C</button></form></details>' : "") + "<button data-cancel-scan " + (row.state !== "queued" || creating ? 'disabled data-unavailable="true"' : "") + '>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</button><p class="error" role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
       document.body.append(dialog);
       dialog.showModal();
       dialog.querySelector("[data-close]").onclick = () => dialog.close();
+      dialog.querySelector("[data-cancel-scan]").onclick = () => cancel(row);
       dialog.onclose = () => dialog.remove();
       dialog.onclick = (e) => {
         if (e.target === dialog) {
@@ -2599,7 +2616,7 @@
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
     var _a2;
-    return !busy && ["home", "inventory", "holdings", "preorders", "login", "connection"].includes(screen) && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    return !busy && !usbPolling && ["home", "inventory", "holdings", "preorders", "login", "connection", "live"].includes(screen) && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
     try {
@@ -3112,6 +3129,7 @@
     });
   }
   var lastDeviceStatus = 0;
+  var nativeUpdatePending = false;
   async function desktopStatus() {
     var _a2, _b, _c, _d, _e, _f, _g, _h;
     const el = $("desktop-status");
@@ -3126,6 +3144,7 @@
     }
     try {
       const s = await window.warehouseDesktop.desktopStatus(), update = s.update || {};
+      nativeUpdatePending = ["ready", "preparing", "installing"].includes(update.status);
       if (device && userId() && Date.now() - lastDeviceStatus > 6e4) {
         lastDeviceStatus = Date.now();
         const printing = await ((_d = (_c = window.warehouseDesktop).printers) == null ? void 0 : _d.call(_c).catch(() => null));
@@ -3255,9 +3274,10 @@
   if ($("screen-refresh")) $("screen-refresh").onclick = updateNow;
   if ($("terminal-refresh")) $("terminal-refresh").onclick = updateNow;
   var usbPolling = false;
+  var usbRetryAfter = 0;
   async function pollUSB() {
     const bridge = window.warehouseDesktop;
-    if (terminal || !device || !(bridge == null ? void 0 : bridge.usbInbox) || usbPolling || busy || !["home", "live"].includes(screen)) return;
+    if (terminal || !device || !(bridge == null ? void 0 : bridge.usbInbox) || usbPolling || nativeUpdatePending || Date.now() < usbRetryAfter || busy || !["home", "live"].includes(screen)) return;
     usbPolling = true;
     try {
       const inbox = await bridge.usbInbox();
@@ -3269,12 +3289,14 @@
           const result = await live.acceptUSB(item);
           await bridge.usbResult(item.id, result);
         } catch (e) {
+          usbRetryAfter = Date.now() + 5e3;
           await bridge.usbResult(item.id, { error: e.message, retry: !e.rejected });
           message(e.message, true);
           break;
         }
       }
     } catch (e) {
+      usbRetryAfter = Date.now() + 5e3;
       message(e.message, true);
     } finally {
       usbPolling = false;

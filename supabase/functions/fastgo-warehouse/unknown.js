@@ -1,6 +1,6 @@
 import {id,fail} from './model.js';
 export async function unknownScan(action,p,{db,actor,device,stationId,g,mutate}){
- if(!['scan_unknown','unknown_scans','unknown_resolve'].includes(action))return undefined;
+ if(!['scan_unknown','unknown_scans','unknown_resolve','unknown_cancel'].includes(action))return undefined;
  const read=async key=>(await db('workshop_warehouse_queue','id=eq.'+key+'&station_id=eq.'+stationId))[0];
  if(action==='unknown_scans'){
   if(device.kind!=='station')fail('Только для ноутбука',403);
@@ -23,6 +23,11 @@ export async function unknownScan(action,p,{db,actor,device,stationId,g,mutate})
  if(device.kind!=='station')fail('Только для ноутбука',403);
  if(!row||row.payload.kind!=='unknown')fail('Скан недоступен',404);
  if(row.state==='done')return row.result;
+ if(action==='unknown_cancel'){
+  if(row.state!=='queued'||row.checkout)fail('Позиция уже создаётся. Дождитесь результата',409);
+  const changed=await db('workshop_warehouse_queue','id=eq.'+row.id+'&station_id=eq.'+stationId+'&state=eq.queued&checkout=is.null','PATCH',{state:'done',result:{cancelled:true},completed_at:new Date().toISOString()},'return=representation');
+  const latest=changed[0]||await read(row.id);if(latest?.state!=='done')fail('Скан изменился. Обновите список',409);return latest.result;
+ }
  let part;
  if(p.create){
   if(!['owner','developer'].includes(actor.role))fail('Создание товара доступно владельцу',403);

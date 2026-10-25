@@ -26,6 +26,7 @@ function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-466
  case 'queue':data=[...jobs.values()].filter(j=>['repair','sale'].includes(j.payload.kind)&&!j.payload.live&&j.state!=='done');break;
  case 'cash_state':data={shifts:[]};break;
  case 'unknown_scans':data=[...jobs.values()].filter(j=>j.payload.kind==='unknown'&&j.state!=='done');break;
+ case 'unknown_cancel':{const j=jobs.get(p.id);if(j.state!=='done'){if(j.state!=='queued'||j.checkout){status=409;error='Позиция создаётся';break;}j.state='done';j.result={cancelled:true};}data=j.result;if(state.failCancelResponse){state.failCancelResponse=false;return route.abort();}break;}
  case 'unknown_resolve':{const j=jobs.get(p.id);j.state='done';j.result={part:catalog.find(x=>x.id===p.part_id)};data=j.result;break;}
  case 'live_jobs':data=[...jobs.values()].filter(j=>j.payload.live).reverse();break;
  case 'repair_quote':data=quote;break;
