@@ -15,6 +15,7 @@ const {serve,backend,launchOptions,catalog}=require('./warehouse-browser-fixture
  for(const width of [1250,1000,900,850]){
   await page.setViewportSize({width,height:650});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal overflow at '+width);
+  const brand=await page.locator('.warehouse-top-brand').boundingBox(),scanner=await page.locator('#usb-scanner').boundingBox();assert(brand.x+brand.width<=scanner.x,'brand must not overlap buttons');
   const header=await page.locator('header').boundingBox();assert.equal(header.y,0);assert.equal(header.height,64);
   for(const selector of ['#logout','#usb-scanner']){const box=await page.locator(selector).boundingBox();assert(box.x+box.width<=width-148,'caption controls must stay clear at '+width);}
   await page.locator('body').evaluate(el=>{el.style.minHeight='1800px';});await page.evaluate(()=>scrollTo(0,300));assert.equal((await page.locator('header').boundingBox()).y,0);await page.evaluate(()=>scrollTo(0,0));

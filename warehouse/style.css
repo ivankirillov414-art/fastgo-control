@@ -108,3 +108,5 @@ body.warehouse-native-window header button{-webkit-app-region:no-drag}
 /* Keep Windows caption controls above scrolling content at every display scale. */
 body.warehouse-native-window{padding-top:64px}body.warehouse-native-window header{position:fixed;top:0;left:0;right:0;height:64px;min-height:64px;padding:10px 164px 10px 20px;flex-wrap:nowrap;overflow:hidden}body.warehouse-native-window header>#connection{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}body.warehouse-native-window header button{flex-shrink:0}body.warehouse-native-window .warehouse-sidebar{top:64px}
 @media(max-width:1100px){body.warehouse-native-window header>#connection{display:none}body.warehouse-native-window #terminal-update{display:none}}
+
+body.warehouse-native-window header>b.warehouse-top-brand{position:static}

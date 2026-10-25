@@ -1,4 +1,4 @@
-# Warehouse 1.0.21 / common app 1.0.24
+# Warehouse 1.0.21 / common app 1.0.25
 
 - Cancel an individual unknown scan from the list or its dialog. The server retains a completed cancellation so terminal retries cannot restore it. No stock, payment or other scan changes.
 - Preserve list buttons across unchanged background polling; wrap long QR URLs so they cannot expand the page.

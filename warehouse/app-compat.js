@@ -2616,7 +2616,7 @@
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
     var _a2;
-    return !busy && !usbPolling && ["home", "inventory", "holdings", "preorders", "login", "connection", "live"].includes(screen) && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    return !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
     try {
