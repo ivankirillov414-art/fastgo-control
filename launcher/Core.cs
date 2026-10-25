@@ -30,7 +30,7 @@ namespace FastGoLauncher {
   public string Name, Detail; public bool Ok; public long Milliseconds;
  }
  public static class Settings {
-  public const string LauncherVersion = "1.0.0";
+  public const string LauncherVersion = "1.0.1";
   public const string Repo = "ivankirillov414-art/fastgo-control";
   public const string Feed = "https://raw.githubusercontent.com/" + Repo + "/main/warehouse/update/latest.yml";
   public const string ReleasesApi = "https://api.github.com/repos/" + Repo + "/releases?per_page=30";
@@ -206,24 +206,43 @@ namespace FastGoLauncher {
  }
  public sealed class Installation {
   public string Version="",Path="";
+  internal static bool MatchesDisplayName(string name) {
+   // electron-builder NSIS defaults to "${productName} ${version}".
+   return Regex.IsMatch(name??"",@"^FastGo Склад(?: \d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)?$",RegexOptions.IgnoreCase);
+  }
+  internal static string DisplayIconPath(string value) {
+   var match=Regex.Match((value??"").Trim(),@"^(?:""([^""]+\.exe)""|([^""]+\.exe))(?:\s*,\s*-?\d+)?$",RegexOptions.IgnoreCase);
+   return match.Success?(match.Groups[1].Success?match.Groups[1].Value:match.Groups[2].Value):"";
+  }
+  internal static Installation FromRegistryValues(string name,string location,string icon,string version) {
+   var result=new Installation();
+   if(!MatchesDisplayName(name)) return result;
+   result.Path=FindExecutable(location);
+   if(result.Path=="") { string path=DisplayIconPath(icon); if(File.Exists(path)) result.Path=path; }
+   System.Version parsed;
+   if(result.Path!="" && System.Version.TryParse(version,out parsed)) result.Version=version;
+   return result;
+  }
+  internal static Installation FromFolder(string folder) {
+   // With signAndEditExecutable=false, EXE ProductVersion belongs to Electron.
+   // Keep a discovered installation even when its application version is unknown.
+   return new Installation { Path=FindExecutable(folder) };
+  }
   public static Installation Find() {
    var result=new Installation();
    foreach(var hive in new[] { RegistryHive.CurrentUser,RegistryHive.LocalMachine }) foreach(var view in new[] { RegistryView.Registry64,RegistryView.Registry32 }) {
     try { using(var root=RegistryKey.OpenBaseKey(hive,view)) using(var uninstall=root.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall")) {
      if(uninstall==null) continue;
      foreach(var name in uninstall.GetSubKeyNames()) using(var key=uninstall.OpenSubKey(name)) {
-      if(key==null || !String.Equals(Convert.ToString(key.GetValue("DisplayName")),"FastGo Склад",StringComparison.OrdinalIgnoreCase)) continue;
-      string location=Convert.ToString(key.GetValue("InstallLocation")),icon=Convert.ToString(key.GetValue("DisplayIcon")).Trim('"');
-      var match=Regex.Match(icon,@"^(.*?\.exe)(?:""?,\d+)?$",RegexOptions.IgnoreCase); if(match.Success) icon=match.Groups[1].Value.Trim('"');
-      string exe=FindExecutable(location); if(exe=="") exe=File.Exists(icon)?icon:"";
-      Version version; string text=Convert.ToString(key.GetValue("DisplayVersion"));
-      if(exe!="" && System.Version.TryParse(text,out version) && (result.Version=="" || version>new Version(result.Version))) result=new Installation { Version=text,Path=exe };
+      if(key==null) continue;
+      var candidate=FromRegistryValues(Convert.ToString(key.GetValue("DisplayName")),Convert.ToString(key.GetValue("InstallLocation")),Convert.ToString(key.GetValue("DisplayIcon")),Convert.ToString(key.GetValue("DisplayVersion")));
+      if(candidate.Path!="" && (result.Path=="" || (candidate.Version!="" && (result.Version=="" || new Version(candidate.Version)>new Version(result.Version))))) result=candidate;
      }
     } } catch { }
    }
    if(result.Path=="") foreach(string folder in new[] { "fastgo-warehouse-desktop", "FastGo Склад" }) {
-    string path=FindExecutable(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Programs",folder));
-    if(path!="") { result.Path=path; Version v; string text=FileVersionInfo.GetVersionInfo(path).ProductVersion; if(System.Version.TryParse(text,out v)) result.Version=text; break; }
+    var candidate=FromFolder(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Programs",folder));
+    if(candidate.Path!="") { result=candidate; break; }
    }
    return result;
   }
@@ -231,10 +250,16 @@ namespace FastGoLauncher {
    if(String.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return "";
    try { return Directory.GetFiles(folder,"*.exe").FirstOrDefault(x=>!System.IO.Path.GetFileName(x).StartsWith("Uninstall",StringComparison.OrdinalIgnoreCase) && System.IO.Path.GetFileName(x).StartsWith("FastGo",StringComparison.OrdinalIgnoreCase))??""; } catch { return ""; }
   }
+  internal static IEnumerable<string> ProcessNames(Installation installed) {
+   var names=new List<string> { "FastGo Склад", "FastGo РЎРєР»Р°Рґ" };
+   if(installed!=null && !String.IsNullOrEmpty(installed.Path)) names.Add(System.IO.Path.GetFileNameWithoutExtension(installed.Path));
+   return names.Distinct(StringComparer.OrdinalIgnoreCase);
+  }
   public static bool Running(Installation installed) {
-   if(installed.Path=="") return false;
-   string name=System.IO.Path.GetFileNameWithoutExtension(installed.Path);
-   var processes=Process.GetProcessesByName(name); bool any=processes.Length>0; foreach(var p in processes) p.Dispose(); return any;
+   foreach(string name in ProcessNames(installed)) {
+    var processes=Process.GetProcessesByName(name); bool any=processes.Length>0; foreach(var p in processes) p.Dispose(); if(any) return true;
+   }
+   return false;
   }
  }
  public sealed class Diagnostics {

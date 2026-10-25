@@ -13,8 +13,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Обновления FastGo Склад с докачкой и диагностикой сети")]
 [assembly: AssemblyCompany("FastGo")]
 [assembly: AssemblyProduct("FastGo Warehouse Launcher")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 namespace FastGoLauncher {
  static class Program {
   [STAThread] static int Main(string[] args) {

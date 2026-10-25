@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -45,13 +46,15 @@ static class Tests {
  static string Hash(byte[] bytes) { using(var hash=SHA512.Create()) return Convert.ToBase64String(hash.ComputeHash(bytes)); }
  static string Dir(string name) { var dir=Path.Combine(root,name); Directory.CreateDirectory(dir); return dir; }
  static Release Release(byte[] bytes,string url) { return new Release { Version="1.2.3",Url=url,Sha512=Hash(bytes),Size=bytes.Length }; }
- static int Main() {
+ static int Main(string[] args) {
+  if(args.Length==1 && args[0]=="--process-fixture") { Thread.Sleep(30000); return 0; }
   root=Path.Combine(Path.GetTempPath(),"fastgo-launcher-tests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
   try { Run().GetAwaiter().GetResult(); Console.WriteLine("ALL "+count+" CHECKS PASSED"); return 0; }
   catch(Exception e) { Console.Error.WriteLine(e); return 1; }
   finally { string temporary=Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar); if(Path.GetDirectoryName(Path.GetFullPath(root))!=temporary) throw new IOException("Unsafe test cleanup path"); if(Directory.Exists(root)) Directory.Delete(root,true); }
  }
  static async Task Run() {
+  TestInstallation();
   byte[] bytes=new byte[1200000]; new Random(31).NextBytes(bytes); bytes[0]=(byte)'M';bytes[1]=(byte)'Z';
   string url="https://github.com/"+Settings.Repo+"/releases/download/fastgo-warehouse-v1.2.3/FastGo-Warehouse-Setup-1.2.3-Windows-x64.exe";
   string valid=Manifest("1.2.3",url,Hash(bytes),bytes.Length.ToString());
@@ -110,5 +113,51 @@ static class Tests {
   }
   string existing=Path.Combine(Dir("verify"),"tampered.exe"); File.WriteAllBytes(existing,bytes); var known=Release(bytes,url); Assert(Updater.Verify(existing,known),"Known file passes checksum");
   using(var stream=File.OpenWrite(existing)) stream.WriteByte(0); Assert(!Updater.Verify(existing,known),"Changed cached file fails revalidation");
+ }
+ static void TestInstallation() {
+  Assert(Installation.MatchesDisplayName("FastGo Склад"),"Recognize legacy warehouse uninstall display name");
+  Assert(Installation.MatchesDisplayName("FastGo Склад 1.0.25"),"Recognize default NSIS product and version display name");
+  Assert(!Installation.MatchesDisplayName("FastGo 1.0.25"),"Do not identify the service application as warehouse");
+  Assert(!Installation.MatchesDisplayName("FastGo Склад Companion"),"Reject unrelated product sharing the warehouse prefix");
+  Assert(!Installation.MatchesDisplayName("FastGo Склад 1.0.25 malicious"),"Require a complete NSIS display name");
+  string folder=Dir("installed warehouse with spaces"),exe=Path.Combine(folder,"FastGo Склад.exe");
+  File.Copy(typeof(Tests).Assembly.Location,exe);
+  Assert(Installation.DisplayIconPath("\""+exe+"\",0")==exe,"Parse quoted DisplayIcon with an index");
+  Assert(Installation.DisplayIconPath(exe+",0")==exe,"Parse unquoted NSIS DisplayIcon with an index");
+  Assert(Installation.DisplayIconPath("  \""+exe+"\", -1  ")==exe,"Parse signed icon index and surrounding whitespace");
+  Assert(Installation.DisplayIconPath("\""+exe+"\" --background")=="","Reject command arguments in DisplayIcon");
+  var known=Installation.FromRegistryValues("FastGo Склад 1.0.25",folder,"","1.0.25");
+  Assert(known.Path==exe && known.Version=="1.0.25","Read a standard NSIS installation and its application version");
+  var missing=Installation.FromRegistryValues("FastGo Склад",folder,"","");
+  Assert(missing.Path==exe && missing.Version=="","Keep installed path when DisplayVersion is absent");
+  var invalid=Installation.FromRegistryValues("FastGo Склад",folder,"","unknown");
+  Assert(invalid.Path==exe && invalid.Version=="","Keep installed path when DisplayVersion is invalid");
+  var icon=Installation.FromRegistryValues("FastGo Склад 1.0.25","","\""+exe+"\",0","1.0.25");
+  Assert(icon.Path==exe && icon.Version=="1.0.25","Discover an installation from quoted DisplayIcon without InstallLocation");
+  var absent=Installation.FromRegistryValues("FastGo Склад 1.0.25",Path.Combine(folder,"absent"),"","1.0.25");
+  Assert(absent.Path=="" && absent.Version=="","Reject uninstall records whose executable is absent");
+  var service=Installation.FromRegistryValues("FastGo 1.0.25",folder,"\""+exe+"\",0","1.0.25");
+  Assert(service.Path=="","Do not discover warehouse through service uninstall records");
+  var fallback=Installation.FromFolder(folder);
+  Assert(fallback.Path==exe && fallback.Version=="","Folder discovery retains path without trusting EXE ProductVersion");
+  Assert(!Installation.ProcessNames(new Installation()).Contains("FastGo",StringComparer.OrdinalIgnoreCase),"Process guard does not match the generic FastGo service name");
+  Assert(!Installation.ProcessNames(new Installation()).Contains("FastGo-Warehouse-Launcher",StringComparer.OrdinalIgnoreCase),"Process guard does not match the launcher");
+  TestWarehouseProcess(exe,"FastGo Склад");
+  string renamed=Path.Combine(folder,"FastGo РЎРєР»Р°Рґ.exe"); File.Copy(typeof(Tests).Assembly.Location,renamed);
+  TestWarehouseProcess(renamed,"FastGo РЎРєР»Р°Рґ");
+ }
+ static void TestWarehouseProcess(string exe,string name) {
+  using(var fixture=Process.Start(new ProcessStartInfo(exe,"--process-fixture") { UseShellExecute=false,CreateNoWindow=true })) {
+   try {
+    bool found=false;
+    for(int attempt=0;attempt<20 && !found;attempt++) {
+     var processes=Process.GetProcessesByName(name);
+     found=processes.Any(p=>p.Id==fixture.Id); foreach(var process in processes) process.Dispose();
+     if(!found) Thread.Sleep(50);
+    }
+    Assert(found && !fixture.HasExited,"Start a controlled real process with warehouse name: "+name);
+    Assert(Installation.Running(new Installation()),"Block installation while named warehouse runs even without discovery: "+name);
+   } finally { if(!fixture.HasExited) fixture.Kill(); fixture.WaitForExit(5000); }
+  }
  }
 }

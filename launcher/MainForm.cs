@@ -29,7 +29,7 @@ namespace FastGoLauncher {
   readonly Meter meter;
   readonly List<Probe> probes=new List<Probe>();
   CancellationTokenSource operation; Release release; string downloaded=""; bool busy;
-  string smokeDirectory; bool repairing;
+  string smokeDirectory; bool repairing,installing;
   public MainForm(string smokeDirectory) {
    this.smokeDirectory=smokeDirectory; updater=new Updater(network); diagnostics=new Diagnostics(network,updater);
    Text="FastGo Склад · Лаунчер"; BackColor=Background; ForeColor=TextPrimary; Font=new Font("Segoe UI",10); AutoScaleMode=AutoScaleMode.Dpi;
@@ -87,7 +87,7 @@ namespace FastGoLauncher {
   async Task Check() {
    if(busy) return; var token=Begin(); downloaded=""; release=null; meter.Percent=0;
    headline.Text="Проверяем обновления"; description.Text="Получаем актуальную версию FastGo Склад."; progressText.Text=""; latestLabel.Text="Проверяем…";
-   var installed=Installation.Find(); installedLabel.Text=installed.Version==""?"Не найден":installed.Version;
+   var installed=Installation.Find(); installedLabel.Text=installed.Version!=""?installed.Version:installed.Path!=""?"Установлен":"Не найден";
    try {
     release=await updater.Latest(token); latestLabel.Text=release.Version;
     string final=Path.Combine(Settings.Downloads,release.FileName);
@@ -120,11 +120,11 @@ namespace FastGoLauncher {
   async Task RepairJarvis() {
    if(busy) return; Begin(); repairing=true; cancel.Visible=false; diagSummary.Text="Исправляем фоновый запуск JARVIS…";
    try { string result=await JarvisRepair.Run(true); diagSummary.Text="JARVIS: скрытый запуск настроен"; diagnosticText.Text=result; probes.Add(new Probe { Name="Исправление JARVIS",Ok=true,Detail=result }); }
-   catch(Exception e) { diagSummary.Text="JARVIS: исправление не применено"; diagnosticText.Text=Format.Error(e); Log.Write("JARVIS: "+Format.Error(e)); }
-   finally { repairing=false; End(); export.Enabled=probes.Count>0; }
+   catch(Exception e) { diagSummary.Text="JARVIS: исправление не применено"; diagnosticText.Text=Format.Error(e); probes.Add(new Probe { Name="Исправление JARVIS",Ok=false,Detail=Format.Error(e) }); Log.Write("JARVIS: "+Format.Error(e)); }
+   finally { repairing=false; End(); export.Enabled=probes.Count>0; diagnosticText.SelectionStart=0; diagnosticText.ScrollToCaret(); }
   }
   async void Install() {
-   if(busy || downloaded=="" || release==null) return;
+   if(busy || installing || downloaded=="" || release==null) return;
    var installed=Installation.Find();
    if(Installation.Running(installed)) { headline.Text="Сначала закройте склад"; description.Text="Завершите текущие документы и закройте FastGo Склад, включая значок в трее. Затем повторите установку."; return; }
    if(installed.Version!="" && new Version(installed.Version)>new Version(release.Version)) { headline.Text="Установлена более новая версия"; description.Text="Понижение версии заблокировано. Проверьте обновления ещё раз."; return; }
@@ -132,10 +132,19 @@ namespace FastGoLauncher {
    try {
     if(!await Task.Run(()=>Updater.Verify(downloaded,release),token)) throw new InvalidDataException("Файл изменился после загрузки. Скачайте установщик заново.");
     if(Installation.Running(Installation.Find())) throw new InvalidOperationException("FastGo Склад открыт. Закройте приложение перед установкой.");
-    Process.Start(new ProcessStartInfo(downloaded) { UseShellExecute=true,WorkingDirectory=Settings.Downloads });
-    headline.Text="Установщик запущен"; description.Text="Пройдите шаги установки. После завершения склад можно открыть кнопкой ниже."; Log.Write("Пользователь запустил установщик "+release.Version);
+    using(var installer=Process.Start(new ProcessStartInfo(downloaded) { UseShellExecute=true,WorkingDirectory=Settings.Downloads })) {
+     if(installer==null) throw new InvalidOperationException("Windows не вернула процесс установщика. Проверьте открытые окна.");
+     installing=true; cancel.Visible=false;
+     headline.Text="Установщик запущен"; description.Text="Завершите шаги мастера установки. Дождитесь закрытия его окна."; action.Text="Идёт установка…"; Log.Write("Пользователь запустил установщик "+release.Version);
+     await Task.Run(()=>installer.WaitForExit());
+     if(IsDisposed) return;
+     var updated=Installation.Find(); installedLabel.Text=updated.Version!=""?updated.Version:updated.Path!=""?"Установлен":"Не найден";
+     if(updated.Version==release.Version) { headline.Text="Склад установлен"; description.Text="Установлена версия "+updated.Version+". Теперь склад можно открыть."; }
+     else { headline.Text="Мастер установки закрыт"; description.Text="Проверьте установленную версию или повторите установку, если мастер был отменён."; }
+     action.Text="Установить "+release.Version;
+    }
    } catch(Exception e) { headline.Text="Установка не запущена"; description.Text=Format.Error(e); }
-   finally { End(); }
+   finally { installing=false; if(!IsDisposed) End(); }
   }
   void OpenWarehouse() { try { var installed=Installation.Find(); if(installed.Path=="") throw new FileNotFoundException("FastGo Склад пока не установлен."); Process.Start(new ProcessStartInfo(installed.Path) { UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(installed.Path) }); } catch(Exception e) { description.Text=Format.Error(e); } }
   void SaveReport() { using(var dialog=new SaveFileDialog { Filter="Текстовый отчёт (*.txt)|*.txt",FileName="FastGo-network-"+DateTime.Now.ToString("yyyy-MM-dd-HHmm")+".txt" }) if(dialog.ShowDialog(this)==DialogResult.OK) { try { File.WriteAllText(dialog.FileName,Diagnostics.Report(probes),System.Text.Encoding.UTF8); } catch(Exception e) { diagSummary.Text=Format.Error(e); } } }
@@ -143,8 +152,12 @@ namespace FastGoLauncher {
    try {
     await Diagnose(); await Task.Delay(250); Directory.CreateDirectory(smokeDirectory);
     using(var bitmap=new Bitmap(Width,Height)) { DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height)); bitmap.Save(Path.Combine(smokeDirectory,"launcher.png"),System.Drawing.Imaging.ImageFormat.Png); }
-    var installed=Installation.Find();
-    File.WriteAllText(Path.Combine(smokeDirectory,"ui-verification.json"),new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(new { launcher=Settings.LauncherVersion,native_process=true,feed_version=release==null?"":release.Version,installed_version=installed.Version,download_button_enabled=action.Enabled,network_checks=probes.Count,network_errors=probes.Count(p=>!p.Ok),jarvis_button_enabled=jarvis.Enabled,jarvis_resource_embedded=typeof(JarvisRepair).Assembly.GetManifestResourceNames().Contains("FastGo.JarvisRepair"),width=Width,height=Height,automatic_install=false }));
+    var installed=Installation.Find(); string inspection="";
+    try { inspection=await JarvisRepair.Run(false); } catch(Exception e) { inspection=Format.Error(e); }
+    diagSummary.Text="JARVIS: проверка без изменений"; diagnosticText.Text=inspection; diagnosticText.SelectionStart=0; diagnosticText.ScrollToCaret();
+    using(var bitmap=new Bitmap(Width,Height)) { DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height)); bitmap.Save(Path.Combine(smokeDirectory,"launcher-jarvis-inspect.png"),System.Drawing.Imaging.ImageFormat.Png); }
+    File.WriteAllText(Path.Combine(smokeDirectory,"jarvis-inspection.txt"),inspection,System.Text.Encoding.UTF8);
+    File.WriteAllText(Path.Combine(smokeDirectory,"ui-verification.json"),new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(new { launcher=Settings.LauncherVersion,native_process=true,feed_version=release==null?"":release.Version,installed_version=installed.Version,download_button_enabled=action.Enabled,network_checks=probes.Count,network_errors=probes.Count(p=>!p.Ok),jarvis_button_enabled=jarvis.Enabled,jarvis_resource_embedded=typeof(JarvisRepair).Assembly.GetManifestResourceNames().Contains("FastGo.JarvisRepair"),jarvis_runner_embedded=typeof(JarvisRepair).Assembly.GetManifestResourceNames().Contains("FastGo.JarvisRunner"),jarvis_inspection_readonly=true,jarvis_error_code_visible=inspection.Contains("Код:"),width=Width,height=Height,automatic_install=false }));
    } catch(Exception e) { File.WriteAllText(Path.Combine(smokeDirectory,"ui-error.txt"),e.ToString()); }
    finally { Close(); }
   }

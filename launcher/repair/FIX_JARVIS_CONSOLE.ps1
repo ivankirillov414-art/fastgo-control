@@ -1,17 +1,64 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$BotRoot,[switch]$Apply,[switch]$LibraryOnly,[string]$StartupDirectory,[string]$ResultFile)
 $ErrorActionPreference='Stop'
 try{[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)}catch{}
 
-function Get-JarvisRoot([object[]]$Actions,[string]$StartupText){
- foreach($action in $Actions){
-  $text=([string]$action.Execute)+' '+([string]$action.Arguments)
-  $match=[regex]::Match($text,'(?i)([a-z]:\\[^"\r\n]*\\)(?:SYNC_TELEMETRY_AUTO\.bat|SYNC_TELEMETRY_HIDDEN\.vbs)')
-  if($match.Success){return $match.Groups[1].Value.TrimEnd('\')}
+function Get-JarvisLaunchRoots([string]$Text,[string]$WorkingDirectory){
+ $text=[Environment]::ExpandEnvironmentVariables($Text)
+ $working=[Environment]::ExpandEnvironmentVariables($WorkingDirectory).Trim().Trim('"')
+ $names='(?:SYNC_TELEMETRY_AUTO\.bat|SYNC_TELEMETRY_HIDDEN\.vbs|RUN_JARVIS_TRADER_FOREVER\.bat)'
+ # Inspect Execute and Arguments separately. A second drive colon or a command
+ # switch cannot become part of the bot path (cmd.exe /c C:\Bot\...).
+ $absolute='(?i)(?<file>(?:[a-z]:\\|\\\\[^\\\s"]+\\[^\\\s"]+\\)[^":\r\n<>|/]*'+$names+')(?=$|[\s"])'
+ $matches=[regex]::Matches($text,$absolute)
+ foreach($match in $matches){[IO.Path]::GetDirectoryName($match.Groups['file'].Value)}
+ if($matches.Count -or !$working){return}
+ $relative='(?i)(?:^|[\s"])(?<file>(?:\.\.?\\)?(?:[^\\":\r\n<>|/]+\\)*'+$names+')(?=$|[\s"])'
+ foreach($match in [regex]::Matches($text,$relative)){
+  $path=[IO.Path]::Combine($working,$match.Groups['file'].Value.Trim())
+  [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($path))
  }
- $match=[regex]::Match($StartupText,'(?i)"([a-z]:\\[^"\r\n]+)\\RUN_JARVIS_TRADER_FOREVER\.bat"')
- if($match.Success){return $match.Groups[1].Value}
+}
+function Get-JarvisRoot([object[]]$Actions,[string]$StartupText){
+ $candidates=@(foreach($action in $Actions){
+  Get-JarvisLaunchRoots -Text ([string]$action.Execute) -WorkingDirectory ([string]$action.WorkingDirectory)
+  Get-JarvisLaunchRoots -Text ([string]$action.Arguments) -WorkingDirectory ([string]$action.WorkingDirectory)
+ }; Get-JarvisLaunchRoots -Text $StartupText -WorkingDirectory '')|Select-Object -Unique
+ $installed=@($candidates|Where-Object {[IO.File]::Exists([IO.Path]::Combine($_,'src\main.py'))})
+ if($installed.Count -gt 1){throw 'Multiple JARVIS installations were found in the task/startup entries. No changes made.'}
+ if($installed.Count -eq 1){return $installed[0]}
+ if($candidates.Count){return @($candidates)[0]}
  throw 'JARVIS task/startup was not found. No changes made. Run this file on the cash laptop where JARVIS is installed.'
+}
+function Read-JarvisStartup([string]$Path){
+ $bytes=[IO.File]::ReadAllBytes($Path)
+ if(($bytes.Length -ge 2 -and (($bytes[0] -eq 255 -and $bytes[1] -eq 254) -or ($bytes[0] -eq 254 -and $bytes[1] -eq 255))) -or
+    ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191) -or
+    ($bytes.Length -ge 4 -and $bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 254 -and $bytes[3] -eq 255)){
+  return [IO.File]::ReadAllText($Path)
+ }
+ try{return [Text.UTF8Encoding]::new($false,$true).GetString($bytes)}catch [Text.DecoderFallbackException]{}
+ $textInfo=[Globalization.CultureInfo]::CurrentCulture.TextInfo
+ $uiTextInfo=[Globalization.CultureInfo]::CurrentUICulture.TextInfo
+ # The UI is Russian; include its OEM/ANSI pages when Windows itself uses a
+ # different display locale. Accept a legacy decoding only for a real bot path.
+ $pages=@($textInfo.OEMCodePage,$textInfo.ANSICodePage,$uiTextInfo.OEMCodePage,$uiTextInfo.ANSICodePage,866,1251)|Select-Object -Unique
+ $valid=@(foreach($page in $pages){
+  $text=[Text.Encoding]::GetEncoding($page).GetString($bytes)
+  foreach($root in @(Get-JarvisLaunchRoots -Text $text -WorkingDirectory '')){
+   if([IO.File]::Exists([IO.Path]::Combine($root,'src\main.py')) -and
+      [IO.File]::Exists([IO.Path]::Combine($root,'RUN_JARVIS_TRADER_FOREVER.bat'))){
+    [pscustomobject]@{root=$root;text=$text};break
+   }
+  }
+ })
+ $roots=@($valid|ForEach-Object {$_.root}|Select-Object -Unique)
+ if($roots.Count -eq 1){return $valid[0].text}
+ throw 'The Windows encoding of the JARVIS startup entry could not be resolved to one installed bot folder. No changes made.'
+}
+function Get-JarvisTask{
+ try{Get-ScheduledTask -TaskName 'JARVIS_Bybit_Telemetry' -TaskPath '\' -ErrorAction Stop}
+ catch{if($_.FullyQualifiedErrorId -like 'CmdletizationQuery_NotFound*'){return};throw}
 }
 function New-HiddenWrapper([string]$Root,[string]$Batch,[bool]$Wait){
  $directory=$Root.Replace('"','""');$batchName=$Batch.Replace('"','""');$waitText=if($Wait){'True'}else{'False'}
@@ -28,11 +75,13 @@ WScript.Quit result
 }
 if($LibraryOnly){return}
 
-$task=Get-ScheduledTask -TaskName 'JARVIS_Bybit_Telemetry' -TaskPath '\' -ErrorAction SilentlyContinue
+$task=Get-JarvisTask
 if(!$StartupDirectory){$StartupDirectory=[Environment]::GetFolderPath('Startup')}
 $startup=Join-Path $StartupDirectory 'JARVIS_Bybit_Trader_Autostart.cmd'
 $startupVbs=[IO.Path]::ChangeExtension($startup,'.vbs')
-$startupText=if(Test-Path -LiteralPath $startup){[IO.File]::ReadAllText($startup)}else{''}
+$legacyStartupText=if(Test-Path -LiteralPath $startup){Read-JarvisStartup $startup}else{''}
+$hiddenStartupText=if(Test-Path -LiteralPath $startupVbs){Read-JarvisStartup $startupVbs}else{''}
+$startupText=$legacyStartupText+$hiddenStartupText
 if(!$task -and !$startupText){throw 'No JARVIS scheduled task or legacy startup entry found. No changes made.'}
 $originalTaskActions=@($task.Actions)
 if(!$BotRoot){$BotRoot=Get-JarvisRoot -Actions @($task.Actions) -StartupText $startupText}
@@ -67,7 +116,7 @@ try{
   $verified=Get-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath
   if($verified.Actions.Count -ne 1 -or $verified.Actions[0].Execute -ne $wscript -or $verified.Actions[0].Arguments -ne $action.Arguments){throw 'The scheduled-task update did not verify.'}
  }
- if($startupText){
+ if($legacyStartupText){
   # Only remove this exact old startup entry after its bytes are backed up.
   [IO.File]::WriteAllText($startupVbs,(New-HiddenWrapper $BotRoot 'RUN_JARVIS_TRADER_FOREVER.bat' $false),[Text.Encoding]::Unicode)
   Remove-Item -LiteralPath $startup
@@ -78,7 +127,19 @@ try{
  $receipt|ConvertTo-Json
 }catch{
  $failure=$_
- if($taskChanged){Set-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Action $originalTaskActions|Out-Null}
- foreach($file in $files){if($null -ne $saved[$file]){[IO.File]::WriteAllBytes($file,$saved[$file])}elseif(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
+ $rollbackErrors=@()
+ if($taskChanged){
+  try{Set-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Action $originalTaskActions|Out-Null}
+  catch{$rollbackErrors+=('Task restore: '+$_.Exception.Message)}
+ }
+ foreach($file in $files){
+  try{
+   if($null -ne $saved[$file]){[IO.File]::WriteAllBytes($file,$saved[$file])}
+   elseif(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
+  }catch{$rollbackErrors+=('File restore '+$file+': '+$_.Exception.Message)}
+ }
+ if($rollbackErrors.Count){
+  throw [InvalidOperationException]::new(('Rollback incomplete. Original error: '+$failure.Exception.Message+' Backup: '+$backup+'. Restore errors: '+($rollbackErrors -join '; ')),$failure.Exception)
+ }
  throw $failure
 }
