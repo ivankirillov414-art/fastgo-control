@@ -17,6 +17,7 @@ public final class SyncEngine {
      catch(WarehouseApi.ApiError e){if(e.status==400||e.status==403||e.status==404||e.status==409){JSONObject current=store.doc(id);if(current!=null&&current.optString("state").equals("open")){current.remove("issue_requested");current.remove("pickup");current.remove("pickup_code");store.save(current);}}throw e;}
      store.put("issue_result:"+id,result.toString());store.complete(id,snapshot.getInt("revision"));
     }else if(snapshot.optBoolean("cancel_requested")){store.put("cancelled:"+id,"true");store.complete(id,snapshot.getInt("revision"));}
+    else if(!snapshot.has("pickup")&&!snapshot.optString("pickup_scan").isEmpty()&&!snapshot.optBoolean("pickup_blocked")&&snapshot.optLong("pickup_retry_at")<=System.currentTimeMillis())syncPickup(snapshot);
     continue;
    }
    if(snapshot.optBoolean("cancel_requested")){
@@ -43,6 +44,10 @@ public final class SyncEngine {
    }
    Object r=api.call("job",new JSONObject().put("id",id));if(r instanceof JSONObject){JSONObject job=(JSONObject)r;store.put("server:"+id,job.optString("state"));if(job.optString("state").equals("done"))store.complete(id,job.getJSONObject("payload").getInt("revision"));}
   }
+ }
+ private void syncPickup(JSONObject selected)throws Exception{
+  try{JSONObject quote=(JSONObject)api.call("parts_pickup_quote",new JSONObject().put("code",selected.getString("pickup_scan")));store.pickupResult(selected,quote,"",false,0);}
+  catch(Exception error){int status=error instanceof WarehouseApi.ApiError?((WarehouseApi.ApiError)error).status:0;boolean permanent=status==400||status==401||status==403||status==404||status==409;long delay=Math.min(30000,2000L<<Math.min(selected.optInt("pickup_attempts"),4));String message=error.getMessage()==null?"Нет связи с сервером":error.getMessage();store.pickupResult(selected,null,message,permanent,System.currentTimeMillis()+delay);}
  }
  private void syncRepair(JSONObject d)throws Exception{
   JSONArray events=d.getJSONArray("events");if(events.length()==0)return;JSONObject event=events.getJSONObject(events.length()-1);if(event.optBoolean("undone"))return;

@@ -9,7 +9,12 @@ public class ScanDocumentTest {
  @Test public void unknownIsNotLostWhenKnownItemsCommit()throws Exception{JSONObject d=ScanDocument.create("receipt");ScanDocument.append(d,"code",part());ScanDocument.append(d,"unknown",null);JSONObject next=ScanDocument.afterCommit(d,d.getInt("revision"));assertEquals("unknown",ScanDocument.last(next).getString("code"));assertEquals(0,ScanDocument.items(next).length());}
  @Test public void wrongSectionDoesNotChangeRevisionOrEvents()throws Exception{
   String qr="https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=359b6650-b0a6-4260-88b7-7c54b99a3fcf";
-  for(String kind:new String[]{"sale","receipt","repair","parts"}){JSONObject d=ScanDocument.create(kind);String before=d.toString();String bad=kind.equals("repair")?"FGP-00000001":qr;try{ScanDocument.append(d,bad,null);fail("Wrong section accepted");}catch(IllegalArgumentException expected){}assertEquals(before,d.toString());}
+  for(String kind:new String[]{"sale","receipt","repair","parts"}){JSONObject d=ScanDocument.create(kind);String before=d.toString();String bad=kind.equals("repair")?"FGP-00000001":kind.equals("parts")?"https://foreign.invalid/repair":qr;try{ScanDocument.append(d,bad,null);fail("Wrong section accepted");}catch(IllegalArgumentException expected){}assertEquals(before,d.toString());}
   assertFalse(ScanDocument.scanError("",qr).isEmpty());assertTrue(ScanDocument.scanError("repair",qr).isEmpty());assertTrue(ScanDocument.scanError("parts","FGPARTS1.token").isEmpty());assertFalse(ScanDocument.scanError("sale","FGPARTS1.token").isEmpty());
+ }
+ @Test public void pickupSelectionSurvivesSerializationButStaleResponsesCannotAttachToChangedBuffer()throws Exception{
+  String qr="https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=359b6650-b0a6-4260-88b7-7c54b99a3fcf";assertTrue(ScanDocument.scanError("parts",qr).isEmpty());assertEquals(qr,ScanDocument.normalizeCode("]Q3"+qr));assertEquals("FGPARTS1.token",ScanDocument.normalizeCode("\uFEFF]Q1FGPARTS1.token\r\n"));
+  JSONObject d=ScanDocument.create("parts");ScanDocument.append(d,"FGP-00000001",part());ScanDocument.append(d,"FGP-00000001",part());ScanDocument.selectPickup(d,"]Q3"+qr);JSONObject selected=new JSONObject(d.toString());assertTrue(ScanDocument.samePickup(d,selected));assertEquals(2,ScanDocument.items(d).getJSONObject(0).getInt("quantity"));
+  ScanDocument.append(d,"FGP-00000001",part());assertFalse(ScanDocument.samePickup(d,selected));d=new JSONObject(selected.toString());d.put("cancel_requested",true);assertFalse(ScanDocument.samePickup(d,selected));d=new JSONObject(selected.toString());ScanDocument.selectPickup(d,"FGPARTS1.other");assertFalse(ScanDocument.samePickup(d,selected));
  }
 }
