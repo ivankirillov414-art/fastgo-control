@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+const {serve,launchOptions}=require('./warehouse-browser-fixture.cjs');
+const {chromium}=require(process.env.FASTGO_PLAYWRIGHT?path.join(process.env.FASTGO_PLAYWRIGHT,'node_modules/playwright'):'playwright');
+(async()=>{const {server,base}=await serve(),browser=await chromium.launch(launchOptions);try{
+ const context=await browser.newContext(),page=await context.newPage();let downloads=0;
+ await context.route('**/test-photo.png*',route=>{downloads++;return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});});
+ await page.goto(base+'/design/part-card-options.html');
+ const read=(key,refresh=false)=>page.evaluate(async({key,refresh})=>{const {cachedPhoto}=await import('/workshop/photo-cache.js');return(await cachedPhoto('/test-photo.png?v='+Math.random(),key,{enabled:true,refresh})).size;},{key,refresh});
+ await Promise.all([read('userA:part:path1'),read('userA:part:path1')]);assert.equal(downloads,1,'simultaneous loads share one download');
+ await page.reload();await read('userA:part:path1');assert.equal(downloads,1,'disk cache survives page reload and signed URL rotation');
+ await read('userB:part:path1');assert.equal(downloads,2,'another account does not reuse cached pixels');
+ await read('userA:part:path2');assert.equal(downloads,3,'replacement path invalidates photo');
+ await read('userA:part:path1',true);assert.equal(downloads,4,'decode recovery bypasses old cached bytes');
+ await page.evaluate(async()=>{const cache=await caches.open('fastgo-part-photos-v1');const key=(await cache.keys()).find(x=>decodeURIComponent(x.url).includes('userA:part:path1'));await cache.put(key,new Response('expired',{headers:{'x-fastgo-stored':'1','x-fastgo-size':'7'}}));});
+ await read('userA:part:path1');assert.equal(downloads,5,'expired cache entries are reloaded');
+ await page.evaluate(async()=>{window.fastgoDesktop={};const {displayPrivatePhoto}=await import('/workshop/private-photo.js');const image=new Image();document.body.append(image);let loaded;window.photoReady=new Promise(r=>loaded=r);displayPrivatePhoto(image,{cacheKey:'userA:part:path1',getUrl:async()=>{throw Error('Access revoked');},onLoad:()=>loaded('leaked'),onError:()=>loaded('denied')});});
+ assert.equal(await page.evaluate(()=>window.photoReady),'denied','cached pixels cannot bypass a fresh authorization failure');
+ await page.evaluate(async()=>{const {cachedPhoto}=await import('/workshop/photo-cache.js');window.noCache=await cachedPhoto('/test-photo.png','web-user',{enabled:false});});
+ assert.equal(await page.evaluate(()=>window.noCache),null);assert.equal(downloads,5,'web/non-native display uses the normal image loader');
+ await page.evaluate(async()=>{const cache=await caches.open('fastgo-part-photos-v1');for(let i=0;i<102;i++)await cache.put('https://fastgo-photo-cache.invalid/old-'+i,new Response('a',{headers:{'Content-Type':'image/png','x-fastgo-stored':String(Date.now()-1000+i),'x-fastgo-size':'1'}}));});
+ await read('userA:part:after-limit');assert.ok(await page.evaluate(async()=>(await(await caches.open('fastgo-part-photos-v1')).keys()).length<=100),'cache evicts older entries to keep the item bound');
+ await page.evaluate(async()=>{const {cachedPhoto}=await import('/workshop/photo-cache.js');const original=Cache.prototype.put;Cache.prototype.put=async()=>{throw new DOMException('Full','QuotaExceededError');};try{window.quotaSize=(await cachedPhoto('/test-photo.png','quota-test',{enabled:true})).size;}finally{Cache.prototype.put=original;}});assert.ok(await page.evaluate(()=>window.quotaSize>0),'a full disk does not prevent display');
+ console.log('PASS: deduplicated downloads, persistent bytes, rotating signed URLs, account/path isolation, refresh, expiry, revoked access, non-native fallback');
+}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
