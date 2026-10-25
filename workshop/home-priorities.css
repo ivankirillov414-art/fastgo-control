@@ -1,6 +1,5 @@
 /* Laptop homepage. Other pages and the mobile homepage keep their own layout. */
-body:has(.priorities-home){padding-top:0}
-body:has(.priorities-home) #desktop-status{display:none}
+body:has(.priorities-home):not(:has(#desktop-status)){padding-top:0}
 .shell:has(.priorities-home){grid-template-columns:210px minmax(0,1fr)}
 .shell:has(.priorities-home) .workspace{padding:22px 28px 28px;max-width:1600px;margin:0 auto}
 .shell:has(.priorities-home) .sidebar{padding:22px 14px 14px}
