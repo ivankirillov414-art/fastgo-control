@@ -9,9 +9,9 @@ function barcodePrintHTML(p){
  if(p2){
   // Preserve JsBarcode's two-dot modules at the P2's native 203 dpi. Stretching
   // an SVG to the full paper width gives bars fractional dots and closes gaps.
-  const box=svg.match(/\bviewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/),dots=box?.slice(1).map(Number),paperDots=Math.floor(width*203/25.4),mm=n=>(n*25.4/203).toFixed(5)+'mm';
+  const box=svg.match(/\bviewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/),dots=box?.slice(1).map(Number),paperDots=Math.min(384,Math.floor(width*203/25.4)),mm=n=>(n*25.4/203).toFixed(5)+'mm';
   if(!dots||!dots.every(n=>Number.isInteger(n)&&n>0)||dots[0]>paperDots-32||dots[1]!==72)throw Error('Штрихкод не помещается без искажения. Выберите более широкую этикетку.');
-  thermalCSS='.label{position:relative;padding:0;display:block}.label strong,.label small{position:absolute;left:'+mm(16)+';right:'+mm(16)+';overflow:hidden;white-space:nowrap;text-align:center}.label strong{top:'+mm(16)+';height:'+mm(26)+';max-height:none;font-size:8pt;line-height:'+mm(26)+';text-overflow:ellipsis}.label svg{position:absolute;left:'+mm(Math.floor((paperDots-dots[0])/2))+';top:'+mm(46)+';width:'+mm(dots[0])+';height:'+mm(72)+';shape-rendering:crispEdges}.label small{top:'+mm(122)+';height:'+mm(24)+';font-size:7pt;line-height:'+mm(24)+'}';
+  thermalCSS='.label{position:relative;padding:0;display:block}.label strong,.label small{position:absolute;left:'+mm(16)+';width:'+mm(paperDots-32)+';overflow:hidden;white-space:nowrap;text-align:center}.label strong{top:'+mm(16)+';height:'+mm(26)+';max-height:none;font-size:8pt;line-height:'+mm(26)+';text-overflow:ellipsis}.label svg{position:absolute;left:'+mm(Math.floor((paperDots-dots[0])/2))+';top:'+mm(46)+';width:'+mm(dots[0])+';height:'+mm(72)+';shape-rendering:crispEdges}.label small{top:'+mm(122)+';height:'+mm(24)+';font-size:7pt;line-height:'+mm(24)+'}';
  }else if(!a4){
   thermalCSS='.label{justify-content:flex-start;padding:2mm;gap:.5mm}.label strong{width:100%;max-height:none;height:3.3mm;flex:0 0 3.3mm;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}';
  }
