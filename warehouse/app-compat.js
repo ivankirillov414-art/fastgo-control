@@ -3243,13 +3243,18 @@
   } });
   var updating = false;
   async function updateNow() {
-    var _a2;
+    var _a2, _b;
     if (updating) return;
     updating = true;
     try {
       live.checkpoint();
       message("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u2026");
-      if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.checkUpdates) {
+      if ((_a2 = window.fastgoDesktop) == null ? void 0 : _a2.updateNow) {
+        await window.fastgoDesktop.updateNow();
+        await desktopStatus();
+        return;
+      }
+      if ((_b = window.warehouseDesktop) == null ? void 0 : _b.checkUpdates) {
         const state = await window.warehouseDesktop.checkUpdates();
         await desktopStatus();
         if (["downloading", "ready", "preparing", "installing"].includes(state == null ? void 0 : state.status)) {
@@ -3270,6 +3275,7 @@
     }
   }
   window.warehouseRequestUpdate = () => void updateNow();
+  if ($("warehouse-update-now")) $("warehouse-update-now").onclick = () => void updateNow();
   window.fastgoWarehouseCanLeave = () => !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
   window.fastgoWarehouseOpenMode = async (kind) => {
     if (!["receipt", "sale"].includes(kind) || !window.fastgoWarehouseCanLeave() && !live.canUSB(kind)) return false;

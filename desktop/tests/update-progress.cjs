@@ -15,8 +15,8 @@ app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'cre
 require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 (async()=>{const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000}),page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));try{
  await page.locator('#desktop-options').waitFor({state:'attached'});await page.locator('#home-stats').waitFor();
- await page.locator('[data-home-settings]').click();await page.locator('#desktop-update-now').click();
- await page.locator('#desktop-update-progress[open]').waitFor();assert.equal(await page.locator('#desktop-settings').evaluate(d=>d.open),false);
+ await page.locator('#desktop-update-main').click();
+ await page.locator('#desktop-update-progress[open]').waitFor();assert.equal(await page.locator('#desktop-settings[open]').count(),0);
  await page.waitForFunction(()=>document.querySelector('#desktop-update-title').textContent==='Проверяем обновления');
  await app.evaluate(()=>{testUpdater.emit('update-available',{version:'99.0.0'});testUpdater.emit('download-progress',{percent:37,transferred:38797312,total:104857600,bytesPerSecond:1048576});});
  await page.waitForFunction(()=>document.querySelector('#desktop-update-progress progress').value===37);assert.match(await page.locator('#desktop-update-detail').textContent(),/37,0 МБ из 100,0 МБ/);

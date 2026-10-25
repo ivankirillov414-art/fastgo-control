@@ -150,6 +150,7 @@ async function updateNow(){
  try{
   live.checkpoint();
   message('Проверка версии приложения…');
+  if(window.fastgoDesktop?.updateNow){await window.fastgoDesktop.updateNow();await desktopStatus();return;}
   if(window.warehouseDesktop?.checkUpdates){
    const state=await window.warehouseDesktop.checkUpdates();await desktopStatus();
    if(['downloading','ready','preparing','installing'].includes(state?.status)){message('Обновление '+state.version+' будет установлено сразу после загрузки, когда документы закрыты и USB свободен.');return;}
@@ -159,6 +160,7 @@ async function updateNow(){
  }catch(e){message('Ошибка обновления: '+e.message,true);}finally{updating=false;}
 }
 window.warehouseRequestUpdate=()=>void updateNow();
+if($('warehouse-update-now'))$('warehouse-update-now').onclick=()=>void updateNow();
 window.fastgoWarehouseCanLeave=()=>!busy&&!job&&!live.hasDraft()&&!draft&&!document.querySelector('dialog[open]');
 window.fastgoWarehouseOpenMode=async kind=>{if(!['receipt','sale'].includes(kind)||!window.fastgoWarehouseCanLeave()&&!live.canUSB(kind))return false;if(!live.active()||live.kind()!==kind)await live.open(kind);return true;};
 if(window.fastgoDesktop){window.fastgoHasUnsavedChanges=()=>!window.fastgoWarehouseCanLeave();window.fastgoUpdateBlockReason=immediate=>window.warehouseUpdateSafe?.(immediate)?'':'Завершите документ склада';window.fastgoLockForUpdate=immediate=>{if(!window.warehouseUpdateSafe?.(immediate))return false;document.body.inert=true;return true;};window.fastgoReleaseUpdateLock=()=>{document.body.inert=false;};}
