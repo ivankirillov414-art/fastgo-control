@@ -1,2 +1,3 @@
-f8534bcfd7c4de5ed640bf2d5e01ade9ba69959500e01a57cbf6e847666e2e66  FastGo-Warehouse-Launcher.exe
+369562f4f8c18444bd5686294abe2b488d14192909cae49ad87f623c61c3f09d  FastGo-Warehouse-Launcher.exe
+369562f4f8c18444bd5686294abe2b488d14192909cae49ad87f623c61c3f09d  FastGo-Warehouse-Launcher-1.0.2.exe
 f8534bcfd7c4de5ed640bf2d5e01ade9ba69959500e01a57cbf6e847666e2e66  FastGo-Warehouse-Launcher-1.0.1.exe
