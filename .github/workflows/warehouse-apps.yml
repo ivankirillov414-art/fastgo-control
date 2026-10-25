@@ -42,7 +42,6 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-avito-notifications.cjs
  windows:
-  needs: test
   runs-on: windows-latest
   timeout-minutes: 12
   steps:
@@ -118,7 +117,7 @@ jobs:
 
  publish:
   if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-  needs: [windows,android]
+  needs: [test,windows,android]
   runs-on: ubuntu-latest
   steps:
    - uses: actions/checkout@v4
