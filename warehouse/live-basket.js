@@ -1,3 +1,4 @@
+import {scanError} from './scan-policy.js';
 import {priceAdjustment} from './price-adjustment.js';
 import {bindScanner} from './scanner.js';
 import {esc,money,uuid,matchBarcode} from './client.js';
@@ -112,13 +113,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(!active||locked)throw Error('Дождитесь завершения операции');
   if(usbId&&(draft?.usb_ids?.includes(usbId)||(load('usb:accepted')||[]).includes(usbId))){const p=matchBarcode(parts(),code)[0];return {name:p?.name||code,price:p?.retail_price,quantity:draft?.items.find(x=>x.part_id===p?.id)?.quantity||1};}
   if(current)throw Error('Сейчас открыт документ другого терминала');
-  if(/^https?:\/\//i.test(code)){
-   if(kind!=='sale')throw rejected('QR ремонта сканируется в «Оплате»');
-   if(draft?.items.length)throw Error('Завершите оплату товаров перед сканированием ремонта');
-   const quote=await call('repair_quote',{code});
-   if(draft){await sync();await call('draft_close',{id:draft.id});save(key(kind),null);draft=null;}
-   cleanup();await (terminal?repair(quote):stationRepair(quote,usbId));return {name:'Ремонт № '+quote.number+' · '+quote.vehicle,price:quote.due};
-  }
+  const scanProblem=scanError(kind,code);if(scanProblem)throw rejected(scanProblem);
   const found=matchBarcode(parts(),code);if(found.length!==1)throw rejected(found.length?'Код неоднозначен':'Товар не найден: '+code);
   if(!draft)draft=newDraft(kind);
   const before=JSON.stringify(draft),old=draft.items.find(x=>x.part_id===found[0].id);

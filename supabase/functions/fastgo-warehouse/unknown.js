@@ -10,6 +10,13 @@ export async function unknownScan(action,p,{db,actor,device,stationId,g,mutate})
  if(action==='scan_unknown'){
   if(device.kind!=='terminal')fail('Только для терминала',403);
   if(typeof p.code!=='string'||!p.code.trim()||p.code.length>2048||!id(p.document_id)||!['receipt','sale'].includes(p.kind))fail('Неверные данные скана');
+  if(/^[a-z][a-z0-9+.-]*:/i.test(p.code.trim())||/^www\./i.test(p.code.trim())||p.code.startsWith('FGPARTS1.')){
+   if(row&&(row.terminal_id!==device.id||row.payload.kind!=='unknown'||row.payload.code!==p.code||row.payload.document_id!==p.document_id))fail('Код скана уже используется',409);
+   if(row?.state==='done')return row;if(row&&(row.state!=='queued'||row.checkout))fail('Документ уже проводится',409);
+   const result={cancelled:true,wrong_section:true,message:'Код не относится к выбранному разделу'};
+   if(row){const changed=await db('workshop_warehouse_queue','id=eq.'+row.id+'&state=eq.queued&checkout=is.null','PATCH',{state:'done',result,completed_at:new Date().toISOString()},'return=representation');const latest=changed[0]||await read(row.id);if(latest?.state!=='done')fail('Документ уже проводится',409);return latest;}
+   return {state:'done',result};
+  }
   if(row){if(row.terminal_id!==device.id||row.payload.kind!=='unknown'||row.payload.code!==p.code||row.payload.document_id!==p.document_id)fail('Код скана уже используется',409);
    if(p.cancel===true&&row.state==='queued'){await db('workshop_warehouse_queue','id=eq.'+row.id+'&state=eq.queued','PATCH',{state:'done',result:{cancelled:true},completed_at:new Date().toISOString()});return {...row,state:'done',result:{cancelled:true}};}return row;
   }

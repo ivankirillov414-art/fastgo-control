@@ -5,6 +5,15 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;import org.junit.runner.RunWith;import static org.junit.Assert.*;
 import android.widget.EditText;import android.view.inputmethod.*;import org.json.*;import java.lang.reflect.*;
 @RunWith(AndroidJUnit4.class) public final class NativeScanTest {
+ @Test public void wrongSectionAndHomeNeverAppendScans()throws Exception{
+  try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   Thread.sleep(600);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+   scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");String qr="https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=359b6650-b0a6-4260-88b7-7c54b99a3fcf";
+    invoke(a,"home",new Class[]{});int before=store.pending().size();invoke(a,"scan",new Class[]{String.class},qr);assertEquals("",field(a,"documentId"));assertEquals(before,store.pending().size());
+    for(String kind:new String[]{"sale","receipt","parts","repair"}){invoke(a,"open",new Class[]{String.class},kind);String id=(String)field(a,"documentId"),snapshot=store.doc(id).toString();invoke(a,"scan",new Class[]{String.class},kind.equals("repair")?"FGP-00000001":qr);assertEquals(snapshot,store.doc(id).toString());assertEquals(kind,field(a,"kind"));store.requestCancel(id);store.complete(id,store.doc(id).getInt("revision"));}
+   }catch(Exception e){throw new AssertionError(e);}});
+  }
+ }
  @Test public void backgroundCompletionClearsOnlyTheCompletedActiveScreen()throws Exception{
   try(LocalStore store=new LocalStore(InstrumentationRegistry.getInstrumentation().getTargetContext())){
    String previous=store.get("active_document");JSONObject first=ScanDocument.create("repair"),second=ScanDocument.create("receipt");store.save(first);store.save(second);store.put("active_document",second.getString("id"));store.complete(first.getString("id"),1);assertEquals(second.getString("id"),store.get("active_document"));store.requestCancel(second.getString("id"));store.complete(second.getString("id"),1);assertEquals("",store.get("active_document"));store.put("active_document",previous);
@@ -24,7 +33,7 @@ import android.widget.EditText;import android.view.inputmethod.*;import org.json
  @Test public void apkInstallWaitsForAllDocumentsIncludingHiddenAndCancelledPendingDocuments()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-   scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");AppUpdates updates=(AppUpdates)field(a,"updates");JSONObject receipt=store.open("receipt"),repair=store.open("repair");store.scan(receipt.getString("id"),"FGP-UPDATE-BLOCKER");store.scan(repair.getString("id"),"QR-UPDATE-BLOCKER");store.put("active_document","");assertFalse(updates.canInstall());store.requestCancel(receipt.getString("id"));assertFalse(updates.canInstall());store.complete(receipt.getString("id"),store.doc(receipt.getString("id")).getInt("revision"));assertFalse(updates.canInstall());store.requestCancel(repair.getString("id"));store.complete(repair.getString("id"),store.doc(repair.getString("id")).getInt("revision"));assertTrue(updates.canInstall());store.put("active_document","empty-screen");assertFalse(updates.canInstall());store.put("active_document","");assertTrue(updates.canInstall());}catch(Exception e){throw new AssertionError(e);}});
+   scenario.onActivity(a->{try{LocalStore store=(LocalStore)field(a,"store");AppUpdates updates=(AppUpdates)field(a,"updates");JSONObject receipt=store.open("receipt"),repair=store.open("repair");store.scan(receipt.getString("id"),"FGP-UPDATE-BLOCKER");store.scan(repair.getString("id"),"https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=359b6650-b0a6-4260-88b7-7c54b99a3fcf");store.put("active_document","");assertFalse(updates.canInstall());store.requestCancel(receipt.getString("id"));assertFalse(updates.canInstall());store.complete(receipt.getString("id"),store.doc(receipt.getString("id")).getInt("revision"));assertFalse(updates.canInstall());store.requestCancel(repair.getString("id"));store.complete(repair.getString("id"),store.doc(repair.getString("id")).getInt("revision"));assertTrue(updates.canInstall());store.put("active_document","empty-screen");assertFalse(updates.canInstall());store.put("active_document","");assertTrue(updates.canInstall());}catch(Exception e){throw new AssertionError(e);}});
   }
  }
  @Test public void receiptAndRepairHaveDurableCancellationBeforeServerConfirmation()throws Exception{
@@ -37,7 +46,7 @@ import android.widget.EditText;import android.view.inputmethod.*;import org.json
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    Thread.sleep(1000);InstrumentationRegistry.getInstrumentation().waitForIdleSync();final String[] id={""};
    scenario.onActivity(a->{try{
-    LocalStore store=(LocalStore)field(a,"store");invoke(a,"open",new Class[]{String.class},"repair");id[0]=(String)field(a,"documentId");store.scan(id[0],"WRONG-REPAIR-CANCELLATION-FIXTURE");invoke(a,"refresh",new Class[]{});
+    LocalStore store=(LocalStore)field(a,"store");invoke(a,"open",new Class[]{String.class},"repair");id[0]=(String)field(a,"documentId");store.scan(id[0],"https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=359b6650-b0a6-4260-88b7-7c54b99a3fcf");invoke(a,"refresh",new Class[]{});
    }catch(Exception error){throw new AssertionError(error);}});
    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
    scenario.onActivity(a->{try{android.widget.Button cancel=(android.widget.Button)field(a,"cancel");android.graphics.Rect visible=new android.graphics.Rect();assertTrue(cancel.getGlobalVisibleRect(visible));assertEquals(cancel.getHeight(),visible.height());assertTrue(cancel.isEnabled());a.onBackPressed();}catch(Exception error){throw new AssertionError(error);}});

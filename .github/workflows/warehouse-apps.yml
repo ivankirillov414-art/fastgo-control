@@ -126,5 +126,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'FastGo Склад: зашифрованные копии базы, фотографий и документов на ноутбуках, проверка восстановления, безопасное обновление при просмотре остатков и тёмная строка управления окном. ТСД 2.1.5 с выдачей запчастей по QR мастера.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Сканирование строго по разделам: ремонтные QR только в оплате ремонта, QR мастера в выдаче запчастей, товарные коды в приходе и продаже. Ошибочные сканы не создают очередь. Нативный ТСД 2.1.6 обновляется поверх установленного приложения с сохранением данных.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py

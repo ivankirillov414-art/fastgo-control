@@ -52,6 +52,24 @@
     }
   });
 
+  // warehouse/scan-policy.js
+  function scanError(kind, code) {
+    if (!kind) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
+    const value = String(code || "").trim(), link = /^[a-z][a-z0-9+.-]*:/i.test(value) || /^www\./i.test(value), pickup = value.startsWith("FGPARTS1.");
+    if (!value) return "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u0434";
+    if (kind === "repair") {
+      try {
+        const u = new URL(value);
+        if (u.protocol === "https:" && u.hostname === "ivankirillov414-art.github.io" && !u.username && !u.password && (u.pathname === "/fastgo-control/repair-status.html" || u.pathname === "/fastgo-control/workshop.html" && u.hash.startsWith("#order?") && u.hash.includes("kind=repair"))) return "";
+      } catch (e) {
+      }
+      return "\u0412 \u043E\u043F\u043B\u0430\u0442\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u043B\u044C\u043A\u043E QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430";
+    }
+    if (kind === "parts") return pickup || !link ? "" : "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB";
+    if (!["receipt", "sale"].includes(kind)) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
+    return pickup ? "QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0432\u044B\u0434\u0430\u0447\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439" : link ? "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430. \u0414\u043B\u044F QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB" : "";
+  }
+
   // workshop/notifications.js
   var escape = (value) => String(value != null ? value : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var clock = (value) => value ? new Date(value).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
@@ -1928,20 +1946,8 @@
         return { name: (p == null ? void 0 : p.name) || code, price: p == null ? void 0 : p.retail_price, quantity: ((_b = draft2 == null ? void 0 : draft2.items.find((x) => x.part_id === (p == null ? void 0 : p.id))) == null ? void 0 : _b.quantity) || 1 };
       }
       if (current) throw Error("\u0421\u0435\u0439\u0447\u0430\u0441 \u043E\u0442\u043A\u0440\u044B\u0442 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430");
-      if (/^https?:\/\//i.test(code)) {
-        if (kind !== "sale") throw rejected("QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u0432 \xAB\u041E\u043F\u043B\u0430\u0442\u0435\xBB");
-        if (draft2 == null ? void 0 : draft2.items.length) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u043E\u043F\u043B\u0430\u0442\u0443 \u0442\u043E\u0432\u0430\u0440\u043E\u0432 \u043F\u0435\u0440\u0435\u0434 \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C \u0440\u0435\u043C\u043E\u043D\u0442\u0430");
-        const quote = await call2("repair_quote", { code });
-        if (draft2) {
-          await sync();
-          await call2("draft_close", { id: draft2.id });
-          save3(key2(kind), null);
-          draft2 = null;
-        }
-        cleanup();
-        await (terminal2 ? repair2(quote) : stationRepair(quote, usbId));
-        return { name: "\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 " + quote.number + " \xB7 " + quote.vehicle, price: quote.due };
-      }
+      const scanProblem = scanError(kind, code);
+      if (scanProblem) throw rejected(scanProblem);
       const found = matchBarcode(parts2(), code);
       if (found.length !== 1) throw rejected(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D: " + code);
       if (!draft2) draft2 = newDraft(kind);
@@ -2822,15 +2828,36 @@
     live.cleanup();
     screen = "home";
     job = null;
-    shell((terminal ? "" : nav()) + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (draft && !terminal ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><div id="live-terminal-panel"></div><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div><section id="unknown-scans"></section></section>' : usbHelp()));
+    shell((terminal ? "" : nav()) + "<h1>" + (terminal ? "\u0421\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B" : "\u0420\u0430\u0431\u043E\u0447\u0435\u0435 \u043C\u0435\u0441\u0442\u043E \u0441\u043A\u043B\u0430\u0434\u0430") + '</h1><div class="homebuttons"><button class="primary" id="receipt">\u041F\u0440\u0438\u0445\u043E\u0434</button><button class="primary" id="pay">\u041E\u043F\u043B\u0430\u0442\u0430</button></div>' + (terminal ? '<button class="primary" id="repair-scan">\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</button>' : "") + (draft && !terminal ? '<div class="panel">\u0415\u0441\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 <button id="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C</button></div>' : "") + (!terminal ? '<section class="panel"><div id="live-terminal-panel"></div><div id="queue" aria-live="polite">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C\u2026</div><section id="unknown-scans"></section></section>' : usbHelp()));
     bindNav();
     $("receipt").onclick = () => run(() => live.open("receipt"));
     $("pay").onclick = () => run(() => live.open("sale"));
+    if ($("repair-scan")) $("repair-scan").onclick = repairScan;
     if ($("resume")) $("resume").onclick = () => basket(draft.kind, true);
     if (!terminal) {
       void poll();
       void pollUSB();
     }
+  }
+  function repairScan() {
+    screen = "repair-scan";
+    shell(nav() + '<h1>\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430</h1><form id="repair-scan-form"><label>QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430<input id="repair-code" autocomplete="off"></label><button>\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u0442\u044C</button></form>');
+    const input = $("repair-code"), form = $("repair-scan-form");
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const code = input.value.trim();
+      input.value = "";
+      const error = scanError("repair", code);
+      if (error) {
+        message(error, true);
+        return;
+      }
+      void run(async () => {
+        const quote = await call("repair_quote", { code });
+        await repair.terminal(quote);
+      });
+    };
+    stopScanner = bindScanner(input, form, () => !busy && screen === "repair-scan");
   }
   function basket(kind, resume = false) {
     if (terminal && draft && !resume && draft.kind === kind) resume = true;
@@ -3284,6 +3311,23 @@
       for (const item of inbox.items) {
         if (busy || !["home", "live"].includes(screen)) break;
         if (!item.kind) continue;
+        const problem = scanError(item.kind, item.code);
+        if (problem) {
+          await bridge.usbResult(item.id, { error: problem });
+          continue;
+        }
+        if (item.kind === "repair") {
+          if (!["home", "live"].includes(screen) || live.hasDraft()) break;
+          try {
+            const quote = await call("repair_quote", { code: item.code });
+            await repair.station(quote, item.id);
+            await bridge.usbResult(item.id, { name: "\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 " + quote.number, price: quote.due });
+          } catch (error) {
+            usbRetryAfter = Date.now() + 5e3;
+            await bridge.usbResult(item.id, { error: error.message, retry: !error.status || error.status >= 500 });
+          }
+          break;
+        }
         if (!live.canUSB(item.kind)) break;
         try {
           const result = await live.acceptUSB(item);

@@ -8,6 +8,7 @@ try{
  const phone=await browser.newContext({viewport:{width:320,height:480}}),page=await phone.newPage(),external=[],errors=[];page.setDefaultTimeout(10000);
  page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:'))external.push(r.url());});page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+s.port+'/'+s.state.token+'/');await page.locator('[data-kind="receipt"]').click();
+ await scan(page,'https://example.com/wrong');await page.waitForFunction(()=>document.getElementById('error').textContent.includes('штрихкод'));assert.equal(s.state.pending.length,0);assert.equal(await page.locator('#pending').innerText(),'');
  assert.equal(await page.locator('#barcode').getAttribute('inputmode'),'none');assert.equal(await page.locator('#barcode').evaluate(el=>getComputedStyle(el.closest('form')).opacity),'0');
  await scan(page);await page.waitForFunction(()=>!document.getElementById('pending').textContent);assert.equal(s.state.pending.length,1);assert.equal(s.state.pending[0].kind,'receipt');
  await phone.setOffline(true);await scan(page,'FGP-00000002');await page.waitForFunction(()=>document.getElementById('pending').textContent.includes('1'));assert.equal(s.state.pending.length,1);await phone.setOffline(false);
