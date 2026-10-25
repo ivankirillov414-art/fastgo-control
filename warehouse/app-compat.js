@@ -2633,7 +2633,7 @@
       e.returnValue = "";
       return;
     }
-    if (busy || screen === "basket" || screen === "checkout" || screen === "live" || screen === "repair") {
+    if (busy || screen === "basket" || screen === "checkout" || screen === "repair" || screen === "live" && live.hasDraft()) {
       e.preventDefault();
       e.returnValue = "";
     }
