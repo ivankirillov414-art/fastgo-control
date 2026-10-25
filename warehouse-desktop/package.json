@@ -57,8 +57,7 @@
       "network-ui.js",
       "printer-profiles.cjs",
       "label-printer-setup.cjs",
-      "label-printer-setup.ps1",
-      "p2-driver/**/*"
+      "label-printer-setup.ps1"
     ],
     "win": {
       "target": "nsis",
@@ -84,6 +83,10 @@
       {
         "from": "platform-tools",
         "to": "platform-tools"
+      },
+      {
+        "from": "p2-driver",
+        "to": "p2-driver"
       }
     ],
     "executableName": "FastGo РЎРєР»Р°Рґ"

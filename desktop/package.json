@@ -58,6 +58,10 @@
       {
         "from": "platform-tools",
         "to": "platform-tools"
+      },
+      {
+        "from": "../warehouse-desktop/p2-driver",
+        "to": "p2-driver"
       }
     ]
   },

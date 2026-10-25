@@ -4,7 +4,7 @@ const CASH_STATION='ac72cfde-0839-44f4-8cb0-a78ce2eacd9c';
 const DRIVER_VERSION='2.1.2026.0508',execute=promisify(execFile);
 const MANIFEST_HASH='a2a4732c56f093f3972293abeb618cfffe71b9dbad8b03c0cf500004c0311847';
 function materialize(dir){
- const hash=b=>require('node:crypto').createHash('sha256').update(b).digest('hex'),source=path.join(__dirname,'p2-driver'),raw=fs.readFileSync(path.join(source,'manifest.json'));
+ const hash=b=>require('node:crypto').createHash('sha256').update(b).digest('hex'),source=process.resourcesPath&&fs.existsSync(path.join(process.resourcesPath,'p2-driver/manifest.json'))?path.join(process.resourcesPath,'p2-driver'):path.join(__dirname,'p2-driver'),raw=fs.readFileSync(path.join(source,'manifest.json'));
  if(hash(raw)!==MANIFEST_HASH)throw Error('P2 manifest checksum mismatch');
  const manifest=JSON.parse(raw);
  for(const f of manifest.files){if(!/^(?:(?:amd64|x86)\/)?P2[PUI]*\.(?:dll|gpd|ini|inf|cat)$/i.test(f.path))throw Error('Invalid P2 package path');const bytes=fs.readFileSync(path.join(source,f.path));if(hash(bytes)!==f.sha256)throw Error('P2 package checksum mismatch');atomicWrite(path.join(dir,'driver',f.path),bytes);}
