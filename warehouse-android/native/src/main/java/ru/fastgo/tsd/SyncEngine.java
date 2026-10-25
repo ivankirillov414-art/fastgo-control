@@ -33,6 +33,7 @@ public final class SyncEngine {
     JSONObject part=store.match(e.getString("code"));
     if(part!=null){store.resolve(id,e.getString("id"),part);continue;}
     JSONObject result=(JSONObject)api.call("scan_unknown",new JSONObject().put("request_id",e.getString("id")).put("code",e.getString("code")).put("kind",kind).put("document_id",e.optString("origin_doc",id)));
+    if(result.optJSONObject("result")!=null&&result.getJSONObject("result").optBoolean("cancelled")){store.cancelScan(id,e.getString("id"));continue;}
     if(result.optJSONObject("result")!=null&&result.getJSONObject("result").has("part"))store.resolve(id,e.getString("id"),result.getJSONObject("result").getJSONObject("part"));
    }
    JSONObject d=store.doc(id);JSONArray items=ScanDocument.items(d);

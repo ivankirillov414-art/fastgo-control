@@ -1,4 +1,22 @@
 (() => {
+  // warehouse/scan-policy.js
+  function scanError(kind2, code) {
+    if (!kind2) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
+    const value = String(code || "").trim(), link = /^[a-z][a-z0-9+.-]*:/i.test(value) || /^www\./i.test(value), pickup = value.startsWith("FGPARTS1.");
+    if (!value) return "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u0434";
+    if (kind2 === "repair") {
+      try {
+        const u = new URL(value);
+        if (u.protocol === "https:" && u.hostname === "ivankirillov414-art.github.io" && !u.username && !u.password && (u.pathname === "/fastgo-control/repair-status.html" || u.pathname === "/fastgo-control/workshop.html" && u.hash.startsWith("#order?") && u.hash.includes("kind=repair"))) return "";
+      } catch (e) {
+      }
+      return "\u0412 \u043E\u043F\u043B\u0430\u0442\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u043B\u044C\u043A\u043E QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430";
+    }
+    if (kind2 === "parts") return pickup || !link ? "" : "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB";
+    if (!["receipt", "sale"].includes(kind2)) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
+    return pickup ? "QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0432\u044B\u0434\u0430\u0447\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439" : link ? "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430. \u0414\u043B\u044F QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB" : "";
+  }
+
   // warehouse/scanner.js
   function bindScanner(input2, form2, enabled, { silent = false } = {}) {
     let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
@@ -12,9 +30,7 @@
     const live = () => !disposed && input2.isConnected && enabled();
     const focus = () => {
       if (live() && (!editable(document.activeElement) || document.activeElement === input2)) {
-        if (silent) input2.readOnly = true;
         input2.focus({ preventScroll: true });
-        if (silent) input2.readOnly = false;
       }
     };
     if (silent) {
@@ -40,7 +56,7 @@
       previous = value;
       lastAt = now;
       if (added >= 4 || burst >= 4) timer = setTimeout(() => {
-        if (live() && document.activeElement === input2 && input2.value === value) submit();
+        if (live() && (silent || document.activeElement === input2) && input2.value === value) submit();
       }, 200);
     };
     const onKey = (e) => {
@@ -62,8 +78,15 @@
         if (live()) onInput({ isComposing: false });
       }, 0);
     };
+    const suspend = () => {
+      if (silent) {
+        reset();
+        input2.blur();
+      }
+    };
     const onVisible = () => {
-      if (!document.hidden) focus();
+      if (document.hidden) suspend();
+      else focus();
     };
     const onClick = (e) => {
       if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
@@ -143,7 +166,8 @@
       }
       while (queue.length) {
         const item = queue[0];
-        await request("scan", item);
+        const result = await request("scan", item);
+        if (result.rejected) error.textContent = result.error;
         queue.shift();
         try {
           persist();
@@ -175,7 +199,7 @@
     kind = value;
     $("home").hidden = true;
     $("work").hidden = false;
-    $("title").textContent = value === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430";
+    $("title").textContent = value === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : value === "repair" ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" : "\u041F\u0440\u043E\u0434\u0430\u0436\u0430";
     $("last").textContent = "";
     error.textContent = "";
     stop == null ? void 0 : stop();
@@ -188,7 +212,8 @@
     stop == null ? void 0 : stop();
     stop = null;
     kind = "";
-    modePending = false;
+    modePending = true;
+    void flush();
     $("home").hidden = false;
     $("work").hidden = true;
   };
@@ -198,6 +223,11 @@
     const code = input.value.trim();
     input.value = "";
     if (!code) return;
+    const problem = scanError(kind, code);
+    if (problem) {
+      error.textContent = problem;
+      return;
+    }
     if (code.length > 256 || /[\x00-\x1f\x7f]/.test(code)) {
       error.textContent = "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434";
       return;

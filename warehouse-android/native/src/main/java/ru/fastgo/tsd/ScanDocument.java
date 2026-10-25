@@ -4,10 +4,22 @@ import java.util.*;
 // Pure document logic: repeated scans have different IDs; retries reuse one ID/revision.
 public final class ScanDocument {
  public static boolean isRepairCode(String code){try{java.net.URI u=new java.net.URI(code.trim());if(!"https".equals(u.getScheme())||!"ivankirillov414-art.github.io".equals(u.getHost())||u.getUserInfo()!=null)return false;return "/fastgo-control/repair-status.html".equals(u.getPath())||"/fastgo-control/workshop.html".equals(u.getPath())&&u.getFragment()!=null&&u.getFragment().startsWith("order?")&&u.getFragment().contains("kind=repair");}catch(Exception e){return false;}}
+ public static boolean isLink(String code){return code.trim().matches("(?is)^[a-z][a-z0-9+.-]*:.*")||code.trim().toLowerCase(Locale.ROOT).startsWith("www.");}
+ public static String scanError(String kind,String code){
+  if(kind==null||kind.isEmpty())return "Сначала выберите раздел сканирования";
+  if(code==null||code.trim().isEmpty()||code.length()>2048)return "Проверьте код";
+  boolean pickup=code.startsWith("FGPARTS1."),repair=isRepairCode(code),link=isLink(code);
+  if(kind.equals("repair"))return repair?"":"В оплате ремонта сканируйте только QR ремонта";
+  if(kind.equals("parts"))return pickup||!link&&!repair?"":"QR ремонта здесь не принимается. Откройте оплату ремонта";
+  if(kind.equals("receipt")||kind.equals("sale"))return pickup?"QR мастера принимается только в выдаче запчастей":repair?"Откройте раздел «Оплата ремонта»":link?"В этом разделе сканируйте штрихкод товара, а не ссылку":"";
+  return "Сначала выберите раздел сканирования";
+ }
  public static JSONObject create(String kind) throws JSONException {return new JSONObject().put("id",UUID.randomUUID().toString()).put("kind",kind).put("revision",1).put("acked",0).put("events",new JSONArray()).put("state","open");}
  public static void append(JSONObject doc,String code,JSONObject part) throws JSONException {
   if(!doc.optString("state").equals("open"))throw new IllegalStateException("Документ уже завершён");
   if(code==null||code.trim().isEmpty()||code.length()>2048)throw new IllegalArgumentException("Проверьте код");
+  String error=scanError(doc.optString("kind"),code);if(!error.isEmpty())throw new IllegalArgumentException(error);
+  if(doc.optString("kind").equals("parts")&&part==null)throw new IllegalArgumentException("Сканируйте штрихкод известной запчасти");
   if(doc.getJSONArray("events").length()>=2000)throw new IllegalStateException("Завершите документ на ноутбуке");
   int revision=doc.getInt("revision")+1;doc.put("revision",revision);
   JSONObject e=new JSONObject().put("id",UUID.randomUUID().toString()).put("code",code.trim()).put("revision",revision).put("origin_doc",doc.getString("id")).put("undone",false);

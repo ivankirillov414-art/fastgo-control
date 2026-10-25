@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'ru.fastgo.tsd'
  compileSdk 35
- defaultConfig { applicationId 'ru.fastgo.tsd.app'; minSdk 23; targetSdk 35; versionCode = Integer.parseInt(project.findProperty('fastgoVersionCode') ?: '8'); versionName = project.findProperty('fastgoVersionName') ?: '2.1.5'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
+ defaultConfig { applicationId 'ru.fastgo.tsd.app'; minSdk 23; targetSdk 35; versionCode = Integer.parseInt(project.findProperty('fastgoVersionCode') ?: '9'); versionName = project.findProperty('fastgoVersionName') ?: '2.1.6'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
  buildTypes { release { minifyEnabled false } }
  testOptions { unitTests.returnDefaultValues = true }
 }

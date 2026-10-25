@@ -13,8 +13,18 @@ class USBScanner{
  async claim(key){if(!this.target||this.target.key!==key)throw Error('Откройте документ');await this.transaction(()=>{for(const x of this.state.pending)if(!x.target)x.target=key;});return this.batch(key);}
  async ack(key,ids){if(!Array.isArray(ids)||ids.length>100||ids.some(x=>typeof x!=='string'))throw Error('Неверное подтверждение');await this.transaction(()=>{const accepted=new Set(ids);this.state.pending=this.state.pending.filter(x=>x.target!==key||!accepted.has(x.id));});return true;}
  async releaseTarget(key){await this.transaction(()=>{for(const x of this.state.pending)if(x.target===key)x.target=null;});if(this.target?.key===key)this.target=null;}
- async record(data){if(!this.state.enabled)throw Error('USB-сканер выключен');if(!data||!/^[-a-zA-Z0-9]{12,100}$/.test(data.id)||!validCode(data.code))throw Error('Неверный штрихкод');return this.transaction(()=>{if(this.state.seen.includes(data.id))return{accepted:true,duplicate:true};if(this.state.pending.length>=MAX_PENDING)throw Error('На ноутбуке накоплено 2000 сканов. Добавьте их в документ.');if(data.kind!==undefined&&!['receipt','sale'].includes(data.kind))throw Error('Неверная операция');const kind=data.kind||this.state.mode||(this.target?.label==='Приход'?'receipt':this.target?.label==='Оплата'?'sale':'');const item={id:data.id,code:data.code.trim(),kind,time:new Date().toISOString(),target:this.target?.key||null};this.state.pending.push(item);this.state.seen.push(item.id);this.state.seen=this.state.seen.slice(-10000);return{accepted:true};});}
- async selectMode(kind){if(!['receipt','sale'].includes(kind))throw Error('Неверная операция');await this.transaction(()=>{this.state.mode=kind;this.state.modeRevision=(this.state.modeRevision||0)+1;});return {kind};}
+ async record(data){
+  if(!this.state.enabled)throw Error('USB-сканер выключен');
+  if(!data||!/^[-a-zA-Z0-9]{12,100}$/.test(data.id)||!validCode(data.code))throw Error('Неверный штрихкод');
+  if(data.kind!==undefined&&!['receipt','sale','repair'].includes(data.kind))throw Error('Неверная операция');
+  const kind=data.kind||this.state.mode||(this.target?.label==='Приход'?'receipt':this.target?.label==='Оплата'?'sale':'');
+  const code=data.code.trim(),link=/^[a-z][a-z0-9+.-]*:/i.test(code)||/^www\./i.test(code),pickup=code.startsWith('FGPARTS1.');
+  let repair=false;try{const u=new URL(code);repair=u.protocol==='https:'&&u.hostname==='ivankirillov414-art.github.io'&&!u.username&&!u.password&&(u.pathname==='/fastgo-control/repair-status.html'||u.pathname==='/fastgo-control/workshop.html'&&u.hash.startsWith('#order?')&&u.hash.includes('kind=repair'));}catch{}
+  const error=!kind?'Сначала выберите раздел сканирования':kind==='repair'&&!repair?'В оплате ремонта сканируйте только QR ремонта':kind!=='repair'&&(link||pickup)?'Код не относится к выбранному разделу':'';
+  if(error)return {accepted:false,rejected:true,error};
+  return this.transaction(()=>{if(this.state.seen.includes(data.id))return{accepted:true,duplicate:true};if(this.state.pending.length>=MAX_PENDING)throw Error('На ноутбуке накоплено 2000 сканов. Добавьте их в документ.');this.state.pending.push({id:data.id,code,kind,time:new Date().toISOString(),target:this.target?.key||null});this.state.seen.push(data.id);this.state.seen=this.state.seen.slice(-10000);return{accepted:true};});
+ }
+ async selectMode(kind){if(!['','receipt','sale','repair'].includes(kind))throw Error('Неверная операция');await this.transaction(()=>{this.state.mode=kind;this.state.modeRevision=(this.state.modeRevision||0)+1;});return {kind};}
  inbox(){return {items:this.state.pending.filter(x=>x.kind).slice(0,100)};}
  async result(id,result){
   if(typeof id!=='string'||!result||typeof result!=='object')throw Error('Неверный результат');

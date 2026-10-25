@@ -45,30 +45,24 @@ test('TSD cancels its own queued repair but cannot cancel another terminal or an
 test('zero-value repair still reaches the laptop, while payment remains forbidden',async()=>{
  const h=await harness(),repair=seedRepair(h),id=randomUUID();h.snap.sheets['Ремонты'].rows[0]['Итого']=0;h.snap.sheets['Ремонты'].rows[0]['Оплачено']=0;
  assert.equal((await h.request('enqueue_repair',{request_id:id,repair_id:repair},'terminal')).status,200);assert.equal((await h.request('queue')).data[0].payload.repair.payable,false);
- const scan=await h.request('scan_unknown',{request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)},'terminal');assert.equal(scan.status,200,scan.error);assert.equal(scan.data.payload.kind,'repair');
+ const scan=await h.request('scan_unknown',{request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)},'terminal');assert.equal(scan.status,200,scan.error);assert.equal(scan.data.result.wrong_section,true);
  assert.equal((await h.request('checkout',{id,payment_method:'cash',amount:0,expected_revision:2})).status,409);assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
 });
-test('native sale QR routes to the paired cashier as a repair, never as an unknown product or automatic payment',async()=>{
- const h=await harness(),repair=seedRepair(h),p={request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)};
- for(let i=0;i<2;i++){const r=await h.request('scan_unknown',p,'terminal');assert.equal(r.status,200,r.error);assert.equal(r.data.payload.kind,'repair');}
- assert.equal(h.queue.length,1);assert.equal(h.queue[0].station_id,station);assert.equal((await h.request('queue')).data[0].payload.repair_id,repair);assert.equal((await h.request('unknown_scans')).data.length,0);
- assert.equal(h.snap.sheets['Оплаты'].rows.length,0);assert.equal(h.snap.sheets['Ремонты'].rows[0]['Оплачено'],500);
+test('repair QR in sale or receipt is cancelled without creating a queue entry',async()=>{
+ const h=await harness(),repair=seedRepair(h);
+ for(const kind of ['sale','receipt'])for(let i=0;i<2;i++){const r=await h.request('scan_unknown',{request_id:randomUUID(),document_id:randomUUID(),kind,code:repairCode(repair)},'terminal');assert.equal(r.status,200);assert.equal(r.data.result.cancelled,true);assert.equal(r.data.result.wrong_section,true);}
+ assert.equal(h.queue.length,0);assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
 });
-test('a previously misclassified repair QR is recovered in place without replacing any receipt or sale',async()=>{
- const h=await harness(),repair=seedRepair(h),p={request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)};
- h.queue.push({id:p.request_id,station_id:station,terminal_id:terminal,state:'queued',payload:{kind:'unknown',code:p.code,document_id:p.document_id,items:[]}});
- assert.equal((await h.request('scan_unknown',p,'terminal')).status,200);assert.equal(h.queue.length,1);assert.equal(h.queue[0].payload.kind,'repair');
- const cancelled=await h.request('scan_unknown',{...p,cancel:true},'terminal');assert.equal(cancelled.data.result.cancelled,true);
- assert.equal((await h.request('scan_unknown',p,'terminal')).data.state,'done');assert.equal((await h.request('queue')).data.length,0);assert.equal(h.receipts.length,0);
+test('wrong-section repair scan cancellation is station scoped and respects processing locks',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(seedRepair(h))};
+ assert.equal((await h.request('scan_unknown',p)).status,403);
+ const row={id:p.request_id,station_id:station,terminal_id:terminal,state:'processing',checkout:{actor_id:actor},payload:{kind:'unknown',code:p.code,document_id:p.document_id,items:[]}};h.queue.push(row);
+ assert.equal((await h.request('scan_unknown',p,'terminal')).status,409);row.state='queued';row.checkout=null;row.terminal_id=randomUUID();
+ assert.equal((await h.request('scan_unknown',p,'terminal')).status,409);row.terminal_id=terminal;
+ assert.equal((await h.request('scan_unknown',p,'terminal')).data.result.cancelled,true);assert.equal((await h.request('unknown_scans')).data.length,0);
 });
-test('repair QR compatibility retains validation, terminal ownership and processing locks',async()=>{
- const h=await harness(),repair=seedRepair(h),p={request_id:randomUUID(),document_id:randomUUID(),kind:'sale',code:repairCode(repair)};
- assert.equal((await h.request('scan_unknown',{...p,kind:'receipt'},'terminal')).status,400);assert.equal((await h.request('scan_unknown',p)).status,403);
- await h.request('scan_unknown',p,'terminal');h.queue[0].checkout={actor_id:actor};h.queue[0].state='processing';
- assert.equal((await h.request('scan_unknown',{...p,cancel:true},'terminal')).status,409);
- assert.equal((await h.request('scan_unknown',{...p,document_id:randomUUID()},'terminal')).status,409);
- assert.equal((await h.request('scan_unknown',{...p,request_id:randomUUID(),code:'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=bad'},'terminal')).status,400);
- assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
+test('foreign URLs and master QR cannot enter the unknown-product queue',async()=>{
+ const h=await harness();for(const code of ['https://example.com/item','FGPARTS1.test','www.example.com','mailto:user@example.com']){const r=await h.request('scan_unknown',{request_id:randomUUID(),document_id:randomUUID(),kind:'receipt',code},'terminal');assert.equal(r.status,200);assert.equal(r.data.result.wrong_section,true);}assert.equal(h.queue.length,0);
 });
 const actor=randomUUID(),master=randomUUID(),part=randomUUID(),station=randomUUID(),terminal=randomUUID();
 function snapshot(){const schema=JSON.parse(fs.readFileSync(new URL('./google-schema.json',import.meta.url)));schema['Фото товаров']=['photo_id','product_id','category','path','created_at','sha256'];const sheets=Object.fromEntries(Object.entries(schema).map(([k,headers])=>[k,{headers,rows:[]}]));const seed=(name,p)=>sheets[name].rows.push({...Object.fromEntries(sheets[name].headers.map(x=>[x,''])),__row:sheets[name].rows.length+2,...p});seed('Товары',{product_id:part,'Модель / название':'Колодки','Штрих-код':'FGP-00000001','Остаток, шт.':5,'Цена закупки, ₽':100,'Цена продажи, ₽':300,'Активен':true});seed('Сотрудники',{employee_id:master,'ФИО':'Тестовый мастер','Роль':'Механик','Активен':true});return{version:1,sheets};}
