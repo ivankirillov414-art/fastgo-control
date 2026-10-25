@@ -646,7 +646,7 @@
   // warehouse/product-panel.js
   var pencil = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
   function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2, photos: photos2 }) {
-    let dialog, selected, editing = "", pending, stopPhotos;
+    let dialog, selected, editing = "", pending2, stopPhotos;
     function close() {
       if ((dialog == null ? void 0 : dialog.dataset.uploading) === "true") return;
       stopPhotos == null ? void 0 : stopPhotos();
@@ -656,7 +656,7 @@
       dialog = null;
       selected = null;
       editing = "";
-      pending = null;
+      pending2 = null;
     }
     function open(part) {
       if ((dialog == null ? void 0 : dialog.dataset.uploading) === "true") return;
@@ -694,6 +694,7 @@
     function draw() {
       if (!dialog || !selected) return;
       dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><h2>' + esc(selected.name) + '</h2><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430", money(selected.retail_price)) + '</div><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc(selected.barcode || "") + "</b>" + (selected.barcode ? '<button type="button" class="primary" data-print-barcode>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</button>' : "") + '</div><p class="product-error" role="alert"></p>';
+      dialog.querySelector(".product-main").append(dialog.querySelector(".product-barcode"));
       stopPhotos == null ? void 0 : stopPhotos();
       const gallery = document.createElement("section");
       gallery.className = "product-photos";
@@ -712,7 +713,7 @@
     }
     function edit(field) {
       editing = field;
-      pending = null;
+      pending2 = null;
       draw();
       const host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
       host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : "\u0426\u0435\u043D\u0430, \u20BD") + '<input type="number" min="0" max="' + (field === "quantity" ? "1000000" : "100000000") + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + selected[field] + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
@@ -721,7 +722,7 @@
       input.select();
       host.querySelector("[data-cancel]").onclick = () => {
         editing = "";
-        pending = null;
+        pending2 = null;
         draw();
       };
       host.querySelector("form").onsubmit = (e) => {
@@ -731,8 +732,8 @@
           dialog.querySelector(".product-error").textContent = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435";
           return;
         }
-        if (!pending || pending.value !== value) pending = { request_id: uuid(), part_id: part.id, field: field2, value, expected: part[field2] };
-        const payload = { ...pending };
+        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid(), part_id: part.id, field: field2, value, expected: part[field2] };
+        const payload = { ...pending2 };
         void run2(async () => {
           input.disabled = true;
           dialog.querySelector(".product-error").textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C\u2026";
@@ -742,7 +743,7 @@
             if (index >= 0) parts2()[index] = updated;
             selected = updated;
             editing = "";
-            pending = null;
+            pending2 = null;
             changed();
             draw();
             message2("\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435");
@@ -802,11 +803,74 @@
     reader.readAsDataURL(file);
   });
 
+  // workshop/photo-cache.js
+  var NAME = "fastgo-part-photos-v1";
+  var MAX_BYTES = 64 * 1024 * 1024;
+  var MAX_ITEMS = 100;
+  var MAX_AGE = 7 * 864e5;
+  var pending = /* @__PURE__ */ new Map();
+  var writes = Promise.resolve();
+  var keyFor = (key2) => "https://fastgo-photo-cache.invalid/" + encodeURIComponent(key2);
+  async function cachedPhoto(url, key2, { enabled = !!(((_a2) => (_a2 = globalThis.window) == null ? void 0 : _a2.fastgoDesktop)() || ((_b) => (_b = globalThis.window) == null ? void 0 : _b.warehouseDesktop)()), refresh = false } = {}) {
+    if (!enabled || !key2 || !globalThis.caches) return null;
+    const address = keyFor(key2), flight = address + (refresh ? ":refresh" : "");
+    if (pending.has(flight)) return pending.get(flight);
+    const task = (async () => {
+      var _a3;
+      const cache = await caches.open(NAME);
+      if (!refresh) {
+        const hit = await cache.match(address);
+        if (hit && Date.now() - Number(hit.headers.get("x-fastgo-stored")) < MAX_AGE) return hit.blob();
+      }
+      const response = await fetch(url, { credentials: "omit", signal: AbortSignal.timeout(12e3) });
+      if (!response.ok || !((_a3 = response.headers.get("content-type")) == null ? void 0 : _a3.startsWith("image/"))) throw Error("Photo unavailable");
+      const blob = await response.blob();
+      if (!blob.size || blob.size > 5 * 1024 * 1024) return blob;
+      writes = writes.catch(() => {
+      }).then(async () => {
+        await cache.delete(address);
+        await cache.put(address, new Response(blob, { headers: { "Content-Type": blob.type, "x-fastgo-stored": String(Date.now()), "x-fastgo-size": String(blob.size) } }));
+        const keys = await cache.keys();
+        let bytes = 0, items = [];
+        for (const request2 of keys) {
+          const saved = await cache.match(request2), time = Number(saved.headers.get("x-fastgo-stored")), size = Number(saved.headers.get("x-fastgo-size"));
+          if (Date.now() - time >= MAX_AGE) {
+            await cache.delete(request2);
+            continue;
+          }
+          bytes += size;
+          items.push({ request: request2, size, time });
+        }
+        items.sort((a, b) => a.time - b.time);
+        while (items.length > MAX_ITEMS || bytes > MAX_BYTES) {
+          const oldest = items.shift();
+          bytes -= oldest.size;
+          await cache.delete(oldest.request);
+        }
+      });
+      await writes.catch(() => {
+      });
+      return blob;
+    })();
+    pending.set(flight, task);
+    try {
+      return await task;
+    } finally {
+      pending.delete(flight);
+    }
+  }
+
   // workshop/private-photo.js
-  function displayPrivatePhoto(img, { getUrl, url, isCurrent = () => img.isConnected, onLoad = () => {
+  function displayPrivatePhoto(img, { getUrl, url, cacheKey, isCurrent = () => img.isConnected, onLoad = () => {
   }, onError = () => {
   } }) {
-    let retries = 0, stopped = false, refreshing2 = false;
+    let retries = 0, stopped = false, refreshing2 = false, objectUrl;
+    const release = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+      }
+    };
     img.loading = "eager";
     img.decoding = "async";
     const current = () => !stopped && isCurrent();
@@ -820,9 +884,18 @@
       if (!current() || refreshing2) return;
       refreshing2 = true;
       try {
-        const next = await getUrl();
+        const next = url && retries === 0 ? url : await getUrl();
         if (!next) throw new Error("Missing photo URL");
-        if (current()) img.src = next;
+        let blob = null;
+        try {
+          blob = await cachedPhoto(next, cacheKey, { refresh: retries > 0 });
+        } catch (e) {
+        }
+        if (current()) {
+          release();
+          objectUrl = blob ? URL.createObjectURL(blob) : null;
+          img.src = objectUrl || next;
+        }
       } catch (e) {
         fail();
       } finally {
@@ -840,32 +913,36 @@
       if (retries++ < 1) refresh();
       else fail();
     };
-    if (url) img.src = url;
+    if (url && !cacheKey) img.src = url;
     else refresh();
     return () => {
       stopped = true;
       img.onload = img.onerror = null;
+      release();
     };
   }
 
   // warehouse/part-photos.js
   function partPhotos({ api: api2, editable, run: run2, changed, message: message2 }) {
     let observer;
+    const thumbnails = [];
+    const cacheKey = (part, path) => userId() && path ? userId() + ":" + part.id + ":" + path : void 0;
     const placeholder = '<span aria-hidden="true">\u25A7</span>';
     function thumbnail(part) {
       return '<span class="inventory-photo" data-photo="' + esc(part.id) + '">' + (part.primary_photo_path ? '<img alt="\u0424\u043E\u0442\u043E: ' + esc(part.name) + '">' : placeholder) + "</span>";
     }
     function bindThumbnails(host, parts2) {
       observer == null ? void 0 : observer.disconnect();
+      thumbnails.splice(0).forEach((stop) => stop());
       const load2 = (el) => {
         const part = parts2.find((p) => p.id === el.dataset.photo), img = el.querySelector("img");
         if (!img || !part) return;
-        displayPrivatePhoto(img, { getUrl: async () => (await api2("part_photo_url", { part_id: part.id })).url, onError: () => {
+        thumbnails.push(displayPrivatePhoto(img, { cacheKey: cacheKey(part, part.primary_photo_path), getUrl: async () => (await api2("part_photo_url", { part_id: part.id })).url, onError: () => {
           if (el.isConnected) {
             el.innerHTML = placeholder;
             el.title = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443 \u0434\u043B\u044F \u043F\u043E\u0432\u0442\u043E\u0440\u0430.";
           }
-        } });
+        } }));
       };
       if (typeof IntersectionObserver === "undefined") {
         host.querySelectorAll("[data-photo]").forEach(load2);
@@ -892,11 +969,47 @@
       return result;
     }
     function mount(host, part) {
-      let pending = null, saving = false, stopped = false;
+      let pending2 = null, saving = false, stopped = false, viewer = null;
       const cleanups = [];
-      host.innerHTML = '<div class="product-photo-heading"><h3>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438</h3>' + (editable() ? '<label class="photo-upload-button">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E<input type="file" accept="image/jpeg,image/png,image/webp" aria-label="\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438"></label>' : "") + '</div><div class="product-photo-gallery">\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438\u2026</div><p class="photo-status" role="status" aria-live="polite"></p><button type="button" class="photo-retry" hidden>\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0443</button>';
+      host.innerHTML = '<div class="product-photo-heading"><h3>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438</h3>' + (editable() ? '<label class="photo-upload-button">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E<input type="file" accept="image/jpeg,image/png,image/webp" aria-label="\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438"></label>' : "") + '</div><div class="product-photo-gallery">\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438\u2026</div><div class="product-photo-thumbs" aria-label="\u0412\u044B\u0431\u043E\u0440 \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438"></div><p class="photo-status" role="status" aria-live="polite"></p><button type="button" class="photo-retry" hidden>\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0443</button>';
       const gallery = host.querySelector(".product-photo-gallery"), status = host.querySelector(".photo-status"), input = host.querySelector("input"), retry = host.querySelector(".photo-retry");
       const current = () => !stopped && host.isConnected;
+      function closeViewer() {
+        if (viewer) {
+          const old = viewer;
+          viewer = null;
+          old.close();
+          old.remove();
+        }
+      }
+      function enlarge(img) {
+        if (!img.naturalWidth || saving) return;
+        closeViewer();
+        viewer = document.createElement("dialog");
+        viewer.className = "product-photo-viewer";
+        viewer.setAttribute("aria-label", "\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F: " + part.name);
+        const big = document.createElement("img");
+        big.src = img.src;
+        big.alt = part.name;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "product-close";
+        close.setAttribute("aria-label", "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E");
+        close.textContent = "\xD7";
+        close.onclick = closeViewer;
+        viewer.append(big, close);
+        document.body.append(viewer);
+        const owned = viewer;
+        owned.onclose = () => {
+          owned.remove();
+          if (viewer === owned) viewer = null;
+        };
+        owned.onclick = (e) => {
+          if (e.target === owned) closeViewer();
+        };
+        owned.showModal();
+        close.focus();
+      }
       const busy2 = (value) => {
         saving = value;
         host.closest("dialog").dataset.uploading = String(value);
@@ -905,20 +1018,20 @@
         retry.disabled = value;
       };
       async function save3() {
-        if (saving || !pending) return;
+        if (saving || !pending2) return;
         await run2(async () => {
           busy2(true);
           retry.hidden = true;
           try {
-            if (pending.file) await upload(part, pending.file, pending.id, false, (text) => {
+            if (pending2.file) await upload(part, pending2.file, pending2.id, false, (text) => {
               if (current()) status.textContent = text;
             });
             else {
               status.textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043E\u0441\u043D\u043E\u0432\u043D\u0443\u044E \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E\u2026";
-              const result = await api2("part_photo_primary", { part_id: part.id, photo_id: pending.photo.id, request_id: pending.id });
+              const result = await api2("part_photo_primary", { part_id: part.id, photo_id: pending2.photo.id, request_id: pending2.id });
               part.primary_photo_path = result.path;
             }
-            pending = null;
+            pending2 = null;
             if (current()) status.textContent = "\u0424\u043E\u0442\u043E \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E";
             await changed(part);
             if (current()) await load2();
@@ -935,28 +1048,58 @@
         });
       }
       async function load2() {
+        var _a2;
         try {
           const photos2 = await api2("part_photos", { part_id: part.id });
           if (!current()) return;
+          closeViewer();
           cleanups.splice(0).forEach((stop) => stop());
           gallery.textContent = photos2.length ? "" : "\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442";
-          for (const photo of photos2) {
+          const thumbs = host.querySelector(".product-photo-thumbs");
+          thumbs.replaceChildren();
+          const first = Math.max(0, photos2.findIndex((p) => p.primary)), cards = [], tabs = [];
+          for (const [index, photo] of photos2.entries()) {
             const card = document.createElement("div");
             card.className = "product-photo-card";
-            card.innerHTML = '<img alt="' + esc(part.name) + '">' + (editable() ? '<button type="button" ' + (photo.primary ? "disabled" : "") + ">" + (photo.primary ? "\u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" : "\u0421\u0434\u0435\u043B\u0430\u0442\u044C \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C") + "</button>" : "");
+            card.hidden = true;
+            card.innerHTML = '<button type="button" class="product-photo-open" aria-label="\u0423\u0432\u0435\u043B\u0438\u0447\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E ' + (index + 1) + '"><img alt="' + esc(part.name) + '"><span>\u2922 \u0423\u0432\u0435\u043B\u0438\u0447\u0438\u0442\u044C</span></button>' + (editable() ? '<button type="button" data-photo-primary ' + (photo.primary ? "disabled" : "") + ">" + (photo.primary ? "\u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" : "\u0421\u0434\u0435\u043B\u0430\u0442\u044C \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C") + "</button>" : "");
             gallery.append(card);
-            cleanups.push(displayPrivatePhoto(card.querySelector("img"), { isCurrent: () => current() && card.isConnected, getUrl: async () => (await api2("part_photo_url", { part_id: part.id, photo_id: photo.id })).url, onError: () => {
-              card.querySelector("img").alt = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E";
-            } }));
-            const choose = card.querySelector("button");
+            cards.push(card);
+            const img = card.querySelector("img"), tab = document.createElement("button");
+            tab.type = "button";
+            tab.className = "product-photo-thumb";
+            tab.textContent = String(index + 1);
+            tab.setAttribute("aria-label", "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044E " + (index + 1));
+            thumbs.append(tab);
+            tabs.push(tab);
+            let started = false;
+            tab.onclick = () => {
+              cards.forEach((c, i) => {
+                c.hidden = i !== index;
+                tabs[i].setAttribute("aria-pressed", String(i === index));
+              });
+              if (started) return;
+              started = true;
+              cleanups.push(displayPrivatePhoto(img, { cacheKey: cacheKey(part, photo.path), isCurrent: () => current() && card.isConnected, getUrl: async () => (await api2("part_photo_url", { part_id: part.id, photo_id: photo.id })).url, onLoad: () => {
+                const preview = document.createElement("img");
+                preview.src = img.src;
+                preview.alt = "";
+                tab.replaceChildren(preview);
+              }, onError: () => {
+                img.alt = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E";
+              } }));
+            };
+            card.querySelector(".product-photo-open").onclick = () => enlarge(img);
+            const choose = card.querySelector("[data-photo-primary]");
             if (choose) {
               choose.dataset.unavailable = String(!!photo.primary);
               choose.onclick = () => {
-                pending = { photo, id: uuid() };
+                pending2 = { photo, id: uuid() };
                 void save3();
               };
             }
           }
+          (_a2 = tabs[first]) == null ? void 0 : _a2.click();
         } catch (error) {
           if (current()) {
             gallery.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438: " + error.message;
@@ -971,7 +1114,7 @@
       if (input) input.onchange = () => {
         const file = input.files[0];
         if (file) {
-          pending = { file, id: uuid() };
+          pending2 = { file, id: uuid() };
           void save3();
         }
       };
@@ -979,6 +1122,7 @@
       void load2();
       return () => {
         stopped = true;
+        closeViewer();
         cleanups.forEach((stop) => stop());
       };
     }
@@ -986,7 +1130,7 @@
   }
 
   // workshop/product-intake.js
-  var keyFor = (actor) => "fastgo_product_intake_v1:" + actor;
+  var keyFor2 = (actor) => "fastgo_product_intake_v1:" + actor;
   var write = (storage, key2, value) => {
     const encoded = JSON.stringify(value);
     storage.setItem(key2, encoded);
@@ -994,7 +1138,7 @@
   };
   function loadProductIntake(storage, actor) {
     var _a2, _b, _c;
-    const raw = storage.getItem(keyFor(actor));
+    const raw = storage.getItem(keyFor2(actor));
     if (!raw) return null;
     let value;
     try {
@@ -1011,12 +1155,12 @@
     if (!String(product2.name || "").trim() || !String(product2.category || "").trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 1e5) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435, \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044E \u0438 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E (\u043E\u0442 0 \u0434\u043E 100000).");
     for (const name of ["unit_cost", "retail_price"]) if (!Number.isFinite(product2[name]) || product2[name] < 0 || product2[name] > 1e9) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0446\u0435\u043D\u0443 \u0442\u043E\u0432\u0430\u0440\u0430.");
     const state = { version: 1, product: product2, quantity, photo, ids: { product: crypto.randomUUID(), stock: crypto.randomUUID(), photo: crypto.randomUUID() }, part: null, received: false, photoSaved: false };
-    write(storage, keyFor(actor), state);
+    write(storage, keyFor2(actor), state);
     return state;
   }
   async function continueProductIntake(storage, actor, { api: api2, uploadPhoto, onProgress = () => {
   } }) {
-    const key2 = keyFor(actor), state = loadProductIntake(storage, actor);
+    const key2 = keyFor2(actor), state = loadProductIntake(storage, actor);
     if (!state) throw new Error("\u041D\u0435\u0442 \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u043E\u0439 \u043F\u0440\u0438\u0451\u043C\u043A\u0438.");
     if (!state.part) {
       onProgress("\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u0442\u043E\u0432\u0430\u0440\u2026");
@@ -1143,17 +1287,17 @@
   var import_update_clock = __toESM(require_update_clock());
   function createWebUpdater({ version, fetchVersion, fetchPage, canApply, apply, notify = () => {
   } }) {
-    let pending = null, checking = false, applying = false, immediate = false;
+    let pending2 = null, checking = false, applying = false, immediate = false;
     async function tick() {
-      if (!pending || applying) return;
+      if (!pending2 || applying) return;
       applying = true;
       try {
         if (!await canApply(immediate)) {
           notify("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430 \u0433\u043E\u0442\u043E\u0432\u043E \xB7 \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0440\u0430\u0431\u043E\u0442\u044B");
           return;
         }
-        apply(pending);
-        pending = null;
+        apply(pending2);
+        pending2 = null;
         immediate = false;
       } catch (e) {
         notify("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430 \u043E\u0442\u043B\u043E\u0436\u0435\u043D\u043E. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u043C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.");
@@ -1168,7 +1312,7 @@
         const next = await fetchVersion();
         if (!/^[a-f0-9]{24}$/.test(next) || next === version) {
           if (next === version) {
-            pending = null;
+            pending2 = null;
             if (immediate) notify("\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0432\u0435\u0440\u0441\u0438\u044F \u044D\u043A\u0440\u0430\u043D\u0430 \xB7 " + version);
             immediate = false;
           }
@@ -1178,7 +1322,7 @@
           notify("\u041F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0435\u0449\u0451 \u0438\u0434\u0451\u0442. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443 \u043F\u043E\u0437\u0436\u0435.");
           return;
         }
-        pending = next;
+        pending2 = next;
         notify("\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u043A\u0440\u0430\u043D\u0430");
       } catch (e) {
         if (immediate) notify("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442 \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
@@ -1325,13 +1469,13 @@
     const summary = (q) => '<section class="panel"><h2>\u0420\u0435\u043C\u043E\u043D\u0442 \u2116 ' + esc(q.number) + "</h2><p>" + esc(q.vehicle) + '</p><div class="total"><span>\u041A \u043E\u043F\u043B\u0430\u0442\u0435</span><b>' + money(q.due) + "</b></div></section>";
     async function enqueue(q, usbId) {
       const cacheKey = usbId ? "repair:usb:" + usbId : "repair:terminal";
-      let pending = load2(cacheKey);
-      if (!pending || pending.repair_id !== q.id) {
-        pending = { request_id: uuid(), repair_id: q.id };
-        save3(cacheKey, pending);
+      let pending2 = load2(cacheKey);
+      if (!pending2 || pending2.repair_id !== q.id) {
+        pending2 = { request_id: uuid(), repair_id: q.id };
+        save3(cacheKey, pending2);
       }
-      const result = await call2("enqueue_repair", pending);
-      return { pending, result };
+      const result = await call2("enqueue_repair", pending2);
+      return { pending: pending2, result };
     }
     async function terminal2(q) {
       render('<div class="live-heading"><button id="repair-back" aria-label="\u041D\u0430\u0437\u0430\u0434">\u2190</button><h1>\u041E\u043F\u043B\u0430\u0442\u0430</h1></div>' + summary(q) + '<p id="repair-status" role="status">\u041F\u0435\u0440\u0435\u0434\u0430\u0451\u043C \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u2026</p>');
@@ -1343,8 +1487,8 @@
         polling2 = true;
         try {
           if (!jobId) {
-            const { pending } = await enqueue(q);
-            jobId = pending.request_id;
+            const { pending: pending2 } = await enqueue(q);
+            jobId = pending2.request_id;
           }
           const r = await call2("job", { id: jobId });
           if (!$2("repair-status")) return;
@@ -1368,8 +1512,8 @@
       }, 1e3);
     }
     async function station(q, usbId) {
-      const { pending } = await enqueue(q, usbId);
-      await checkout2(await call2("job", { id: pending.request_id }));
+      const { pending: pending2 } = await enqueue(q, usbId);
+      await checkout2(await call2("job", { id: pending2.request_id }));
     }
     async function checkout2(job2) {
       var _a2, _b;
@@ -2466,12 +2610,12 @@
         saving = true;
         onDirty(true);
         form.querySelectorAll("button,input,select,textarea").forEach((button) => button.disabled = true);
-        let pending;
+        let pending2;
         try {
-          pending = await operation(localStorage, actor, "preorder_save", payload);
-          const result = await call2("preorder_save", pending.params);
+          pending2 = await operation(localStorage, actor, "preorder_save", payload);
+          const result = await call2("preorder_save", pending2.params);
           if (!(result == null ? void 0 : result.id) || !result.revision) throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u0442\u0443 \u0436\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E.");
-          pending.finish();
+          pending2.finish();
           saving = false;
           flag(false);
           close(true);
@@ -2705,12 +2849,12 @@
     $("connect-retry").onclick = () => run(connectTerminal);
     const stations = await api("stations");
     const connect = async (station) => {
-      let pending = load("terminal-connection");
-      if (!pending || pending.station_id !== station.id) {
-        pending = { station_id: station.id, terminal_id: uuid(), token: uuid() + uuid() };
-        save2("terminal-connection", pending);
+      let pending2 = load("terminal-connection");
+      if (!pending2 || pending2.station_id !== station.id) {
+        pending2 = { station_id: station.id, terminal_id: uuid(), token: uuid() + uuid() };
+        save2("terminal-connection", pending2);
       }
-      device = await api("connect_terminal", pending);
+      device = await api("connect_terminal", pending2);
       save2("terminal", device);
       save2("terminal-connection", null);
       await start();
@@ -2811,12 +2955,12 @@
       e.preventDefault();
       const value = e.target.elements.value.value;
       run(async () => {
-        let pending = load("station-registration");
-        if (!pending) {
-          pending = { station_id: uuid(), token: uuid() + uuid() };
-          save2("station-registration", pending);
+        let pending2 = load("station-registration");
+        if (!pending2) {
+          pending2 = { station_id: uuid(), token: uuid() + uuid() };
+          save2("station-registration", pending2);
         }
-        device = await api("register", { name: value, ...pending });
+        device = await api("register", { name: value, ...pending2 });
         save2("station", device);
         save2("station-registration", null);
         await start();
@@ -3135,16 +3279,16 @@
       dialog.showModal();
       dialog.onclose = () => dialog.remove();
       dialog.querySelector("[data-cancel]").onclick = () => dialog.close();
-      let pending = null;
+      let pending2 = null;
       dialog.querySelector("form").onsubmit = async (e) => {
         e.preventDefault();
         const submit = dialog.querySelector(".primary"), input = dialog.querySelector("input");
         if (submit.disabled) return;
-        pending = pending || { request_id, master_id: x.master_id, part_id: x.part_id, quantity: Number(input.value) };
+        pending2 = pending2 || { request_id, master_id: x.master_id, part_id: x.part_id, quantity: Number(input.value) };
         submit.disabled = true;
         input.disabled = true;
         try {
-          await call("master_return", pending);
+          await call("master_return", pending2);
           dialog.close();
           await holdings();
           message("\u0414\u0435\u0442\u0430\u043B\u044C \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0435\u043D\u0430 \u043D\u0430 \u0441\u043A\u043B\u0430\u0434. \u0417\u0430\u043F\u0430\u0441 \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u0443\u043C\u0435\u043D\u044C\u0448\u0435\u043D.");

@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const root=path.resolve(__dirname,'..'),dir=path.join(root,'warehouse'),pages=['warehouse.html','warehouse-terminal.html'];
 const read=p=>fs.readFileSync(path.join(root,p),'utf8').replace(/\r\n/g,'\n');
 const normalize=s=>s.replace(/(<meta name="warehouse-web-version" content=")[^"]*(">)/g,'$1VERSION$2').replace(/(warehouse\/(?:style\.css|app-compat\.js)\?v=)[^"\s]+/g,'$1VERSION');
-const inputs=fs.readdirSync(dir).filter(n=>n.endsWith('.js')&&n!=='app-compat.js'||n.endsWith('.css')).sort().map(n=>'warehouse/'+n).concat(pages,'warehouse-desktop/update-clock.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/notifications.js','workshop/pending.js');
+const inputs=fs.readdirSync(dir).filter(n=>n.endsWith('.js')&&n!=='app-compat.js'||n.endsWith('.css')).sort().map(n=>'warehouse/'+n).concat(pages,'warehouse-desktop/update-clock.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/photo-cache.js','workshop/product-intake.js','workshop/notifications.js','workshop/pending.js');
 const version=crypto.createHash('sha256').update(inputs.map(p=>p+'\n'+(pages.includes(p)?normalize(read(p)):read(p))).join('\n')).digest('hex').slice(0,24);
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex');
 if(process.argv.includes('--check')){

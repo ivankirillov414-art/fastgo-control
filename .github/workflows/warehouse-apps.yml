@@ -31,6 +31,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-network-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-product-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-catalog-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-part-photo-cache.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-price-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-workshop-sale-price-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-master-stock-browser.cjs
@@ -65,6 +66,11 @@ jobs:
    - name: Verify bundled warehouse UI without internet
      timeout-minutes: 2
      run: node scripts/check-warehouse-bundled-desktop.cjs
+   - name: Verify photo cache persists after native restart
+     shell: pwsh
+     run: |
+      $env:FASTGO_ELECTRON = Join-Path $pwd 'warehouse-desktop/node_modules/electron/dist/electron.exe'
+      node scripts/check-part-photo-cache-native.cjs
    - name: Verify native Windows network probe
      timeout-minutes: 1
      run: node warehouse-desktop/tests/network-windows-probe.cjs

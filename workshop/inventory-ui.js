@@ -161,7 +161,8 @@ export async function photoDialog(part){
   const dialog=showDialog('Фотографии: '+part.name,`<p>${esc(part.model||'')} · ${money(part.retail_price)} · ${Number(part.quantity)||0} шт.</p>${editable?'<label><input id="part-photo-category" type="checkbox"> Основное фото категории</label><label>Добавить фотографию<input id="part-photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="btn secondary" for="part-photo-camera">Сделать снимок</label><input id="part-photo-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="muted">Выберите фото или сделайте снимок — он сохранится автоматически.</p><div id="part-photo-progress" hidden></div>':''}<div id="part-photo-list" class="photo-grid">Загружаем фотографии…</div>`,`<button class="btn ghost" data-inv-close>Закрыть</button>${editable?'<button class="btn" id="part-photo-upload">Загрузить</button>':''}`);
   const host=$('part-photo-list'),input=$('part-photo-file'),button=$('part-photo-upload'),category=$('part-photo-category');
   const status=editable?uploadStatus($('part-photo-progress')):null;
-  let busy=false,pendingFile=null,pendingPhoto=null;
+  let busy=false,pendingFile=null,pendingPhoto=null;const photoStops=[];
+  dialog.addEventListener('close',()=>photoStops.splice(0).forEach(stop=>stop()),{once:true});
   const save=async(file,photo)=>{
     if(busy)return;
     if(!file&&!photo){status.error('Сначала выберите фотографию');return;}
@@ -170,7 +171,7 @@ export async function photoDialog(part){
     try{
       let url,result;
       if(file){result=await uploadPartPhoto(part,file,category.checked,undefined,text=>status.busy(text));url=URL.createObjectURL(result.file);}
-      else{status.busy('Сохраняем основную фотографию…');result=await api('part_photo_primary',{part_id:part.id,photo_id:photo.id,primary_for_category:category.checked});url=photo.url;}
+      else{status.busy('Сохраняем основную фотографию…');result=await api('part_photo_primary',{part_id:part.id,photo_id:photo.id,primary_for_category:category.checked});}
       part.primary_photo_path=result.path;updateProductPhoto(part,url);
       // The preview owns this blob until its card leaves the page. Revoking it
       // on a timer breaks restored/evicted images on mobile Safari.
@@ -186,7 +187,7 @@ export async function photoDialog(part){
     await Promise.allSettled(photos.map(async p=>{
       const card=document.createElement('div'),img=document.createElement('img');img.alt=part.name;img.loading='lazy';card.append(img);host.append(card);
       if(editable){const primary=document.createElement('button');primary.className='btn secondary small';primary.textContent=p.primary?'Основное фото':'Сделать основным';primary.disabled=busy;primary.onclick=()=>save(null,{...p,url:img.src});card.append(primary);}
-      displayPrivatePhoto(img,{getUrl:async()=>(await api('part_photo_url',{part_id:part.id,photo_id:p.id},{fresh:true})).url,onError:()=>{img.alt='Фото не загрузилось';}});
+      photoStops.push(displayPrivatePhoto(img,{cacheKey:me?.profile_id&&p.path?me.profile_id+':'+part.id+':'+p.path:undefined,getUrl:async()=>(await api('part_photo_url',{part_id:part.id,photo_id:p.id},{fresh:true})).url,onError:()=>{img.alt='Фото не загрузилось';}}));
     }));
   }catch(e){if(host.isConnected)host.textContent=e.message;}
 }
@@ -372,6 +373,7 @@ export function bindProductPreviews(host,products){
     const timeout=setTimeout(()=>{stops.get(button)?.();button.dataset.photoState='error';finish();},30000);
     button.dataset.photoState='loading';
     const stop=displayPrivatePhoto(img,{
+      cacheKey:me?.profile_id&&p.primary_photo_path?me.profile_id+':'+p.id+':'+p.primary_photo_path:undefined,
       url,
       isCurrent:()=>button.isConnected&&versions.get(button)===version,
       getUrl:async()=>(await api('part_photo_url',{part_id:p.id},{fresh:true})).url,

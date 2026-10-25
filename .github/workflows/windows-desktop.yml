@@ -43,10 +43,16 @@ jobs:
           node desktop/tests/unified-smoke.cjs
           node desktop/tests/terminal-auto-open.cjs
       - name: Verify repair receipt fits one A4 page
+        # Photo cache must survive the same native origin and process restart.
         shell: pwsh
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/print-layout.cjs
+      - name: Verify native photo cache persistence
+        shell: pwsh
+        run: |
+          $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
+          node scripts/check-part-photo-cache-native.cjs
       - name: Verify stable screen during background polling
         shell: pwsh
         run: |
