@@ -475,7 +475,13 @@
     root.className = "printer-fields";
     root.innerHTML = '<label>\u041F\u0440\u0438\u043D\u0442\u0435\u0440<select data-printer></select></label><button type="button" data-refresh>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A</button><div class="printer-size"><label>\u0428\u0438\u0440\u0438\u043D\u0430, \u043C\u043C<input data-width type="number" min="30" max="110" step="0.1" value="58" required></label><label>\u0412\u044B\u0441\u043E\u0442\u0430, \u043C\u043C<input data-height type="number" min="20" max="200" step="0.1" value="30" required></label></div>' + (allowDialog ? '<label class="printer-remember"><input type="checkbox" data-remember checked>\u0417\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u044C \u0434\u043B\u044F \u044D\u0442\u043E\u0433\u043E \u0444\u043E\u0440\u043C\u0430\u0442\u0430</label>' : "") + '<p class="muted" data-note role="status"></p>';
     const select = root.querySelector("[data-printer]"), width = root.querySelector("[data-width]"), height = root.querySelector("[data-height]"), remember = root.querySelector("[data-remember]"), note = root.querySelector("[data-note]"), refresh = root.querySelector("[data-refresh]");
-    let snapshot = { printers: [], profiles: {} }, loading = false;
+    const connect = document.createElement("button");
+    connect.type = "button";
+    connect.dataset.connectP2 = "";
+    connect.textContent = "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C DETONGER P2";
+    connect.hidden = true;
+    refresh.after(connect);
+    let snapshot = { printers: [], profiles: {} }, loading = false, pollTimer;
     const option = (name, value) => {
       const o = document.createElement("option");
       o.value = value;
@@ -483,10 +489,15 @@
       return o;
     };
     function describe() {
+      var _a2, _b, _c, _d;
       if (remember) remember.disabled = !select.value;
       const found = snapshot.printers.some((p) => p.name === select.value);
       note.textContent = select.value && !found ? "\u042D\u0442\u043E\u0442 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0435\u0433\u043E \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A." : select.value ? "\u0412\u044B\u0431\u043E\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u0434\u043B\u044F \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0445 \u043F\u0435\u0447\u0430\u0442\u0435\u0439." : allowDialog ? "\u0414\u043B\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0432\u044B\u0431\u043E\u0440\u0430 \u0443\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430." : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043A \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443, \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u0440\u0430\u0439\u0432\u0435\u0440 \u0435\u0433\u043E \u043C\u043E\u0434\u0435\u043B\u0438 \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A.";
+      if (format === "label" && ((_a2 = snapshot.setup) == null ? void 0 : _a2.message)) note.textContent = snapshot.setup.message;
       if (snapshot.warning) note.textContent = snapshot.warning;
+      connect.hidden = format !== "label" || typeof ((_b = native()) == null ? void 0 : _b.setupPrinter) !== "function" || ((_c = snapshot.setup) == null ? void 0 : _c.status) === "ready";
+      connect.disabled = ((_d = snapshot.setup) == null ? void 0 : _d.busy) === true;
+      connect.textContent = connect.disabled ? "\u0423\u0441\u0442\u0430\u043D\u0430\u0432\u043B\u0438\u0432\u0430\u0435\u043C DETONGER P2\u2026" : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C DETONGER P2";
       changed({ loading });
     }
     function populate(preserve = false) {
@@ -504,24 +515,40 @@
       describe();
     }
     async function load2(preserve = false) {
+      var _a2, _b, _c, _d;
       if (loading) return;
       loading = true;
       refresh.disabled = select.disabled = true;
       changed({ loading });
       note.textContent = "\u041F\u043E\u043B\u0443\u0447\u0430\u0435\u043C \u0441\u043F\u0438\u0441\u043E\u043A \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432\u2026";
       try {
+        const previous = (_a2 = snapshot.setup) == null ? void 0 : _a2.status;
         snapshot = await native().printers();
-        populate(preserve);
+        populate(previous === "installing" && ((_b = snapshot.setup) == null ? void 0 : _b.status) === "ready" ? false : preserve);
       } catch (e) {
         note.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A\xBB.";
       } finally {
         loading = false;
         refresh.disabled = select.disabled = false;
         changed({ loading });
+        clearTimeout(pollTimer);
+        if (((_c = snapshot.setup) == null ? void 0 : _c.busy) || ((_d = snapshot.setup) == null ? void 0 : _d.status) === "installing") pollTimer = setTimeout(() => {
+          if (root.isConnected) void load2(true);
+        }, 3e3);
       }
     }
     select.onchange = describe;
     refresh.onclick = () => void load2(true);
+    connect.onclick = async () => {
+      connect.disabled = true;
+      try {
+        await native().setupPrinter();
+        await load2(true);
+      } catch (e) {
+        note.textContent = e.message;
+        connect.disabled = false;
+      }
+    };
     const ready = load2();
     return { ready, setFormat: (next) => {
       format = next;

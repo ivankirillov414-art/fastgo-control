@@ -25,6 +25,8 @@ assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('cla
   await app.context().route('https://**',route=>route.abort());let page;for(let n=0;n<100;n++){page=app.windows().find(p=>p.url()==='fastgo://app/warehouse.html');if(page)break;await new Promise(r=>setTimeout(r,150));}assert(page);await page.locator('#login').waitFor();
   const state=await app.evaluate(({app,BrowserWindow})=>{const win=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html');return {version:app.getVersion(),packaged:app.isPackaged,bounds:win.getBounds(),content:win.getContentBounds()};});
   assert.equal(state.version,pkg.version);assert(state.packaged);assert(state.bounds.height-state.content.height<32,'Standard white title bar remains');assert.equal(await page.evaluate(()=>document.body.classList.contains('warehouse-native-window')),true);assert.equal(await page.evaluate(()=>window.warehouseUpdateSafe(true)),true);
+  step('materialize signed P2 package outside ASAR');
+  const helper=await app.evaluate(({app})=>{const p=process.mainModule.require('./label-printer-setup.cjs'),path=process.mainModule.require('node:path'),fs=process.mainModule.require('node:fs');const file=p.materialize(path.join(app.getPath('userData'),'p2-probe'));return {file,exists:fs.existsSync(file),catalog:fs.existsSync(path.join(path.dirname(file),'driver/P2.cat'))};});assert(helper.exists&&helper.catalog);assert(!helper.file.includes('app.asar'));
   step('responsive native caption controls');
   for(const width of [1250,1000,850]){
    await app.evaluate(({BrowserWindow},width)=>{BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html').setSize(width,700);},width);

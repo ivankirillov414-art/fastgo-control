@@ -12,3 +12,9 @@ console.log('PASS: packaged updater, public update feed, installer checksum and 
 
 assert(asar.extractFile(archive,'warehouse-updater.cjs').toString().includes('class WarehouseUpdater'));assert(asar.extractFile(archive,'warehouse-native/backup-replica.cjs').toString().includes('class BackupReplica'));
 assert(asar.extractFile(archive,path.join('warehouse-native','printer-profiles.cjs')).toString().includes('class PrinterProfiles'));
+
+const p2base=path.join(resources,'p2-driver'),p2raw=fs.readFileSync(path.join(p2base,'manifest.json')),p2manifest=JSON.parse(p2raw);
+assert.equal(crypto.createHash('sha256').update(p2raw).digest('hex'),'a2a4732c56f093f3972293abeb618cfffe71b9dbad8b03c0cf500004c0311847');
+for(const f of p2manifest.files)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(p2base,f.path))).digest('hex'),f.sha256,'Changed signed P2 file: '+f.path);
+assert(asar.extractFile(archive,'warehouse-native/label-printer-setup.ps1').length>0);
+console.log('PASS: all signed P2 driver bytes are preserved in the delivered common application');

@@ -1,6 +1,6 @@
 {
   "name": "fastgo-desktop",
-  "version": "1.0.29",
+  "version": "1.0.30",
   "private": true,
   "description": "FastGo workshop for Windows with offline database and remote printing",
   "author": "FastGo",
@@ -58,6 +58,10 @@
       {
         "from": "platform-tools",
         "to": "platform-tools"
+      },
+      {
+        "from": "../warehouse-desktop/p2-driver",
+        "to": "p2-driver"
       }
     ]
   },

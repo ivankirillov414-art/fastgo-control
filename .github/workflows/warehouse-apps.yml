@@ -42,7 +42,6 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-avito-notifications.cjs
  windows:
-  needs: test
   runs-on: windows-latest
   timeout-minutes: 12
   steps:
@@ -56,6 +55,10 @@ jobs:
      run: |
       Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile adb.zip
       Expand-Archive adb.zip -DestinationPath warehouse-desktop
+   - name: Verify the signed P2 driver registers through native Windows tools
+     timeout-minutes: 4
+     shell: pwsh
+     run: ./warehouse-desktop/tests/p2-driver-install.ps1
    - run: npm run build
      working-directory: warehouse-desktop
    - name: Install desktop verification tools
@@ -114,7 +117,7 @@ jobs:
 
  publish:
   if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-  needs: [windows,android]
+  needs: [test,windows,android]
   runs-on: ubuntu-latest
   steps:
    - uses: actions/checkout@v4

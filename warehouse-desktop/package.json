@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -55,7 +55,9 @@
       "network.html",
       "network.css",
       "network-ui.js",
-      "printer-profiles.cjs"
+      "printer-profiles.cjs",
+      "label-printer-setup.cjs",
+      "label-printer-setup.ps1"
     ],
     "win": {
       "target": "nsis",
@@ -81,6 +83,10 @@
       {
         "from": "platform-tools",
         "to": "platform-tools"
+      },
+      {
+        "from": "p2-driver",
+        "to": "p2-driver"
       }
     ],
     "executableName": "FastGo РЎРєР»Р°Рґ"

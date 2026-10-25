@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "driver_version": "2.1.2026.0508",
+  "source_url": "https://detonger.com/driver/exe/DeTong_P2_Series_Windows_Driver_3.2.2026.1018.exe",
+  "source_sha256": "0feae9a235b0b4707d6f6854547d69d6f49bf03ec30ec57a74fba7b4873866df",
+  "signer_thumbprint": "52DE7654F62FB78407724FB3E1A76FB4DF0F3E58",
+  "files": [
+    {
+      "path": "amd64/P2.dll",
+      "sha256": "81581ae439d8409f66d9baa5aeca30bd19f529bf03cd5450effee8c6d3cb2453"
+    },
+    {
+      "path": "amd64/P2P.dll",
+      "sha256": "dd4a82039f28c56c4bb29dbf5c7c58c4c248c13adbc1f3fa24e13547f30203fe"
+    },
+    {
+      "path": "amd64/P2PUI.dll",
+      "sha256": "2964c0ac43911e6555a42eba1312143b76ade670230cf31edef013905c26a079"
+    },
+    {
+      "path": "amd64/P2UI.dll",
+      "sha256": "b73fe05d2955b6092f2ad16c4c79f441ec10953e7408b26c90a5bd8c0ccb2073"
+    },
+    {
+      "path": "P2.cat",
+      "sha256": "f642bf9b1f5dce523f875501a4cde6d2b1dcc707c23f3874737c76bf2b97f6f3"
+    },
+    {
+      "path": "P2.gpd",
+      "sha256": "473a03a2a528b06fa838d09e0d29f2e8841d7add449faf2b495a73dc1029b8e4"
+    },
+    {
+      "path": "P2.inf",
+      "sha256": "157fa6fdc84de9623d6a9a66aeb78ebbd9f20fa3deb1cafc20994d5b0cb39915"
+    },
+    {
+      "path": "P2.ini",
+      "sha256": "ef32bf4871efd599020620e91c7bcf13f0d1b72823eedd223be05e601448cbd8"
+    },
+    {
+      "path": "P2P.gpd",
+      "sha256": "537c2ad468c6528eae488e3dac94e3d705d1b5f47aa7b9dc9a759eb408cc6a6f"
+    },
+    {
+      "path": "P2P.ini",
+      "sha256": "f25a6ee5866a4ae194513e5f7a93902a80f7466cc10ac068504fd3b7e072f705"
+    },
+    {
+      "path": "x86/P2.dll",
+      "sha256": "f4766e0d3e247f555e7ef231ae8afb3ed8ab79569ae2af6bc8b79165650e1ab9"
+    },
+    {
+      "path": "x86/P2P.dll",
+      "sha256": "a5c7e2d8a94b6521b57cf5c84de7ca841012ffeee15a939dd8c7bd27b588fdda"
+    },
+    {
+      "path": "x86/P2PUI.dll",
+      "sha256": "9a42bddc784129adbabe117c3229cfbbbe01e2b2ec51180a1d838f91402833ac"
+    },
+    {
+      "path": "x86/P2UI.dll",
+      "sha256": "d66688cb8977db8e8f11f28bfe4201bf9340ba336297d2078bd212c1dea77240"
+    }
+  ]
+}
