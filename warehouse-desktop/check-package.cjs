@@ -13,7 +13,11 @@ for(const file of ['network-diagnostics.cjs','network-window.cjs','network-prelo
 assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('class PrinterProfiles'));
 (async()=>{
  stage='launch';console.log('Warehouse package check: '+stage);
- const profile=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-warehouse-package-')),app=await _electron.launch({executablePath:exe,args:['--user-data-dir='+profile],timeout:60000});
+ const profile=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-warehouse-package-'));
+ const queued=Array.from({length:6},(_,i)=>({id:'regression-scan-'+i,code:'FGP-00000001',time:new Date().toISOString(),target:null}));
+ const scannerDir=path.join(profile,'usb-scanner');fs.mkdirSync(scannerDir,{recursive:true});
+ fs.writeFileSync(path.join(scannerDir,'usb-scanner.json'),JSON.stringify({token:crypto.randomBytes(32).toString('hex'),serial:'',enabled:false,autoConnect:false,pending:queued,seen:queued.map(x=>x.id),results:[],mode:''}));
+ let app=await _electron.launch({executablePath:exe,args:['--user-data-dir='+profile],timeout:60000});
  electronProcess=app.process();
  const step=name=>{stage=name;console.log('Warehouse package check: '+name);};
  try{
@@ -35,7 +39,23 @@ assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('cla
   step('network window');
   const newWindow=app.waitForEvent('window');await page.locator('#network-diagnostics').click();const network=await newWindow;await network.locator('#probe').waitFor();assert.equal(await network.evaluate(()=>typeof window.fastgoNetwork.probe),'function');assert.equal(typeof(await network.evaluate(()=>window.fastgoNetwork.status())).online,'boolean');
   const networkBounds=await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/network.html'));return {height:w.getBounds().height,content:w.getContentBounds().height};});assert(networkBounds.height-networkBounds.content<32,'Network diagnostics retains a white title bar');await network.screenshot({path:path.join(dist,'network-window.png')});
-  fs.writeFileSync(path.join(dist,'warehouse-package-verification.json'),JSON.stringify({...state,checksum_verified:true,blockmap_verified:true,local_ui:true,no_standard_titlebar:true,network_window_verified:true,network_ipc_verified:true,printer_settings_verified:true,printer_discovery_warning:printers.warning||null},null,2));
+  await network.close();
+  step('downloaded update quits with six saved USB scans');
+  assert.equal((await page.evaluate(()=>window.warehouseDesktop.desktopStatus())).usb.pending,6);
+  // Use the actual updater guard, IPC, renderer beforeunload and tray lifecycle.
+  // The installer handoff is simulated; NSIS replacement is checked separately
+  // by installer-upgrade.ps1. This probe must really close the packaged process.
+  const closed=app.waitForEvent('close',{timeout:15000});
+  await app.evaluate(({app})=>{const updater=process.mainModule.require('electron-updater').autoUpdater;updater.checkForUpdates=async()=>{};updater.quitAndInstall=()=>{app.quit();};updater.emit('update-downloaded',{version:'99.0.0'});});
+  await page.evaluate(()=>{void window.warehouseDesktop.checkUpdates();}).catch(error=>{if(!/closed|destroyed/i.test(error.message))throw error;});
+  await closed;
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(scannerDir,'usb-scanner.json'),'utf8')).pending,queued,'Saved scans must survive quitting for an update');
+  step('restart with the same profile and saved USB queue');
+  app=await _electron.launch({executablePath:exe,args:['--user-data-dir='+profile],timeout:30000});electronProcess=app.process();
+  await app.context().route('https://**',route=>route.abort());page=await app.firstWindow();await page.locator('#login').waitFor();
+  assert.equal((await page.evaluate(()=>window.warehouseDesktop.desktopStatus())).usb.pending,6);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(scannerDir,'usb-scanner.json'),'utf8')).pending,queued);
+  fs.writeFileSync(path.join(dist,'warehouse-package-verification.json'),JSON.stringify({...state,checksum_verified:true,blockmap_verified:true,local_ui:true,no_standard_titlebar:true,network_window_verified:true,network_ipc_verified:true,printer_settings_verified:true,printer_discovery_warning:printers.warning||null,saved_usb_scans:6,update_guard_and_actual_quit_verified:true,restart_with_saved_queue_verified:true,installer_handoff_simulated:true},null,2));
   console.log('PASS: final warehouse EXE opens installed assets and network diagnostics without internet, both windows have dark integrated title bars, safe updates work before login, and installer checksum/blockmap match');
  }finally{
   step('test process cleanup');let timer;
