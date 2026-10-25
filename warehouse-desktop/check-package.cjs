@@ -45,9 +45,9 @@ assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('cla
   // Use the actual updater guard, IPC, renderer beforeunload and tray lifecycle.
   // The installer handoff is simulated; NSIS replacement is checked separately
   // by installer-upgrade.ps1. This probe must really close the packaged process.
-  await app.evaluate(({app})=>{const load=require('node:module').createRequire(require('node:path').join(app.getAppPath(),'package.json'));const updater=load('electron-updater').autoUpdater;updater.checkForUpdates=async()=>{};updater.quitAndInstall=()=>{app.quit();};updater.emit('update-downloaded',{version:'99.0.0'});});
   const closed=app.waitForEvent('close',{timeout:15000});
-  await page.evaluate(()=>{void window.warehouseDesktop.checkUpdates();});
+  await app.evaluate(({app})=>{const updater=process.mainModule.require('electron-updater').autoUpdater;updater.checkForUpdates=async()=>{};updater.quitAndInstall=()=>{app.quit();};updater.emit('update-downloaded',{version:'99.0.0'});});
+  await page.evaluate(()=>{void window.warehouseDesktop.checkUpdates();}).catch(error=>{if(!/closed|destroyed/i.test(error.message))throw error;});
   await closed;
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(scannerDir,'usb-scanner.json'),'utf8')).pending,queued,'Saved scans must survive quitting for an update');
   step('restart with the same profile and saved USB queue');
