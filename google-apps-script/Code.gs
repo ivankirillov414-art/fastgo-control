@@ -33,7 +33,7 @@ function routeUnlocked_(action,p,actor){
     case 'health': return health_();
     case 'catalog': return catalog_();
     case 'part_by_barcode': return partByBarcode_(p);
-    case 'part_save': requireAdmin_(actor); return partSave_(p);
+    case 'part_save': requireAdmin_(actor); return partSave_(p,actor);
     case 'part_photo_upload': requireAdmin_(actor); return privatePartUpload_(p); 
     case 'part_photo_url': return privatePartPhoto_(p);
     case 'part_photos': return partPhotos_(p);
@@ -130,7 +130,7 @@ function categoryEnsure_(value){
   if(matches.length){const row=matches[0];if(!row['Штрих-код категории'])patchRow_(SHEETS.categories,row.__row,{'Штрих-код категории':barcodeNext_(SHEETS.categories,'Штрих-код категории','next_category_seq','FGC-',6)});return String(row['Категория (ключ)']);}
   append_(SHEETS.categories,{'Категория (ключ)':name,'Понятное название':name,'Штрих-код категории':barcodeNext_(SHEETS.categories,'Штрих-код категории','next_category_seq','FGC-',6),'Основное фото':'','Примечание':''});return name;
 }
-function partSave_(p){
+function partSave_(p,actor){
   const r=p.id?find_(SHEETS.products,'product_id',p.id):null,now=now_(),name=String(p.name||'').trim().slice(0,200),sku=String(p.sku===undefined?r&&r['Артикул / SKU']||'':p.sku).trim().slice(0,100);
   if(p.id&&!r)throw httpError_('Товар не найден; новая позиция не создана',404);
   if(!name)throw httpError_('Укажите название',400);
@@ -142,7 +142,7 @@ function partSave_(p){
   if(sku&&others.some(x=>norm(x['Артикул / SKU'])===norm(sku)))throw httpError_('Артикул уже принадлежит другому товару',409);
   if(others.some(x=>norm(x['Категория'])===norm(category)&&norm(x['Модель'])===norm(model)&&norm(x['Модель / название'])===norm(name)))throw httpError_('Эта модель уже есть на складе. Выберите существующую позицию',409);
   const value={'Категория':category,'Модель / название':name,'Модель':model,'Артикул / SKU':sku,'Ед.':String(p.unit||r&&r['Ед.']||'шт').trim().slice(0,20),'Цена закупки, ₽':cost,'Цена продажи, ₽':retail,'Активен':p.active===undefined?(r?r['Активен']!==false:true):p.active!==false,updated_at:now};
-  if(r){patchRow_(SHEETS.products,r.__row,value);return mapProduct_(find_(SHEETS.products,'product_id',p.id));}
+  if(r){const before=num_(r['Цена закупки, ₽']);patchRow_(SHEETS.products,r.__row,value);if(actor&&cost!==before)addEvent_('stock',p.id,'purchase_price_update',actor,{field:'unit_cost',before,after:cost});return mapProduct_(find_(SHEETS.products,'product_id',p.id));}
   const id=uid_(),barcode=barcodeNext_(SHEETS.products,'Штрих-код','next_product_seq','FGP-',8);
   append_(SHEETS.products,{...value,'Штрих-код':barcode,'Приход, шт.':0,'Сумма прихода, ₽':0,'Фото / примечание':'',product_id:id,'Остаток, шт.':0,'Фото URL':''});
   return mapProduct_(find_(SHEETS.products,'product_id',id));

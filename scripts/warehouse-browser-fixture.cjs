@@ -1,7 +1,7 @@
 // Shared browser fixture. Database concurrency/idempotency is covered by warehouse.test.mjs.
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path');
 const actor='11111111-1111-4111-8111-111111111111',part='22222222-2222-4222-8222-222222222222',second='33333333-3333-4333-8333-333333333333';
-const catalog=[{id:part,name:'Покрышка 10 × 2,5',barcode:'FGP-00000001',retail_price:1200,quantity:20,active:true},{id:second,name:'Камера 10 × 2,5',barcode:'FGP-00000002',retail_price:300,quantity:20,active:true}];
+const catalog=[{id:part,name:'Покрышка 10 × 2,5',barcode:'FGP-00000001',retail_price:1200,unit_cost:600,quantity:20,active:true},{id:second,name:'Камера 10 × 2,5',barcode:'FGP-00000002',retail_price:300,unit_cost:120,quantity:20,active:true}];
 const launchOptions={headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,args:['--no-sandbox']}:{})};
 async function serve(){const root=path.resolve(__dirname,'..'),server=http.createServer((req,res)=>{const p=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(!p.startsWith(root+path.sep))return res.writeHead(403).end();fs.readFile(p,(e,b)=>{if(e)return res.writeHead(404).end();res.setHeader('Content-Type',p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'text/html');res.end(b);});});await new Promise(r=>server.listen(0,'127.0.0.1',r));return {server,base:'http://127.0.0.1:'+server.address().port};}
 function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-4666-8666-666666666666',number:'0026',vehicle:'Kugoo M4 Pro',total:1500,paid:500,due:1000,revision:2,payable:true};const state={offline:false,holdPayment:false,repairPaid:false,role:'owner',failEditResponse:false,holdings:[],returns:[],failReturnResponse:false,returnReceipts:new Map(),edits:[],editReceipts:new Map(),partPhotos:new Map(),photoUploads:[],photoReceipts:new Map(),productSaves:[],productReceipts:new Map(),stockIntakes:[],stockReceipts:new Map(),failPhotoResponse:false,imageRequests:0,expirePhotoOnce:false,parts:structuredClone(catalog).map((x,i)=>({...x,sku:i?'FGP-038':'FGP-037'}))};
@@ -44,5 +44,14 @@ function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-466
  await route.fulfill({status,json:{data,error},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}});});}
  return {connect,jobs,payments,quote,state};
 }
-async function scan(page,code='FGP-00000001',suffix='Enter'){await page.bringToFront();await page.keyboard.type(code,{delay:5});if(suffix)await page.keyboard.press(suffix);}
+async function scan(page,code='FGP-00000001',suffix='Enter'){
+ await page.bringToFront();
+ // Receipts on a laptop now receive TSD/USB scans only. ATOL is for payment
+ // or repair-parts issue; route receipt fixtures through the real USB inbox.
+ if(await page.locator('body[data-mode=station] #live-submit').count()&&(await page.locator('#live-submit').innerText())==='Оформить приход'){
+  const id=await page.evaluate(code=>{const id=crypto.randomUUID();window.__testInbox??=[];window.__testAcknowledged??=[];window.warehouseDesktop={...window.warehouseDesktop,usbInbox:async()=>({items:window.__testInbox}),usbResult:async(id,result)=>{window.__testAcknowledged.push({id,result});window.__testInbox=window.__testInbox.filter(x=>x.id!==id);}};window.__testInbox.push({id,kind:'receipt',code});return id;},code);
+  await page.waitForFunction(id=>window.__testAcknowledged.some(x=>x.id===id),id);return;
+ }
+ await page.keyboard.type(code,{delay:5});if(suffix)await page.keyboard.press(suffix);
+}
 module.exports={actor,part,second,catalog,launchOptions,serve,backend,scan};

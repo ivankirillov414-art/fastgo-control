@@ -47,6 +47,26 @@ await check('Владелец корректирует цену и остато�
  const access={device:null,remote:true};await f.edit('quantity',7,5,f.owner,{},access);await f.edit('retail_price',1500.50,300,f.owner,{},access);
  assert.equal(f.stock(),7);assert.equal((await f.call('catalog')).parts[0].retail_price,1500.50);
  assert.equal(f.state.sheets['Движения склада'].rows.at(-1)['Тип'],'Корректировка');
- const version=f.state.version;for(const role of ['mechanic','seller','manager','receiver','admin'])await assert.rejects(f.edit('quantity',8,7,{...f.owner,role},{},access),e=>e.status===403);
+ const version=f.state.version;for(const role of ['mechanic','seller','manager','receiver'])await assert.rejects(f.edit('quantity',8,7,{...f.owner,role},{},access),e=>e.status===403);
  assert.equal(f.state.version,version);await assert.rejects(f.edit('quantity',8,7,f.owner,{}, {device:null}),e=>e.status===403);
+});
+
+await check('Закупочная цена меняется отдельно от розницы с аудитом и повтором без дубля',async f=>{
+ const access={device:null,remote:true},request_id=randomUUID(),movements=structuredClone(f.state.sheets['Движения склада'].rows);
+ f.lose();await assert.rejects(f.edit('unit_cost',175.50,0,f.owner,{request_id},access),/Response lost/);
+ const result=await f.edit('unit_cost',175.50,0,f.owner,{request_id},access);assert.equal(result.unit_cost,175.50);assert.equal(result.retail_price,300);assert.equal(result.quantity,5);
+ assert.deepEqual(f.state.sheets['Движения склада'].rows,movements);assert.equal(f.state.sheets['События'].rows.filter(r=>r['Действие']==='purchase_price_update').length,1);
+ await assert.rejects(f.edit('unit_cost',200,0,f.owner,{},access),e=>e.status===409);
+ await assert.rejects(f.edit('unit_cost',-1,175.50,f.owner,{},access),e=>e.status===400);
+ await assert.rejects(f.edit('unit_cost',200,175.50,f.master,{},access),e=>e.status===403);
+});
+await check('Карточка товарной техники сохраняет закупочную цену и историю изменения',async f=>{
+ const part=await f.call('part_save',{name:'Kugoo Max Speed',category:'Техника · Электросамокаты',unit_cost:20000,retail_price:35000});
+ const changed=await f.call('part_save',{id:part.id,name:part.name,unit_cost:22000.50,retail_price:35000});assert.equal(changed.unit_cost,22000.50);assert.equal(changed.retail_price,35000);
+ const event=f.state.sheets['События'].rows.find(r=>r.record_id===part.id&&r['Действие']==='purchase_price_update');assert.equal(event.actor_id,f.owner.id);assert.equal(JSON.parse(event['Детали']).before,20000);
+});
+
+await check('Администратор каталога исправляет закупочную цену с телефона, мастер не получает это право',async f=>{
+ const access={device:null,remote:true};const changed=await f.edit('unit_cost',100,0,{...f.owner,role:'admin'},{},access);assert.equal(changed.unit_cost,100);assert.equal(changed.retail_price,300);
+ await assert.rejects(f.edit('unit_cost',1,100,{...f.master,can_sell:true,can_edit_catalog:true},{},access),e=>e.status===403);
 });
