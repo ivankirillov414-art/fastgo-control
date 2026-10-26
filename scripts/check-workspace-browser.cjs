@@ -23,7 +23,7 @@ const server=createServer((req,res)=>{
   const me={role,name:'Тестовый сотрудник',profile_id:'fixture',active:true,backend:'POSTGRES_GOOGLE_MIRROR'};
   const record={id:'test',repair_number:1,storage_number:1,status:'stored',revision:1,brand:'Тестовая техника',model:'Модель',last_name:'Тест',first_name:'Клиент',phone:'+70000000000',created_at:'2026-09-21',storage_amount:0,paid_amount:0,total_amount:0,fault_photo_paths:[],signed_document_paths:[],works:[],parts:[]};
   await page.route('**/*',async route=>{
-   const req=route.request();if(req.url().startsWith(origin))return route.continue();
+   const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
    if(req.url().includes('/functions/v1/fastgo-print-api'))return route.fulfill({json:{data:{enabled:false}},headers:{'Access-Control-Allow-Origin':'*'}});
    if(req.url().includes('/functions/v1/fastgo-workshop-api')){
     if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'}});
@@ -109,7 +109,7 @@ const server=createServer((req,res)=>{
  page.on('pageerror',e=>errors.push(e.message));
  await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'intake-fixture',expires_at:4102444800})));
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
   if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
@@ -132,14 +132,14 @@ const server=createServer((req,res)=>{
   assert.equal(await page.locator('#f-promised_date').isVisible(),false);
   const before=creates.length;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Телефон'}).waitFor();assert.equal(creates.length,before);
   for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);
-  await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});
+  await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==','base64')});
   await page.locator('#f-intake_amount').fill('400');failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
   await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor({state:'attached'});
   assert.equal(creates.length,before+2);assert.equal(creates[before].request_id,creates[before+1].request_id);assert.equal(creates[before+1].phone,'+79991234567');assert.equal(creates[before+1].promised_date,'');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.goto(origin+'/workshop.html#new?kind=storage');await page.locator('#intake-form').waitFor();
   for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);
-  await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});
+  await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==','base64')});
   await page.locator('#f-storage_tariff').selectOption('season');assert.equal(await page.locator('#f-storage_months').isVisible(),false);
   await page.locator('#intake-save').click();await page.locator('#order-form').waitFor();assert.equal(creates.at(-1).storage_tariff,'season');assert.ok(creates.at(-1).planned_return_date>=creates.at(-1).starts_on);
  }
@@ -152,7 +152,7 @@ const server=createServer((req,res)=>{
  page.on('pageerror',e=>errors.push(e.message));
  await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'seller-fixture',expires_at:4102444800})));
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
   if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
@@ -197,7 +197,7 @@ const server=createServer((req,res)=>{
  let verified=0,updated=0,logout=0,loggedIn=0,trust=false;
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,PUT,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
   const p=req.postDataJSON();
@@ -268,7 +268,7 @@ const server=createServer((req,res)=>{
  page.on('pageerror',e=>errors.push(e.message));
  await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'fixture-only',user_id:'receipt-fixture',expires_at:4102444800})));
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
   if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
@@ -314,7 +314,7 @@ const server=createServer((req,res)=>{
  const product={id:'sale-part',name:'Амортизатор рулевой длинное название модели',barcode:'FGP-00000001',quantity:10,retail_price:800,active:true};
  const shift={id:'sale-shift',number:1,register:'Основная касса',status:'open',opened_at:'2026-10-10'};
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
   if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
@@ -354,7 +354,7 @@ const server=createServer((req,res)=>{
  const context=await browser.newContext(),page=await context.newPage(),errors=[];let requests=0,verified=0,signupURL='';
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
-  const req=route.request();if(req.url().startsWith(origin))return route.continue();
+  const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
   if(req.url().includes('/auth/v1/signup')){signupURL=req.url();return route.fulfill({json:{id:'confirmation-fixture',identities:[{id:'fixture'}]},headers});}

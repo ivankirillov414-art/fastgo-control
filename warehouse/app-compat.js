@@ -97,8 +97,16 @@
     } catch (e) {
       throw Error("\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438. \u0414\u0430\u043D\u043D\u044B\u0435 \u043D\u0435 \u0443\u0434\u0430\u043B\u0435\u043D\u044B. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.");
     }
-    const j = await r.json();
-    if (!r.ok) throw Object.assign(Error(j.error || j.error_description || j.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0440\u0432\u0438\u0441\u0430"), { status: r.status });
+    let j;
+    try {
+      j = await r.json();
+    } catch (e) {
+      throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u043F\u044B\u0442\u043A\u0443.");
+    }
+    if (!r.ok) {
+      const code = j.error_code || j.code, msg = j.error_description || j.msg || j.message || j.error || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0440\u0432\u0438\u0441\u0430", known = { invalid_credentials: "\u041D\u0435\u0432\u0435\u0440\u043D\u0430\u044F \u043F\u043E\u0447\u0442\u0430 \u0438\u043B\u0438 \u043F\u0430\u0440\u043E\u043B\u044C. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u0432\u0445\u043E\u0434\u0430 \u0438\u0437 FastGo \u0421\u0435\u0440\u0432\u0438\u0441.", email_not_confirmed: "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043F\u043E\u0447\u0442\u0443 \u0434\u043B\u044F \u0432\u0445\u043E\u0434\u0430.", over_request_rate_limit: "\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u043D\u043E\u0433\u043E \u043F\u043E\u043F\u044B\u0442\u043E\u043A. \u041F\u043E\u0434\u043E\u0436\u0434\u0438\u0442\u0435 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043C\u0438\u043D\u0443\u0442." };
+      throw Object.assign(Error(known[code] || { "Invalid login credentials": known.invalid_credentials }[msg] || msg), { status: r.status });
+    }
     return j;
   }
   function save(j) {
@@ -2921,6 +2929,9 @@
   var stopScanner;
   var stopUSB;
   var preorderView;
+  if (!terminal && !window.warehouseDesktop && matchMedia("(max-width:760px)").matches) {
+    for (const id of ["usb-scanner", "terminal-update"]) if ($(id)) $(id).hidden = true;
+  }
   var serviceLink = $("warehouse-service");
   if (serviceLink) serviceLink.hidden = !(window.fastgoDesktop || new URLSearchParams(location.search).get("unified") === "1");
   serviceLink == null ? void 0 : serviceLink.addEventListener("click", (e) => {
@@ -2980,6 +2991,9 @@
   } }) : null;
   function applyReadOnly() {
     if (document.body.dataset.readonly !== "true") return;
+    if (!window.warehouseDesktop) {
+      for (const id of ["usb-scanner", "terminal-update", "network-diagnostics", "printer-settings"]) if ($(id)) $(id).hidden = true;
+    }
     for (const id of ["receipt", "pay", "nav-receipt", "nav-pay", "shift", "usb-scanner", "terminal-update"]) if ($(id)) {
       $(id).disabled = true;
       $(id).title = "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043D\u0430 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
@@ -3136,9 +3150,10 @@
     draft = load("draft:" + document.body.dataset.mode);
     $("logout").hidden = false;
     if (!device) {
-      if (!terminal && new URLSearchParams(location.search).get("unified") === "1") {
+      if (!terminal && (new URLSearchParams(location.search).get("unified") === "1" || !window.warehouseDesktop)) {
         document.body.dataset.readonly = "true";
         memberRole = (await serviceApi("me")).role;
+        if (memberRole === "mechanic") throw Error("\u042D\u0442\u043E\u0442 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432\u0430\u0448\u0435\u0439 \u0440\u043E\u043B\u0438");
         await catalog();
         $("connection").textContent = "\u041A\u0430\u0442\u0430\u043B\u043E\u0433 \u0441\u043A\u043B\u0430\u0434\u0430 \xB7 \u043E\u0431\u0449\u0435\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435";
         home();
