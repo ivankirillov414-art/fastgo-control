@@ -1,5 +1,6 @@
 import {createNativeEngine} from '../_shared/native-engine.js';
-import {readPickupCode} from '../_shared/parts-pickup-code.js';
+import {readPickupCode,pickupCode} from '../_shared/parts-pickup-code.js';
+import {repairIdFromCode} from './repair.js';
 import {items,id,fail} from './model.js';
 function eventDetails(e){try{return JSON.parse(e['Детали']||'{}');}catch{return {};}}
 export function pickupRepair(snapshot,ticket){
@@ -31,9 +32,16 @@ export function preparePartsIssue(snapshot,p,ticket,actor,{uuid=()=>crypto.rando
 export async function partsIssue(action,p,{db,actor,device,stationId,key,digest}){
  if(!['parts_pickup_quote','parts_issue'].includes(action))return undefined;
  if(device.kind!=='terminal')fail('Выдавайте детали сканированием на ТСД кассы',403);
- const ticket=await readPickupCode(p.code,key,{allowExpired:action==='parts_issue'});
+ let code=p.code,ticket,snapshot;
+ if(action==='parts_pickup_quote'&&typeof code==='string'&&!code.startsWith('FGPARTS1.')){
+  const repairId=await repairIdFromCode(code,key);snapshot=await db('rpc/workshop_native_snapshot','','POST',{});
+  const repair=snapshot.sheets['Ремонты'].rows.find(r=>r.repair_id===repairId);if(!repair)fail('Ремонт не найден',404);
+  if(!id(repair.master_id))fail('Сначала назначьте мастера в карточке ремонта',409);
+  code=(await pickupCode({id:repairId,assigned_master_id:repair.master_id},key)).code;
+ }
+ ticket=await readPickupCode(code,key,{allowExpired:action==='parts_issue'});
  const active=async()=>{if(!(await db('workshop_members','profile_id=eq.'+ticket.master_id+'&active=eq.true&role=eq.mechanic&select=profile_id')).length)fail('Мастер отключён',409);};
- if(action==='parts_pickup_quote'){await active();const q=pickupRepair(await db('rpc/workshop_native_snapshot','','POST',{}),ticket);delete q.raw;return q;}
+ if(action==='parts_pickup_quote'){await active();const q=pickupRepair(snapshot||await db('rpc/workshop_native_snapshot','','POST',{}),ticket);delete q.raw;return {...q,code};}
  if(!id(p.request_id))fail('Неверный код выдачи');const normalized=items(p.items),fingerprint=await digest(JSON.stringify({code:p.code,items:normalized,terminal_id:device.id,station_id:stationId}));
  // Receipt lookup precedes expiry/assignment checks on retries: a committed issue is final.
  const receipt=async()=>{const old=(await db('workshop_native_receipts','request_id=eq.'+p.request_id))[0];if(!old)return null;if(old.action!=='warehouse_parts_issue'||old.actor_id!==actor.id||old.fingerprint!==fingerprint)fail('Код выдачи уже использован',409);return old.result;};

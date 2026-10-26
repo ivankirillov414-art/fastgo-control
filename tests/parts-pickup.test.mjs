@@ -46,6 +46,17 @@ test('lost issue response is resolved by receipt; price and quantities cannot ch
  await assert.rejects(partsIssue('parts_issue',{...p,items:[{part_id:part,quantity:3}]},h.context),/уже использован/);
  await partsIssue('parts_issue',p,h.context);assert.equal(h.commits.length,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);
 });
+
+test('printed repair QR selects an assigned repair without issuing; confirmation uses a signed ticket',async()=>{
+ const h=fixture(),url='https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+repair;
+ const quote=await partsIssue('parts_pickup_quote',{code:url},h.context);assert.equal(quote.id,repair);assert.equal(quote.master_id,master);assert.match(quote.code,/^FGPARTS1\./);assert.equal(h.commits.length,0);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+ await assert.rejects(partsIssue('parts_issue',{request_id:randomUUID(),code:url,items:[{part_id:part,quantity:2}]},h.context));
+ const issued=await partsIssue('parts_issue',{request_id:randomUUID(),code:quote.code,items:[{part_id:part,quantity:2}]},h.context);assert.equal(issued.repair_id,repair);assert.equal(issued.items[0].quantity,2);assert.equal(h.commits.length,1);
+});
+test('repair QR lookup rejects foreign links, unassigned, closed and reassigned repairs without writes',async()=>{
+ const url='https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+repair;
+ for(const mode of ['foreign','unassigned','closed','reassigned']){const h=fixture();if(mode==='unassigned')h.raw.master_id='';if(mode==='closed')h.raw['Статус']='Готов';const input=mode==='foreign'?url.replace('ivankirillov414-art.github.io','evil.invalid'):mode==='reassigned'?await code():url;if(mode==='reassigned')h.raw.master_id=randomUUID();await assert.rejects(partsIssue('parts_pickup_quote',{code:input},h.context));assert.equal(h.commits.length,0);}
+});
 test('two terminals cannot consume the same pickup QR twice under a concurrent commit',async()=>{
  const h=fixture(),c=await code();const results=await Promise.allSettled([1,2].map(()=>partsIssue('parts_issue',{request_id:randomUUID(),code:c,items:[{part_id:part,quantity:1}]},h.context)));
  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.commits.length,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],4);
