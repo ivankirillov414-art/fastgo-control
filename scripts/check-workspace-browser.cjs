@@ -41,7 +41,7 @@ const server=createServer((req,res)=>{
    const sizes=await page.evaluate(()=>({page:document.documentElement.scrollWidth,width:innerWidth,side:document.querySelector('.sidebar').scrollWidth,sideWidth:document.querySelector('.sidebar').clientWidth}));
    assert.ok(sizes.page<=sizes.width+1,JSON.stringify({kind,role,width,sizes}));
    if(width>760)assert.ok(sizes.side<=sizes.sideWidth+1,JSON.stringify(sizes));
-   await page.locator('.view-switch a').filter({hasText:'Доска'}).click();await page.locator('.order-board').waitFor();
+   assert.equal(await page.locator('.view-switch,.order-board').count(),0);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    if(role==='owner')await page.screenshot({path:`browser-results/${kind}-${width}.png`,fullPage:true});
   }

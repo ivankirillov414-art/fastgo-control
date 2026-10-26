@@ -10,6 +10,9 @@ export const vehicles=modelGroups.flatMap(([brand,models,source])=>models.split(
 const norm=v=>String(v??'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\+/g,' plus ').replace(/[‐–—]/g,'-').replace(/\s+/g,' ').trim();
 const names=brands.flatMap(brand=>[brand,...(aliases[brand]||[])].map(name=>({brand,name,normalized:norm(name)}))).sort((a,b)=>b.normalized.length-a.normalized.length);
 function brandPrefix(value){const n=norm(value);return names.find(x=>n===x.normalized||n.startsWith(x.normalized+' '));}
+const phonetic=value=>norm(value).replace(/[а-я]/g,c=>({а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ж:'zh',з:'z',и:'i',й:'i',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sh',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'}[c])).replace(/kugoo|kuga|kugo|kugu/g,'kugo').replace(/max/g,'maks').replace(/speed/g,'spid').replace(/plyus/g,'plus').replace(/(\d)([a-z])/g,'$1 $2').replace(/[^a-z0-9]+/g,' ').trim();
+const tokens=value=>phonetic(value).split(' ').filter(Boolean);
+const sameWords=(a,b)=>tokens(a).sort().join(' ')===tokens(b).sort().join(' ');
 export function splitEquipment(value){
  const text=String(value??'').replace(/\s+/g,' ').trim(),known=brandPrefix(text);
  if(known){const words=known.name.trim().split(/\s+/).length;return {brand:known.brand,model:text.split(' ').slice(words).join(' ')};}
@@ -18,21 +21,26 @@ export function splitEquipment(value){
 export function equipmentChoices(query,history=[]){
  const q=norm(query);if(!q)return [];
  const prefix=brandPrefix(query),canonical=prefix?norm(prefix.brand)+' '+norm(splitEquipment(query).model):q;
- const words=canonical.trim().split(' ').filter(Boolean),seen=new Set();
+ const words=tokens(canonical),seen=new Set();
  const candidates=[...brands.map(brand=>({brand,model:''})),...vehicles,...history];
  return candidates.filter(x=>{
-  const key=norm(x.brand+' '+(x.model||''));if(seen.has(key))return false;seen.add(key);
-  const search=norm([x.brand,x.model,...(aliases[x.brand]||[])].join(' '));
+  const key=phonetic(x.brand+' '+(x.model||''));if(seen.has(key))return false;seen.add(key);
+  const search=phonetic([x.brand,x.model,...(aliases[x.brand]||[])].join(' '));
   return words.every(w=>search.includes(w));
  }).sort((a,b)=>{
-  const score=x=>{const value=norm(x.brand+' '+(x.model||''));return value===canonical.trim()?0:value.startsWith(canonical.trim())?1:2;};
+  const score=x=>sameWords(x.brand+' '+(x.model||''),query)||x.model&&sameWords(x.model,query)?0:1;
   return score(a)-score(b);
  }).slice(0,40).map(item=>({value:item.brand+(item.model?' '+item.model:''),label:item.brand+(item.model?' '+item.model:''),search:query,item}));
 }
+export function resolveEquipment(query,history=[]){
+ const choices=equipmentChoices(query,history).filter(x=>x.item.model&&(sameWords(x.value,query)||sameWords(x.item.model,query)));
+ return choices.length===1?choices[0].item:null;
+}
 export function bindEquipment(input,form,setDirty){
- const history=[],sync=()=>{const parts=splitEquipment(input.value);form.elements.brand.value=parts.brand;form.elements.model.value=parts.model;};
- suggest(input,q=>equipmentChoices(q,history),choice=>{sync();setDirty(true);if(!choice.item.model){input.value=choice.item.brand+' ';input.focus();input.dispatchEvent(new Event('input',{bubbles:true}));}});
- input.addEventListener('input',sync);sync();
+ const history=[];let selected=null;const preview=document.createElement('p');preview.className='muted';preview.setAttribute('role','status');preview.style.cssText='margin:8px 0 0;font-size:13px';input.after(preview);
+ const sync=()=>{const item=selected||resolveEquipment(input.value,history);form.elements.brand.value=item?.brand||'';form.elements.model.value=item?.model||'';input.setCustomValidity(input.value.trim()&&!item?.model?'Выберите бренд и модель из подсказок':'');preview.textContent=item?.model?'Выбрано: '+item.brand+' '+item.model:input.value.trim()?'Выберите технику из подсказок. Название сохранится как в каталоге.':'Начните вводить модель или бренд — например «макс спид».';return !!item?.model;};
+ suggest(input,q=>equipmentChoices(q,history),choice=>{selected=choice.item.model?choice.item:null;sync();setDirty(true);if(!choice.item.model){input.value=choice.item.brand+' ';input.focus();input.dispatchEvent(new Event('input',{bubbles:true}));}});
+ input.addEventListener('input',()=>{selected=null;sync();});input.addEventListener('blur',()=>{if(sync())input.value=form.elements.brand.value+' '+form.elements.model.value;});sync();
  let loaded=false;
  input.addEventListener('focus',()=>{
   if(loaded)return;loaded=true;
