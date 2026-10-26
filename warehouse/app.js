@@ -7,6 +7,7 @@ import {unknownScans} from './unknown-scans.js';
 import {productPanel} from './product-panel.js';
 import {partPhotos} from './part-photos.js';
 import {newPartForm} from './new-part.js';
+import {offerLabelPrinting,mobileLabelOffer} from './label-offer.js';
 import {startWebUpdates} from './web-update.js';
 import {repairPayment} from './repair-payment.js?v=20261016-scan-2';
 import {liveBasket} from './live-basket.js?v=20261016-scan-2';
@@ -119,11 +120,12 @@ async function checkout(value){if(value.payload.kind==='repair')return repair.ch
 function shift(){screen='shift';shell(nav()+'<h1>Открыть смену</h1><form id="shift-form" class="panel"><label>Касса<input name="register" value="'+esc(device.name)+'" required></label><label>Наличные на начало, ₽<input name="opening_cash" type="number" min="0" step="0.01" value="0" required></label><button class="primary">Открыть</button></form>');bindNav();const request_id=uuid();$('shift-form').onsubmit=e=>{e.preventDefault();const p=formValues(e.target);run(async()=>{await call('shift_open',{...p,request_id});home();message('Смена открыта');});};}
 let drawInventory=()=>{};
 const canManageParts=()=>!terminal&&['owner','developer','admin'].includes(memberRole);
-const canReceiveParts=()=>!terminal&&!!device&&document.body.dataset.readonly!=='true';
+const canReceiveParts=()=>!terminal&&(!!device&&document.body.dataset.readonly!=='true'||canManageParts());
 const refreshParts=async()=>{await catalog();drawInventory();};
 const photos=partPhotos({api:serviceApi,editable:canManageParts,run,changed:refreshParts,message});
-const product=productPanel({parts:()=>parts,editable:canManageParts,call:(a,p)=>call(a,p),run,changed:()=>drawInventory(),message,photos});
-const createPart=newPartForm({actor:userId,api:serviceApi,photos,parts:()=>parts,canReceive:canReceiveParts,run,refresh:refreshParts,openProduct:p=>product.open(p),message});
+const offerLabels=(part,quantity)=>{if(mobileLabelOffer())return offerLabelPrinting(part,quantity,{call:serviceApi,actor:userId()});};
+const product=productPanel({parts:()=>parts,editable:canManageParts,call:(a,p)=>call(a,p),run,changed:()=>drawInventory(),message,photos,offerLabels});
+const createPart=newPartForm({actor:userId,api:serviceApi,photos,parts:()=>parts,canReceive:canReceiveParts,run,refresh:refreshParts,openProduct:p=>product.open(p),message,offerLabels});
 async function inventory(){await catalog();screen='inventory';shell(nav()+'<div class="inventory-toolbar"><h1>Остатки общей базы</h1>'+(canManageParts()?'<button id="new-part" class="primary">Добавить запчасть</button>':'')+'</div><label class="inventory-search"><span class="sr-only">Поиск</span><input id="filter" type="search" placeholder="Поиск по названию, артикулу или штрихкоду…"></label><div class="inventory-table"><div class="inventory-columns"><span>Название</span><span>Артикул</span><span>Остаток</span><span>Продажа / закупка</span></div><div id="stock-list"></div></div>');bindNav();drawInventory=()=>{if(!$('stock-list'))return;const q=$('filter').value.toLowerCase(),matches=parts.filter(x=>[x.name,x.barcode,x.sku,x.model].join(' ').toLowerCase().includes(q));$('stock-list').innerHTML=matches.slice(0,100).map(x=>'<button type="button" class="inventory-item" data-part="'+esc(x.id)+'"><span class="inventory-name">'+photos.thumbnail(x)+'<strong>'+esc(x.name)+'</strong></span><span>'+esc(x.sku||'—')+'</span><span>'+x.quantity+' шт.</span><span>'+money(x.retail_price)+'<small class="purchase-price">Закупка: '+money(x.unit_cost)+'</small></span></button>').join('')+(matches.length?'':'<p class="muted inventory-empty">Ничего не найдено</p>');photos.bindThumbnails($('stock-list'),parts);$('stock-list').querySelectorAll('[data-part]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.inventory-item').forEach(x=>x.classList.toggle('selected',x===b));product.open(parts.find(x=>x.id===b.dataset.part));});};if($('new-part'))$('new-part').onclick=createPart;$('filter').oninput=drawInventory;drawInventory();}
 
 async function holdings(){
