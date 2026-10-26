@@ -34,7 +34,8 @@ async function refresh(){if(!session?.refresh_token)return false;if(!refreshing)
 export async function signIn(email,password){reads.clear();saveSession(await request('/auth/v1/token?grant_type=password',{email,password}));}
 export async function sendPasswordRecovery(email){
  email=String(email||'').trim().toLowerCase();if(!email)throw new Error('Укажите почту');
- await request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+location.pathname),{email});
+ const redirect=window.fastgoDesktop||window.fastgoInstalledApp?'https://ivankirillov414-art.github.io/fastgo-control/workshop.html':location.origin+location.pathname;
+ await request('/auth/v1/recover?redirect_to='+encodeURIComponent(redirect),{email});
  return true;
 }
 export async function verifyRecoveryCode(email,code){

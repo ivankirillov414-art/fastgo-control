@@ -51,3 +51,11 @@ test('P2 setup receipt keeps the driver result but excludes arbitrary helper dat
  const writes=[];await deviceStatus('device_status',{app:'warehouse',version:'1.0.26',printing:{setup:{status:'driver_installed',driver_version:'3.2.2026.1018',message:'USB is missing',attempts:1,busy:false,connected:false,queue_name:'',updated_at:'2026-10-25T12:00:00Z',secret:'PRIVATE',stdout:'PRIVATE'}}},{device:{id:randomUUID(),kind:'station'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
  const setup=writes[0][3].details.printing.setup;assert.equal(setup.status,'driver_installed');assert.equal(setup.attempts,1);assert.equal(setup.connected,false);assert(!JSON.stringify(setup).includes('PRIVATE'));
 });
+
+
+test('many Windows devices cannot exceed the diagnostic JSONB byte limit or hide the installed version',async()=>{
+ const writes=[],scanner={devices:Array.from({length:64},(_,i)=>({name:'Клавиатура и принтер устройства '.repeat(8),manufacturer:'Производитель'.repeat(8),kind:'HIDClass',status:'OK',error:0,hardware:i===0?'USBPRINT\\4BARCODE3B-365B':'USB\\VID_OTHER_'+i}))},printing={printers:Array.from({length:32},(_,i)=>({name:i?'Принтер '+i:'P2 Label Printer',displayName:'Принтер '.repeat(30),status:0})),profiles:{label:{deviceName:'P2 Label Printer',widthMm:50,heightMm:27}},pc365:{status:'ready',test_printed:true,queue_name:'POScenter PC-365'}};
+ await deviceStatus('device_status',{app:'warehouse',version:'1.0.30',host:'Home-PC',update_status:'current',scanner,printing},{device:{id:randomUUID(),kind:'station'},stationId:randomUUID(),db:async(...args)=>writes.push(args)});
+ const row=writes[0][3],pg=v=>Array.isArray(v)?'['+v.map(pg).join(', ')+']':v&&typeof v==='object'?'{'+Object.entries(v).filter(([,v])=>v!==undefined).map(([k,v])=>JSON.stringify(k)+': '+pg(v)).join(', ')+'}':JSON.stringify(v);
+ assert(Buffer.byteLength(pg(row.details))<4096);assert.equal(row.version,'1.0.30');assert.equal(row.details.host,'Home-PC');assert.equal(row.details.update_status,'current');assert.equal(row.details.printing.pc365.status,'ready');assert.equal(row.details.printing.pc365.test_printed,true);assert.equal(row.details.diagnostics_truncated,true);
+});
