@@ -147,11 +147,12 @@ test('two simultaneous sales of the last unit result in one sale and one outbox 
 test('a lost response replays the committed receipt without a second stock write',async()=>{
  const h=harness(),p={request_id:randomUUID(),part_id:part,movement_type:'receipt',quantity:2,note:'test'};h.failResponse();await assert.rejects(h.call('stock',p),/response lost/);await h.call('stock',p);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);assert.equal(h.outbox.length,1);
 });
-test('master can open workshop repairs and receive stock',async()=>{
+test('master reads repairs but cannot change stock or payments even with an old cash permission',async()=>{
  const h=harness(),r=await h.call('create',intake()),mechanic={...manager,role:'mechanic'};
  assert.equal((await h.call('get',{id:r.id},mechanic)).record.id,r.id);
- await h.call('stock',{part_id:part,quantity:1,movement_type:'receipt'},mechanic);
- assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],2);
+ const before=structuredClone(h.sheets);
+ for(const can_sell of [false,true])for(const action of ['stock','stock_history','stock_receive','stock_receipts','finance','payment','cash_state','shift_open','shift_close','sale','sales'])await assert.rejects(h.call(action,{part_id:part,quantity:1,movement_type:'receipt',id:r.id,amount:1,method:'cash'},{...mechanic,can_sell}),e=>e.status===403);
+ assert.deepEqual(h.sheets,before);
 });
 test('new private photos can be selected and viewed while Google is unavailable',async()=>{
  const h=harness();const uploaded=await h.call('part_photo_upload',{part_id:part,content_type:'image/png',content_base64:Buffer.from([137,80,78,71,13,10,26,10]).toString('base64'),primary_for_category:true});assert.ok(uploaded.path.startsWith('native:'));const photo=await h.call('part_photo_url',{part_id:part});assert.ok(photo.url.startsWith('signed:'));assert.equal(h.googleCalls(),0);assert.equal(h.outbox.length,1);
@@ -242,7 +243,7 @@ test('free price rejects invalid money and base mode ignores submitted override'
  const sale=await h.call('sale',{shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1,price_mode:'base',unit_price:1}]});assert.equal(sale.total,100);
 });
 
-test('single master completes an unassigned repair from intake through payment and issue',async()=>{
+test('master completes work and receiver records payment before issue',async()=>{
  const h=harness(),master={...manager,role:'mechanic'};
  let r=await h.call('create',intake(),master);
  assert.equal(r.assigned_master_id,'');
@@ -251,7 +252,8 @@ test('single master completes an unassigned repair from intake through payment a
  await change('diagnostics');
  await change('repair',{approve:true,approval_note:'Клиент согласовал'});
  await change('ready',{quality_checked:true,no_parts:true});
- await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'},master);
+ await assert.rejects(h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'},master),e=>e.status===403);
+ await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'},receiver);
  r=(await h.call('get',{kind:'repair',id:r.id},master)).record;
  await change('issued',{quality_checked:true,handover_notes:'Выдано клиенту, комплектность проверена'});
  assert.equal(r.status,'issued');assert.equal(r.assigned_master_id,'');assert.equal(r.paid_amount,100);
@@ -276,8 +278,8 @@ test('order videos persist privately and receive playable signed links',async()=
  }
 });
 
-test('explicit individual permissions enable cash and catalogue, while stock administration stays restricted',async()=>{
- const h=harness(),actor={...manager,role:'mechanic',can_sell:true,can_edit_catalog:true};
+test('individual cash permission works for managers while master cash access stays disabled',async()=>{
+ const h=harness(),actor={...manager,role:'manager',can_sell:true,can_edit_catalog:true};
  const shift=await h.call('shift_open',{register:'Персональные права'},actor);
  assert.equal((await h.call('cash_state',{shift_id:shift.id},actor)).selected.id,shift.id);
  const service='88888888-8888-4888-8888-888888888888';h.seed('Прайс работ',{service_id:service,'Работа':'Тест','Работа, ₽':100});

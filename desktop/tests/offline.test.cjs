@@ -11,3 +11,11 @@ test('conflict resolution keeps an audit record and does not discard unrelated q
 test('local print dispatch is durable and not lost on restart',()=>{const f=fixture(),r=record();f.store.printState(actor,'intake:'+r.id,'dispatched','repair',r.id);f.store.close();const s=new Store(f.file);assert.equal(s.printExists(actor,'intake:'+r.id).state,'dispatched');s.close();});
 test('backup is a readable independent SQLite copy',()=>{const f=fixture(),r=record();f.store.remember(actor,'repair',r);const backup=f.store.backup(),s=new Store(backup);assert.equal(s.record(actor,'repair',r.id).brand,'Kugoo');s.close();f.store.close();});
 test('offline repair parts can only come from TSD and no-parts confirmation belongs to its mechanic',()=>{const f=fixture(),r={...record(),assigned_master_id:actor};f.store.cache(actor,'me',{role:'mechanic'});f.store.remember(actor,'repair',r);assert.throws(()=>f.store.localWrite(actor,'update',{id:r.id,parts:[{name:'Manual',quantity:1,price:10}]}),/только через ТСД/);assert.throws(()=>f.store.localWrite(actor,'update',{id:r.id,status:'ready'}),/Без замены/);const saved=f.store.localWrite(actor,'update',{id:r.id,status:'ready',no_parts:true});assert.equal(saved.parts_status.mode,'none');f.store.cache(other,'me',{role:'manager'});f.store.remember(other,'repair',r);assert.throws(()=>f.store.localWrite(other,'update',{id:r.id,status:'ready',no_parts:true}),/ставит мастер/);f.store.close();});
+
+
+test('master cannot enqueue a payment or refund and cannot read finance or stock offline',()=>{
+ const f=fixture(),r=record();f.store.cache(other,'me',{role:'mechanic',can_sell:true});f.store.remember(other,'repair',r);
+ for(const amount of [100,-100])assert.throws(()=>f.store.localWrite(other,'payment',{id:r.id,amount,method:'cash'}),/недоступны мастеру/);
+ for(const action of ['finance','stock','stock_history','cash_state','sales'])assert.throws(()=>f.store.read(other,action),/недоступны мастеру/);
+ assert.equal(f.store.pending(other).length,0);assert.equal(f.store.record(other,'repair',r.id).paid_amount,0);f.store.close();
+});

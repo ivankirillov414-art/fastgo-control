@@ -1,8 +1,10 @@
 import './workshop/version-status.js';
+import {startReceiptLabels} from './warehouse/receipt-labels.js';
 import {invalidateReads} from './workshop/core.js';
 import {installUpdateSafety} from './workshop/update-safety.js';
 import {installUpdateProgress,updateView} from './update-progress.js';
 const native=window.fastgoDesktop;
+startReceiptLabels({call:async(action,params={})=>{const session=await native.getSession();if(!session?.access_token)return [];const station=await native.warehouseStation();if(!station)return [];const result=await native.request('/functions/v1/fastgo-warehouse',{action,device_id:station.id,device_token:station.token,...params});if(result?.__desktopError)throw Error(result.message);return result.data;},notify:value=>{let box=document.getElementById('receipt-label-notice');if(!box){box=document.createElement('p');box.id='receipt-label-notice';box.setAttribute('role','status');document.body.append(box);}box.textContent=value.text;box.style.cssText='position:fixed;top:64px;right:12px;max-width:380px;padding:12px;background:#14253a;color:'+ (value.ok?'#67e0ad':'#ffc2b4')+';border:1px solid #40566d;border-radius:8px;z-index:90';}});
 installUpdateSafety({window,document});
 const updateProgress=installUpdateProgress({native,window,document});
 native.onUpdate(async()=>{try{if((await native.state()).update?.status==='error')window.fastgoReleaseUpdateLock();}catch{window.fastgoReleaseUpdateLock();}});

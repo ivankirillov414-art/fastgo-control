@@ -1,3 +1,4 @@
+import {editInventory} from '../fastgo-warehouse/inventory.js';
 import {pickupCode} from '../_shared/parts-pickup-code.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
@@ -5,13 +6,13 @@ import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-preorders-2026-10-24';
+const RELEASE = 'workshop-master-scope-2026-10-26';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||''));
 const admin=m=>['developer','owner','admin'].includes(m.role);
-const canSell=m=>['developer','owner','seller'].includes(m.role)||m.can_sell===true;
+const canSell=m=>m.role!=='mechanic'&&(['developer','owner','seller'].includes(m.role)||m.can_sell===true);
 const canEditCatalog=m=>admin(m)||m.can_edit_catalog===true;
 const manager=m=>['developer','owner','admin','receiver','manager','mechanic'].includes(m.role);
 const numeric=(v,label,min=0,max=1e9)=>{if(v===null||v===''||typeof v==='boolean')fail('Проверьте '+label);const n=Number(v);if(!Number.isFinite(n)||n<min||n>max)fail('Проверьте '+label);return n;};
@@ -152,11 +153,18 @@ async function main(req){
       return out({data:{active:member?.active===true,state,requested_at:member?.created_at||null}});
     }
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(me.role))fail('Доступ к мастерской не выдан',403);
+    if(me.role==='mechanic'&&['payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action))fail('Касса, склад и оплаты недоступны мастеру',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
     if(['stock_receive','stock_receipts'].includes(action)&&!['developer','owner','seller'].includes(me.role))fail('Нет права принимать товар на склад',403);
     if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!canSell(me))fail('Касса доступна продажнику, владельцу и разработчику',403);
     if(me.role==='seller'&&!['me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
+    if(action==='inventory_edit'){
+      if(!['owner','developer'].includes(me.role))fail('Нет права изменять цену и остаток',403);
+      if((await config()).storage_mode!=='postgres')fail('Для корректировки нужна рабочая база FastGo',503);
+      const digest=async value=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(n=>n.toString(16).padStart(2,'0')).join('');
+      return out({data:await editInventory(p,{db,actor:{id:user.id,role:me.role,email:user.email||''},device:null,remote:true,digest})});
+    }
     // Reuse the same verified user and active workshop membership as card reads.
     if(action==='sync_status')return out({data:await nativeSyncStatus(db,me,await rolePermission(me.role),RELEASE)});
     if(action==='sync_changes')return out({data:await nativeSyncChanges(db,p)});

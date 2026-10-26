@@ -1,11 +1,13 @@
 import {icon} from './icons.js';
 import {searchSelect} from './autocomplete.js';
 
+let disposeRepairPanes=()=>{};
 const $=id=>document.getElementById(id);
 const make=(tag,className)=>Object.assign(document.createElement(tag),{className});
 
 // Move the existing controls, preserving their form ownership and business handlers.
-export function layoutRepairCard(){
+export function layoutRepairCard({role}={}){
+ disposeRepairPanes();disposeRepairPanes=()=>{};
  const progress=$('repair-progress-panel');if(!progress)return false;
  const workspace=$('workspace'),form=$('order-form'),columns=workspace.querySelector('.detail-columns');
  const client=columns.querySelector('section.panel'),payment=$('payment-work-costs').closest('.panel');
@@ -81,7 +83,39 @@ export function layoutRepairCard(){
  const extras=[...workspace.children].filter(node=>node!==columns&&node!==card&&node!==top&&node!==oldDetails);
  card.append(top,rail,main);workspace.replaceChildren(card);
  for(const node of extras){if(node.matches('.notice')||(node.matches('.actions')&&node.childElementCount))main.prepend(node);}
+ installRepairPanes({card,top,rail,main,client,form,progress,partSection,payment,paymentOptions,details,detailBody,media,footer,master:role==='mechanic'});
  return true;
+}
+
+function installRepairPanes({card,top,rail,main,client,form,progress,partSection,payment,paymentOptions,details,detailBody,media,footer,master}){
+ const workSection=progress.querySelector('.repair-flow-costs:not(.repair-parts-section)');
+ const diagnostics=$('f-diagnostics_notes')?.closest('fieldset');
+ if(master&&diagnostics){workSection.append(diagnostics);diagnostics.classList.add('repair-master-notes');}
+ const tabs=make('nav','repair-pane-tabs');tabs.setAttribute('aria-label','Блоки ремонта');
+ const panes=[['vehicle','Техника'],['work','Работы'],['parts','Запчасти'],['photos','Фото'],...(!master?[['payment','Оплата'],['history','История']]:[])];
+ const body=make('div','repair-pane-body');body.append(rail,main);card.append(tabs,body);if(footer)card.append(footer);
+ const narrow=matchMedia('(max-width:760px)');let selected='vehicle';
+ const children=[...detailBody.children];
+ const show=()=>{
+  const phone=narrow.matches;
+  tabs.hidden=!phone;
+  rail.hidden=phone&&selected!=='vehicle';client.hidden=phone&&selected!=='vehicle';
+  form.hidden=phone&&!['work','parts','payment'].includes(selected);
+  progress.hidden=phone&&!['work','parts'].includes(selected);
+  workSection.hidden=phone&&selected!=='work';partSection.hidden=phone&&selected!=='parts';
+  progress.querySelector(':scope > h2').hidden=phone;
+  payment.hidden=master||(phone&&selected!=='payment');
+  details.hidden=phone?!['photos','history','payment'].includes(selected):master;
+  details.querySelector(':scope > summary').hidden=phone||master;
+  if(phone){details.open=true;paymentOptions.open=true;}
+  for(const child of children)child.hidden=phone?(selected==='photos'?child!==media:selected==='payment'?!child.contains(paymentOptions):selected==='history'?(child===media||child.contains(paymentOptions)):true):false;
+  if(master&&diagnostics)diagnostics.hidden=false;
+  if(footer){(phone?card:main).append(footer);footer.hidden=phone&&!['work','parts','payment'].includes(selected);}
+  for(const button of tabs.children)button.setAttribute('aria-current',button.dataset.repairPane===selected?'page':'false');
+ };
+ for(const [id,label] of panes){const button=make('button','btn ghost');button.type='button';button.dataset.repairPane=id;button.textContent=label;button.onclick=()=>{selected=id;show();body.scrollTop=0;};tabs.append(button);}
+ rail.querySelector('.repair-photo-add').onclick=()=>{if(narrow.matches){selected='photos';show();body.scrollTop=0;}else if(master){details.hidden=false;details.open=true;for(const child of children)child.hidden=child!==media;media.scrollIntoView({block:'start',behavior:'smooth'});}else{details.open=true;media.scrollIntoView({block:'start',behavior:'smooth'});}};
+ narrow.addEventListener('change',show);disposeRepairPanes=()=>narrow.removeEventListener('change',show);show();
 }
 
 export function createRepairPhotoGallery({cover,thumbnails,paths,selected,onSelect}){

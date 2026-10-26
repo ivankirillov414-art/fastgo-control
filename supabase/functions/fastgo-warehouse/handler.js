@@ -5,6 +5,7 @@ import {deviceStatus} from './device-status.js';
 import {partsIssue} from './parts-issue.js';
 import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
+import {receiptLabels} from './receipt-labels.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {createNativeEngine} from '../_shared/native-engine.js';
@@ -18,7 +19,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const ur=await fetcher(base+'/auth/v1/user',{headers:{apikey:key,Authorization:auth},signal:AbortSignal.timeout(10000)});if(!ur.ok)fail('Войдите в FastGo',401);const user=await ur.json();
  const db=async(path,q='',method='GET',body,prefer)=>{const r=await fetcher(base+'/rest/v1/'+path+(q?'?'+q:''),{method,headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json',...(prefer?{Prefer:prefer}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok){const e=await r.json().catch(()=>({}));fail(e.message||'Ошибка базы',r.status===409?409:503);}if(r.status===204)return null;const text=await r.text();if(!text.trim()){if(['POST','PATCH','DELETE'].includes(method)&&!prefer&&!path.startsWith('rpc/'))return null;fail('База вернула пустой ответ. Повторите запрос',503);}try{return JSON.parse(text);}catch{fail('База вернула некорректный ответ. Повторите запрос',503);}};
  const member=(await db('workshop_members','profile_id=eq.'+user.id+'&active=eq.true&select=*'))[0];if(!member)fail('Доступ отключён',403);
- const owner=['owner','developer'].includes(member.role),cash=owner||member.role==='seller'||member.can_sell===true;
+ const owner=['owner','developer'].includes(member.role),cash=member.role!=='mechanic'&&(owner||member.role==='seller'||member.can_sell===true);
  const raw=await req.text();if(raw.length>25000)fail('Слишком большой запрос');const p=JSON.parse(raw),action=p.action;
  if(action==='holdings'){if(!owner)fail('Только для владельца',403);const snapshot=await db('rpc/workshop_native_snapshot','','POST',{});return out({data:masterHoldings(snapshot.sheets)});}
  if(!cash)fail('Нет доступа к складу и оплатам',403);
@@ -56,6 +57,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const cancelled=await cancelDocument(action,p,{db,actor,device,stationId});if(cancelled!==undefined)return out({data:cancelled});
  const repairScanResult=await repairScan(action,p,{db,actor,device,stationId,key});if(repairScanResult!==undefined)return out({data:repairScanResult});
  const unknown=await unknownScan(action,p,{db,actor,device,stationId,g,mutate});if(unknown!==undefined)return out({data:unknown});
+ const labels=await receiptLabels(action,p,{db,device,stationId});if(labels!==undefined)return out({data:labels});
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
  if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
  if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},terminal_allowed:true,member:{name:member.name,role:member.role}}});

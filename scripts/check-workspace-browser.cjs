@@ -41,7 +41,7 @@ const server=createServer((req,res)=>{
    const sizes=await page.evaluate(()=>({page:document.documentElement.scrollWidth,width:innerWidth,side:document.querySelector('.sidebar').scrollWidth,sideWidth:document.querySelector('.sidebar').clientWidth}));
    assert.ok(sizes.page<=sizes.width+1,JSON.stringify({kind,role,width,sizes}));
    if(width>760)assert.ok(sizes.side<=sizes.sideWidth+1,JSON.stringify(sizes));
-   await page.locator('.view-switch a').filter({hasText:'Доска'}).click();await page.locator('.order-board').waitFor();
+   assert.equal(await page.locator('.view-switch,.order-board').count(),0);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    if(role==='owner')await page.screenshot({path:`browser-results/${kind}-${width}.png`,fullPage:true});
   }
@@ -64,7 +64,7 @@ const server=createServer((req,res)=>{
   assert.deepEqual(errors,[]);await context.close();
  }
 
- await require('./check-repair-scanner.cjs')({browser,origin,kind});
+ await require('./check-repair-pickup.cjs')({browser,origin,kind});
 
  // Phone uploads, compression, partial retry and cross-device gallery refresh.
  {
@@ -86,11 +86,11 @@ const server=createServer((req,res)=>{
   }
   return route.fulfill({json:{data},headers});
  });
- await page.setViewportSize({width:390,height:844});await page.goto(origin+'/workshop.html#order?kind=repair&id=photo-order');await page.locator('#photo-grid').filter({hasText:'не добавлены'}).waitFor();
+ await page.setViewportSize({width:390,height:844});await page.goto(origin+'/workshop.html#order?kind=repair&id=photo-order');await page.locator('[data-repair-pane=photos]').click();await page.locator('#photo-grid').filter({hasText:'не добавлены'}).waitFor();
  await page.locator('#phone-photos').click();await page.locator('#phone-photo-link img').waitFor();assert.ok((await page.locator('#phone-photo-link a').getAttribute('href')).includes('id=photo-order'));
  const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=2400;c.height=1800;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,2400,1800);g.addColorStop(0,'red');g.addColorStop(1,'blue');x.fillStyle=g;x.fillRect(0,0,2400,1800);return c.toDataURL('image/png').split(',')[1];});
  const file={name:'phone.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')};
- await page.locator('#f-diagnostics_notes').fill('Несохранённый комментарий');
+ await page.locator('[data-repair-pane=work]').click();await page.locator('#f-diagnostics_notes').fill('Несохранённый комментарий');await page.locator('[data-repair-pane=photos]').click();
  await page.locator('#photos').setInputFiles([file,{...file,name:'second.png'}]);await page.locator('#photos-progress').filter({hasText:'Повторить'}).waitFor();
  assert.equal(uploads.length,2,await page.locator('#photos-progress').innerText());assert.equal(uploads[0].content_type,'image/jpeg');
  const dimensions=await page.evaluate(async s=>{const i=new Image();await new Promise((r,j)=>{i.onload=r;i.onerror=j;i.src='data:image/jpeg;base64,'+s;});return [i.naturalWidth,i.naturalHeight];},uploads[0].content_base64);assert.deepEqual(dimensions,[1600,1200]);
@@ -121,6 +121,8 @@ const server=createServer((req,res)=>{
    creates.push(p);if(failNext){failNext=false;return route.fulfill({status:503,json:{error:'Временно не удалось сохранить'},headers});}
    record={...p,id:'intake-'+creates.length,repair_number:7,storage_number:8,status:p.kind==='storage'?'stored':'accepted',revision:1,created_at:'2026-10-10',works:[],parts:[],total_amount:0,paid_amount:0,storage_amount:1990,fault_photo_paths:[],signed_document_paths:[]};data=record;
   }
+  if(action==='upload'){record.fault_photo_paths.push('fixture.png');data={path:'fixture.png'};}
+  if(action==='update'){record={...record,...p,revision:record.revision+1,total_amount:p.works.reduce((n,x)=>n+x.price*x.quantity,0)};data=record;}
   if(action==='get')data={record,events:[],payments:[],linked:[]};
   return route.fulfill({json:{data},headers});
  });
@@ -129,13 +131,15 @@ const server=createServer((req,res)=>{
   assert.equal(await page.locator('#intake-form input[required]').count(),5);
   assert.equal(await page.locator('#f-promised_date').isVisible(),false);
   const before=creates.length;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Телефон'}).waitFor();assert.equal(creates.length,before);
-  for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван',brand:'Ninebot',model:'G30'}))await page.locator('#f-'+name).fill(value);
-  failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
-  await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor();
+  for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);
+  await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});
+  await page.locator('#f-intake_amount').fill('400');failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
+  await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor({state:'attached'});
   assert.equal(creates.length,before+2);assert.equal(creates[before].request_id,creates[before+1].request_id);assert.equal(creates[before+1].phone,'+79991234567');assert.equal(creates[before+1].promised_date,'');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.goto(origin+'/workshop.html#new?kind=storage');await page.locator('#intake-form').waitFor();
-  for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван',brand:'Ninebot',model:'G30'}))await page.locator('#f-'+name).fill(value);
+  for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);
+  await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});
   await page.locator('#f-storage_tariff').selectOption('season');assert.equal(await page.locator('#f-storage_months').isVisible(),false);
   await page.locator('#intake-save').click();await page.locator('#order-form').waitFor();assert.equal(creates.at(-1).storage_tariff,'season');assert.ok(creates.at(-1).planned_return_date>=creates.at(-1).starts_on);
  }
@@ -165,7 +169,7 @@ const server=createServer((req,res)=>{
   return route.fulfill({json:{data},headers});
  });
  await page.setViewportSize({width:360,height:800});
- await page.goto(origin+'/workshop.html#stock');await page.getByRole('link',{name:'+ Приход списком'}).click();
+ await page.goto(origin+'/workshop.html#stock-receive');
  await page.getByLabel('Поставщик / накладная').fill('Поставка 15');
  await page.locator('[data-field="quantity"]').fill('15');
  await page.locator('#receipt-add').click();
@@ -189,7 +193,7 @@ const server=createServer((req,res)=>{
 
  // Recovery fixture: no real mail, accounts, codes or password changes.
  {
- const context=await browser.newContext({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'}),page=await context.newPage(),errors=[];
+ const context=await browser.newContext({viewport:{width:390,height:844},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'}),page=await context.newPage(),errors=[];
  let verified=0,updated=0,logout=0,loggedIn=0,trust=false;
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
@@ -376,6 +380,6 @@ const server=createServer((req,res)=>{
  assert.deepEqual(errors,[]);await context.close();
  }
 
- console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
+ console.log('PASS',kind,'five widths, six roles, table view without chooser, price groups and storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

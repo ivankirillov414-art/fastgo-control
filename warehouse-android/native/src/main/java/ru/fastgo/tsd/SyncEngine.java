@@ -42,6 +42,10 @@ public final class SyncEngine {
     try{JSONObject reply=(JSONObject)api.call("draft_sync",new JSONObject().put("request_id",id).put("kind",kind).put("revision",d.getInt("revision")).put("items",items).put("active",active));if(reply.optString("state").equals("done")){store.complete(id,reply.getJSONObject("payload").getInt("revision"));continue;}store.acknowledge(id,reply.getJSONObject("payload").getInt("revision"));}
     catch(WarehouseApi.ApiError ex){if(ex.status!=409)throw ex;}
    }
+   if(d.optBoolean("receipt_requested")){
+    JSONObject result=(JSONObject)api.call("live_receive",new JSONObject().put("id",id).put("revision",d.getInt("revision")));
+    store.put("receipt_result:"+id,result.toString());store.complete(id,d.getInt("revision"));continue;
+   }
    Object r=api.call("job",new JSONObject().put("id",id));if(r instanceof JSONObject){JSONObject job=(JSONObject)r;store.put("server:"+id,job.optString("state"));if(job.optString("state").equals("done"))store.complete(id,job.getJSONObject("payload").getInt("revision"));}
   }
  }

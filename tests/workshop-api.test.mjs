@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const user='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
-function setup({role='owner',active=true,valid=true,confirmed=true,record={},respond}={}){let handler;const calls=[];const fetch=async(url,options={})=>{calls.push({url,options});if(url.endsWith('/auth/v1/user')&&(options.method||'GET')!=='PUT')return Response.json(valid?{id:user,email:'qa@example.com',email_confirmed_at:confirmed?'2026-09-25T00:00:00Z':null,user_metadata:{full_name:'QA User'}}:{error:'invalid'},{status:valid?200:401});if(url.includes('/workshop_members')){if(url.includes('role=eq.mechanic')&&role!=='mechanic')return Response.json([]);return Response.json(active?[{profile_id:user,name:'QA',role,active:true,created_at:'2026-09-25T00:00:00Z',approved_at:'2026-09-25T00:00:00Z'}]:[]);}if(url.includes('/service_repairs?'))return Response.json([{id,assigned_master_id:user,fault_photo_paths:[],signed_document_paths:[],...record}]);if(respond)return respond(url,options);throw new Error('Unexpected fetch: '+url);};const context={Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://db.invalid':'test-server-key'},serve:fn=>handler=fn},Request,Response,Headers,URL,URLSearchParams,AbortSignal,Uint8Array,TextDecoder,TextEncoder,atob,fetch,crypto:globalThis.crypto,nativeClient:()=>{throw new Error('native client should not be reached in this API unit test');}};vm.runInNewContext(source,context);return {calls,invoke:(body,headers={Authorization:'Bearer test-user-jwt'},method='POST')=>handler(new Request('https://edge.invalid/fastgo-workshop-api',{method,headers:{'Content-Type':'application/json',...headers},body:method==='POST'?JSON.stringify(body):undefined}))};}
+function setup({role='owner',active=true,valid=true,confirmed=true,record={},respond,inventoryEdit}={}){let handler;const calls=[];const fetch=async(url,options={})=>{calls.push({url,options});if(url.endsWith('/auth/v1/user')&&(options.method||'GET')!=='PUT')return Response.json(valid?{id:user,email:'qa@example.com',email_confirmed_at:confirmed?'2026-09-25T00:00:00Z':null,user_metadata:{full_name:'QA User'}}:{error:'invalid'},{status:valid?200:401});if(url.includes('/workshop_members')){if(url.includes('role=eq.mechanic')&&role!=='mechanic')return Response.json([]);return Response.json(active?[{profile_id:user,name:'QA',role,active:true,created_at:'2026-09-25T00:00:00Z',approved_at:'2026-09-25T00:00:00Z'}]:[]);}if(url.includes('/service_repairs?'))return Response.json([{id,assigned_master_id:user,fault_photo_paths:[],signed_document_paths:[],...record}]);if(respond)return respond(url,options);throw new Error('Unexpected fetch: '+url);};const context={Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://db.invalid':'test-server-key'},serve:fn=>handler=fn},Request,Response,Headers,URL,URLSearchParams,AbortSignal,Uint8Array,TextDecoder,TextEncoder,atob,fetch,crypto:globalThis.crypto,editInventory:inventoryEdit,nativeClient:()=>{throw new Error('native client should not be reached in this API unit test');}};vm.runInNewContext(source,context);return {calls,invoke:(body,headers={Authorization:'Bearer test-user-jwt'},method='POST')=>handler(new Request('https://edge.invalid/fastgo-workshop-api',{method,headers:{'Content-Type':'application/json',...headers},body:method==='POST'?JSON.stringify(body):undefined}))};}
 test('unauthenticated caller cannot query data',async()=>{const s=setup();assert.equal((await s.invoke({action:'list'},{})).status,401);assert.equal(s.calls.length,0);});
 test('invalid JWT cannot query records',async()=>{const s=setup({valid:false});assert.equal((await s.invoke({action:'get',params:{id}})).status,401);assert.equal(s.calls.length,1);});
 test('inactive membership is enforced independently of token',async()=>{const s=setup({active:false});assert.equal((await s.invoke({action:'list'})).status,403);assert.equal(s.calls.length,2);});
@@ -185,4 +185,20 @@ test('repair status transitions consult role permissions in API and native engin
   const native=fs.readFileSync(new URL('../supabase/functions/_shared/native-engine.js',import.meta.url),'utf8');
   assert.match(native,/canSetRepairStatus_\(actor,status\)/);
   assert.match(native,/У вашей роли нет права на этот статус ремонта/);
+});
+
+
+test('master money and stock actions are denied at the authenticated API boundary',async()=>{
+ const s=setup({role:'mechanic'});
+ for(const action of ['payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales']){
+  const r=await s.invoke({action,params:{kind:'repair',id,amount:100,method:'cash'}});assert.equal(r.status,403,action);
+ }
+ assert.equal(s.calls.some(c=>/workshop_native_commit|workshop_mutate/.test(c.url)),false);
+});
+
+
+test('mobile inventory route uses verified owner and a server-only remote flag',async()=>{
+ let calls=0;const s=setup({inventoryEdit:async(p,context)=>{calls++;assert.equal(context.actor.id,user);assert.equal(context.actor.role,'owner');assert.equal(context.remote,true);assert.equal(context.device,null);return {id,quantity:7};},respond:async url=>{assert.match(url,/workshop_backend_config/);return Response.json([{sheets_api_url:'https://script.google.com/macros/s/fixture/exec',sheets_api_secret:'fixture-only',storage_mode:'postgres'}]);}});
+ const r=await s.invoke({action:'inventory_edit',params:{part_id:id,field:'quantity',value:7,expected:5,actor:{id:'forged'},remote:true}});assert.equal(r.status,200,await r.clone().text());assert.equal(calls,1);
+ for(const role of ['mechanic','seller','admin','manager','receiver']){const other=setup({role});assert.equal((await other.invoke({action:'inventory_edit',params:{part_id:id,field:'retail_price',value:1,expected:300}})).status,403);}
 });

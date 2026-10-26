@@ -42,35 +42,34 @@ const server=createServer((req,res)=>{
    }
    return route.fulfill({headers,json:{data}});
   });
+  const pane=async id=>{if(viewport.width<=760)await page.locator('[data-repair-pane="'+id+'"]').click();};
   const open=async()=>{
    await page.goto(origin+'/workshop.html#order?kind=repair&id=progress-fixture');
-   await page.locator('#work-search').waitFor();
+   await page.locator('#work-search').waitFor({state:'attached'});await pane('work');
   };
   const transition=async name=>{await page.locator('.repair-status-menu > summary').click();await page.getByRole('button',{name,exact:true}).click();};
   const saved=async action=>{
    const form=await page.locator('#order-form').elementHandle(),count=updates.length;
    await action();await page.waitForFunction(form=>!form.isConnected,form);
-   assert.equal(updates.length,count+1);await page.locator('#repair-save').waitFor();
+   assert.equal(updates.length,count+1);await pane('work');await page.locator('#repair-save').waitFor();
   };
   try{
    await open();
    assert.equal(await page.locator('#f-status,#f-promised_date,#catalog-picker').count(),0);
    assert.ok(await page.locator('#repair-save').isVisible());
-   await page.locator('.repair-photo-thumbnail img').first().waitFor();
-   await page.getByRole('button',{name:'Фото 2',exact:true}).click();
-   assert.match(await page.locator('#order-vehicle-photo img').getAttribute('src'),/photo-two/);
+   if(viewport.width>760){await page.locator('.repair-photo-thumbnail img').first().waitFor();await page.getByRole('button',{name:'Фото 2',exact:true}).click();assert.match(await page.locator('#order-vehicle-photo img').getAttribute('src'),/photo-two/);}await pane('payment');
    await page.locator('#payment').click();await page.locator('#f-amount').waitFor();assert.equal(updates.length,0);
    await page.locator('#dialog [aria-label="Закрыть"]').click();
-   await page.locator('#edit-intake').click();await page.locator('#f-last_name').waitFor();await page.locator('#dialog [aria-label="Закрыть"]').click();
+   await pane('vehicle');await page.locator('#edit-intake').click();await page.locator('#f-last_name').waitFor();await page.locator('#dialog [aria-label="Закрыть"]').click();
    assert.equal(await page.locator('#repair-save').evaluate(x=>x.form.id),'order-form');
    await page.locator('.repair-menu-button').click();await page.locator('#dialog a[href="#stock"]').waitFor();await page.locator('#dialog [aria-label="Закрыть"]').click();
-   await page.locator('#repair-details-panel > summary').click();
+   if(viewport.width>760)await page.locator('#repair-details-panel > summary').click();
    assert.equal(await page.locator('#approve').evaluate(x=>x.form.id),'order-form');
-   await page.locator('#refresh-photos').click();await page.waitForFunction(()=>document.querySelector('#order-vehicle-photo img')?.src.includes('photo-two'));
-   await page.locator('.repair-payment-options > summary').click();
+   await pane('photos');await page.locator('#refresh-photos').click();if(viewport.width>760)await page.waitForFunction(()=>document.querySelector('#order-vehicle-photo img')?.src.includes('photo-two'));await pane('payment');
+   if(viewport.width>760)await page.locator('.repair-payment-options > summary').click();
    await page.locator('#f-approval_note').fill('Проверка сохранения подробной информации');assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),true);
-   await page.locator('#repair-details-panel > summary').click();await page.evaluate(()=>window.scrollTo(0,0));
-   await page.screenshot({path:`browser-results/repair-card-initial-${viewport.width}.png`});
+   if(viewport.width>760)await page.locator('#repair-details-panel > summary').click();await page.evaluate(()=>window.scrollTo(0,0));
+   await pane('work');await page.screenshot({path:`browser-results/repair-card-initial-${viewport.width}.png`});
    await page.locator('#work-search').fill('замена');
    await page.getByRole('option',{name:/Замена камеры/}).waitFor();
    await page.locator('#work-search').press('ArrowDown');await page.locator('#work-search').press('Enter');
@@ -105,7 +104,7 @@ const server=createServer((req,res)=>{
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.approved_amount,1350);
    failUpdate=true;await page.locator('#work-rows [data-prop="name"]').first().fill('Новое название');
-   await page.locator('#repair-save').click();await page.locator('#repair-save-error').filter({hasText:/другим сотрудником/}).waitFor();
+   assert.equal(await page.locator('#work-rows [data-prop="name"]').first().inputValue(),'Новое название');await page.locator('#repair-save').click();await page.locator('#repair-save-error').filter({hasText:/другим сотрудником/}).waitFor();
    assert.equal(await page.locator('#work-rows [data-prop="name"]').first().inputValue(),'Новое название');
    assert.ok(await page.locator('#repair-save').isEnabled());
    // No horizontal overflow; sticky save remains in view at both scroll extremes.
@@ -117,14 +116,14 @@ const server=createServer((req,res)=>{
    }
    await page.screenshot({path:`browser-results/repair-progress-saved-${viewport.width}.png`});
    // Fresh roles still control transitions, and closed records stay read-only.
-   record.status='repair';permission={};await page.reload();await page.locator('#repair-progress-panel').waitFor();
+   record.status='repair';permission={};await page.reload();await page.locator('#repair-progress-panel').waitFor({state:'attached'});await pane('work');
    assert.equal(await page.locator('[data-repair-status="ready"],[data-repair-status="cancelled"]').count(),0);
-   record.status='issued';await page.reload();await page.locator('#repair-progress-panel').waitFor();
+   record.status='issued';await page.reload();await page.locator('#repair-progress-panel').waitFor({state:'attached'});await pane('work');
    assert.equal(await page.locator('#repair-save,[data-repair-status]').count(),0);assert.ok(await page.locator('#add-work').isDisabled());
    record.status='stored';await page.goto(origin+'/workshop.html#order?kind=storage&id=progress-fixture');
    await page.getByRole('button',{name:'Хранение и выдача'}).click();
    assert.ok(await page.locator('#f-status').isVisible());assert.ok(await page.locator('#f-planned_return_date').isVisible());
-   personalStock=true;record.status='accepted';record.assigned_master_id='progress-fixture';await open();assert.equal(await page.locator('[data-held-part]').count(),0);await page.locator('#take-parts').click();await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor();assert.ok(await page.locator('[data-pickup-qr] svg').count());await page.getByRole('dialog',{name:'Взять запчасти'}).getByRole('button',{name:'Закрыть',exact:true}).click();
+   personalStock=true;record.status='accepted';record.assigned_master_id='progress-fixture';await open();assert.equal(await page.locator('[data-held-part]').count(),0);await pane('parts');await page.locator('#take-parts').click();await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor();assert.ok(await page.locator('[data-pickup-qr] svg').count());await page.getByRole('dialog',{name:'Взять запчасти'}).getByRole('button',{name:'Закрыть',exact:true}).click();
    assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, inline layout and saving, diagnostics → repair → ready without parts, pickup QR, manual parts removed, price approval, conflict, permissions and storage`);
   }catch(error){console.error('PAGE',await page.locator('body').innerText(),errors);throw error;}finally{await context.close();}
  }}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -22,6 +22,8 @@ export async function deviceStatus(action,p,{db,device,stationId}){
   if(source.setup&&typeof source.setup==='object'){const s=source.setup;details.printing.setup={status:text(s.status,32),message:text(s.message,300),driver_version:text(s.driver_version,32),queue_name:text(s.queue_name,256),connected:s.connected===true,busy:s.busy===true,attempts:Number.isInteger(s.attempts)?Math.max(0,Math.min(100,s.attempts)):0,updated_at:typeof s.updated_at==='string'&&Number.isFinite(Date.parse(s.updated_at))?new Date(s.updated_at).toISOString():null};}
  }
  const row={device_id:device.id,app,version:p.version,station_id:stationId,pending_documents:p.pending_documents??null,details,last_seen:new Date().toISOString()};
+ if(app!=='tsd'&&p.scanner&&typeof p.scanner==='object')details.scanner={sampled_at:text(p.scanner.sampled_at,40),devices:(Array.isArray(p.scanner.devices)?p.scanner.devices:[]).slice(0,64).map(x=>({name:text(x.name,160),manufacturer:text(x.manufacturer,100),kind:text(x.kind,40),status:text(x.status,40),hardware:text(x.hardware,160),error:Number.isSafeInteger(x.error)?x.error:null}))};
+ if(app!=='tsd'&&p.scan_test&&typeof p.scan_test==='object')details.scan_test={received:p.scan_test.received===true,matched:p.scan_test.matched===true,characters:Number.isSafeInteger(p.scan_test.characters)?Math.min(2048,Math.max(0,p.scan_test.characters)):0,sampled_at:new Date().toISOString()};
  await db('workshop_device_status','on_conflict=device_id,app','POST',row,'resolution=merge-duplicates,return=minimal');
  return {device_id:device.id,app,version:row.version,last_seen:row.last_seen};
 }

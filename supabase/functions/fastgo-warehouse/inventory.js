@@ -1,8 +1,10 @@
 import {createNativeEngine} from '../_shared/native-engine.js';
-import {id,fail} from './model.js';
+// Keep inventory corrections independent of terminal/master issue adapters.
+const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});};
+const id=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 
-export async function editInventory(p,{db,actor,device,digest}){
- if(device.kind!=='station'||!['owner','developer'].includes(actor.role))fail('Нет права изменять цену и остаток',403);
+export async function editInventory(p,{db,actor,device,digest,remote=false}){
+ if((device?.kind!=='station'&&!remote)||!['owner','developer'].includes(actor.role))fail('Нет права изменять цену и остаток',403);
  const {request_id,part_id,field,value,expected}=p;
  if(!id(request_id)||!id(part_id)||!['quantity','retail_price'].includes(field))fail('Неверные данные товара');
  const valid=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=(field==='quantity'?1000000:100000000)&&(field==='quantity'?Number.isInteger(n):Math.abs(n*100-Math.round(n*100))<0.00001);

@@ -70,6 +70,193 @@
     return pickup ? "QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0432\u044B\u0434\u0430\u0447\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439" : link ? "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430. \u0414\u043B\u044F QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB" : "";
   }
 
+  // warehouse/client.js
+  var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
+  var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
+  var STORE = "fastgo_warehouse_session_v1";
+  var unified = new URLSearchParams(location.search).get("unified") === "1";
+  var SESSION_KEY = unified ? "fastgo_workshop_session" : STORE;
+  var session;
+  try {
+    session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  } catch (e) {
+  }
+  var userId = () => (session == null ? void 0 : session.user_id) || "";
+  var esc = (v) => String(v != null ? v : "").replace(/[&<>"']/g, (x) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[x]);
+  var money = (n) => Number(n || 0).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
+  var refreshing;
+  async function request(path, body, auth) {
+    let r;
+    try {
+      r = await fetch(BASE + path, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json", ...auth ? { Authorization: "Bearer " + auth } : {} }, body: JSON.stringify(body), signal: (() => {
+        if (typeof AbortController === "undefined") return void 0;
+        const c = new AbortController();
+        setTimeout(() => c.abort(), 3e4);
+        return c.signal;
+      })() });
+    } catch (e) {
+      throw Error("\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438. \u0414\u0430\u043D\u043D\u044B\u0435 \u043D\u0435 \u0443\u0434\u0430\u043B\u0435\u043D\u044B. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.");
+    }
+    const j = await r.json();
+    if (!r.ok) throw Object.assign(Error(j.error || j.error_description || j.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0440\u0432\u0438\u0441\u0430"), { status: r.status });
+    return j;
+  }
+  function save(j) {
+    var _a2;
+    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a2 = j.user) == null ? void 0 : _a2.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
+  async function login(email, password) {
+    save(await request("/auth/v1/token?grant_type=password", { email, password }));
+  }
+  async function logout() {
+    const token = session == null ? void 0 : session.access_token;
+    session = null;
+    localStorage.removeItem(SESSION_KEY);
+    if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
+    });
+  }
+  var serviceActions = /* @__PURE__ */ new Set(["inventory_edit", "preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
+  var serviceApi = (action, params = {}) => {
+    if (!serviceActions.has(action)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
+    return api("service_" + action, params);
+  };
+  async function api(action, params = {}) {
+    if (!session) throw Object.assign(Error("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo"), { status: 401 });
+    if (session.expires_at * 1e3 < Date.now() + 6e4) {
+      if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
+      await refreshing;
+    }
+    if (action.startsWith("service_")) {
+      const operation2 = action.slice(8);
+      if (!serviceActions.has(operation2)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
+      return (await request("/functions/v1/fastgo-workshop-api", { action: operation2, params }, session.access_token)).data;
+    }
+    return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
+  }
+  async function avitoApi(action, params = {}) {
+    if (!session) throw Object.assign(Error("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo"), { status: 401 });
+    if (session.expires_at * 1e3 < Date.now() + 6e4) {
+      if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
+      await refreshing;
+    }
+    return (await request("/functions/v1/fastgo-avito", { action, ...params }, session.access_token)).data;
+  }
+  var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
+  function matchBarcode(parts2, value) {
+    const code = String(value).trim().toUpperCase();
+    return parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code);
+  }
+
+  // warehouse/scanner-diagnostics.js
+  function installScannerDiagnostics({ parts: parts2, report = async () => {
+  } }) {
+    const bridge = window.warehouseDesktop;
+    if (!(bridge == null ? void 0 : bridge.scannerStatus)) return;
+    const button = document.createElement("button");
+    button.textContent = "\u0421\u043A\u0430\u043D\u0435\u0440";
+    button.id = "hardware-scanner";
+    document.querySelector("header").append(button);
+    button.onclick = async () => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "barcode-print-dialog";
+      dialog.setAttribute("aria-label", "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u043A\u0430\u043D\u0435\u0440\u0430");
+      dialog.innerHTML = '<h2>\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u043A\u0430\u043D\u0435\u0440\u0430</h2><div data-devices>\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 Windows\u2026</div><p>\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u043E\u0434\u043D\u0443 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0443. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u043F\u0440\u0438\u0445\u043E\u0434 \u0438\u043B\u0438 \u043F\u0440\u043E\u0434\u0430\u0436\u0443.</p><label>\u041A\u043E\u0434 \u0441\u043E \u0441\u043A\u0430\u043D\u0435\u0440\u0430<input data-scan autocomplete="off" spellcheck="false"></label><p data-result role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
+      document.body.append(dialog);
+      dialog.showModal();
+      dialog.onclose = () => dialog.remove();
+      dialog.querySelector("[data-close]").onclick = () => dialog.close();
+      const input = dialog.querySelector("[data-scan]"), result = dialog.querySelector("[data-result]");
+      const check = () => {
+        const code = input.value.trim();
+        if (!code) return;
+        const matches = matchBarcode(parts2(), code);
+        result.textContent = matches.length === 1 ? "\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u0435\u0440\u0435\u0434\u0430\u043B \u043A\u043E\u0434 \xB7 " + matches[0].name : "\u041A\u043E\u0434 \u043F\u043E\u043B\u0443\u0447\u0435\u043D, \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0439 \u0432 \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0435: " + matches.length;
+        void report({ scan_test: { received: true, matched: matches.length === 1, characters: code.length } }).catch(() => {
+        });
+      };
+      let timer;
+      input.oninput = () => {
+        clearTimeout(timer);
+        timer = setTimeout(check, 250);
+      };
+      input.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          clearTimeout(timer);
+          check();
+        }
+      };
+      dialog.addEventListener("close", () => clearTimeout(timer));
+      input.focus();
+      try {
+        const status = await bridge.scannerStatus();
+        if (!dialog.isConnected) return;
+        dialog.querySelector("[data-devices]").innerHTML = status.devices.length ? status.devices.map((d) => "<p><b>" + esc(d.name) + "</b><br><small>" + esc(d.kind) + " \xB7 " + esc(d.status) + " \xB7 " + esc(d.hardware) + "</small></p>").join("") : "<p>Windows \u043D\u0435 \u0441\u043E\u043E\u0431\u0449\u0438\u043B\u0430 \u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u043C USB-\u0441\u043A\u0430\u043D\u0435\u0440\u0435. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u0438\u0442\u0430\u043D\u0438\u0435 \u0438 \u043A\u0430\u0431\u0435\u043B\u044C.</p>";
+        await report({ scanner: status });
+      } catch (e) {
+        if (dialog.isConnected) dialog.querySelector("[data-devices]").textContent = e.message;
+      }
+    };
+  }
+
+  // warehouse/receipt-labels.js
+  function startReceiptLabels({ call: call2, bridge = window.warehouseDesktop, notify = () => {
+  } }) {
+    if (!(bridge == null ? void 0 : bridge.printReceiptLabels)) return { tick: async () => {
+    }, stop() {
+    } };
+    let running = false, stopped = false, loader;
+    async function barcode() {
+      if (window.JsBarcode) return;
+      if (!loader) loader = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = new URL("vendor/jsbarcode-3.12.3.min.js", document.baseURI).href;
+        script.onload = resolve;
+        script.onerror = () => reject(Error("\u041D\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u043B\u0441\u044F \u0433\u0435\u043D\u0435\u0440\u0430\u0442\u043E\u0440 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432"));
+        document.head.append(script);
+      }).catch((e) => {
+        loader = null;
+        throw e;
+      });
+      await loader;
+    }
+    async function tick() {
+      var _a2;
+      if (stopped || running) return;
+      running = true;
+      try {
+        const jobs = await call2("receipt_label_jobs");
+        if (!Array.isArray(jobs) || !jobs.length) return;
+        await barcode();
+        for (const job2 of jobs) {
+          if (stopped) return;
+          const items = (((_a2 = job2.result) == null ? void 0 : _a2.items) || []).map((part) => {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
+            return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
+          });
+          await bridge.printReceiptLabels({ id: job2.id, items });
+          await call2("receipt_label_ack", { id: job2.id });
+          notify({ ok: true, text: "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
+        }
+      } catch (error) {
+        notify({ ok: false, text: "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043F\u0440\u0438\u0445\u043E\u0434\u0430 \u043E\u0436\u0438\u0434\u0430\u044E\u0442 \u043F\u0435\u0447\u0430\u0442\u0438: " + error.message });
+      } finally {
+        running = false;
+      }
+    }
+    const timer = setInterval(() => void tick(), 1e4);
+    const first = setTimeout(() => void tick(), 2e3);
+    window.addEventListener("online", tick);
+    return { tick, stop() {
+      stopped = true;
+      clearTimeout(first);
+      clearInterval(timer);
+      window.removeEventListener("online", tick);
+    } };
+  }
+
   // workshop/notifications.js
   var escape = (value) => String(value != null ? value : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var clock = (value) => value ? new Date(value).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
@@ -292,84 +479,6 @@
     const timer = setInterval(() => void refresh(), 15e3);
     void refresh();
     return controller;
-  }
-
-  // warehouse/client.js
-  var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
-  var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
-  var STORE = "fastgo_warehouse_session_v1";
-  var unified = new URLSearchParams(location.search).get("unified") === "1";
-  var SESSION_KEY = unified ? "fastgo_workshop_session" : STORE;
-  var session;
-  try {
-    session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-  } catch (e) {
-  }
-  var userId = () => (session == null ? void 0 : session.user_id) || "";
-  var esc = (v) => String(v != null ? v : "").replace(/[&<>"']/g, (x) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[x]);
-  var money = (n) => Number(n || 0).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
-  var refreshing;
-  async function request(path, body, auth) {
-    let r;
-    try {
-      r = await fetch(BASE + path, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json", ...auth ? { Authorization: "Bearer " + auth } : {} }, body: JSON.stringify(body), signal: (() => {
-        if (typeof AbortController === "undefined") return void 0;
-        const c = new AbortController();
-        setTimeout(() => c.abort(), 3e4);
-        return c.signal;
-      })() });
-    } catch (e) {
-      throw Error("\u041D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438. \u0414\u0430\u043D\u043D\u044B\u0435 \u043D\u0435 \u0443\u0434\u0430\u043B\u0435\u043D\u044B. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.");
-    }
-    const j = await r.json();
-    if (!r.ok) throw Object.assign(Error(j.error || j.error_description || j.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0440\u0432\u0438\u0441\u0430"), { status: r.status });
-    return j;
-  }
-  function save(j) {
-    var _a2;
-    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a2 = j.user) == null ? void 0 : _a2.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  }
-  async function login(email, password) {
-    save(await request("/auth/v1/token?grant_type=password", { email, password }));
-  }
-  async function logout() {
-    const token = session == null ? void 0 : session.access_token;
-    session = null;
-    localStorage.removeItem(SESSION_KEY);
-    if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
-    });
-  }
-  var serviceActions = /* @__PURE__ */ new Set(["preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
-  var serviceApi = (action, params = {}) => {
-    if (!serviceActions.has(action)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
-    return api("service_" + action, params);
-  };
-  async function api(action, params = {}) {
-    if (!session) throw Object.assign(Error("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo"), { status: 401 });
-    if (session.expires_at * 1e3 < Date.now() + 6e4) {
-      if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
-      await refreshing;
-    }
-    if (action.startsWith("service_")) {
-      const operation2 = action.slice(8);
-      if (!serviceActions.has(operation2)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
-      return (await request("/functions/v1/fastgo-workshop-api", { action: operation2, params }, session.access_token)).data;
-    }
-    return (await request("/functions/v1/fastgo-warehouse", { ...params, action }, session.access_token)).data;
-  }
-  async function avitoApi(action, params = {}) {
-    if (!session) throw Object.assign(Error("\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 FastGo"), { status: 401 });
-    if (session.expires_at * 1e3 < Date.now() + 6e4) {
-      if (!refreshing) refreshing = request("/auth/v1/token?grant_type=refresh_token", { refresh_token: session.refresh_token }).then(save).finally(() => refreshing = null);
-      await refreshing;
-    }
-    return (await request("/functions/v1/fastgo-avito", { action, ...params }, session.access_token)).data;
-  }
-  var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
-  function matchBarcode(parts2, value) {
-    const code = String(value).trim().toUpperCase();
-    return parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code);
   }
 
   // warehouse/unknown-scans.js
@@ -637,7 +746,7 @@
       try {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
-        const payload = { name: part.name, barcode: String(part.barcode), svg: svg.outerHTML, quantity, format };
+        const payload = { name: part.name, barcode: String(part.barcode), price: Number(part.retail_price), svg: svg.outerHTML, quantity, format };
         if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.printBarcode) {
           button.disabled = true;
           const result = await window.warehouseDesktop.printBarcode({ ...payload, ...printers == null ? void 0 : printers.selection() });
@@ -648,7 +757,7 @@
           }
           return;
         }
-        const label = '<section class="label"><strong>' + esc(part.name) + "</strong>" + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
+        const label = '<section class="label"><div class="label-heading"><strong>' + esc(part.name) + '</strong><b class="price">' + esc(Number(part.retail_price).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " \u20BD") + "</b></div>" + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
         frame.title = "\u041F\u0435\u0447\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A";
         frame.style.cssText = "position:fixed;width:1px;height:1px;left:-10000px;border:0";
         frame.srcdoc = barcodeDocument(label, quantity, format);
@@ -667,7 +776,7 @@
     };
   }
   function barcodeDocument(label, quantity, format) {
-    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
+    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}.label-heading{display:flex;align-items:center;justify-content:space-between;gap:1mm;width:100%}.label-heading strong{min-width:0;flex:1;text-align:left}.price{font-size:8pt;font-weight:bold;white-space:nowrap}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
   }
 
   // warehouse/product-panel.js
@@ -2760,10 +2869,22 @@
   var call = (action, p = {}) => {
     if (!device && document.body.dataset.readonly === "true") {
       if (action === "catalog") return api("service_catalog");
+      if (action === "inventory_edit") return serviceApi(action, p);
       throw Error("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445. \u0417\u0434\u0435\u0441\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430.");
     }
     return api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
   };
+  var receiptLabels = !terminal ? startReceiptLabels({ call: (a, p) => device ? call(a, p) : Promise.resolve([]), notify: (value) => {
+    let box = $("receipt-label-notice");
+    if (!box) {
+      box = document.createElement("p");
+      box.id = "receipt-label-notice";
+      box.setAttribute("role", "status");
+      $("message").after(box);
+    }
+    box.textContent = value.text;
+    box.className = value.ok ? "notice" : "error";
+  } }) : null;
   function applyReadOnly() {
     if (document.body.dataset.readonly !== "true") return;
     for (const id of ["receipt", "pay", "nav-receipt", "nav-pay", "shift", "usb-scanner", "terminal-update"]) if ($(id)) {
@@ -2776,6 +2897,12 @@
     $("message").textContent = v;
     $("message").className = error ? "error" : "";
   }
+  var scannerTest = null;
+  installScannerDiagnostics({ parts: () => parts, report: async (extra) => {
+    if (extra.scan_test) scannerTest = extra.scan_test;
+    lastDeviceStatus = 0;
+    await desktopStatus();
+  } });
   async function run(fn) {
     if (busy) return;
     busy = true;
@@ -2909,7 +3036,7 @@
         $("connection").textContent = "\u041A\u0430\u0442\u0430\u043B\u043E\u0433 \u0441\u043A\u043B\u0430\u0434\u0430 \xB7 \u043E\u0431\u0449\u0435\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435";
         home();
         await inventory();
-        message("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.");
+        message("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445. \u0426\u0435\u043D\u0443 \u0438 \u043E\u0441\u0442\u0430\u0442\u043E\u043A \u0432\u043B\u0430\u0434\u0435\u043B\u0435\u0446 \u043C\u043E\u0436\u0435\u0442 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0432 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0435 \u0442\u043E\u0432\u0430\u0440\u0430.");
         return;
       }
       if (!terminal) return setup();
@@ -3273,7 +3400,7 @@
     drawInventory();
   };
   var photos = partPhotos({ api: serviceApi, editable: canManageParts, run, changed: refreshParts, message });
-  var product = productPanel({ parts: () => parts, editable: () => !!device && ["owner", "developer"].includes(memberRole), call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos });
+  var product = productPanel({ parts: () => parts, editable: () => !terminal && ["owner", "developer"].includes(memberRole), call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos });
   var createPart = newPartForm({ actor: userId, api: serviceApi, photos, parts: () => parts, canReceive: canReceiveParts, run, refresh: refreshParts, openProduct: (p) => product.open(p), message });
   async function inventory() {
     await catalog();
@@ -3329,7 +3456,7 @@
   var lastDeviceStatus = 0;
   var nativeUpdatePending = false;
   async function desktopStatus() {
-    var _a2, _b, _c, _d, _e, _f, _g, _h;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     const el = $("desktop-status");
     if (!el) return;
     if (((_a2 = window.fastgoInstalledApp) == null ? void 0 : _a2.platform) === "ios") {
@@ -3345,18 +3472,18 @@
       nativeUpdatePending = ["ready", "preparing", "installing"].includes(update.status);
       if (device && userId() && Date.now() - lastDeviceStatus > 6e4) {
         lastDeviceStatus = Date.now();
-        const printing = await ((_d = (_c = window.warehouseDesktop).printers) == null ? void 0 : _d.call(_c).catch(() => null));
-        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing }).catch(() => {
+        const printing = await ((_d = (_c = window.warehouseDesktop).printers) == null ? void 0 : _d.call(_c).catch(() => null)), scanner = await ((_f = (_e = window.warehouseDesktop).scannerStatus) == null ? void 0 : _f.call(_e).catch(() => null));
+        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing, scanner, scan_test: scannerTest }).catch(() => {
         });
       }
       let note = "";
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
-      if ((_e = s.terminalUpdate) == null ? void 0 : _e.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
-      if (((_f = s.recovery) == null ? void 0 : _f.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_g = s.recovery) == null ? void 0 : _g.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_h = s.recovery) == null ? void 0 : _h.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
+      if ((_g = s.terminalUpdate) == null ? void 0 : _g.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
+      if (((_h = s.recovery) == null ? void 0 : _h.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_i = s.recovery) == null ? void 0 : _i.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_j = s.recovery) == null ? void 0 : _j.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {

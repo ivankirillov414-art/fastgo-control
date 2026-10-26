@@ -86,6 +86,7 @@ export async function liveWarehouse(action,p,{db,actor,device,stationId,digest})
   if(!commit.retry){result=commit.result;break;}
  }
  if(!result)fail('Склад изменился. Повторите операцию',409);
+ if(receiving)result={...result,label_print_status:'pending'};
  await db('workshop_warehouse_queue','id=eq.'+requestId,'PATCH',{state:'done',result,completed_at:new Date().toISOString()});
  return result;
 }

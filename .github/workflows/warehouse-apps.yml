@@ -24,6 +24,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-live-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-receipt-labels-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-receipt-cancel-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-payment-cancel-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-auto-open-browser.cjs
