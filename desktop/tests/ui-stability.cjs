@@ -11,7 +11,7 @@ app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'cre
 (async()=>{const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});const page=await app.firstWindow();try{
  await page.locator('#home-stats [data-count=working]').waitFor();
  await page.waitForFunction(async()=>!(await window.fastgoDesktop.state()).warming);await page.waitForTimeout(700);
- await page.evaluate(()=>{window.originalIntake=document.querySelector('.home-actions a[href="#new?kind=repair"]');window.originalStorage=document.querySelector('.home-actions a[href="#new?kind=storage"]');document.querySelector('#priority-search input').value='Не сбрасывать';window.dataEvents=0;window.addEventListener('workshop-data-changed',()=>window.dataEvents++);});
+ await page.evaluate(()=>{window.originalIntake=document.querySelector('.home-actions a[href="#new?kind=repair"]');window.originalStorage=document.querySelector('.nav a[href="#storage"]');document.querySelector('#priority-search input').value='Не сбрасывать';window.dataEvents=0;window.addEventListener('workshop-data-changed',()=>window.dataEvents++);});
  await page.waitForTimeout(5500);assert((await app.evaluate(()=>globalThis.printPolls))>=4);
  assert(await page.evaluate(()=>window.originalIntake.isConnected&&window.originalStorage.isConnected));assert.equal(await page.evaluate(()=>window.dataEvents),0);
  await page.evaluate(()=>window.fastgoDesktop.sync());await page.waitForTimeout(500);

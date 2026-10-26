@@ -380,6 +380,6 @@ const server=createServer((req,res)=>{
  assert.deepEqual(errors,[]);await context.close();
  }
 
- console.log('PASS',kind,'five widths, six roles, table default, board, price groups, storage buttons');
+ console.log('PASS',kind,'five widths, six roles, table view without chooser, price groups and storage buttons');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
