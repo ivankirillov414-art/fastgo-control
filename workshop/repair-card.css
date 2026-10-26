@@ -33,7 +33,7 @@
 .repair-visual{min-width:0;position:sticky;top:18px}
 body:has(#desktop-status) .repair-visual{top:65px}
 .repair-workspace .order-vehicle-card{margin:0!important;border:1px solid #3a5067!important;border-radius:12px!important;background:#112238!important;overflow:hidden}
-.repair-workspace #order-vehicle-photo{min-height:300px!important;height:clamp(320px,calc(100dvh - 248px),710px);padding:0;overflow:hidden;background:#0a1420}
+.repair-workspace #order-vehicle-photo{display:block!important;min-height:300px!important;height:clamp(320px,calc(100dvh - 248px),710px);padding:0;overflow:hidden;background:#0a1420}
 .repair-workspace #order-vehicle-photo>a{display:block;width:100%;height:100%}
 .repair-workspace #order-vehicle-photo img{display:block;width:100%;height:100%;object-fit:contain}
 .repair-workspace #order-vehicle-photo p{padding:28px;text-align:center;line-height:1.5}
