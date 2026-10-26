@@ -14,6 +14,10 @@ assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('cla
 (async()=>{
  stage='launch';console.log('Warehouse package check: '+stage);
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-warehouse-package-'));
+ // This is an installed-profile upgrade probe (six durable USB scans below).
+ // First-boot origin migration is covered by check-warehouse-bundled-desktop;
+ // its temporary window can close Playwright's initial context during attach.
+ fs.writeFileSync(path.join(profile,'warehouse-bundled-ui-v1.txt'),new Date().toISOString());
  const queued=Array.from({length:6},(_,i)=>({id:'regression-scan-'+i,code:'FGP-00000001',time:new Date().toISOString(),target:null}));
  const scannerDir=path.join(profile,'usb-scanner');fs.mkdirSync(scannerDir,{recursive:true});
  fs.writeFileSync(path.join(scannerDir,'usb-scanner.json'),JSON.stringify({token:crypto.randomBytes(32).toString('hex'),serial:'',enabled:false,autoConnect:false,pending:queued,seen:queued.map(x=>x.id),results:[],mode:''}));
@@ -22,7 +26,7 @@ assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('cla
  const step=name=>{stage=name;console.log('Warehouse package check: '+name);};
  try{
   step('local login');
-  await app.context().route('https://**',route=>route.abort());let page;for(let n=0;n<100;n++){page=app.windows().find(p=>p.url()==='fastgo://app/warehouse.html');if(page)break;await new Promise(r=>setTimeout(r,150));}assert(page);await page.locator('#login').waitFor();
+  let page;for(let n=0;n<100;n++){page=app.windows().find(p=>p.url()==='fastgo://app/warehouse.html');if(page)break;await new Promise(r=>setTimeout(r,150));}assert(page);await page.context().route('https://**',route=>route.abort());await page.locator('#login').waitFor();
   const state=await app.evaluate(({app,BrowserWindow})=>{const win=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html');return {version:app.getVersion(),packaged:app.isPackaged,bounds:win.getBounds(),content:win.getContentBounds()};});
   assert.equal(state.version,pkg.version);assert(state.packaged);assert(state.bounds.height-state.content.height<32,'Standard white title bar remains');assert.equal(await page.evaluate(()=>document.body.classList.contains('warehouse-native-window')),true);assert.equal(await page.evaluate(()=>window.warehouseUpdateSafe(true)),true);
   step('materialize signed P2 package outside ASAR');
