@@ -51,6 +51,6 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  if(!/update_installed_at[^\d]+\d+/.test(status))throw Error('Replacement APK did not record successful installation');
  const result=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#keepsDataAfterInstall',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);
  if(!/OK \(1 test\)/.test(result))throw Error('Post-update retention check failed: '+result);
- fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:9,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,restart_mode:restartMode,sqlite_retained:true,encrypted_value_retained:true},null,2));
+ fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:12,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,restart_mode:restartMode,sqlite_retained:true,encrypted_value_retained:true},null,2));
  console.log('PASS: document gate, APK download/hash/signature, Android installer, return via '+restartMode+', new version and retained SQLite/encrypted credentials');
 })().catch(e=>{console.error(e.message);process.exitCode=1;});

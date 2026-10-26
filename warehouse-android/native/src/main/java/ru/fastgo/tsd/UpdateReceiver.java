@@ -7,6 +7,15 @@ public final class UpdateReceiver extends BroadcastReceiver {
  @Override public void onReceive(Context context,Intent intent){
   UpdateJob.schedule(context,true);
   if(!Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction()))return;
+  final PendingResult pending=goAsync();
+  // PackageManager may still be clearing the previous package's notifications.
+  // Keep this short broadcast alive and post the return notification after that
+  // cleanup, so Android's background-start restriction cannot leave it missing.
+  new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+   try{String version=context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName;
+    UpdateNotifications.show(context,"FastGo обновлён","Установлена версия "+version+". Нажмите, чтобы продолжить работу");
+   }catch(Exception ignored){}finally{pending.finish();}
+  },2000);
   try(LocalStore store=new LocalStore(context)){
    String version=context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName;
    store.put("update_installed_version",version);
