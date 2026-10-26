@@ -21,6 +21,7 @@ jobs:
       - run: npm install --prefix /tmp/fastgo-browser playwright@1.62.1
       - run: /tmp/fastgo-browser/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-browser/node_modules node scripts/check-workspace-browser.cjs ${{ matrix.browser }}
+      - run: NODE_PATH=/tmp/fastgo-browser/node_modules node scripts/check-password-recovery-browser.cjs ${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -213,7 +213,7 @@ const server=createServer((req,res)=>{
   if(req.url().includes('/functions/v1/fastgo-workshop-api')){
    let data={};const {action}=p;
    if(action==='me')data={role:'owner',email:'recovery@example.invalid',profile_id:'fixture',name:'Тест',active:true};
-   if(action==='owner_device_status')data={trusted:trust};
+   if(action==='owner_device_status')data={registered:true,trusted:trust};
    if(action==='request_access')data={active:true};
    if(action==='catalog')data={parts:[],services:[],staff:[],categories:[]};
    if(action==='overview')data={repairs:0,storage:0,ready:0,overdue:0,storage_due:0,debt:0,today_payments:0};
@@ -226,20 +226,11 @@ const server=createServer((req,res)=>{
  await page.getByRole('button',{name:'Забыли пароль?'}).click();
  await page.getByLabel('Электронная почта',{exact:false}).fill('recovery@example.invalid');
  await page.getByRole('button',{name:'Отправить письмо',exact:true}).click();
- await page.getByLabel('Код из письма').fill('00000000');
- await page.getByRole('button',{name:'Подтвердить код'}).click();
- await page.getByText('Код неверный или срок его действия истёк.',{exact:false}).waitFor();
- assert.equal(updated,0);
- await page.getByLabel('Код из письма').fill('12345678');
- await page.getByRole('button',{name:'Подтвердить код'}).click();
- await page.getByText('Этот iPhone не является доверенным устройством владельца.',{exact:true}).waitFor();
- assert.equal(updated,0);
- trust=true;
- await page.getByRole('button',{name:'Забыли пароль?'}).click();
- await page.getByLabel('Электронная почта',{exact:false}).fill('recovery@example.invalid');
- await page.getByRole('button',{name:'Отправить письмо',exact:true}).click();
- await page.getByLabel('Код из письма').fill('12345678');
- await page.getByRole('button',{name:'Подтвердить код'}).click();
+ assert.equal(await page.locator('#recovery-code').count(),0);
+ await page.getByText('письмо со ссылкой отправлено',{exact:false}).waitFor();
+ await page.goto(origin+'/workshop.html#type=recovery&access_token=recovery-fixture');
+ await page.getByText('Восстановление этой учётной записи доступно на её доверенном iPhone.',{exact:true}).waitFor();assert.equal(updated,0);
+ trust=true;await page.goto(origin+'/workshop.html#type=recovery&access_token=recovery-fixture');
  await page.getByRole('heading',{name:'Новый пароль',exact:true}).waitFor();
  assert.equal(await page.locator('#f-new_password').getAttribute('autocomplete'),'new-password');
  assert.equal(await page.evaluate(()=>localStorage.getItem('fastgo_workshop_session')),null);
@@ -250,7 +241,7 @@ const server=createServer((req,res)=>{
  await page.locator('#f-confirm_password').fill('Fixture-password-42');
  await page.getByRole('button',{name:'Сохранить новый пароль'}).click();
  await page.getByRole('heading',{name:'Вход для сотрудников',exact:true}).waitFor();
- assert.equal(verified,2);assert.equal(updated,1);assert.equal(logout,1);assert.equal(loggedIn,0);
+ assert.equal(verified,0);assert.equal(updated,1);assert.equal(logout,1);assert.equal(loggedIn,0);
  assert.equal(await page.locator('#f-email').inputValue(),'recovery@example.invalid');
  assert.equal(await page.locator('#f-email').getAttribute('autocomplete'),'username');
  assert.equal(await page.locator('#password').getAttribute('autocomplete'),'current-password');
