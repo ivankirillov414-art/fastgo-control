@@ -5,7 +5,7 @@ class ReceiptLabelJournal{
  constructor(dir){this.dir=dir;}
  async run(job,print){
   if(!job||!guid.test(job.id)||!Array.isArray(job.items)||job.items.length<1||job.items.length>40)throw Error('Неверное задание этикеток прихода');
-  const normalized=job.items.map(x=>{if(!x||typeof x.name!=='string'||typeof x.barcode!=='string'||!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>1000)throw Error('Проверьте этикетки прихода');return {name:x.name,barcode:x.barcode,quantity:x.quantity};});
+  const normalized=job.items.map(x=>{if(!x||typeof x.name!=='string'||typeof x.barcode!=='string'||!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>1000)throw Error('Проверьте этикетки прихода');return {name:x.name,barcode:x.barcode,quantity:x.quantity,...(x.price===undefined?{}:{price:x.price})};});
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
   fs.mkdirSync(this.dir,{recursive:true});const file=path.join(this.dir,job.id+'.json'),lock=file+'.lock';let handle;
   try{handle=fs.openSync(lock,'wx');fs.writeFileSync(handle,JSON.stringify({pid:process.pid}));}

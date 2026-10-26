@@ -234,7 +234,7 @@
           const items = (((_a2 = job2.result) == null ? void 0 : _a2.items) || []).map((part) => {
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
-            return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, svg: svg.outerHTML };
+            return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
           });
           await bridge.printReceiptLabels({ id: job2.id, items });
           await call2("receipt_label_ack", { id: job2.id });
@@ -746,7 +746,7 @@
       try {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
-        const payload = { name: part.name, barcode: String(part.barcode), svg: svg.outerHTML, quantity, format };
+        const payload = { name: part.name, barcode: String(part.barcode), price: Number(part.retail_price), svg: svg.outerHTML, quantity, format };
         if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.printBarcode) {
           button.disabled = true;
           const result = await window.warehouseDesktop.printBarcode({ ...payload, ...printers == null ? void 0 : printers.selection() });
@@ -757,7 +757,7 @@
           }
           return;
         }
-        const label = '<section class="label"><strong>' + esc(part.name) + "</strong>" + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
+        const label = '<section class="label"><div class="label-heading"><strong>' + esc(part.name) + '</strong><b class="price">' + esc(Number(part.retail_price).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " \u20BD") + "</b></div>" + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
         frame.title = "\u041F\u0435\u0447\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A";
         frame.style.cssText = "position:fixed;width:1px;height:1px;left:-10000px;border:0";
         frame.srcdoc = barcodeDocument(label, quantity, format);
@@ -776,7 +776,7 @@
     };
   }
   function barcodeDocument(label, quantity, format) {
-    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
+    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}.label-heading{display:flex;align-items:center;justify-content:space-between;gap:1mm;width:100%}.label-heading strong{min-width:0;flex:1;text-align:left}.price{font-size:8pt;font-weight:bold;white-space:nowrap}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
   }
 
   // warehouse/product-panel.js

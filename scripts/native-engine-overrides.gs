@@ -70,6 +70,7 @@ function updateOrder_(p,actor){
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
   const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
+  if(role_(actor)==='mechanic'&&(parts.length!==oldParts.length||!repairPartsSubset_(parts,oldParts)))throw httpError_('Выданные детали изменяются на кассе',403);
   if(parts.length!==oldParts.length)returnRepairParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), pricing=repairPricing_(r,p,works,parts),total=pricing.total,previousTotal=num_(r['Итого']);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));

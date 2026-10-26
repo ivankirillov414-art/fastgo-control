@@ -1,4 +1,11 @@
 /* Repair workspace: a photo column and a single working column. */
+.repair-pane-body{display:contents}
+.repair-pane-tabs{display:none}
+.repair-card>[hidden],.repair-card [hidden]{display:none!important}
+.repair-card>.repair-card-save{grid-column:2}
+.repair-master-notes{margin-top:14px!important}
+.repair-cancel-reasons{border:0;padding:0;display:grid;gap:12px}
+.repair-cancel-reasons legend{margin-bottom:16px;line-height:1.5}
 .shell:has(.repair-workspace){display:block;min-height:100vh;background:radial-gradient(ellipse at 45% 0,#102539 0,#08131f 65%)}
 .shell:has(.repair-workspace)>.sidebar{display:none}
 .shell:has(.repair-workspace)>.content{margin:0;min-width:0}
@@ -168,4 +175,28 @@ body:has(#desktop-status) .repair-visual{top:65px}
  .repair-details>summary{font-size:14px;padding:12px 10px}
  .repair-details-body{padding:4px 10px 12px}
  .repair-workspace .repair-card-save{bottom:82px}
+}
+@media(max-width:760px){
+ .workspace.repair-workspace{padding:8px 8px 88px;height:100dvh;overflow:hidden}
+ .repair-card{display:flex;flex-direction:column;height:100%;padding:10px;gap:10px;min-height:0}
+ .repair-card-top{display:block;flex:0 0 auto;width:100%}
+ .repair-brand{min-height:34px;padding:0}
+ .repair-brand .brand{font-size:26px}
+ .repair-workspace .order-detail-head{margin-top:10px;gap:8px;flex-wrap:wrap}
+ .repair-pane-tabs{display:flex;gap:4px;width:100%;overflow-x:auto;flex:0 0 auto;padding-bottom:4px}
+ .repair-pane-tabs .btn{font-size:12px;padding:8px 10px;flex:0 0 auto;min-height:36px}
+ .repair-pane-tabs [aria-current=page]{background:#12566b;color:#5af2f4;border-color:#26aebe}
+ .repair-pane-body{display:block;overflow:auto;min-height:0;flex:1 1 auto;width:100%;overscroll-behavior:contain}
+ .repair-pane-body .repair-visual{position:static}
+ .repair-pane-body .repair-main{margin-top:10px}
+ .repair-workspace #order-vehicle-photo{height:170px!important;min-height:170px!important}
+ .repair-workspace .repair-photo-thumbnails{display:none}
+ .repair-workspace .repair-photo-add{margin-top:6px}
+ .repair-workspace .repair-card-save{position:static;width:100%;flex:0 0 auto;margin:0;padding:10px}
+ .repair-workspace .repair-details{border:0;background:none}
+ .repair-details-body{padding:0!important}
+ .repair-workspace .repair-payment-options{margin:0}
+ .repair-pane-body:has(#repair-payment-panel:not([hidden])) .repair-payment-options>summary{display:none}
+ .repair-pane-body:has(#repair-payment-panel:not([hidden])) .repair-payment-options{display:block}
+ .repair-pane-body:has(#repair-payment-panel:not([hidden])) .repair-payment-options> :not(summary){display:block}
 }

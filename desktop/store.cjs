@@ -40,7 +40,7 @@ class Store{
   if(action==='upload'||action==='documents'){const field=p.slot==='signed'?'signed_document_paths':'fault_photo_paths';r[field]=[...new Set([...(r[field]||[]),...(patch.paths||p.paths||[])])];}
   r.revision=Number(r.revision||0)+1;r.updated_at=new Date().toISOString();return r;
  }
- localWrite(actor,action,p){if(!writes.has(action))throw Error('Для этого действия требуется интернет. Ремонты и хранение доступны без сети.');return this.transaction(()=>{
+ localWrite(actor,action,p){if(this.cache(actor,'me')?.role==='mechanic'&&action==='payment')throw Error('Оплаты недоступны мастеру');if(!writes.has(action))throw Error('Для этого действия требуется интернет. Ремонты и хранение доступны без сети.');return this.transaction(()=>{
   p={...p,request_id:p.request_id||randomUUID()};const old=this.db.prepare('SELECT result FROM outbox WHERE actor=? AND request_id=?').get(actor,p.request_id);if(old)return JSON.parse(old.result);
   const kind=p.kind==='storage'?'storage':'repair';let before,patch={},id=p.id;
   if(action==='create'){
@@ -52,6 +52,7 @@ class Store{
    before=this.record(actor,kind,id);if(p.revision!==undefined&&Number(p.revision)!==Number(before.revision))throw Object.assign(Error('Карточка уже изменена в приложении. Обновите её.'),{status:409});
    if(final.has(before.status)&&!['upload','documents'].includes(action)&&!p.reopen_reason)throw Error('Заказ закрыт. Откройте его повторно перед изменением.');
    if(kind==='repair'&&action==='update'){
+    if(this.cache(actor,'me')?.role==='mechanic'&&p.parts!==undefined&&contentKey(p.parts)!==contentKey(before.parts||[]))throw Error('Запчасти выдаются только через ТСД; выданные детали изменяются на кассе');
     if(p.parts!==undefined){const available=(before.parts||[]).map(contentKey);if(!Array.isArray(p.parts)||!p.parts.every(line=>{const at=available.indexOf(contentKey(line));if(at<0)return false;available.splice(at,1);return true;}))throw Error('Запчасти в ремонт выдаются только через ТСД на кассе');}
     const master=p.assigned_master_id??before.assigned_master_id,member=this.cache(actor,'me');
     if(p.no_parts===true&&((p.parts||before.parts||[]).length||actor!==master&&!(member?.role==='mechanic'&&!master)&&!['owner','developer'].includes(member?.role)))throw Error('Отметку «Без замены запчастей» ставит мастер ремонта');
@@ -66,7 +67,7 @@ class Store{
   this.db.prepare('UPDATE records SET local=? WHERE actor=? AND kind=? AND id=?').run(stable(updated),actor,kind,id);return result;
  });}
  cacheResponse(actor,action,p,data){const changed=contentKey(this.cache(actor,action+':'+stable(p)))!==contentKey(data);this.cache(actor,action+':'+stable(p),data);if(['me','catalog','legal','request_access'].includes(action))this.cache(actor,action,data);if(action==='get')this.remember(actor,p.kind||'repair',data.record);if(action==='list')for(const r of data.items||[]){const existing=this.row(actor,p.kind||'repair',r.id);if(!existing)this.remember(actor,p.kind||'repair',r);}return changed;}
- read(actor,action,p={}){const kind=p.kind==='storage'?'storage':'repair';
+ read(actor,action,p={}){if(this.cache(actor,'me')?.role==='mechanic'&&['finance','stock','stock_history','stock_receipts','cash_state','sales'].includes(action))throw Error('Касса, склад и оплаты недоступны мастеру');const kind=p.kind==='storage'?'storage':'repair';
   if(action==='overview'){const repairs=this.all(actor,'repair'),storage=this.all(actor,'storage'),active=repairs.filter(r=>!final.has(r.status)),held=storage.filter(r=>!final.has(r.status)),today=new Date().toISOString().slice(0,10),week=new Date(Date.now()+7*86400000).toISOString().slice(0,10);return {...this.cache(actor,'overview:'+stable(p)),repairs:active.length,ready:repairs.filter(r=>r.status==='ready').length,overdue:active.filter(r=>r.promised_date&&r.promised_date<today).length,storage:held.length,storage_due:held.filter(r=>r.planned_return_date>=today&&r.planned_return_date<=week).length,debt:[...repairs,...storage].filter(r=>!['cancelled','deleted'].includes(r.status)).reduce((sum,r)=>sum+Math.max(0,Number(r.storage_tariff?r.storage_amount:r.total_amount||0)-Number(r.paid_amount||0)),0),today_payments:this.cache(actor,'overview:'+stable(p))?.today_payments||0,low_stock:(this.cache(actor,'catalog')?.parts||[]).filter(r=>Number(r.quantity)<=2).length};}
   if(['me','catalog','legal','request_access'].includes(action)){const data=this.cache(actor,action);if(!data)throw Error('Для первого входа и загрузки базы нужен интернет.');if(action==='catalog'){const copy=JSON.parse(JSON.stringify(data));for(const op of this.pending(actor).filter(x=>x.action==='update'&&x.patch.parts)){for(const part of copy.parts||[]){const qty=rows=>(rows||[]).filter(x=>x.id===part.id).reduce((n,x)=>n+Number(x.quantity||1),0);part.quantity=Number(part.quantity||0)+qty(op.base?.parts)-qty(op.patch.parts);}}return copy;}return data;}
   if(action==='get'){const record=this.record(actor,kind,p.id),cached=this.cache(actor,'get:'+stable(p));return {...cached,record,legal:this.cache(actor,'legal')||cached?.legal||{},payments:cached?.payments||[],events:cached?.events||[],linked:cached?.linked||[]};}

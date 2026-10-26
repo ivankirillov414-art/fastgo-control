@@ -27,6 +27,7 @@ function doPost(e) {
 
 function route_(action,p,actor){ return reliableRoute_(action,p,actor); }
 function routeUnlocked_(action,p,actor){
+  if(role_(actor)==='mechanic'&&['payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action))throw httpError_('Касса, склад и оплаты недоступны мастеру',403);
   if(role_(actor)==='seller'&&!['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','stock_history','health'].includes(action))throw httpError_('Нет доступа',403);
   switch(action){
     case 'health': return health_();

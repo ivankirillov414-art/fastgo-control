@@ -2,7 +2,7 @@ name: Workshop browser layout
 on:
   push:
     branches: [main, codex/repair-part-scanning-20261010]
-    paths: ['workshop/**','workshop.html','workshop.css','scripts/check-workspace-browser.cjs','scripts/check-repair-scanner.cjs','.github/workflows/workspace-browser.yml']
+    paths: ['workshop/**','workshop.html','workshop.css','scripts/check-workspace-browser.cjs','scripts/check-repair-pickup.cjs','.github/workflows/workspace-browser.yml']
   workflow_dispatch:
 permissions:
   contents: read

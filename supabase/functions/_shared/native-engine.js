@@ -17,6 +17,7 @@ export function createNativeEngine(snapshot,{uuid=()=>crypto.randomUUID(),now=()
  function health_(){return {ok:true,backend:'POSTGRES_GOOGLE_MIRROR',capabilities:{atomic_writes:true,private_product_photos:true,background_google_sync:true}};}
 
 function routeUnlocked_(action,p,actor){
+  if(role_(actor)==='mechanic'&&['payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action))throw httpError_('Касса, склад и оплаты недоступны мастеру',403);
   if(['preorders','preorder_get','preorder_suggestions','preorder_save'].includes(action)){const prepared=preorderOperation(sheets,action,p,actor,{uuid:uid_,now:now_});if(prepared.event)append_(SHEETS.events,prepared.event);return prepared.result;}
   if(role_(actor)==='seller'&&!['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','stock_history','health'].includes(action))throw httpError_('Нет доступа',403);
   switch(action){
@@ -436,6 +437,7 @@ function updateOrder_(p,actor){
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
   const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
+  if(role_(actor)==='mechanic'&&(parts.length!==oldParts.length||!repairPartsSubset_(parts,oldParts)))throw httpError_('Выданные детали изменяются на кассе',403);
   if(parts.length!==oldParts.length)returnRepairParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), pricing=repairPricing_(r,p,works,parts),total=pricing.total,previousTotal=num_(r['Итого']);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));

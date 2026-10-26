@@ -186,3 +186,12 @@ test('repair status transitions consult role permissions in API and native engin
   assert.match(native,/canSetRepairStatus_\(actor,status\)/);
   assert.match(native,/У вашей роли нет права на этот статус ремонта/);
 });
+
+
+test('master money and stock actions are denied at the authenticated API boundary',async()=>{
+ const s=setup({role:'mechanic'});
+ for(const action of ['payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales']){
+  const r=await s.invoke({action,params:{kind:'repair',id,amount:100,method:'cash'}});assert.equal(r.status,403,action);
+ }
+ assert.equal(s.calls.some(c=>/workshop_native_commit|workshop_mutate/.test(c.url)),false);
+});

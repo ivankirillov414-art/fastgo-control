@@ -12,7 +12,7 @@ export function startReceiptLabels({call,bridge=window.warehouseDesktop,notify=(
    await barcode();
    for(const job of jobs){
     if(stopped)return;
-    const items=(job.result?.items||[]).map(part=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');window.JsBarcode(svg,String(part.barcode),{format:'CODE128',displayValue:false,width:2,height:72,margin:0,marginLeft:20,marginRight:20,background:'#ffffff',lineColor:'#000000'});return {name:part.name,barcode:String(part.barcode),quantity:part.quantity,svg:svg.outerHTML};});
+    const items=(job.result?.items||[]).map(part=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');window.JsBarcode(svg,String(part.barcode),{format:'CODE128',displayValue:false,width:2,height:72,margin:0,marginLeft:20,marginRight:20,background:'#ffffff',lineColor:'#000000'});return {name:part.name,barcode:String(part.barcode),quantity:part.quantity,price:part.retail_price,svg:svg.outerHTML};});
     await bridge.printReceiptLabels({id:job.id,items});
     await call('receipt_label_ack',{id:job.id});
     notify({ok:true,text:'Приход оформлен · '+items.reduce((n,x)=>n+x.quantity,0)+' этикеток передано термопринтеру'});
