@@ -19,6 +19,7 @@ import {api,serviceApi,login,logout,userId,esc,money,uuid,matchBarcode} from './
 const formValues=form=>{const p={};new FormData(form).forEach((v,k)=>p[k]=v);return p;};
 const $=id=>document.getElementById(id),terminal=document.body.dataset.mode==='terminal';let device,parts=[],staff=[],screen='home',draft,job,busy=false,polling=false,memberRole='',lastActivity=Date.now();
 let stopScanner,stopUSB,preorderView;
+if(!terminal&&!window.warehouseDesktop&&matchMedia('(max-width:760px)').matches)for(const id of ['usb-scanner','terminal-update'])if($(id))$(id).hidden=true;
 const serviceLink=$('warehouse-service');if(serviceLink)serviceLink.hidden=!(window.fastgoDesktop||new URLSearchParams(location.search).get('unified')==='1');
 serviceLink?.addEventListener('click',e=>{if(!window.fastgoWarehouseCanLeave?.()){e.preventDefault();message('Завершите документ перед переходом в сервис',true);}});
 const networkButton=$('network-diagnostics');if(networkButton){networkButton.hidden=!window.warehouseDesktop?.openNetworkDiagnostics;networkButton.onclick=()=>window.warehouseDesktop.openNetworkDiagnostics().catch(e=>message(e.message,true));}
@@ -30,7 +31,7 @@ const repair=repairPayment({call:(a,p)=>call(a,p),render:html=>{live.cleanup();s
 const live=liveBasket({terminal,call:(a,p)=>call(a,p),parts:()=>parts,render:html=>{screen='live';shell(html);},home,run,message,load,save,refresh:catalog,repair:q=>repair.terminal(q),stationRepair:(q,id)=>repair.station(q,id),canOpen:canReceiveIncoming});
 const call=(action,p={})=>{if(!device&&document.body.dataset.readonly==='true'){if(action==='catalog')return api('service_catalog');if(action==='inventory_edit')return serviceApi(action,p);throw Error('Приход, оплата и ТСД доступны на двух подключённых ноутбуках. Здесь доступен просмотр склада.');}return api(action,{device_id:device?.id,device_token:device?.token,...p});};
 const receiptLabels=!terminal?startReceiptLabels({call:(a,p)=>device?call(a,p):Promise.resolve([]),notify:value=>{let box=$('receipt-label-notice');if(!box){box=document.createElement('p');box.id='receipt-label-notice';box.setAttribute('role','status');$('message').after(box);}box.textContent=value.text;box.className=value.ok?'notice':'error';}}):null;
-function applyReadOnly(){if(document.body.dataset.readonly!=='true')return;for(const id of ['receipt','pay','nav-receipt','nav-pay','shift','usb-scanner','terminal-update'])if($(id)){$(id).disabled=true;$(id).title='Доступно на подключённом складском ноутбуке';}}
+function applyReadOnly(){if(document.body.dataset.readonly!=='true')return;if(!window.warehouseDesktop)for(const id of ['usb-scanner','terminal-update','network-diagnostics','printer-settings'])if($(id))$(id).hidden=true;for(const id of ['receipt','pay','nav-receipt','nav-pay','shift','usb-scanner','terminal-update'])if($(id)){$(id).disabled=true;$(id).title='Доступно на подключённом складском ноутбуке';}}
 const unknown=unknownScans({call:(a,p)=>call(a,p),parts:()=>parts,refresh:catalog,run,message,owner:()=>['owner','developer'].includes(memberRole)});
 function message(v,error=false){$('message').textContent=v;$('message').className=error?'error':'';}
 let scannerTest=null;installScannerDiagnostics({parts:()=>parts,report:async extra=>{if(extra.scan_test)scannerTest=extra.scan_test;lastDeviceStatus=0;await desktopStatus();}});
@@ -66,7 +67,7 @@ async function connectTerminal(){
 async function start(){
  if(!userId())return signIn();
  device=load(terminal?'terminal':'station');draft=load('draft:'+document.body.dataset.mode);$('logout').hidden=false;
- if(!device){if(!terminal&&new URLSearchParams(location.search).get('unified')==='1'){document.body.dataset.readonly='true';memberRole=(await serviceApi('me')).role;await catalog();$('connection').textContent='Каталог склада · общее приложение';home();await inventory();message('Приход, оплата и подключение ТСД доступны на двух разрешённых ноутбуках. Цену и остаток владелец может изменить в карточке товара.');return;}if(!terminal)return setup();try{return await connectTerminal();}catch(e){return connectionError(e);}}
+ if(!device){if(!terminal&&(new URLSearchParams(location.search).get('unified')==='1'||!window.warehouseDesktop)){document.body.dataset.readonly='true';memberRole=(await serviceApi('me')).role;if(memberRole==='mechanic')throw Error('Этот раздел недоступен вашей роли');await catalog();$('connection').textContent='Каталог склада · общее приложение';home();await inventory();message('Приход, оплата и подключение ТСД доступны на двух разрешённых ноутбуках. Цену и остаток владелец может изменить в карточке товара.');return;}if(!terminal)return setup();try{return await connectTerminal();}catch(e){return connectionError(e);}}
  try{const info=await call('info');memberRole=info.member.role;notifications();$('connection').textContent=info.device.name+' · интернет';await catalog();home();if(!terminal){if(new URLSearchParams(location.search).get('section')==='inventory')await inventory();await live.restore();}}
  catch(e){
   if(e.status===401){signIn();message('Войдите снова. Сохранённый документ останется на устройстве.',true);return;}

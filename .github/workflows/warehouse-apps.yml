@@ -21,6 +21,7 @@ jobs:
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-mobile-login.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-usb-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-live-browser.cjs
