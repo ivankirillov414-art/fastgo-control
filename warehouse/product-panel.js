@@ -1,7 +1,7 @@
 import {printBarcode} from './barcode-print.js';
 import {esc,money,uuid} from './client.js';
 const pencil='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
-export function productPanel({parts,editable,call,run,changed,message,photos}){
+export function productPanel({parts,editable,call,run,changed,message,photos,offerLabels=()=>{}}){
  let dialog,selected,editing='',pending,stopPhotos;
  function close(){if(dialog?.dataset.uploading==='true')return;stopPhotos?.();stopPhotos=null;if(dialog?.open)dialog.close();dialog?.remove();dialog=null;selected=null;editing='';pending=null;}
  function open(part){if(dialog?.dataset.uploading==='true')return;close();selected=part;dialog=document.createElement('dialog');dialog.className='product-dialog';dialog.setAttribute('aria-label','Карточка товара');document.body.append(dialog);draw();dialog.showModal();dialog.querySelector('[data-close]').focus();dialog.onclick=e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();};const owned=dialog;dialog.oncancel=e=>{if(owned.dataset.uploading==='true')e.preventDefault();};dialog.onclose=()=>{owned.remove();if(dialog===owned){stopPhotos?.();stopPhotos=null;dialog=null;selected=null;}};}
@@ -9,7 +9,7 @@ export function productPanel({parts,editable,call,run,changed,message,photos}){
  function draw(){if(!dialog||!selected)return;dialog.innerHTML='<button class="product-close" type="button" data-close aria-label="Закрыть карточку">×</button><div class="product-main"><h2>'+esc(selected.name)+'</h2><div class="product-metrics">'+metric('quantity','Остаток',selected.quantity+' <span>шт.</span>')+metric('retail_price','Цена продажи',money(selected.retail_price))+metric('unit_cost','Закупочная цена',money(selected.unit_cost))+'</div><div class="product-sku"><span>Артикул</span><b>'+esc(selected.sku||'Не указан')+'</b></div></div><div class="product-barcode"><span>Штрихкод</span>'+(selected.barcode?'<svg id="product-barcode" role="img" aria-label="Штрихкод '+esc(selected.barcode)+'"></svg>':'<p>Не указан</p>')+'<b>'+esc(selected.barcode||'')+'</b>'+(selected.barcode?'<button type="button" class="primary" data-print-barcode>Печать штрихкодов</button>':'')+'</div><p class="product-error" role="alert"></p>';
  dialog.querySelector('.product-main').append(dialog.querySelector('.product-barcode'));
  stopPhotos?.();const gallery=document.createElement('section');gallery.className='product-photos';dialog.querySelector('.product-error').before(gallery);stopPhotos=photos?.mount(gallery,selected);
- if(dialog.querySelector('[data-print-barcode]'))dialog.querySelector('[data-print-barcode]').onclick=()=>printBarcode(selected);
+ if(dialog.querySelector('[data-print-barcode]'))dialog.querySelector('[data-print-barcode]').onclick=()=>{if(!offerLabels(selected,1))printBarcode(selected);};
  dialog.querySelector('[data-close]').onclick=close;dialog.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(b.dataset.edit));
  if(selected.barcode){try{window.JsBarcode(dialog.querySelector('svg#product-barcode'),String(selected.barcode),{format:'CODE128',displayValue:false,width:2,height:110,margin:16,background:'#ffffff',lineColor:'#000000'});}catch{dialog.querySelector('#product-barcode').outerHTML='<p>Код: '+esc(selected.barcode)+'</p>';}}
  }
@@ -17,7 +17,7 @@ export function productPanel({parts,editable,call,run,changed,message,photos}){
  const input=host.querySelector('input');input.focus();input.select();host.querySelector('[data-cancel]').onclick=()=>{editing='';pending=null;draw();};
  host.querySelector('form').onsubmit=e=>{e.preventDefault();const part=selected,value=Number(input.value),field=editing;if(input.value.trim()===''||!Number.isFinite(value)||value<0||field==='quantity'&&!Number.isInteger(value)||field!=='quantity'&&Math.abs(value*100-Math.round(value*100))>0.00001){dialog.querySelector('.product-error').textContent='Проверьте значение';return;}
  if(!pending||pending.value!==value)pending={request_id:uuid(),part_id:part.id,field,value,expected:part[field]??0};const payload={...pending};
- void run(async()=>{input.disabled=true;dialog.querySelector('.product-error').textContent='Сохраняем…';try{const updated=await call('inventory_edit',payload);const index=parts().findIndex(x=>x.id===updated.id);if(index>=0)parts()[index]=updated;selected=updated;editing='';pending=null;changed();draw();message('Сохранено в общей базе');}catch(e){if(dialog)dialog.querySelector('.product-error').textContent=e.message;throw e;}finally{input.disabled=false;}});
+ void run(async()=>{input.disabled=true;dialog.querySelector('.product-error').textContent='Сохраняем…';try{const updated=await call('inventory_edit',payload);const index=parts().findIndex(x=>x.id===updated.id);if(index>=0)parts()[index]=updated;selected=updated;editing='';pending=null;changed();draw();message('Сохранено в общей базе');if(field==='quantity'&&value!==payload.expected&&value>0)offerLabels(updated,value);}catch(e){if(dialog)dialog.querySelector('.product-error').textContent=e.message;throw e;}finally{input.disabled=false;}});
  };
  }
  return {open,close};

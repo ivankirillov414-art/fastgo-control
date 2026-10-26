@@ -124,7 +124,7 @@
     if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
     });
   }
-  var serviceActions = /* @__PURE__ */ new Set(["inventory_edit", "preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
+  var serviceActions = /* @__PURE__ */ new Set(["label_targets", "label_enqueue", "inventory_edit", "preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
   var serviceApi = (action, params = {}) => {
     if (!serviceActions.has(action)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
     return api("service_" + action, params);
@@ -230,7 +230,7 @@
       await loader;
     }
     async function tick() {
-      var _a2;
+      var _a2, _b;
       if (stopped || running) return;
       running = true;
       try {
@@ -246,7 +246,7 @@
           });
           await bridge.printReceiptLabels({ id: job2.id, items });
           await call2("receipt_label_ack", { id: job2.id });
-          notify({ ok: true, text: "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
+          notify({ ok: true, text: (((_b = job2.payload) == null ? void 0 : _b.kind) === "labels" ? "\u041F\u0435\u0447\u0430\u0442\u044C \u0441 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430" : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D") + " \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
         }
       } catch (error) {
         notify({ ok: false, text: "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043F\u0440\u0438\u0445\u043E\u0434\u0430 \u043E\u0436\u0438\u0434\u0430\u044E\u0442 \u043F\u0435\u0447\u0430\u0442\u0438: " + error.message });
@@ -807,7 +807,8 @@
 
   // warehouse/product-panel.js
   var pencil = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
-  function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2, photos: photos2 }) {
+  function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2, photos: photos2, offerLabels: offerLabels2 = () => {
+  } }) {
     let dialog, selected, editing = "", pending2, stopPhotos;
     function close() {
       if ((dialog == null ? void 0 : dialog.dataset.uploading) === "true") return;
@@ -862,7 +863,9 @@
       gallery.className = "product-photos";
       dialog.querySelector(".product-error").before(gallery);
       stopPhotos = photos2 == null ? void 0 : photos2.mount(gallery, selected);
-      if (dialog.querySelector("[data-print-barcode]")) dialog.querySelector("[data-print-barcode]").onclick = () => printBarcode(selected);
+      if (dialog.querySelector("[data-print-barcode]")) dialog.querySelector("[data-print-barcode]").onclick = () => {
+        if (!offerLabels2(selected, 1)) printBarcode(selected);
+      };
       dialog.querySelector("[data-close]").onclick = close;
       dialog.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => edit(b.dataset.edit));
       if (selected.barcode) {
@@ -911,6 +914,7 @@
             changed();
             draw();
             message2("\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435");
+            if (field2 === "quantity" && value !== payload.expected && value > 0) offerLabels2(updated, value);
           } catch (e2) {
             if (dialog) dialog.querySelector(".product-error").textContent = e2.message;
             throw e2;
@@ -1353,7 +1357,8 @@
   }
 
   // warehouse/new-part.js
-  function newPartForm({ actor, api: api2, photos: photos2, parts: parts2, canReceive, run: run2, refresh, openProduct, message: message2 }) {
+  function newPartForm({ actor, api: api2, photos: photos2, parts: parts2, canReceive, run: run2, refresh, openProduct, message: message2, offerLabels: offerLabels2 = () => {
+  } }) {
     return function open() {
       const dialog = document.createElement("dialog");
       dialog.className = "new-part-dialog";
@@ -1426,10 +1431,17 @@
             if (state.quantity > 0 && !canReceive()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u0445\u043E\u0434 \u043D\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u043E\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.");
             if (state.photo && !state.photoSaved && (!photo || photo.sha256 !== state.photo.sha256 || photo.type !== state.photo.type)) throw Error("\u0414\u043B\u044F \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u044F \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E \u0436\u0435 \u0444\u043E\u0442\u043E. \u0422\u043E\u0432\u0430\u0440 \u0438 \u043F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B.");
             const part = await continueProductIntake(localStorage, actor(), { api: api2, onProgress: (text) => status.textContent = text, uploadPhoto: (part2, metadata, id) => photos2.upload(part2, file, id, metadata.primary, (text) => status.textContent = text) });
-            await refresh();
+            let refreshFailed = false;
+            try {
+              await refresh();
+            } catch (e2) {
+              refreshFailed = true;
+            }
             dialog.close();
-            openProduct(parts2().find((p) => p.id === part.id) || part);
-            message2("\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C \u0441\u043E\u0437\u0434\u0430\u043D\u0430. " + (state.quantity > 0 ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. " : "") + (state.photo ? "\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430." : ""));
+            const saved = parts2().find((p) => p.id === part.id) || { ...part, quantity: state.quantity };
+            openProduct(saved);
+            message2("\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u044C \u0441\u043E\u0437\u0434\u0430\u043D\u0430. " + (state.quantity > 0 ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. " : "") + (state.photo ? "\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430. " : "") + (refreshFailed ? "\u0421\u043F\u0438\u0441\u043E\u043A \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." : ""));
+            if (state.quantity > 0) offerLabels2(saved, state.quantity);
           } catch (error) {
             if (dialog.isConnected) status.textContent = error.message;
             throw error;
@@ -1445,6 +1457,101 @@
       };
       form.elements.name.focus();
     };
+  }
+
+  // warehouse/label-offer.js
+  var mobileLabelOffer = () => !window.warehouseDesktop && (matchMedia("(max-width: 700px)").matches || matchMedia("(pointer: coarse)").matches);
+  function offerLabelPrinting(part, quantity, { call: call2, actor }) {
+    var _a2;
+    if (!(part == null ? void 0 : part.barcode) || !Number.isInteger(quantity) || quantity < 1) return;
+    const key2 = "fastgo_label_offer_v1:" + actor + ":" + part.id;
+    let pending2 = null;
+    try {
+      pending2 = JSON.parse(localStorage.getItem(key2) || "null");
+    } catch (e) {
+    }
+    if ((pending2 == null ? void 0 : pending2.part_id) !== part.id) pending2 = null;
+    const dialog = document.createElement("dialog");
+    dialog.className = "barcode-print-dialog";
+    dialog.setAttribute("aria-label", "\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?");
+    dialog.innerHTML = "<form><h2>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?</h2><p>" + esc(part.name) + "</p><p>\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u0435\u043C \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C <b>" + quantity + '</b> \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A. \u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043C\u043E\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C.</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" required value="' + esc((_a2 = pending2 == null ? void 0 : pending2.quantity) != null ? _a2 : quantity) + '"></label><label>\u041F\u0435\u0447\u0430\u0442\u044C \u043D\u0430 \u043A\u0430\u0441\u0441\u0435<select name="station" required aria-label="\u041A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440"></select></label><p data-status role="status">\u0418\u0449\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0439 \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u2026</p><p class="error" role="alert"></p><div class="actions"><button type="button" data-close>\u041D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button><button type="submit" class="primary" disabled>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button></div></form>';
+    document.body.append(dialog);
+    dialog.showModal();
+    dialog.onclose = () => dialog.remove();
+    const form = dialog.querySelector("form"), input = form.elements.quantity, station = form.elements.station, button = form.querySelector("[type=submit]"), close = form.querySelector("[data-close]"), status = form.querySelector("[data-status]"), error = form.querySelector("[role=alert]");
+    let busy2 = false, targets = [];
+    close.onclick = () => dialog.close();
+    dialog.oncancel = (e) => {
+      if (busy2) e.preventDefault();
+    };
+    const freeze = (value) => {
+      input.disabled = value;
+      station.disabled = value;
+    };
+    if (pending2) {
+      freeze(true);
+      close.textContent = "\u0417\u0430\u043A\u0440\u044B\u0442\u044C";
+    }
+    void call2("label_targets").then((result) => {
+      if (!dialog.isConnected) return;
+      targets = Array.isArray(result) ? result : [];
+      station.innerHTML = targets.map((x) => '<option value="' + esc(x.id) + '">' + esc(x.name + " \xB7 " + x.printer) + "</option>").join("");
+      if (pending2) station.value = pending2.station_id;
+      const update = () => {
+        const target = targets.find((x) => x.id === station.value);
+        button.disabled = !target;
+        status.textContent = !target ? "\u041D\u0430 \u043A\u0430\u0441\u0441\u0435 \u0435\u0449\u0451 \u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u043D \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0435\u0433\u043E \u0432 FastGo \u043D\u0430 \u043A\u0430\u0441\u0441\u043E\u0432\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : pending2 ? "\u041F\u043E\u0432\u0442\u043E\u0440\u044F\u0435\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u0431\u0435\u0437 \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u043E\u0432." : target.online ? "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043D\u043E\u0443\u0442\u0431\u0443\u043A." : "\u041A\u0430\u0441\u0441\u0430 \u0441\u0435\u0439\u0447\u0430\u0441 \u043D\u0435 \u0432 \u0441\u0435\u0442\u0438. \u0417\u0430\u0434\u0430\u043D\u0438\u0435 \u0434\u043E\u0436\u0434\u0451\u0442\u0441\u044F \u0435\u0451 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.";
+      };
+      station.onchange = update;
+      update();
+    }).catch((e) => {
+      if (dialog.isConnected) {
+        status.textContent = "\u0421\u043F\u0438\u0441\u043E\u043A \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0445 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.";
+        error.textContent = e.message;
+      }
+    });
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (busy2 || !form.reportValidity()) return;
+      const count = Number(input.value);
+      if (!Number.isInteger(count) || count < 1 || count > 1e3) {
+        error.textContent = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0446\u0435\u043B\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000";
+        return;
+      }
+      try {
+        if (!pending2) {
+          pending2 = { request_id: uuid(), part_id: part.id, quantity: count, station_id: station.value };
+          const raw = JSON.stringify(pending2);
+          localStorage.setItem(key2, raw);
+          if (localStorage.getItem(key2) !== raw) throw Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
+        }
+        busy2 = true;
+        button.disabled = true;
+        close.disabled = true;
+        close.textContent = "\u0417\u0430\u043A\u0440\u044B\u0442\u044C";
+        freeze(true);
+        error.textContent = "";
+        const result = await call2("label_enqueue", pending2);
+        if ((result == null ? void 0 : result.id) !== pending2.request_id || !["pending", "printed"].includes(result.status)) throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043F\u0435\u0447\u0430\u0442\u044C. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u044D\u0442\u043E \u0436\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435.");
+        localStorage.removeItem(key2);
+        status.textContent = result.status === "printed" ? "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u0443\u0436\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u043D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0435\u043C." : "\u0417\u0430\u0434\u0430\u043D\u0438\u0435 \u043D\u0430 " + pending2.quantity + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u043D\u0430 \u043A\u0430\u0441\u0441\u0443. \u041F\u0435\u0447\u0430\u0442\u044C \u043D\u0430\u0447\u043D\u0451\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.";
+        button.hidden = true;
+        close.textContent = "\u0413\u043E\u0442\u043E\u0432\u043E";
+      } catch (e2) {
+        error.textContent = e2.message;
+        if ([400, 403, 404, 409, 413, 422].includes(e2.status)) {
+          localStorage.removeItem(key2);
+          pending2 = null;
+          freeze(false);
+        } else if (pending2) status.textContent = "\u041E\u0442\u0432\u0435\u0442 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C\xBB: \u043A\u043E\u0434 \u0437\u0430\u0434\u0430\u043D\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D, \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
+        button.textContent = "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C";
+        button.disabled = false;
+      } finally {
+        busy2 = false;
+        close.disabled = false;
+      }
+    };
+    return dialog;
   }
 
   // warehouse/web-update.js
@@ -3521,14 +3628,17 @@
   var drawInventory = () => {
   };
   var canManageParts = () => !terminal && ["owner", "developer", "admin"].includes(memberRole);
-  var canReceiveParts = () => !terminal && !!device && document.body.dataset.readonly !== "true";
+  var canReceiveParts = () => !terminal && (!!device && document.body.dataset.readonly !== "true" || canManageParts());
   var refreshParts = async () => {
     await catalog();
     drawInventory();
   };
   var photos = partPhotos({ api: serviceApi, editable: canManageParts, run, changed: refreshParts, message });
-  var product = productPanel({ parts: () => parts, editable: canManageParts, call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos });
-  var createPart = newPartForm({ actor: userId, api: serviceApi, photos, parts: () => parts, canReceive: canReceiveParts, run, refresh: refreshParts, openProduct: (p) => product.open(p), message });
+  var offerLabels = (part, quantity) => {
+    if (mobileLabelOffer()) return offerLabelPrinting(part, quantity, { call: serviceApi, actor: userId() });
+  };
+  var product = productPanel({ parts: () => parts, editable: canManageParts, call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos, offerLabels });
+  var createPart = newPartForm({ actor: userId, api: serviceApi, photos, parts: () => parts, canReceive: canReceiveParts, run, refresh: refreshParts, openProduct: (p) => product.open(p), message, offerLabels });
   async function inventory() {
     await catalog();
     screen = "inventory";

@@ -1,7 +1,7 @@
 import {esc} from './client.js';
 import {loadProductIntake,startProductIntake,continueProductIntake} from '../workshop/product-intake.js';
 
-export function newPartForm({actor,api,photos,parts,canReceive,run,refresh,openProduct,message}){
+export function newPartForm({actor,api,photos,parts,canReceive,run,refresh,openProduct,message,offerLabels=()=>{}}){
  return function open(){
   const dialog=document.createElement('dialog');dialog.className='new-part-dialog';dialog.setAttribute('aria-label','Новая запчасть');
   const categories=[...new Set(parts().map(p=>p.category).filter(Boolean))].sort();
@@ -21,7 +21,7 @@ export function newPartForm({actor,api,photos,parts,canReceive,run,refresh,openP
     restore();if(state.quantity>0&&!canReceive())throw Error('Завершите сохранённый приход на разрешённом складском ноутбуке.');
     if(state.photo&&!state.photoSaved&&(!photo||photo.sha256!==state.photo.sha256||photo.type!==state.photo.type))throw Error('Для продолжения выберите то же фото. Товар и приход сохранены.');
     const part=await continueProductIntake(localStorage,actor(),{api,onProgress:text=>status.textContent=text,uploadPhoto:(part,metadata,id)=>photos.upload(part,file,id,metadata.primary,text=>status.textContent=text)});
-    await refresh();dialog.close();openProduct(parts().find(p=>p.id===part.id)||part);message('Запчасть создана. '+(state.quantity>0?'Приход сохранён. ':'')+(state.photo?'Фотография сохранена.':''));
+    let refreshFailed=false;try{await refresh();}catch{refreshFailed=true;}dialog.close();const saved=parts().find(p=>p.id===part.id)||{...part,quantity:state.quantity};openProduct(saved);message('Запчасть создана. '+(state.quantity>0?'Приход сохранён. ':'')+(state.photo?'Фотография сохранена. ':'')+(refreshFailed?'Список обновится после подключения.':''));if(state.quantity>0)offerLabels(saved,state.quantity);
    }catch(error){if(dialog.isConnected)status.textContent=error.message;throw error;}finally{saving=false;if(dialog.isConnected){submit.disabled=false;close.disabled=false;fileInput.disabled=false;}}
   });};
   form.elements.name.focus();

@@ -8,6 +8,7 @@ import {canSell,api,esc,money,csvDownload} from './core.js';
 import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.js';
 import {loadLibrary as loadScript} from './library-loader.js';
 import {loadProductIntake,startProductIntake,continueProductIntake} from './product-intake.js';
+import {offerLabelPrinting,mobileLabelOffer} from '../warehouse/label-offer.js';
 
 const ZXING_URL=new URL('../vendor/zxing-browser-0.2.1.min.js',import.meta.url).href;
 const BARCODE_URL=new URL('../vendor/jsbarcode-3.12.3.min.js',import.meta.url).href;
@@ -234,6 +235,7 @@ export async function newPartForm(prefill='',{equipment=false}={}){
       catalogCache=null;window.dispatchEvent(new Event('workshop-data-changed'));
       showDialog('Приёмка завершена',`<p>${esc(part.name)}</p><p>Штрих-код: <strong>${esc(part.barcode)}</strong></p><p>Товар, приход и выбранное фото сохранены.</p>`,`<button class="btn ghost" data-inv-close>Закрыть</button><button class="btn" id="new-part-print">Напечатать этикетку</button>`);
       $('new-part-print').onclick=()=>printPartLabel(part,Number(state.quantity)||1).catch(e=>notice(e.message,'bad'));
+      if(mobileLabelOffer()&&state.quantity>0)offerLabelPrinting(part,state.quantity,{call:api,actor});
     }catch(e){progress.textContent=e.message;notice(e.message,'bad');try{if(!loadProductIntake(localStorage,actor)){for(const field of form.elements)field.disabled=false;if(!photoReady){form.elements.photo.disabled=true;form.elements.category_primary.disabled=true;}button.textContent='Создать и принять';}}catch{} }finally{button.disabled=false;}
   };
 }
