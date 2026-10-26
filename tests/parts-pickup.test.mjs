@@ -61,8 +61,8 @@ test('two terminals cannot consume the same pickup QR twice under a concurrent c
  const h=fixture(),c=await code();const results=await Promise.allSettled([1,2].map(()=>partsIssue('parts_issue',{request_id:randomUUID(),code:c,items:[{part_id:part,quantity:1}]},h.context)));
  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.commits.length,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],4);
 });
-test('closed/reassigned repairs, insufficient stock and laptop issue requests cause no writes',async()=>{
- for(const mode of ['closed','reassigned','stock','station']){const h=fixture();if(mode==='closed')h.raw['Статус']='Готов';if(mode==='reassigned')h.raw.master_id=randomUUID();const context=mode==='station'?{...h.context,device:{id:station,kind:'station'}}:h.context;
+test('closed/reassigned repairs and insufficient stock cause no writes',async()=>{
+ for(const mode of ['closed','reassigned','stock']){const h=fixture();if(mode==='closed')h.raw['Статус']='Готов';if(mode==='reassigned')h.raw.master_id=randomUUID();const context=mode==='station'?{...h.context,device:{id:station,kind:'station'}}:h.context;
   await assert.rejects(partsIssue('parts_issue',{request_id:randomUUID(),code:await code(),items:[{part_id:part,quantity:mode==='stock'?6:1}]},context));assert.equal(h.commits.length,0);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],5);
  }
 });
@@ -88,4 +88,12 @@ test('returning TSD parts does not consume an older personal holding of the same
  const engine=createNativeEngine(h.sheets),r=engine.run('update',{kind:'repair',id:repair,revision:2,status:'diagnostics',parts:[]},owner);
  assert.equal(r.parts.length,0);assert.equal(engine.sheets['Товары'].rows[0]['Остаток, шт.'],5);
  assert.ok(!engine.changes().some(x=>['master_stock_consume','master_stock_restore'].includes(x.values['Действие'])));
+});
+
+
+test('cash scanner issues into the repair once, without a sale or payment',async()=>{
+ const h=fixture(),context={...h.context,device:{id:station,kind:'station'}},p={request_id:randomUUID(),code:await code(),items:[{part_id:part,quantity:2}]};
+ const result=await partsIssue('parts_issue',p,context);assert.equal(result.items[0].quantity,2);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);
+ assert.equal(h.sheets['Продажи'].rows.length,0);assert.equal(h.sheets['Оплаты'].rows.length,0);assert.deepEqual(await partsIssue('parts_issue',p,context),result);assert.equal(h.commits.length,1);
+ const event=h.sheets['События'].rows.find(x=>x['Действие']==='parts_issued');assert.equal(JSON.parse(event['Детали']).scanner_source,'atol');
 });

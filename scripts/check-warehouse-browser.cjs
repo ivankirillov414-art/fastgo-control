@@ -28,16 +28,7 @@ await page.locator('#back').click();await page.evaluate(({actor,jobid})=>localSt
 assert.equal(await page.locator('#barcode').evaluate(el=>el===document.activeElement),true);
 await page.locator('#note').focus();await page.keyboard.type('FGP-00000001',{delay:5});await page.keyboard.press('Enter');
 assert.equal(await page.locator('[data-qty]').count(),0);assert.equal(await page.locator('#note').inputValue(),'FGP-00000001');
-await page.locator('#barcode').focus();await page.keyboard.type('UNKNOWN-CODE',{delay:5});
-await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Код не найден'));
-await page.keyboard.type('FGP-00000001',{delay:5});await page.waitForFunction(()=>document.querySelector('[data-qty]')?.value==='1');
-await page.locator('[data-remove]').click();assert.equal(await page.locator('#barcode').evaluate(el=>el===document.activeElement),true);
-// Batched scanner insertion (Android input connection) also works.
-await page.locator('#barcode').fill('FGP-00000001');await page.waitForFunction(()=>document.querySelector('[data-qty]')?.value==='1');
-await page.evaluate(()=>{const input=document.getElementById('barcode');input.value='FGP-00000001';input.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('back').click();});await page.waitForTimeout(250);
-await page.locator('#resume').click();assert.equal(await page.locator('[data-qty]').inputValue(),'1');
-assert.equal(await page.locator('#note').inputValue(),'FGP-00000001');
-page.once('dialog',d=>d.accept());await page.locator('#discard').click();
+await page.locator('#barcode').focus();await page.keyboard.type('FGP-00000001',{delay:5});await page.keyboard.press('Enter');await page.getByText('АТОЛ используется для оплаты и выдачи мастеру. Для прихода используйте ТСД.',{exact:true}).waitFor();assert.equal(await page.locator('[data-qty]').count(),0);page.once('dialog',d=>d.accept());await page.locator('#discard').click();
 await page.setViewportSize({width:1280,height:800});await page.goto('http://127.0.0.1:'+server.address().port+'/warehouse.html');await page.locator('#terminal-update').click();await page.locator('#terminal-help[open]').waitFor();await page.getByRole('button',{name:'Понятно',exact:true}).click();await page.evaluate(()=>{window.openedUpdater=0;window.warehouseDesktop={openTerminalUpdater:async()=>{window.openedUpdater++;}};});await page.locator('#terminal-update').click();assert.equal(await page.evaluate(()=>window.openedUpdater),1);assert.equal(await page.locator('#terminal-help').evaluate(el=>el.open),false);if(await page.locator('[data-job]').count())await page.locator('[data-job]').click();assert.equal(await page.locator('#mode option[value=master]').count(),0);await page.locator('#mode').selectOption('sale');assert.match(await page.locator('#total').innerText(),/600/);await page.locator('#checkout').click();await page.locator('#pay').waitFor();assert.equal(paid.mode,'sale');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);// A USB delivery acknowledged late must never increment a persisted draft twice.
 await page.addInitScript(()=>{
  window.warehouseDesktop={};

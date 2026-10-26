@@ -86,7 +86,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  function mount(){
   render(markup(kind));draw();$('live-back').onclick=()=>{if(current)dismissed=current.id+':'+current.payload.revision;cleanup();home();};
   $('live-scan').onsubmit=e=>{e.preventDefault();const code=$('live-code').value.trim();if(!code)return;if($('scan-received'))$('scan-received').textContent='Получен код: '+code;$('live-code').value='';void add(code).catch(e=>feedback(e.message,true));};
-  stop=bindScanner($('live-code'),$('live-scan'),()=>active&&!locked,{silent:true});
+  if(terminal)stop=bindScanner($('live-code'),$('live-scan'),()=>active&&!locked,{silent:true});
   function compatible(enabled,focus=false){
    stop?.();const form=$('live-scan'),input=$('live-code');
    form.className=enabled?'scanner-compatible':'scanner-sink';form.setAttribute('aria-hidden',String(!enabled));
@@ -105,7 +105,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   if(draft){const r=await call('job',{id:draft.id}).catch(()=>null);if(r?.state==='done'){const extra=remaining(draft,r);rememberUSB(draft);save(key(kind),null);save('live:'+kind,null);draft=extra.length?{...newDraft(kind),items:extra,last_part_id:extra[extra.length-1].part_id}:null;}else if(r?.state==='processing'){if(!terminal){current=r;draft=null;locked=true;}else locked=true;}}
   if(terminal&&!draft)draft=newDraft(kind);
   if(draft){cache();lastId=draft.last_part_id||'';overrides=load('live-edits:'+draft.id)||{};}
-  active=true;mount();if(draft)void sync().catch(e=>feedback(e.message,true));
+  active=true;mount();if(draft?.pickup)void run(issuePending);else if(draft)void sync().catch(e=>feedback(e.message,true));
  }
  async function openMirror(value){cleanup();kind=value.payload.kind;draft=null;current=value;shown.set(value.id,value.payload.revision);locked=value.state==='processing';overrides=load('live-edits:'+value.id)||{};active=true;mount();if(value.checkout?.payment_method){const el=document.querySelector('input[name="live-method"][value="'+value.checkout.payment_method+'"]');if(el)el.checked=true;}}
  async function addCode(code,usbId){
@@ -123,6 +123,26 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   lastId=found[0].id;draw();feedback('');return {name:found[0].name,price:found[0].retail_price,quantity:draft.items.find(x=>x.part_id===lastId).quantity};
  }
  function add(code,usbId){const next=scanChain.then(()=>addCode(code,usbId));scanChain=next.catch(()=>{});return next;}
+ async function issuePending(){
+  if(!draft?.pickup)throw Error('Нет выдачи для завершения');
+  const local=draft;locked=true;draw();
+  try{
+   const result=await call('parts_issue',{request_id:local.pickup.request_id,code:local.pickup.code,items:local.items});
+   // Stock and repair are one atomic server transaction. Close the temporary
+   // sale only after its idempotent issue receipt has been confirmed.
+   await call('cancel_document',{id:local.id,kind:'sale',revision:local.revision});
+   finished({id:local.id,payload:local,result:{}});
+   message('Запчасти выданы в ремонт № '+result.number+' · '+result.master_name);
+  }catch(e){locked=true;draw();feedback('Выдача не завершена: '+e.message+'. Повторите QR мастера или откройте этот черновик для повтора.',true);throw e;}
+ }
+ async function issueParts(code){
+  if(terminal||current||!draft?.items.length||kind!=='sale')throw Error('Сначала отсканируйте запчасти для мастера. Скан отменён.');
+  if(draft.pickup){if(draft.pickup.code!==code)throw Error('Сначала завершите предыдущую выдачу');return issuePending();}
+  if(locked)throw Error('Дождитесь завершения операции');
+  await scanChain;await sync();
+  await call('parts_pickup_quote',{code});
+  draft.pickup={code,request_id:uuid()};cache();checkpoint();return issuePending();
+ }
  async function poll(){
   if(polling||!active)return;polling=true;try{
    if(draft){const local=draft;void sync().catch(()=>{});const r=await call('job',{id:local.id});if(active&&draft===local&&r?.state==='done')finished(r);else if(active&&draft===local&&r){locked=r.state==='processing';draw();}return;}
@@ -159,7 +179,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   }
  }
  async function finish(){
-  if(terminal)return;await scanChain;if(draft)await sync();
+  if(terminal)return;if(draft?.pickup)throw Error('Эти запчасти выдаются мастеру. Откройте черновик для завершения выдачи.');await scanChain;if(draft)await sync();
   const value=source(),id=documentId();if(!value.items.length)throw Error('Нет отсканированных товаров');
   const method=current?.checkout?.payment_method||document.querySelector('input[name="live-method"]:checked')?.value;
   if(kind==='sale'&&!method)throw Error('Выберите способ оплаты');
@@ -171,5 +191,5 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    save('live-edits:'+id,null);save('live-total:'+id,null);finished({id,payload:value,result});
   }catch(e){const r=await call('job',{id}).catch(()=>null);if(r?.state==='done'){finished(r);return;}if(r){if(current)current=r;locked=r.state==='processing';}else locked=true;draw();throw e;}
  }
- return {open,cleanup,suspend,checkpoint,restore,pollMirror,hasDraft:()=>active&&(!!current||locked)||!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!locked&&!draft?.items.length&&!current?.checkout,canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
+ return {open,cleanup,suspend,checkpoint,restore,pollMirror,hasDraft:()=>active&&(!!current||locked)||!!draft?.items.length,active:()=>active,kind:()=>kind,canAutoOpen:()=>!active||!locked&&!draft?.items.length&&!current?.checkout,canPaymentScan:()=>!current&&(!locked||!!draft?.pickup),issueParts,acceptPaymentScan:async code=>{if(terminal||current||locked)throw Error('Завершите текущий документ. Скан отменён.');if(!active||kind!=='sale'){checkpoint();await open('sale');}return add(code);},canUSB:k=>!active||!current&&!locked&&kind===k,acceptUSB:async item=>{if(!active)await open(item.kind);if(kind!==item.kind)throw Error('Завершите текущий документ');return add(item.code,item.id);}};
 }

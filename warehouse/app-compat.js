@@ -590,6 +590,11 @@
     connect.textContent = "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C DETONGER P2";
     connect.hidden = true;
     refresh.after(connect);
+    const connectPC = document.createElement("button");
+    connectPC.type = "button";
+    connectPC.textContent = "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C POScenter PC-365";
+    connectPC.hidden = true;
+    connect.after(connectPC);
     let snapshot = { printers: [], profiles: {} }, loading = false, pollTimer;
     const option = (name, value) => {
       const o = document.createElement("option");
@@ -598,7 +603,7 @@
       return o;
     };
     function describe() {
-      var _a2, _b, _c, _d;
+      var _a2, _b, _c, _d, _e, _f, _g, _h;
       if (remember) remember.disabled = !select.value;
       const found = snapshot.printers.some((p) => p.name === select.value);
       note.textContent = select.value && !found ? "\u042D\u0442\u043E\u0442 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0435\u0433\u043E \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A." : select.value ? "\u0412\u044B\u0431\u043E\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u0434\u043B\u044F \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0445 \u043F\u0435\u0447\u0430\u0442\u0435\u0439." : allowDialog ? "\u0414\u043B\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0432\u044B\u0431\u043E\u0440\u0430 \u0443\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430." : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043A \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443, \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u0440\u0430\u0439\u0432\u0435\u0440 \u0435\u0433\u043E \u043C\u043E\u0434\u0435\u043B\u0438 \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A.";
@@ -607,6 +612,9 @@
       connect.hidden = format !== "label" || typeof ((_b = native()) == null ? void 0 : _b.setupPrinter) !== "function" || ((_c = snapshot.setup) == null ? void 0 : _c.status) === "ready";
       connect.disabled = ((_d = snapshot.setup) == null ? void 0 : _d.busy) === true;
       connect.textContent = connect.disabled ? "\u0423\u0441\u0442\u0430\u043D\u0430\u0432\u043B\u0438\u0432\u0430\u0435\u043C DETONGER P2\u2026" : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C DETONGER P2";
+      connectPC.hidden = format !== "label" || typeof ((_e = native()) == null ? void 0 : _e.setupPrinter) !== "function" || ((_f = snapshot.pc365) == null ? void 0 : _f.status) === "ready";
+      connectPC.disabled = ((_g = snapshot.pc365) == null ? void 0 : _g.busy) === true;
+      if (format === "label" && ((_h = snapshot.pc365) == null ? void 0 : _h.message) && snapshot.pc365.status !== "not_connected") note.textContent += (note.textContent ? " \xB7 " : "") + snapshot.pc365.message;
       changed({ loading });
     }
     function populate(preserve = false) {
@@ -624,7 +632,7 @@
       describe();
     }
     async function load2(preserve = false) {
-      var _a2, _b, _c, _d;
+      var _a2, _b, _c, _d, _e, _f;
       if (loading) return;
       loading = true;
       refresh.disabled = select.disabled = true;
@@ -641,7 +649,7 @@
         refresh.disabled = select.disabled = false;
         changed({ loading });
         clearTimeout(pollTimer);
-        if (((_c = snapshot.setup) == null ? void 0 : _c.busy) || ((_d = snapshot.setup) == null ? void 0 : _d.status) === "installing") pollTimer = setTimeout(() => {
+        if (((_c = snapshot.setup) == null ? void 0 : _c.busy) || ((_d = snapshot.setup) == null ? void 0 : _d.status) === "installing" || ((_e = snapshot.pc365) == null ? void 0 : _e.busy) || ((_f = snapshot.pc365) == null ? void 0 : _f.status) === "installing") pollTimer = setTimeout(() => {
           if (root.isConnected) void load2(true);
         }, 3e3);
       }
@@ -656,6 +664,16 @@
       } catch (e) {
         note.textContent = e.message;
         connect.disabled = false;
+      }
+    };
+    connectPC.onclick = async () => {
+      connectPC.disabled = true;
+      try {
+        await native().setupPrinter({ model: "pc365" });
+        await load2(true);
+      } catch (e) {
+        note.textContent = e.message;
+        connectPC.disabled = false;
       }
     };
     const ready = load2();
@@ -825,11 +843,11 @@
       };
     }
     function metric(field, label, value) {
-      return '<section class="product-metric" data-metric="' + field + '"><div class="metric-label">' + label + (editable() ? '<button type="button" class="pencil" data-edit="' + field + '" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C ' + (field === "quantity" ? "\u043E\u0441\u0442\u0430\u0442\u043E\u043A" : "\u0446\u0435\u043D\u0443") + '">' + pencil + "</button>" : "") + "</div><strong>" + value + "</strong><div data-editor></div></section>";
+      return '<section class="product-metric" data-metric="' + field + '"><div class="metric-label">' + label + (editable() ? '<button type="button" class="pencil" data-edit="' + field + '" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C ' + (field === "quantity" ? "\u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0443\u044E \u0446\u0435\u043D\u0443" : "\u0446\u0435\u043D\u0443") + '">' + pencil + "</button>" : "") + "</div><strong>" + value + "</strong><div data-editor></div></section>";
     }
     function draw() {
       if (!dialog || !selected) return;
-      dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><h2>' + esc(selected.name) + '</h2><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430", money(selected.retail_price)) + '</div><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc(selected.barcode || "") + "</b>" + (selected.barcode ? '<button type="button" class="primary" data-print-barcode>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</button>' : "") + '</div><p class="product-error" role="alert"></p>';
+      dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><h2>' + esc(selected.name) + '</h2><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438", money(selected.retail_price)) + metric("unit_cost", "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430", money(selected.unit_cost)) + '</div><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc(selected.barcode || "") + "</b>" + (selected.barcode ? '<button type="button" class="primary" data-print-barcode>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</button>' : "") + '</div><p class="product-error" role="alert"></p>';
       dialog.querySelector(".product-main").append(dialog.querySelector(".product-barcode"));
       stopPhotos == null ? void 0 : stopPhotos();
       const gallery = document.createElement("section");
@@ -848,11 +866,12 @@
       }
     }
     function edit(field) {
+      var _a2;
       editing = field;
       pending2 = null;
       draw();
       const host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
-      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : "\u0426\u0435\u043D\u0430, \u20BD") + '<input type="number" min="0" max="' + (field === "quantity" ? "1000000" : "100000000") + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + selected[field] + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
+      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : field === "unit_cost" ? "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD" : "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD") + '<input type="number" min="0" max="' + (field === "quantity" ? "1000000" : "100000000") + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + ((_a2 = selected[field]) != null ? _a2 : 0) + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
       const input = host.querySelector("input");
       input.focus();
       input.select();
@@ -862,13 +881,14 @@
         draw();
       };
       host.querySelector("form").onsubmit = (e) => {
+        var _a3;
         e.preventDefault();
         const part = selected, value = Number(input.value), field2 = editing;
-        if (input.value.trim() === "" || !Number.isFinite(value) || value < 0 || field2 === "quantity" && !Number.isInteger(value) || field2 === "retail_price" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
+        if (input.value.trim() === "" || !Number.isFinite(value) || value < 0 || field2 === "quantity" && !Number.isInteger(value) || field2 !== "quantity" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
           dialog.querySelector(".product-error").textContent = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435";
           return;
         }
-        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid(), part_id: part.id, field: field2, value, expected: part[field2] };
+        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid(), part_id: part.id, field: field2, value, expected: (_a3 = part[field2]) != null ? _a3 : 0 };
         const payload = { ...pending2 };
         void run2(async () => {
           input.disabled = true;
@@ -1331,7 +1351,7 @@
       dialog.className = "new-part-dialog";
       dialog.setAttribute("aria-label", "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C");
       const categories = [...new Set(parts2().map((p) => p.category).filter(Boolean))].sort();
-      dialog.innerHTML = '<form><h2>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</h2><div class="new-part-fields"><label>\u041D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435<input name="name" required maxlength="200"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required maxlength="100" list="new-part-categories"><datalist id="new-part-categories">' + categories.map((c) => '<option value="' + esc(c) + '">').join("") + '</datalist></label><label>\u041C\u043E\u0434\u0435\u043B\u044C / \u0440\u0430\u0437\u043C\u0435\u0440<input name="model" maxlength="120"></label><label>\u0410\u0440\u0442\u0438\u043A\u0443\u043B / SKU<input name="sku" maxlength="100"></label><label>\u0417\u0430\u043A\u0443\u043F\u043A\u0430, \u20BD<input name="unit_cost" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041F\u0440\u043E\u0434\u0430\u0436\u0430, \u20BD<input name="retail_price" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u0440\u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438<input name="initial_quantity" type="number" min="0" max="100000" step="1" value="0" ' + (canReceive() ? "" : "disabled") + '></label><label>\u0415\u0434\u0438\u043D\u0438\u0446\u0430 \u0438\u0437\u043C\u0435\u0440\u0435\u043D\u0438\u044F<input name="unit" value="\u0448\u0442" maxlength="20" required></label></div><p class="muted">\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 FastGo \u043F\u0440\u0438\u0441\u0432\u043E\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.' + (canReceive() ? " \u041D\u0430\u0447\u0430\u043B\u044C\u043D\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u043E\u043C." : " \u041F\u0440\u0438\u0445\u043E\u0434 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.") + '</p><label>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><img class="new-part-preview" alt="\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" hidden><label class="new-part-category-photo"><input name="category_primary" type="checkbox"> \u0421\u0434\u0435\u043B\u0430\u0442\u044C \u0444\u043E\u0442\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C \u0434\u043B\u044F \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0438</label><p class="new-part-status" role="status" aria-live="polite"></p><div class="actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button class="primary" type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button></div></form>';
+      dialog.innerHTML = '<form><h2>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</h2><div class="new-part-fields"><label>\u041D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435<input name="name" required maxlength="200"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required maxlength="100" list="new-part-categories"><datalist id="new-part-categories">' + categories.map((c) => '<option value="' + esc(c) + '">').join("") + '</datalist></label><label>\u041C\u043E\u0434\u0435\u043B\u044C / \u0440\u0430\u0437\u043C\u0435\u0440<input name="model" maxlength="120"></label><label>\u0410\u0440\u0442\u0438\u043A\u0443\u043B / SKU<input name="sku" maxlength="100"></label><label>\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD<input name="unit_cost" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041F\u0440\u043E\u0434\u0430\u0436\u0430, \u20BD<input name="retail_price" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u0440\u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438<input name="initial_quantity" type="number" min="0" max="100000" step="1" value="0" ' + (canReceive() ? "" : "disabled") + '></label><label>\u0415\u0434\u0438\u043D\u0438\u0446\u0430 \u0438\u0437\u043C\u0435\u0440\u0435\u043D\u0438\u044F<input name="unit" value="\u0448\u0442" maxlength="20" required></label></div><p class="muted">\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 FastGo \u043F\u0440\u0438\u0441\u0432\u043E\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.' + (canReceive() ? " \u041D\u0430\u0447\u0430\u043B\u044C\u043D\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u043E\u043C." : " \u041F\u0440\u0438\u0445\u043E\u0434 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.") + '</p><label>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><img class="new-part-preview" alt="\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" hidden><label class="new-part-category-photo"><input name="category_primary" type="checkbox"> \u0421\u0434\u0435\u043B\u0430\u0442\u044C \u0444\u043E\u0442\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C \u0434\u043B\u044F \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0438</label><p class="new-part-status" role="status" aria-live="polite"></p><div class="actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button class="primary" type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button></div></form>';
       document.body.append(dialog);
       dialog.showModal();
       const form = dialog.querySelector("form"), submit = dialog.querySelector("[type=submit]"), status = dialog.querySelector("[role=status]"), close = dialog.querySelector("[data-close]"), fileInput = form.elements.photo;
@@ -2126,7 +2146,7 @@
         $2("live-code").value = "";
         void add(code).catch((e2) => feedback(e2.message, true));
       };
-      stop = bindScanner($2("live-code"), $2("live-scan"), () => active && !locked, { silent: true });
+      if (terminal2) stop = bindScanner($2("live-code"), $2("live-scan"), () => active && !locked, { silent: true });
       function compatible(enabled, focus = false) {
         stop == null ? void 0 : stop();
         const form = $2("live-scan"), input = $2("live-code");
@@ -2199,7 +2219,8 @@
       }
       active = true;
       mount();
-      if (draft2) void sync().catch((e) => feedback(e.message, true));
+      if (draft2 == null ? void 0 : draft2.pickup) void run2(issuePending);
+      else if (draft2) void sync().catch((e) => feedback(e.message, true));
     }
     async function openMirror(value) {
       var _a2;
@@ -2257,6 +2278,38 @@
       scanChain = next.catch(() => {
       });
       return next;
+    }
+    async function issuePending() {
+      if (!(draft2 == null ? void 0 : draft2.pickup)) throw Error("\u041D\u0435\u0442 \u0432\u044B\u0434\u0430\u0447\u0438 \u0434\u043B\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F");
+      const local = draft2;
+      locked = true;
+      draw();
+      try {
+        const result = await call2("parts_issue", { request_id: local.pickup.request_id, code: local.pickup.code, items: local.items });
+        await call2("cancel_document", { id: local.id, kind: "sale", revision: local.revision });
+        finished({ id: local.id, payload: local, result: {} });
+        message2("\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u0432\u044B\u0434\u0430\u043D\u044B \u0432 \u0440\u0435\u043C\u043E\u043D\u0442 \u2116 " + result.number + " \xB7 " + result.master_name);
+      } catch (e) {
+        locked = true;
+        draw();
+        feedback("\u0412\u044B\u0434\u0430\u0447\u0430 \u043D\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430: " + e.message + ". \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u0438\u043B\u0438 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u044D\u0442\u043E\u0442 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A \u0434\u043B\u044F \u043F\u043E\u0432\u0442\u043E\u0440\u0430.", true);
+        throw e;
+      }
+    }
+    async function issueParts(code) {
+      if (terminal2 || current || !(draft2 == null ? void 0 : draft2.items.length) || kind !== "sale") throw Error("\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u0434\u043B\u044F \u043C\u0430\u0441\u0442\u0435\u0440\u0430. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
+      if (draft2.pickup) {
+        if (draft2.pickup.code !== code) throw Error("\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0443\u044E \u0432\u044B\u0434\u0430\u0447\u0443");
+        return issuePending();
+      }
+      if (locked) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438");
+      await scanChain;
+      await sync();
+      await call2("parts_pickup_quote", { code });
+      draft2.pickup = { code, request_id: uuid() };
+      cache();
+      checkpoint();
+      return issuePending();
     }
     async function poll2() {
       if (polling2 || !active) return;
@@ -2356,6 +2409,7 @@
     async function finish() {
       var _a2, _b, _c;
       if (terminal2) return;
+      if (draft2 == null ? void 0 : draft2.pickup) throw Error("\u042D\u0442\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u0432\u044B\u0434\u0430\u044E\u0442\u0441\u044F \u043C\u0430\u0441\u0442\u0435\u0440\u0443. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A \u0434\u043B\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0432\u044B\u0434\u0430\u0447\u0438.");
       await scanChain;
       if (draft2) await sync();
       const value = source(), id = documentId();
@@ -2394,7 +2448,14 @@
         throw e;
       }
     }
-    return { open, cleanup, suspend, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(draft2 == null ? void 0 : draft2.items.length) && !(current == null ? void 0 : current.checkout), canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    return { open, cleanup, suspend, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(draft2 == null ? void 0 : draft2.items.length) && !(current == null ? void 0 : current.checkout), canPaymentScan: () => !current && (!locked || !!(draft2 == null ? void 0 : draft2.pickup)), issueParts, acceptPaymentScan: async (code) => {
+      if (terminal2 || current || locked) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
+      if (!active || kind !== "sale") {
+        checkpoint();
+        await open("sale");
+      }
+      return add(code);
+    }, canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
@@ -2468,6 +2529,38 @@
       void bridge.usbTarget(null).catch(() => {
       });
     };
+  }
+
+  // warehouse/payment-scanner.js
+  function paymentScan(code, parts2) {
+    const value = String(code || "").trim();
+    if (value.startsWith("FGPARTS1.")) return { kind: "parts", code: value };
+    if (!scanError("repair", value)) return { kind: "repair", code: value };
+    const problem = scanError("sale", value);
+    if (problem) throw Error(problem);
+    const found = matchBarcode(parts2, value);
+    if (found.length !== 1) throw Error(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
+    return { kind: "sale", code: value, part: found[0] };
+  }
+  function installPaymentScanner({ enabled, parts: parts2, accept, error }) {
+    const form = document.createElement("form");
+    form.className = "scanner-sink";
+    form.setAttribute("aria-hidden", "true");
+    form.innerHTML = '<input data-payment-scan autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="none" tabindex="-1">';
+    document.body.append(form);
+    const input = form.firstElementChild;
+    let chain = Promise.resolve();
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const code = input.value.trim();
+      input.value = "";
+      if (!code) return;
+      chain = chain.then(() => {
+        if (!enabled()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E \u043F\u0435\u0440\u0435\u0434 \u043E\u043F\u043B\u0430\u0442\u043E\u0439. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
+        return accept(paymentScan(code, parts2()));
+      }).catch((e2) => error(e2.message));
+    };
+    return bindScanner(input, form, enabled, { silent: true });
   }
 
   // workshop/pending.js
@@ -2903,6 +2996,20 @@
     lastDeviceStatus = 0;
     await desktopStatus();
   } });
+  if (!terminal) installPaymentScanner({ enabled: () => !!device && !busy && !nativeUpdatePending && document.body.dataset.readonly !== "true" && !["login", "connection", "connect", "setup", "basket"].includes(screen) && !document.querySelector("dialog[open]"), parts: () => parts, error: (text) => message(text, true), accept: (scan) => run(async () => {
+    if (job || screen === "repair" || !live.canPaymentScan()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u043E\u043F\u043B\u0430\u0442\u0443. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
+    if (scan.kind === "parts") {
+      await live.issueParts(scan.code);
+      return;
+    }
+    if (scan.kind === "repair") {
+      if (live.hasDraft()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u0435\u0440\u0435\u0434 \u043E\u043F\u043B\u0430\u0442\u043E\u0439 \u0440\u0435\u043C\u043E\u043D\u0442\u0430. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
+      const quote = await call("repair_quote", { code: scan.code });
+      await repair.station(quote);
+      return;
+    }
+    await live.acceptPaymentScan(scan.code);
+  }) });
   async function run(fn) {
     if (busy) return;
     busy = true;
@@ -2920,7 +3027,7 @@
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
     var _a2;
-    return !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    return !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
     try {
@@ -3173,7 +3280,12 @@
     drawBasket();
     $("scan").onsubmit = (e) => {
       e.preventDefault();
-      if (!busy) addCode($("barcode").value.trim());
+      if (!busy) {
+        if (!terminal && draft.kind === "receipt") {
+          message("\u0410\u0422\u041E\u041B \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u0434\u043B\u044F \u043E\u043F\u043B\u0430\u0442\u044B \u0438 \u0432\u044B\u0434\u0430\u0447\u0438 \u043C\u0430\u0441\u0442\u0435\u0440\u0443. \u0414\u043B\u044F \u043F\u0440\u0438\u0445\u043E\u0434\u0430 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u0422\u0421\u0414.", true);
+          $("barcode").value = "";
+        } else addCode($("barcode").value.trim());
+      }
     };
     if ($("note")) $("note").oninput = (e) => {
       draft.note = e.target.value;
@@ -3289,7 +3401,7 @@
   }
   function canReceiveIncoming() {
     var _a2;
-    return !busy && !job && !draft && ["home", "live", "inventory", "holdings", "preorders"].includes(screen) && !document.querySelector("dialog[open]") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not(#live-code):not(#filter),textarea,select"));
+    return !busy && !job && !draft && ["home", "live", "inventory", "holdings", "preorders"].includes(screen) && !document.querySelector("dialog[open]") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not(#live-code):not(#filter):not([data-payment-scan]),textarea,select"));
   }
   var autoQueueSeen = /* @__PURE__ */ new Set();
   async function poll() {
@@ -3400,17 +3512,17 @@
     drawInventory();
   };
   var photos = partPhotos({ api: serviceApi, editable: canManageParts, run, changed: refreshParts, message });
-  var product = productPanel({ parts: () => parts, editable: () => !terminal && ["owner", "developer"].includes(memberRole), call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos });
+  var product = productPanel({ parts: () => parts, editable: canManageParts, call: (a, p) => call(a, p), run, changed: () => drawInventory(), message, photos });
   var createPart = newPartForm({ actor: userId, api: serviceApi, photos, parts: () => parts, canReceive: canReceiveParts, run, refresh: refreshParts, openProduct: (p) => product.open(p), message });
   async function inventory() {
     await catalog();
     screen = "inventory";
-    shell(nav() + '<div class="inventory-toolbar"><h1>\u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u044B</h1>' + (canManageParts() ? '<button id="new-part" class="primary">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button>' : "") + '</div><label class="inventory-search"><span class="sr-only">\u041F\u043E\u0438\u0441\u043A</span><input id="filter" type="search" placeholder="\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044E, \u0430\u0440\u0442\u0438\u043A\u0443\u043B\u0443 \u0438\u043B\u0438 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u0443\u2026"></label><div class="inventory-table"><div class="inventory-columns"><span>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435</span><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><span>\u041E\u0441\u0442\u0430\u0442\u043E\u043A</span><span>\u0426\u0435\u043D\u0430</span></div><div id="stock-list"></div></div>');
+    shell(nav() + '<div class="inventory-toolbar"><h1>\u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u044B</h1>' + (canManageParts() ? '<button id="new-part" class="primary">\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button>' : "") + '</div><label class="inventory-search"><span class="sr-only">\u041F\u043E\u0438\u0441\u043A</span><input id="filter" type="search" placeholder="\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044E, \u0430\u0440\u0442\u0438\u043A\u0443\u043B\u0443 \u0438\u043B\u0438 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u0443\u2026"></label><div class="inventory-table"><div class="inventory-columns"><span>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435</span><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><span>\u041E\u0441\u0442\u0430\u0442\u043E\u043A</span><span>\u041F\u0440\u043E\u0434\u0430\u0436\u0430 / \u0437\u0430\u043A\u0443\u043F\u043A\u0430</span></div><div id="stock-list"></div></div>');
     bindNav();
     drawInventory = () => {
       if (!$("stock-list")) return;
       const q = $("filter").value.toLowerCase(), matches = parts.filter((x) => [x.name, x.barcode, x.sku, x.model].join(" ").toLowerCase().includes(q));
-      $("stock-list").innerHTML = matches.slice(0, 100).map((x) => '<button type="button" class="inventory-item" data-part="' + esc(x.id) + '"><span class="inventory-name">' + photos.thumbnail(x) + "<strong>" + esc(x.name) + "</strong></span><span>" + esc(x.sku || "\u2014") + "</span><span>" + x.quantity + " \u0448\u0442.</span><span>" + money(x.retail_price) + "</span></button>").join("") + (matches.length ? "" : '<p class="muted inventory-empty">\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E</p>');
+      $("stock-list").innerHTML = matches.slice(0, 100).map((x) => '<button type="button" class="inventory-item" data-part="' + esc(x.id) + '"><span class="inventory-name">' + photos.thumbnail(x) + "<strong>" + esc(x.name) + "</strong></span><span>" + esc(x.sku || "\u2014") + "</span><span>" + x.quantity + " \u0448\u0442.</span><span>" + money(x.retail_price) + '<small class="purchase-price">\u0417\u0430\u043A\u0443\u043F\u043A\u0430: ' + money(x.unit_cost) + "</small></span></button>").join("") + (matches.length ? "" : '<p class="muted inventory-empty">\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E</p>');
       photos.bindThumbnails($("stock-list"), parts);
       $("stock-list").querySelectorAll("[data-part]").forEach((b) => b.onclick = () => {
         document.querySelectorAll(".inventory-item").forEach((x) => x.classList.toggle("selected", x === b));

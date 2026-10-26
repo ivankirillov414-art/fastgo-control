@@ -1,0 +1,157 @@
+﻿<driver version='6.6'>
+
+<stock>
+Name=2 x 4
+Data=WkxJQhwAAAAYAAAAeJwrOMbA8KCHkeEbCwMYwwCICQBmGASc
+</stock>
+
+<stock>
+Name=4 x 4
+Data=WkxJQhwAAAAWAAAAeJx70MPI8ACIv7EwgDEMgJgAbFQE0w==
+</stock>
+
+<stock>
+Name=4 x 6
+Data=WkxJQhwAAAAYAAAAeJx70MPIEBDMxPCNhQGMYQDEBABZywQL
+</stock>
+
+
+<stock>
+Name=京东面单
+Data=WkxJQhwAAAAaAAAAeJxb0MbIkLGTkeEFMwMYwwALA1stAFvsBKc=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=韵达标准
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8EOCmeECOwMYwwALg0AtAFhdBHo=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=申通标准大
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoCHIzHCBnQGMYYCFgbMWAEQuA5w=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=优速标准
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALA28tAFMCBEU=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=百世汇通
+Data=WkxJQhwAAAAaAAAAeJxb0MbIIDCDieECOwMYwwALA3MtAE3tBAQ=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=E邮宝长
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8MGTieEFMwMYwwALA1MtAF6qBLw=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=优速/宅急送
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8MGTieEFMwMYwwALA08tAF6+BMY=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=申通扩展
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoCHIzHCBnQGMYYCFgb0WAEQqA5o=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=韵达小包
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALg2AtAFMKBEk=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=菜鸟中通
+Data=WkxJQhwAAAAaAAAAeJxb0MbIYPCMieECOwMYwwALA2stAFfzBHQ=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=圆通标准
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALA38tAFMGBEc=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=百世扩展
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALA0stAFLwBDw=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=邮政小包
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8MGTieEFMwMYwwALA18tAF7CBMg=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=申通标准小
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8MGTieEFMwMYwwALA0ctAF62BMI=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=天天/全峰/快捷
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALA3ctAFL+BEM=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=E邮宝短
+Data=WkxJQhwAAAAZAAAAeJxb0MbIsACIL7AzgDEMsDAw1gIAWbUEfw==
+Type=Die Cut
+</stock>
+
+<stock>
+Name=顺丰
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8MGTieEFMwMYwwALA1ctAF66BMQ=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=中通标准
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALg1AtAFMMBEo=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=邮政物流
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALg3AtAFMOBEs=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=国通快递
+Data=WkxJQhwAAAAaAAAAeJxb0MbIoLCfieECOwMYwwALg2gtAFMSBE0=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=宅急送
+Data=WkxJQhwAAAAaAAAAeJxb0MbI8MGTieEFMwMYwwALg0gtAF7OBM4=
+Type=Die Cut
+</stock>
+
+<stock>
+Name=圆通扩展
+Data=WkxJQhwAAAAaAAAAeJxb0MbIUBHOzHCBnQGMYYCFgaEWAFHmBCk=
+Type=Die Cut
+</stock>
+
+<font type='Bar Code'>
+Name=Sample Bar Code Font
+Data=WkxJQqgAAABAAAAAeJybwMgABgoaZgbBibkFOakKTolFCs75KakKbvl5JQxIAKTUEEQoMKQwoIEYdAEkwA4m2TDEGfHoQQcAOGsJSg==
+</font>
+
+</driver>
+

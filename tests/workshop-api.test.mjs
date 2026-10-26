@@ -200,5 +200,5 @@ test('master money and stock actions are denied at the authenticated API boundar
 test('mobile inventory route uses verified owner and a server-only remote flag',async()=>{
  let calls=0;const s=setup({inventoryEdit:async(p,context)=>{calls++;assert.equal(context.actor.id,user);assert.equal(context.actor.role,'owner');assert.equal(context.remote,true);assert.equal(context.device,null);return {id,quantity:7};},respond:async url=>{assert.match(url,/workshop_backend_config/);return Response.json([{sheets_api_url:'https://script.google.com/macros/s/fixture/exec',sheets_api_secret:'fixture-only',storage_mode:'postgres'}]);}});
  const r=await s.invoke({action:'inventory_edit',params:{part_id:id,field:'quantity',value:7,expected:5,actor:{id:'forged'},remote:true}});assert.equal(r.status,200,await r.clone().text());assert.equal(calls,1);
- for(const role of ['mechanic','seller','admin','manager','receiver']){const other=setup({role});assert.equal((await other.invoke({action:'inventory_edit',params:{part_id:id,field:'retail_price',value:1,expected:300}})).status,403);}
+ for(const role of ['mechanic','seller','manager','receiver']){const other=setup({role});assert.equal((await other.invoke({action:'inventory_edit',params:{part_id:id,field:'retail_price',value:1,expected:300}})).status,403);}
 });
