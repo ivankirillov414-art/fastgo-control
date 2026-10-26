@@ -160,8 +160,10 @@ async function main(req){
     if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!canSell(me))fail('Касса доступна продажнику, владельцу и разработчику',403);
     if(me.role==='seller'&&!['me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
-    if(action==='label_enqueue'&&(await config()).storage_mode!=='postgres')fail('Переносим рабочую базу. Повторите печать после завершения переноса.',503);
-    const labels=await manualLabels(action,p,{db,actor:{id:user.id,role:me.role,can_edit_catalog:me.can_edit_catalog===true}});if(labels!==undefined)return out({data:labels});
+    if(['label_targets','label_enqueue'].includes(action)){
+      if(action==='label_enqueue'&&(await config()).storage_mode!=='postgres')fail('Переносим рабочую базу. Повторите печать после завершения переноса.',503);
+      return out({data:await manualLabels(action,p,{db,actor:{id:user.id,role:me.role,can_edit_catalog:me.can_edit_catalog===true}})});
+    }
     if(action==='inventory_edit'){
       if(!admin(me))fail('Нет права изменять цену и остаток',403);
       if((await config()).storage_mode!=='postgres')fail('Для корректировки нужна рабочая база FastGo',503);
