@@ -5,6 +5,7 @@ import {deviceStatus} from './device-status.js';
 import {partsIssue} from './parts-issue.js';
 import {editInventory} from './inventory.js';
 import {liveWarehouse} from './live.js';
+import {receiptLabels} from './receipt-labels.js';
 import {repairIdFromCode,repairQuote,prepareRepairPayment} from './repair.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {createNativeEngine} from '../_shared/native-engine.js';
@@ -56,6 +57,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  const cancelled=await cancelDocument(action,p,{db,actor,device,stationId});if(cancelled!==undefined)return out({data:cancelled});
  const repairScanResult=await repairScan(action,p,{db,actor,device,stationId,key});if(repairScanResult!==undefined)return out({data:repairScanResult});
  const unknown=await unknownScan(action,p,{db,actor,device,stationId,g,mutate});if(unknown!==undefined)return out({data:unknown});
+ const labels=await receiptLabels(action,p,{db,device,stationId});if(labels!==undefined)return out({data:labels});
  const live=await liveWarehouse(action,p,{db,actor,device,stationId,digest});if(live!==undefined)return out({data:live});
  if(action==='inventory_edit')return out({data:await editInventory(p,{db,actor,device,digest})});
  if(action==='info')return out({data:{device:{id:device.id,name:device.name,kind:device.kind,station_id:stationId},terminal_allowed:true,member:{name:member.name,role:member.role}}});

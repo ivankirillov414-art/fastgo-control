@@ -23,6 +23,7 @@ public final class ScanDocument {
  public static boolean samePickup(JSONObject current,JSONObject selected){return current!=null&&current.optString("state").equals("open")&&!current.optBoolean("cancel_requested")&&!current.optBoolean("issue_requested")&&current.optInt("revision")==selected.optInt("revision")&&!selected.optString("pickup_scan").isEmpty()&&current.optString("pickup_scan").equals(selected.optString("pickup_scan"));}
  public static void append(JSONObject doc,String code,JSONObject part) throws JSONException {
   if(!doc.optString("state").equals("open"))throw new IllegalStateException("Документ уже завершён");
+  if(doc.optBoolean("receipt_requested"))throw new IllegalStateException("Приход уже отправлен");
   if(code==null||code.trim().isEmpty()||code.length()>2048)throw new IllegalArgumentException("Проверьте код");
   String error=scanError(doc.optString("kind"),code);if(!error.isEmpty())throw new IllegalArgumentException(error);
   if(doc.optString("kind").equals("parts")&&part==null)throw new IllegalArgumentException("Сканируйте штрихкод известной запчасти");
@@ -33,14 +34,25 @@ public final class ScanDocument {
   doc.getJSONArray("events").put(e);
  }
  public static boolean undo(JSONObject doc) throws JSONException {
-  if(!doc.optString("state").equals("open"))return false;
+  if(!doc.optString("state").equals("open")||doc.optBoolean("receipt_requested"))return false;
   JSONArray events=doc.getJSONArray("events");for(int i=events.length()-1;i>=0;i--){JSONObject e=events.getJSONObject(i);if(!e.optBoolean("undone")){e.put("undone",true);doc.put("revision",doc.getInt("revision")+1);return true;}}return false;
+ }
+ public static void acceptReceipt(JSONObject doc,JSONArray quantities)throws JSONException{
+  if(!doc.optString("kind").equals("receipt")||!doc.optString("state").equals("open")||doc.optBoolean("cancel_requested")||doc.optBoolean("receipt_requested"))throw new IllegalStateException("Приход уже завершается");
+  JSONArray scanned=items(doc),events=doc.getJSONArray("events");
+  if(scanned.length()==0||quantities==null||scanned.length()!=quantities.length())throw new IllegalArgumentException("Сначала отсканируйте товары");
+  for(int i=0;i<events.length();i++)if(!events.getJSONObject(i).optBoolean("undone")&&!events.getJSONObject(i).has("part_id"))throw new IllegalStateException("Сначала разберите неизвестный код на ноутбуке или отмените его скан");
+  JSONObject selected=new JSONObject();
+  for(int i=0;i<quantities.length();i++){JSONObject row=quantities.getJSONObject(i);String id=row.getString("part_id");double n=row.getDouble("quantity");boolean known=false;for(int j=0;j<scanned.length();j++)if(scanned.getJSONObject(j).getString("part_id").equals(id))known=true;
+   if(!known||selected.has(id)||n<1||n>1000||n!=Math.floor(n))throw new IllegalArgumentException("Количество каждого товара — от 1 до 1000");selected.put(id,(int)n);
+  }
+  doc.put("receipt_quantities",selected).put("receipt_requested",true).put("revision",doc.getInt("revision")+1);doc.remove("scan_error");
  }
  public static JSONArray items(JSONObject doc) throws JSONException {
   Map<String,Integer> counts=new LinkedHashMap<>();JSONArray events=doc.getJSONArray("events");
   for(int i=0;i<events.length();i++){JSONObject e=events.getJSONObject(i);if(!e.optBoolean("undone")&&e.has("part_id")){String id=e.getString("part_id");counts.put(id,(counts.containsKey(id)?counts.get(id):0)+1);}}
   if(counts.size()>40)throw new IllegalStateException("В документе больше 40 разных товаров");
-  JSONArray result=new JSONArray();for(Map.Entry<String,Integer> e:counts.entrySet()){if(e.getValue()>1000)throw new IllegalStateException("Не больше 1000 штук одного товара");result.put(new JSONObject().put("part_id",e.getKey()).put("quantity",e.getValue()));}return result;
+  JSONArray result=new JSONArray();for(Map.Entry<String,Integer> e:counts.entrySet()){int quantity=doc.optBoolean("receipt_requested")?doc.getJSONObject("receipt_quantities").getInt(e.getKey()):e.getValue();if(quantity<1||quantity>1000)throw new IllegalStateException("Не больше 1000 штук одного товара");result.put(new JSONObject().put("part_id",e.getKey()).put("quantity",quantity));}return result;
  }
  public static JSONObject last(JSONObject doc) throws JSONException {JSONArray a=doc.getJSONArray("events");for(int i=a.length()-1;i>=0;i--)if(!a.getJSONObject(i).optBoolean("undone"))return a.getJSONObject(i);return null;}
  public static int count(JSONObject doc) throws JSONException {int n=0;JSONArray a=doc.getJSONArray("events");for(int i=0;i<a.length();i++)if(!a.getJSONObject(i).optBoolean("undone"))n++;return n;}

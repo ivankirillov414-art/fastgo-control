@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -56,6 +56,8 @@
       "network.css",
       "network-ui.js",
       "printer-profiles.cjs",
+      "receipt-label-journal.cjs",
+      "scanner-diagnostics.cjs",
       "label-printer-setup.cjs",
       "label-printer-setup.ps1"
     ],

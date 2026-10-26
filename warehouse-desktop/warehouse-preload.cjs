@@ -3,6 +3,8 @@ contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
  openNetworkDiagnostics:()=>ipcRenderer.invoke('warehouse-network:open'),
  notifyAvito:p=>ipcRenderer.invoke('warehouse:notifyAvito',p),
  printBarcode:p=>ipcRenderer.invoke('warehouse:printBarcode',p),
+ printReceiptLabels:p=>ipcRenderer.invoke('warehouse:printReceiptLabels',p),
+ scannerStatus:()=>ipcRenderer.invoke('warehouse:scannerStatus'),
  printers:()=>ipcRenderer.invoke('warehouse:printers'),
  setupPrinter:()=>ipcRenderer.invoke('warehouse:printerSetup'),
  savePrinter:p=>ipcRenderer.invoke('warehouse:printerSave',p),

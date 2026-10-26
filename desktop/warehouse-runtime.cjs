@@ -5,6 +5,7 @@ const {USBScanner}=require('./warehouse-native/usb-scanner.cjs');
 const {registerUSBBridge}=require('./warehouse-native/usb-bridge.cjs');
 const {registerTerminalLauncher,registerWarehouseAttention}=require('./warehouse-native/warehouse-bridge.cjs');
 function createWarehouseRuntime({app,BrowserWindow,ipcMain,getWindow,updates,warehouseCall=async()=>[],setupTerminal=async()=>''}){
+ require('./warehouse-native/scanner-diagnostics.cjs').registerScannerDiagnostics({ipcMain,getWindow});
  let usb=null,authorized=false,control,updaterWindow,opening=false,lastMode='',usbError='',authChain=Promise.resolve();
  const openedCloud=new Set();
  const terminal=new TerminalUpdate({adb:path.join(process.resourcesPath,'platform-tools','adb.exe'),dir:path.join(app.getPath('userData'),'terminal-update')});

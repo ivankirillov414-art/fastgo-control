@@ -14,7 +14,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  adb(['shell','am','start','-n',pkg+'/ru.fastgo.tsd.InstallUpdateActivity']);
  fs.mkdirSync('warehouse-android/native/build/upgrade-test',{recursive:true});let installed=false;
  for(let i=0;i<30;i++){
-  if(/versionCode=11\b/.test(adb(['shell','dumpsys','package',pkg]))){installed=true;break;}
+  if(/versionCode=12\b/.test(adb(['shell','dumpsys','package',pkg]))){installed=true;break;}
   // Android 10 briefly has no accessibility root while Package Installer takes focus.
   // Retry the observation; installation remains verified by PackageManager below.
   let xml;try{adb(['shell','uiautomator','dump','/sdcard/fastgo-install.xml']);xml=adb(['shell','cat','/sdcard/fastgo-install.xml']);}catch{await pause(1000);continue;}
