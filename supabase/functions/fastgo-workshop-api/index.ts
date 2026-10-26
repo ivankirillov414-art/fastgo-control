@@ -1,3 +1,4 @@
+import {editInventory} from '../fastgo-warehouse/inventory.js';
 import {pickupCode} from '../_shared/parts-pickup-code.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
@@ -158,6 +159,12 @@ async function main(req){
     if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!canSell(me))fail('Касса доступна продажнику, владельцу и разработчику',403);
     if(me.role==='seller'&&!['me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
+    if(action==='inventory_edit'){
+      if(!['owner','developer'].includes(me.role))fail('Нет права изменять цену и остаток',403);
+      if((await config()).storage_mode!=='postgres')fail('Для корректировки нужна рабочая база FastGo',503);
+      const digest=async value=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(n=>n.toString(16).padStart(2,'0')).join('');
+      return out({data:await editInventory(p,{db,actor:{id:user.id,role:me.role,email:user.email||''},device:null,remote:true,digest})});
+    }
     // Reuse the same verified user and active workshop membership as card reads.
     if(action==='sync_status')return out({data:await nativeSyncStatus(db,me,await rolePermission(me.role),RELEASE)});
     if(action==='sync_changes')return out({data:await nativeSyncChanges(db,p)});

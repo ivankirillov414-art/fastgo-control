@@ -193,7 +193,7 @@ const server=createServer((req,res)=>{
 
  // Recovery fixture: no real mail, accounts, codes or password changes.
  {
- const context=await browser.newContext({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'}),page=await context.newPage(),errors=[];
+ const context=await browser.newContext({viewport:{width:390,height:844},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'}),page=await context.newPage(),errors=[];
  let verified=0,updated=0,logout=0,loggedIn=0,trust=false;
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
