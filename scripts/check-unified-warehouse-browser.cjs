@@ -27,6 +27,7 @@ const {serve,launchOptions,actor,catalog}=require('./warehouse-browser-fixture.c
    assert.equal(await dialog.locator('[data-edit]').count(),role==='seller'?0:3);
    if(role!=='seller'){
     await dialog.getByRole('button',{name:'Изменить остаток',exact:true}).click();await dialog.getByRole('spinbutton',{name:'Новый остаток'}).fill('7');await dialog.getByRole('button',{name:'Сохранить',exact:true}).click();await dialog.locator('[data-metric=quantity]>strong').filter({hasText:'7 шт.'}).waitFor();
+    const labels=page.getByRole('dialog',{name:'Напечатать этикетки?',exact:true});await labels.waitFor();assert.equal(await labels.locator('[name=quantity]').inputValue(),'7');await labels.getByRole('button',{name:'Не печатать',exact:true}).click();assert(!calls.some(p=>p.action==='label_enqueue'),'dismissing the offer does not print');
     await dialog.getByRole('button',{name:'Изменить цену',exact:true}).click();await dialog.getByRole('spinbutton',{name:'Новая цена'}).fill('1500.50');await dialog.getByRole('button',{name:'Сохранить',exact:true}).click();await dialog.locator('.product-error').filter({hasText:'Ответ потерян'}).waitFor();
     await dialog.getByRole('button',{name:'Сохранить',exact:true}).click();await dialog.locator('[data-metric=retail_price]>strong').filter({hasText:/1.?500,50/}).waitFor();
     const retries=calls.filter(p=>p.action==='inventory_edit'&&p.params.field==='retail_price');assert.equal(retries[0].params.request_id,retries[1].params.request_id);assert.equal(edits.size,2);
