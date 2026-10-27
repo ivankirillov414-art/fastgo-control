@@ -14,7 +14,9 @@ class PC365Setup{
  snapshot(){return {...this.state,busy:this.busy};}
  async ensure({printers=[],manual=false}={}){
   if(!this.enabled||this.platform!=='win32'||this.busy||await this.station()!==CASH_STATION)return this.snapshot();
-  this.read();if(!manual&&(['ready','driver_installed','permission_declined','error'].includes(this.state.status)||this.now()-this.at<60000))return this.snapshot();
+  this.read();const present=printers.find(isPC365);
+  if(present){if(this.state.status!=='ready'||this.state.queue_name!==present.name){this.state={...this.state,status:'ready',connected:true,queue_name:present.name,message:'POScenter PC-365 установлен в Windows и доступен для выбора.',updated_at:new Date(this.now()).toISOString()};fs.mkdirSync(this.dir,{recursive:true});atomicWrite(path.join(this.dir,'receipt.json'),Buffer.from(JSON.stringify(this.state)));}return this.snapshot();}
+  if(!manual&&(['ready','driver_installed','permission_declined','error'].includes(this.state.status)||this.now()-this.at<60000))return this.snapshot();
   this.at=this.now();fs.mkdirSync(this.dir,{recursive:true});let lock;const lockFile=path.join(this.dir,'install.lock');
   try{if(fs.statSync(lockFile).mtimeMs<this.now()-600000)fs.unlinkSync(lockFile);}catch{}
   try{lock=fs.openSync(lockFile,'wx');}catch(e){if(e.code==='EEXIST')return this.snapshot();throw e;}

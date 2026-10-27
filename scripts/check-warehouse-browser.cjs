@@ -5,15 +5,16 @@ const server=http.createServer((req,res)=>{const p=path.resolve(root,'.'+new URL
 await context.addInitScript(({actor})=>{localStorage.setItem('fastgo_warehouse_session_v1',JSON.stringify({user_id:actor,access_token:'test',expires_at:4102444800}));for(const kind of ['terminal','station'])localStorage.setItem('fgwarehouse:'+actor+':'+kind,JSON.stringify({id:'55555555-5555-4555-8555-555555555555',token:'test',name:'Склад'}));},{actor});
 const page=await context.newPage();await page.goto('http://127.0.0.1:'+server.address().port+'/warehouse-terminal.html');await page.getByRole('heading',{name:'Складской терминал'}).waitFor();assert.equal(await page.locator('#setup,#rebind,#pair-code,#login').count(),0);assert.equal(await page.locator('#back,#resume').count(),0);assert.equal(await page.locator('#logout').isVisible(),false);assert.equal(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),true);await page.locator('summary').filter({hasText:'Подключение по USB'}).waitFor();await page.goto('http://127.0.0.1:'+server.address().port+'/warehouse.html');await page.evaluate(({actor,jobid})=>localStorage.setItem('fgwarehouse:'+actor+':draft:station',JSON.stringify({id:jobid,kind:'sale',items:[],note:''})),{actor,jobid});await page.reload();await page.locator('#resume').click();
 assert.equal(await page.locator('#barcode').evaluate(el=>el===document.activeElement),true);
-// A scanner without an Enter suffix adds once after the complete fast burst.
-await page.keyboard.type('FGP-00000001',{delay:5});
+// Scanner IMEs deliver a decoded value in one input event. Do not make this
+// no-suffix check depend on CI scheduling gaps between individual key RPCs.
+await page.keyboard.insertText('FGP-00000001');
 try{await page.waitForFunction(()=>document.querySelector('[data-qty]')?.value==='1');}catch(e){console.error('SCAN STATE',await page.locator('body').innerText(),await page.locator('#barcode').inputValue());throw e;}
 await page.keyboard.type('FGP-00000001',{delay:5});await page.keyboard.press('Enter');
 await page.waitForTimeout(250);assert.equal(await page.locator('[data-qty]').inputValue(),'2');
 await page.keyboard.type('FGP-00000001',{delay:5});await page.keyboard.press('Tab');
 await page.waitForTimeout(250);assert.equal(await page.locator('[data-qty]').inputValue(),'3');
 // No field tap is required after focus moved to the page or a button.
-await page.locator('#back').focus();await page.keyboard.type('FGP-00000001',{delay:5});
+await page.locator('#back').focus();await page.keyboard.press('F');await page.keyboard.insertText('GP-00000001');
 await page.waitForFunction(()=>document.querySelector('[data-qty]')?.value==='4');
 // Slow manual entry still requires explicit Add / Enter.
 await page.keyboard.type('FGP-00000001',{delay:90});await page.waitForTimeout(250);

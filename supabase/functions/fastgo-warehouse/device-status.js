@@ -39,7 +39,7 @@ export async function deviceStatus(action,p,{db,device,stationId}){
  }
  const row={device_id:device.id,app,version:p.version,station_id:stationId,pending_documents:p.pending_documents??null,details,last_seen:new Date().toISOString()};
  if(app!=='tsd'&&p.scanner&&typeof p.scanner==='object')details.scanner={sampled_at:text(p.scanner.sampled_at,40),devices:(Array.isArray(p.scanner.devices)?p.scanner.devices:[]).slice(0,64).map(x=>({name:text(x.name,160),manufacturer:text(x.manufacturer,100),kind:text(x.kind,40),status:text(x.status,40),hardware:text(x.hardware,160),error:Number.isSafeInteger(x.error)?x.error:null}))};
- if(app!=='tsd'&&p.scan_test&&typeof p.scan_test==='object')details.scan_test={received:p.scan_test.received===true,matched:p.scan_test.matched===true,characters:Number.isSafeInteger(p.scan_test.characters)?Math.min(2048,Math.max(0,p.scan_test.characters)):0,sampled_at:new Date().toISOString()};
+ if(app!=='tsd'&&p.scan_test&&typeof p.scan_test==='object')details.scan_test={received:p.scan_test.received===true,matched:p.scan_test.matched===true,characters:Number.isSafeInteger(p.scan_test.characters)?Math.min(2048,Math.max(0,p.scan_test.characters)):0,...(p.scan_test.source==='atol'?{source:'atol',normalized:p.scan_test.normalized===true,...(/^(?:FGP-\d{1,20}|\d{8,18})$/.test(p.scan_test.code||'')?{code:p.scan_test.code}:{})}:{}),sampled_at:new Date().toISOString()};
  compactDiagnostics(details);
  await db('workshop_device_status','on_conflict=device_id,app','POST',row,'resolution=merge-duplicates,return=minimal');
  return {device_id:device.id,app,version:row.version,last_seen:row.last_seen};

@@ -1,3 +1,4 @@
+import {normalizeScan} from './scan-normalize.js';
 const BASE='https://oqgpjfikjpcplnxueoki.supabase.co',KEY='sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji',STORE='fastgo_warehouse_session_v1';
 const unified=new URLSearchParams(location.search).get('unified')==='1',SESSION_KEY=unified?'fastgo_workshop_session':STORE;
 let session;try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch{}
@@ -15,4 +16,4 @@ export async function api(action,params={}){if(!session)throw Object.assign(Erro
 export async function avitoApi(action,params={}){if(!session)throw Object.assign(Error('Войдите в FastGo'),{status:401});if(session.expires_at*1000<Date.now()+60000){if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(save).finally(()=>refreshing=null);await refreshing;}return (await request('/functions/v1/fastgo-avito',{action,...params},session.access_token)).data;}
 export async function backupApi(action,params={}){if(!session)throw Object.assign(Error('Войдите в FastGo'),{status:401});if(!window.fastgoDesktop&&session.expires_at*1000<Date.now()+60000){if(!refreshing)refreshing=request('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(save).finally(()=>refreshing=null);await refreshing;}return (await request('/functions/v1/fastgo-backups',{action,...params},session.access_token)).data;}
 export const uuid=()=>crypto.randomUUID?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(Number(c)^crypto.getRandomValues(new Uint8Array(1))[0]&15>>Number(c)/4).toString(16));
-export function matchBarcode(parts,value){const code=String(value).trim().toUpperCase();return parts.filter(x=>String(x.barcode||'').toUpperCase()===code||String(x.sku||'').toUpperCase()===code||x.id.toUpperCase()===code);}
+export function matchBarcode(parts,value){const find=code=>parts.filter(x=>String(x.barcode||'').toUpperCase()===code||String(x.sku||'').toUpperCase()===code||x.id.toUpperCase()===code),raw=String(value).trim().toUpperCase(),exact=find(raw);return exact.length?exact:find(normalizeScan(value).toUpperCase());}

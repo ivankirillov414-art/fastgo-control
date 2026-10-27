@@ -7,3 +7,6 @@ test('a failed later line retries only that line and a lost spool callback never
 test('concurrent processes cannot submit the same receipt and known rejected jobs can retry',async t=>{const a=fixture(t),b=new ReceiptLabelJournal(a.dir);let release,entered,calls=0;const started=new Promise(r=>entered=r),gate=new Promise(r=>release=r);const first=a.run(job,async(x,before)=>{before();if(++calls===1){entered();await gate;}});await started;await assert.rejects(()=>b.run(job,async()=>{}),/уже печатаются/);release();await first;assert.equal(calls,2);
  const retry=fixture(t);let fail=true;await assert.rejects(()=>retry.run(job,async(x,before)=>{before();if(fail){fail=false;throw Object.assign(Error('rejected'),{notSubmitted:true});}}),/rejected/);await retry.run(job,async(x,before)=>before());
 });
+test('an explicit printer cannot be replaced when retrying the same label job',async t=>{
+ const journal=fixture(t);let count=0;const selected={...job,printer_name:'4BARCODE 3B-365B'};await journal.run(selected,async(x,before)=>{before();count++;});await journal.run(selected,async()=>count++);assert.equal(count,2);await assert.rejects(journal.run({...selected,printer_name:'P2 Label Printer'},async()=>count++),/Состав/);assert.equal(count,2);
+});

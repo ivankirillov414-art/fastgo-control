@@ -15,8 +15,11 @@ export async function manualLabels(action,p,{db,actor}){
  }).filter(x=>x.printer).sort((a,b)=>Number(b.online)-Number(a.online)||b.lastSeen.localeCompare(a.lastSeen));
  if(action==='label_targets')return targets.map(({lastSeen,...x})=>x);
  if(!uuid(p.request_id)||!uuid(p.part_id)||!uuid(p.station_id)||!Number.isInteger(p.quantity)||p.quantity<1||p.quantity>1000)fail('Проверьте товар, кассу и количество этикеток от 1 до 1000');
+ if(p.printer_name!==undefined&&(typeof p.printer_name!=='string'||!p.printer_name||p.printer_name.length>256)||p.remember_printer!==undefined&&typeof p.remember_printer!=='boolean')fail('Проверьте выбранный принтер');
+ if(p.remember_printer&&!['owner','developer'].includes(actor.role))fail('Основной принтер меняет владелец',403);
  if(!permitted.has(p.station_id))fail('Этот ноутбук не разрешён для печати',403);
- const fingerprint=JSON.stringify({station_id:p.station_id,part_id:p.part_id,quantity:p.quantity});
+ const destination=p.printer_name?{printer_name:p.printer_name,remember_printer:p.remember_printer===true}:{};
+ const fingerprint=JSON.stringify({station_id:p.station_id,part_id:p.part_id,quantity:p.quantity,...destination});
  const previous=async()=>{
   const job=(await db('workshop_warehouse_queue','id=eq.'+p.request_id))[0];if(!job)return null;
   if(job.created_by!==actor.id||job.station_id!==p.station_id||job.payload?.kind!=='labels'||job.payload?.fingerprint!==fingerprint)fail('Код задания уже использован',409);
@@ -24,9 +27,10 @@ export async function manualLabels(action,p,{db,actor}){
  };
  const old=await previous();if(old)return old;
  if(!targets.some(x=>x.id===p.station_id))fail('На кассе не выбран термопринтер',409);
+ if(p.printer_name&&!statuses.some(s=>s.station_id===p.station_id&&s.details?.printing?.printers?.some(x=>x.name===p.printer_name)))fail('Выбранный принтер не найден на кассе',409);
  const g=nativeClient({db,actor,google:async()=>fail('Каталог недоступен',503),storage:{}}),catalog=await g('catalog'),part=catalog.parts.find(x=>x.id===p.part_id&&x.active!==false);
  if(!part?.barcode)fail('У товара нет штрихкода или он отключён',404);
- const job={id:p.request_id,station_id:p.station_id,terminal_id:p.station_id,created_by:actor.id,state:'done',completed_at:new Date().toISOString(),payload:{kind:'labels',source:'mobile_catalog',fingerprint,items:[{part_id:part.id,quantity:p.quantity}]},result:{label_print_status:'pending',items:[{part_id:part.id,name:part.name,barcode:part.barcode,retail_price:part.retail_price,quantity:p.quantity}]}};
+ const job={id:p.request_id,station_id:p.station_id,terminal_id:p.station_id,created_by:actor.id,state:'done',completed_at:new Date().toISOString(),payload:{kind:'labels',source:'mobile_catalog',fingerprint,items:[{part_id:part.id,quantity:p.quantity}]},result:{label_print_status:'pending',...destination,items:[{part_id:part.id,name:part.name,barcode:part.barcode,retail_price:part.retail_price,quantity:p.quantity}]}};
  try{await db('workshop_warehouse_queue','','POST',job);}catch(e){const found=await previous();if(found)return found;throw e;}
  return {id:job.id,status:'pending'};
 }

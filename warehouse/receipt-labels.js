@@ -8,12 +8,12 @@ export function startReceiptLabels({call,bridge=window.warehouseDesktop,notify=(
  async function tick(){
   if(stopped||running)return;running=true;
   try{
-   const jobs=await call('receipt_label_jobs');if(!Array.isArray(jobs)||!jobs.length)return;
+   const jobs=await call('receipt_label_jobs',{label_pipeline:2});if(!Array.isArray(jobs)||!jobs.length)return;
    await barcode();
    for(const job of jobs){
     if(stopped)return;
     const items=(job.result?.items||[]).map(part=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');window.JsBarcode(svg,String(part.barcode),{format:'CODE128',displayValue:false,width:2,height:72,margin:0,marginLeft:20,marginRight:20,background:'#ffffff',lineColor:'#000000'});return {name:part.name,barcode:String(part.barcode),quantity:part.quantity,price:part.retail_price,svg:svg.outerHTML};});
-    await bridge.printReceiptLabels({id:job.id,items});
+    await bridge.printReceiptLabels({id:job.id,items,...(job.result?.printer_name?{printer_name:job.result.printer_name,remember_printer:job.result.remember_printer===true}:{})});
     await call('receipt_label_ack',{id:job.id});
     notify({ok:true,text:(job.payload?.kind==='labels'?'Печать с телефона':'Приход оформлен')+' · '+items.reduce((n,x)=>n+x.quantity,0)+' этикеток передано термопринтеру'});
    }
