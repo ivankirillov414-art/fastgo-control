@@ -27,11 +27,24 @@ function fixture(){
  return {actor,station,other,part,jobs,snapshot,status,statuses,allowed,db,request,get writes(){return writes;},loseReply:()=>lost=true};
 }
 test('phone sees both supported thermal queues on its allowed laptop with the saved default and exact names',async()=>{
- const h=fixture(),targets=await h.request('label_targets');assert.equal(targets.length,2);
+ const h=fixture(),targets=await h.request('label_targets',{label_pipeline:3});assert.equal(targets.length,2);
  assert.deepEqual(targets.map(x=>[x.id,x.printer,x.displayName,x.isDefault]),[[h.station,'P2 Label Printer','P2 Label Printer',true],[h.station,'4BARCODE 3B-365B','POScenter PC-365',false]]);
  assert(targets.every(x=>x.online&&x.can_remember&&x.width_mm===50&&x.height_mm===27&&x.label_pipeline===3));assert.equal(h.writes,0);
- h.status.details.printing.label.deviceName='4BARCODE 3B-365B';assert.equal((await h.request('label_targets'))[0].printer,'4BARCODE 3B-365B');
+ h.status.details.printing.label.deviceName='4BARCODE 3B-365B';assert.equal((await h.request('label_targets',{label_pipeline:3}))[0].printer,'4BARCODE 3B-365B');
  await assert.rejects(h.request('label_targets',{}, {...h.actor,role:'mechanic',can_edit_catalog:true}),e=>e.status===403);
+});
+test('cached station-only clients see only the saved printer, never a selectable second queue',async()=>{
+ const h=fixture();
+ for(const label_pipeline of [undefined,1,2,'3',null]){
+  const targets=await h.request('label_targets',{label_pipeline});assert.deepEqual(targets,[{id:h.station,name:'Драгнир',printer:'P2 Label Printer',online:true}]);
+  // This is the old client contract: option.value is only station.id and
+  // enqueue has no printer_name. Its sole offered queue is the saved one.
+  const p={request_id:randomUUID(),part_id:h.part,station_id:targets[0].id,quantity:1};await h.request('label_enqueue',p);assert.equal(h.jobs.at(-1).result.printer_name,undefined);
+ }
+ h.status.details.printing.label.deviceName='4BARCODE 3B-365B';assert.equal((await h.request('label_targets'))[0].printer,'4BARCODE 3B-365B');
+ const writes=h.writes;
+ for(const deviceName of ['', 'Disconnected printer','Microsoft Print to PDF']){h.status.details.printing.label.deviceName=deviceName;assert.deepEqual(await h.request('label_targets'),[],'without an available saved queue a station-only client must not advertise another queue');assert.equal((await h.request('label_targets',{label_pipeline:3})).length,2,'an explicit-queue client still sees the physical thermal queues');}
+ assert.equal(h.writes,writes);
 });
 test('44 labels are independent of stock; a lost enqueue reply and a retry create one job',async()=>{
  const h=fixture(),before=structuredClone(h.snapshot),p={request_id:randomUUID(),part_id:h.part,station_id:h.station,quantity:44};h.loseReply();
@@ -65,17 +78,17 @@ test('an owner can test and remember PC365, while old workers cannot print it on
 test('a fresh snapshot never resurrects old queues or virtual/A4 printers; offline targets retain their identity',async()=>{
  const h=fixture();h.status.details.printing.printers=[{name:'P2 Label Printer'},{name:'Microsoft Print to PDF'},{name:'Fax'},{name:'EPSON L8050 Series'}];
  h.statuses.push({station_id:h.station,last_seen:new Date(Date.now()-240000).toISOString(),details:{printing:{label:{deviceName:'4BARCODE 3B-365B'},printers:[{name:'4BARCODE 3B-365B'}]}}});
- assert.deepEqual((await h.request('label_targets')).map(x=>x.printer),['P2 Label Printer']);
+ assert.deepEqual((await h.request('label_targets',{label_pipeline:3})).map(x=>x.printer),['P2 Label Printer']);
  for(const printer_name of ['4BARCODE 3B-365B','Microsoft Print to PDF','Fax','EPSON L8050 Series'])await assert.rejects(h.request('label_enqueue',{request_id:randomUUID(),part_id:h.part,station_id:h.station,quantity:1,printer_name}),e=>e.status===409);
- h.status.last_seen=new Date(Date.now()-181000).toISOString();h.statuses.splice(1);const targets=await h.request('label_targets');assert.equal(targets[0].online,false);assert.equal(targets[0].id,h.station);assert.equal(h.writes,0);
+ h.status.last_seen=new Date(Date.now()-181000).toISOString();h.statuses.splice(1);const targets=await h.request('label_targets',{label_pipeline:3});assert.equal(targets[0].online,false);assert.equal(targets[0].id,h.station);assert.equal(h.writes,0);
 });
 
 test('an explicitly saved physical label queue remains available without guessing generic thermal capabilities',async()=>{
  const h=fixture();h.status.details.printing.printers.push({name:'Thermal_System_Queue'});
- assert(!(await h.request('label_targets')).some(x=>x.printer==='Thermal_System_Queue'));
- h.status.details.printing.label.deviceName='Thermal_System_Queue';assert.equal((await h.request('label_targets'))[0].printer,'Thermal_System_Queue');
- h.status.details.printing.label.deviceName='Microsoft Print to PDF';assert(!(await h.request('label_targets')).some(x=>x.printer==='Microsoft Print to PDF'));
- const admin=await h.request('label_targets',{}, {...h.actor,role:'admin'});assert(admin.every(x=>x.can_remember===false));
+ assert(!(await h.request('label_targets',{label_pipeline:3})).some(x=>x.printer==='Thermal_System_Queue'));
+ h.status.details.printing.label.deviceName='Thermal_System_Queue';assert.equal((await h.request('label_targets',{label_pipeline:3}))[0].printer,'Thermal_System_Queue');
+ h.status.details.printing.label.deviceName='Microsoft Print to PDF';assert(!(await h.request('label_targets',{label_pipeline:3})).some(x=>x.printer==='Microsoft Print to PDF'));
+ const admin=await h.request('label_targets',{label_pipeline:3}, {...h.actor,role:'admin'});assert(admin.every(x=>x.can_remember===false));
 });
 
 test('label dimensions travel with the exact printer and request; old workers cannot discard the format',async()=>{

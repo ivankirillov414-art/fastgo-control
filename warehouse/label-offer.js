@@ -29,7 +29,7 @@ export function offerLabelPrinting(part,quantity,{call,actor}){
   remember.disabled=!!pending||target?.can_remember!==true;
   status.textContent=pending?'Повторяем сохранённое задание с тем же принтером, количеством и форматом.':!target?'Касса пока не сообщила о подключённом термопринтере.':target.online?'Этикетки напечатает выбранный принтер кассового ноутбука.':'Касса сейчас не в сети. Задание дождётся её подключения.';
  }
- void call('label_targets').then(result=>{
+ void call('label_targets',{label_pipeline:3}).then(result=>{
   if(!dialog.isConnected)return;targets=Array.isArray(result)?result:[];
   station.innerHTML=targets.map(x=>'<option value="'+esc(targetKey(x))+'">'+esc(x.name+' · '+(x.displayName||x.printer)+(x.isDefault?' · основной':''))+'</option>').join('');
   const target=pending?targets.find(x=>x.id===pending.station_id&&(!pending.printer_name||x.printer===pending.printer_name)):targets.find(x=>x.isDefault)||targets[0];

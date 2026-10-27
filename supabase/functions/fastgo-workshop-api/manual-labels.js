@@ -30,7 +30,12 @@ export async function manualLabels(action,p,{db,actor}){
  const statuses=await db('workshop_device_status','app=in.(warehouse,desktop)&order=last_seen.desc&limit=30');
  const permitted=new Set(allowed.map(x=>x.station_id));
  const targets=printTargets(stations,statuses,permitted,['owner','developer'].includes(actor.role));
- if(action==='label_targets')return targets.map(({lastSeen,...x})=>x);
+ if(action==='label_targets'){
+  if(Number.isSafeInteger(p.label_pipeline)&&p.label_pipeline>=3)return targets.map(({lastSeen,...x})=>x);
+  // Cached clients address only station IDs and omit printer_name on enqueue.
+  // They can safely describe only the saved queue their worker will use.
+  return targets.filter(x=>x.isDefault).map(({id,name,printer,online})=>({id,name,printer,online}));
+ }
  if(!uuid(p.request_id)||!uuid(p.part_id)||!uuid(p.station_id)||!Number.isInteger(p.quantity)||p.quantity<1||p.quantity>1000)fail('Проверьте товар, кассу и количество этикеток от 1 до 1000');
  if(p.printer_name!==undefined&&!printerName(p.printer_name)||p.remember_printer!==undefined&&typeof p.remember_printer!=='boolean')fail('Проверьте выбранный принтер');
  if(p.remember_printer&&!['owner','developer'].includes(actor.role))fail('Основной принтер меняет владелец',403);
