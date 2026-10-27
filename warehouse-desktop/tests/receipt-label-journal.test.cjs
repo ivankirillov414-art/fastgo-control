@@ -10,3 +10,17 @@ test('concurrent processes cannot submit the same receipt and known rejected job
 test('an explicit printer cannot be replaced when retrying the same label job',async t=>{
  const journal=fixture(t);let count=0;const selected={...job,printer_name:'4BARCODE 3B-365B'};await journal.run(selected,async(x,before)=>{before();count++;});await journal.run(selected,async()=>count++);assert.equal(count,2);await assert.rejects(journal.run({...selected,printer_name:'P2 Label Printer'},async()=>count++),/Состав/);assert.equal(count,2);
 });
+
+test('explicit format is durable across retries while old unsized fingerprints remain unchanged',async t=>{
+ const journal=fixture(t),selected={...job,printer_name:'4BARCODE 3B-365B',widthMm:50,heightMm:30};let count=0;
+ await journal.run(selected,async(x,before)=>{before();count++;});assert.equal((await journal.run(selected,async()=>count++)).alreadyPrinted,true);
+ await assert.rejects(journal.run({...selected,heightMm:27},async()=>count++),/Состав/);assert.equal(count,2);
+ const old=fixture(t);await old.run(job,async(x,before)=>before());const saved=JSON.parse(fs.readFileSync(path.join(old.dir,job.id+'.json'),'utf8'));
+ const expected=require('node:crypto').createHash('sha256').update(JSON.stringify(job.items)).digest('hex');assert.equal(saved.fingerprint,expected,'existing journals keep their exact old fingerprint');
+});
+
+test('invalid or partial explicit formats fail before any print and can be corrected with the same unused id',async t=>{
+ const journal=fixture(t);let count=0;
+ for(const dimensions of [{widthMm:50},{heightMm:30},{widthMm:null,heightMm:30},{widthMm:'50',heightMm:30},{widthMm:50,heightMm:201},{widthMm:29,heightMm:30}])await assert.rejects(journal.run({...job,...dimensions},async()=>count++),/ширин|высот|этикетки/i);
+ assert.equal(count,0);await journal.run({...job,widthMm:50,heightMm:30},async(x,before)=>{before();count++;});assert.equal(count,2);
+});

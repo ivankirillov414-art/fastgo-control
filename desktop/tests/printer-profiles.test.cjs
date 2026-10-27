@@ -43,6 +43,19 @@ test('remembering only follows accepted printing, and settings can be saved befo
  await f.handlers['warehouse:printBarcode'](f.event,{...f.payload,format:'a4'});assert.equal(f.prints[1].deviceName,'Laser_A4');assert.equal(f.prints[1].pageSize,'A4');assert.equal(f.preferences.read().profiles.label.deviceName,'Thermal_System_Queue');
 });
 test('receipt labels use the saved thermal queue, quantities and persistent deduplication from the service screen',async t=>{const f=fixture(t);f.preferences.save({format:'label',deviceName:'Thermal_System_Queue',widthMm:50,heightMm:27});f.event.senderFrame.url='fastgo://app/workshop.html';const job={id:'11111111-1111-4111-8111-111111111111',items:[{...f.payload,quantity:10}]};assert.equal((await f.handlers['warehouse:printReceiptLabels'](f.event,job)).printed,true);assert.equal((await f.handlers['warehouse:printReceiptLabels'](f.event,job)).alreadyPrinted,true);assert.equal(f.prints.length,1);assert.equal(f.prints[0].silent,true);assert.equal(f.prints[0].copies,1);assert.equal((decodeURIComponent(f.windows[0].url).match(/<section class="label">/g)||[]).length,10);f.queues([]);await assert.rejects(()=>f.handlers['warehouse:printReceiptLabels'](f.event,{...job,id:'22222222-2222-4222-8222-222222222222'}),/принтер не найден/);assert.equal(f.prints.length,1);});
+
+test('typed phone label job applies its explicit paper size and remembers it only after accepted printing',async t=>{
+ const f=fixture(t);f.preferences.save({format:'label',deviceName:'P2 Label Printer',widthMm:50,heightMm:27});f.queues([{name:'P2 Label Printer'},{name:'4BARCODE 3B-365B'}]);
+ const job={id:'33333333-3333-4333-8333-333333333333',printer_name:'4BARCODE 3B-365B',widthMm:58,heightMm:40,remember_printer:true,items:[{...f.payload,price:1500,svg:'<svg viewBox="0 0 300 72"><rect x="20" y="0" width="2" height="72"/></svg>'}]};
+ assert.equal((await f.handlers['warehouse:printReceiptLabels'](f.event,job)).printed,true);assert.deepEqual(f.prints[0].pageSize,{width:58000,height:40000});assert.equal(f.prints[0].deviceName,'4BARCODE 3B-365B');assert.match(decodeURIComponent(f.windows[0].url),/size:58mm 40mm/);
+ assert.deepEqual(f.preferences.read().profiles.label,{format:'label',deviceName:'4BARCODE 3B-365B',widthMm:58,heightMm:40});assert.equal((await f.handlers['warehouse:printReceiptLabels'](f.event,job)).alreadyPrinted,true);assert.equal(f.prints.length,1);
+});
+
+test('partial or invalid explicit paper size cannot print or overwrite the saved format',async t=>{
+ const f=fixture(t);f.preferences.save({format:'label',deviceName:'Thermal_System_Queue',widthMm:50,heightMm:27});const saved=f.preferences.read();
+ for(const size of [{widthMm:58},{heightMm:40},{widthMm:29,heightMm:40},{widthMm:58,heightMm:201},{widthMm:'58',heightMm:40}])await assert.rejects(()=>f.handlers['warehouse:printReceiptLabels'](f.event,{id:'44444444-4444-4444-8444-444444444444',items:[f.payload],remember_printer:true,...size}));
+ assert.equal(f.prints.length,0);assert.deepEqual(f.preferences.read(),saved);
+});
 test('printer IPC rejects unrelated windows and subframes before listing, configuring or printing',async t=>{
  const f=fixture(t),iframe={...f.event,senderFrame:{url:'fastgo://app/warehouse.html'}},other={sender:{},senderFrame:{}};
  for(const event of [iframe,other])for(const name of ['warehouse:printers','warehouse:printerSave','warehouse:printBarcode'])await assert.rejects(()=>f.handlers[name](event,f.payload),/Недоступно/);

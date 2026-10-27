@@ -8,6 +8,14 @@ store.close();
 const wrapper=path.join(data,'launch.cjs');fs.writeFileSync(wrapper,`const {app,net,safeStorage}=require('electron');const fs=require('node:fs'),path=require('node:path');app.setPath('userData',${JSON.stringify(data)});net.isOnline=()=>false;app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'credentials.bin'),safeStorage.encryptString(JSON.stringify({access_token:'offline-smoke-token',refresh_token:'offline-smoke-refresh',user_id:${JSON.stringify(actor)},expires_at:4102444800}))));require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 async function launch(){const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});const page=await app.firstWindow();page.on('pageerror',e=>console.error('Renderer:',e.message));await page.locator('#desktop-state-text').waitFor({state:'attached'});return {app,page};}
 (async()=>{let opened=await launch();try{
+ const launchVisibility=await opened.app.evaluate(({app,BrowserWindow})=>{
+  const window=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('fastgo://app/workshop.html')),before=BrowserWindow.getAllWindows().length;
+  window.hide();const hidden=!window.isVisible();
+  app.emit('second-instance',{},[process.execPath,app.getAppPath(),'--background'],process.cwd());const quiet=!window.isVisible();
+  app.emit('second-instance',{},[process.execPath,app.getAppPath()],process.cwd());const reopened=window.isVisible();
+  app.emit('second-instance',{},[process.execPath,app.getAppPath(),'--background'],process.cwd());
+  return {hidden,quiet,reopened,visibleWorkPreserved:window.isVisible(),sameWindows:BrowserWindow.getAllWindows().length===before};
+ });assert.deepEqual(launchVisibility,{hidden:true,quiet:true,reopened:true,visibleWorkPreserved:true,sameWindows:true});
  const chrome=await opened.app.evaluate(({Menu,BrowserWindow})=>({menu:Menu.getApplicationMenu(),menuVisible:BrowserWindow.getAllWindows()[0].isMenuBarVisible()}));assert.equal(chrome.menu,null);assert.equal(chrome.menuVisible,false);
  if(process.platform==='win32'){assert.equal(await opened.page.evaluate(()=>navigator.windowControlsOverlay.visible),true);const rect=await opened.page.evaluate(()=>{const r=navigator.windowControlsOverlay.getTitlebarAreaRect();const bar=document.querySelector('#desktop-status').getBoundingClientRect();return {width:r.width,barRight:bar.right};});assert.ok(rect.barRight<=rect.width+1);}
  await opened.page.waitForFunction(()=>document.querySelector('#desktop-state-text')?.textContent.includes('Работа без сети'));

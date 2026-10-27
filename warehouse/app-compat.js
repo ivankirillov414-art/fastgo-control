@@ -342,11 +342,11 @@
       await loader;
     }
     async function tick() {
-      var _a2, _b, _c;
+      var _a2, _b, _c, _d, _e;
       if (stopped || running) return;
       running = true;
       try {
-        const jobs = await call2("receipt_label_jobs", { label_pipeline: 2 });
+        const jobs = await call2("receipt_label_jobs", { label_pipeline: 3 });
         if (!Array.isArray(jobs) || !jobs.length) return;
         await barcode();
         for (const job2 of jobs) {
@@ -356,9 +356,9 @@
             window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
             return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
           });
-          await bridge.printReceiptLabels({ id: job2.id, items, ...((_b = job2.result) == null ? void 0 : _b.printer_name) ? { printer_name: job2.result.printer_name, remember_printer: job2.result.remember_printer === true } : {} });
+          await bridge.printReceiptLabels({ id: job2.id, items, ...((_b = job2.result) == null ? void 0 : _b.printer_name) ? { printer_name: job2.result.printer_name, remember_printer: job2.result.remember_printer === true } : {}, ...((_c = job2.result) == null ? void 0 : _c.width_mm) !== void 0 || ((_d = job2.result) == null ? void 0 : _d.height_mm) !== void 0 ? { widthMm: job2.result.width_mm, heightMm: job2.result.height_mm } : {} });
           await call2("receipt_label_ack", { id: job2.id });
-          notify({ ok: true, text: (((_c = job2.payload) == null ? void 0 : _c.kind) === "labels" ? "\u041F\u0435\u0447\u0430\u0442\u044C \u0441 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430" : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D") + " \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
+          notify({ ok: true, text: (((_e = job2.payload) == null ? void 0 : _e.kind) === "labels" ? "\u041F\u0435\u0447\u0430\u0442\u044C \u0441 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430" : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D") + " \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
         }
       } catch (error) {
         notify({ ok: false, text: "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043F\u0440\u0438\u0445\u043E\u0434\u0430 \u043E\u0436\u0438\u0434\u0430\u044E\u0442 \u043F\u0435\u0447\u0430\u0442\u0438: " + error.message });
@@ -1592,56 +1592,84 @@
     const dialog = document.createElement("dialog");
     dialog.className = "barcode-print-dialog";
     dialog.setAttribute("aria-label", "\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?");
-    dialog.innerHTML = "<form><h2>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?</h2><p>" + esc(part.name) + "</p><p>\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u0435\u043C \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C <b>" + quantity + '</b> \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A. \u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043C\u043E\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C.</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" required value="' + esc((_a2 = pending2 == null ? void 0 : pending2.quantity) != null ? _a2 : quantity) + '"></label><label>\u041F\u0435\u0447\u0430\u0442\u044C \u043D\u0430 \u043A\u0430\u0441\u0441\u0435<select name="station" required aria-label="\u041A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440"></select></label><p data-status role="status">\u0418\u0449\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0439 \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u2026</p><p class="error" role="alert"></p><div class="actions"><button type="button" data-close>\u041D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button><button type="submit" class="primary" disabled>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button></div></form>';
+    dialog.innerHTML = "<form><h2>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?</h2><p>" + esc(part.name) + "</p><p>\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u0435\u043C \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C <b>" + quantity + '</b> \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A. \u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043C\u043E\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C.</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" required value="' + esc((_a2 = pending2 == null ? void 0 : pending2.quantity) != null ? _a2 : quantity) + '"></label><label>\u041A\u0430\u0441\u0441\u0430 \u0438 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440<select name="station" required aria-label="\u041A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440"></select></label><div class="printer-size"><label>\u0428\u0438\u0440\u0438\u043D\u0430, \u043C\u043C<input name="width_mm" aria-label="\u0428\u0438\u0440\u0438\u043D\u0430 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438, \u043C\u043C" type="number" min="30" max="110" step="0.1" value="58" required></label><label>\u0412\u044B\u0441\u043E\u0442\u0430, \u043C\u043C<input name="height_mm" aria-label="\u0412\u044B\u0441\u043E\u0442\u0430 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438, \u043C\u043C" type="number" min="20" max="200" step="0.1" value="30" required></label></div><label class="printer-remember" data-remember-label hidden><input name="remember" type="checkbox" checked>\u0417\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u044C \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438 \u0440\u0430\u0437\u043C\u0435\u0440 \u043D\u0430 \u043A\u0430\u0441\u0441\u0435</label><p data-status role="status">\u0418\u0449\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u044B\u2026</p><p class="error" role="alert"></p><div class="actions"><button type="button" data-close>\u041D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button><button type="submit" class="primary" disabled>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button></div></form>';
     document.body.append(dialog);
     dialog.showModal();
     dialog.onclose = () => dialog.remove();
-    const form = dialog.querySelector("form"), input = form.elements.quantity, station = form.elements.station, button = form.querySelector("[type=submit]"), close = form.querySelector("[data-close]"), status = form.querySelector("[data-status]"), error = form.querySelector("[role=alert]");
+    const form = dialog.querySelector("form"), input = form.elements.quantity, station = form.elements.station, width = form.elements.width_mm, height = form.elements.height_mm, remember = form.elements.remember, rememberLabel = form.querySelector("[data-remember-label]"), button = form.querySelector("[type=submit]"), close = form.querySelector("[data-close]"), status = form.querySelector("[data-status]"), error = form.querySelector("[role=alert]");
     let busy2 = false, targets = [];
+    const targetKey = (x) => JSON.stringify([x.id, x.printer]);
+    const selected = () => targets.find((x) => targetKey(x) === station.value);
+    const sizedTarget = (target) => Number.isSafeInteger(target == null ? void 0 : target.label_pipeline) && target.label_pipeline >= 3;
     close.onclick = () => dialog.close();
     dialog.oncancel = (e) => {
       if (busy2) e.preventDefault();
     };
     const freeze = (value) => {
-      input.disabled = value;
-      station.disabled = value;
+      for (const el of [input, station, width, height, remember]) el.disabled = value;
     };
     if (pending2) {
       freeze(true);
       close.textContent = "\u0417\u0430\u043A\u0440\u044B\u0442\u044C";
     }
+    function showTarget() {
+      var _a3, _b, _c, _d;
+      const target = selected();
+      button.disabled = !pending2 && !target;
+      width.value = (_b = (_a3 = pending2 == null ? void 0 : pending2.width_mm) != null ? _a3 : target == null ? void 0 : target.width_mm) != null ? _b : 58;
+      height.value = (_d = (_c = pending2 == null ? void 0 : pending2.height_mm) != null ? _c : target == null ? void 0 : target.height_mm) != null ? _d : 30;
+      form.querySelector(".printer-size").hidden = !sizedTarget(target) && (pending2 == null ? void 0 : pending2.width_mm) === void 0;
+      width.disabled = height.disabled = !!pending2 || !sizedTarget(target);
+      rememberLabel.hidden = !((target == null ? void 0 : target.can_remember) === true || (pending2 == null ? void 0 : pending2.remember_printer) === true);
+      remember.checked = pending2 ? pending2.remember_printer === true : (target == null ? void 0 : target.can_remember) === true;
+      remember.disabled = !!pending2 || (target == null ? void 0 : target.can_remember) !== true;
+      status.textContent = pending2 ? "\u041F\u043E\u0432\u0442\u043E\u0440\u044F\u0435\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u0441 \u0442\u0435\u043C \u0436\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u043C, \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E\u043C \u0438 \u0444\u043E\u0440\u043C\u0430\u0442\u043E\u043C." : !target ? "\u041A\u0430\u0441\u0441\u0430 \u043F\u043E\u043A\u0430 \u043D\u0435 \u0441\u043E\u043E\u0431\u0449\u0438\u043B\u0430 \u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u043C \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0435." : target.online ? "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043A\u0430\u0441\u0441\u043E\u0432\u043E\u0433\u043E \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430." : "\u041A\u0430\u0441\u0441\u0430 \u0441\u0435\u0439\u0447\u0430\u0441 \u043D\u0435 \u0432 \u0441\u0435\u0442\u0438. \u0417\u0430\u0434\u0430\u043D\u0438\u0435 \u0434\u043E\u0436\u0434\u0451\u0442\u0441\u044F \u0435\u0451 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.";
+    }
     void call2("label_targets").then((result) => {
       if (!dialog.isConnected) return;
       targets = Array.isArray(result) ? result : [];
-      station.innerHTML = targets.map((x) => '<option value="' + esc(x.id) + '">' + esc(x.name + " \xB7 " + x.printer) + "</option>").join("");
-      if (pending2) station.value = pending2.station_id;
-      const update = () => {
-        const target = targets.find((x) => x.id === station.value);
-        button.disabled = !target;
-        status.textContent = !target ? "\u041D\u0430 \u043A\u0430\u0441\u0441\u0435 \u0435\u0449\u0451 \u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u043D \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0435\u0433\u043E \u0432 FastGo \u043D\u0430 \u043A\u0430\u0441\u0441\u043E\u0432\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : pending2 ? "\u041F\u043E\u0432\u0442\u043E\u0440\u044F\u0435\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u0431\u0435\u0437 \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u043E\u0432." : target.online ? "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043D\u043E\u0443\u0442\u0431\u0443\u043A." : "\u041A\u0430\u0441\u0441\u0430 \u0441\u0435\u0439\u0447\u0430\u0441 \u043D\u0435 \u0432 \u0441\u0435\u0442\u0438. \u0417\u0430\u0434\u0430\u043D\u0438\u0435 \u0434\u043E\u0436\u0434\u0451\u0442\u0441\u044F \u0435\u0451 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.";
-      };
-      station.onchange = update;
-      update();
+      station.innerHTML = targets.map((x) => '<option value="' + esc(targetKey(x)) + '">' + esc(x.name + " \xB7 " + (x.displayName || x.printer) + (x.isDefault ? " \xB7 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439" : "")) + "</option>").join("");
+      const target = pending2 ? targets.find((x) => x.id === pending2.station_id && (!pending2.printer_name || x.printer === pending2.printer_name)) : targets.find((x) => x.isDefault) || targets[0];
+      if (target) station.value = targetKey(target);
+      else if (pending2) {
+        const option = document.createElement("option");
+        option.value = "pending";
+        option.textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435" + (pending2.printer_name ? " \xB7 " + pending2.printer_name : "");
+        station.append(option);
+        station.value = option.value;
+      }
+      station.onchange = showTarget;
+      showTarget();
     }).catch((e) => {
+      var _a3, _b;
       if (dialog.isConnected) {
         status.textContent = "\u0421\u043F\u0438\u0441\u043E\u043A \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0445 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.";
         error.textContent = e.message;
+        if (pending2) {
+          button.disabled = false;
+          width.value = (_a3 = pending2.width_mm) != null ? _a3 : 58;
+          height.value = (_b = pending2.height_mm) != null ? _b : 30;
+        }
       }
     });
     form.onsubmit = async (e) => {
+      var _a3;
       e.preventDefault();
       if (busy2 || !form.reportValidity()) return;
-      const count = Number(input.value);
-      if (!Number.isInteger(count) || count < 1 || count > 1e3) {
-        error.textContent = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0446\u0435\u043B\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000";
+      const count = Number(input.value), widthMm = Number(width.value), heightMm = Number(height.value);
+      if (!pending2 && (!Number.isInteger(count) || count < 1 || count > 1e3 || !Number.isFinite(widthMm) || widthMm < 30 || widthMm > 110 || !Number.isFinite(heightMm) || heightMm < 20 || heightMm > 200)) {
+        error.textContent = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0438 \u0440\u0430\u0437\u043C\u0435\u0440 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438";
         return;
       }
       try {
         if (!pending2) {
-          pending2 = { request_id: uuid(), part_id: part.id, quantity: count, station_id: station.value };
-          const raw = JSON.stringify(pending2);
+          const target = selected();
+          if (!target) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440");
+          const candidate = { request_id: uuid(), part_id: part.id, quantity: count, station_id: target.id, printer_name: target.printer, remember_printer: target.can_remember === true && remember.checked, ...sizedTarget(target) ? { width_mm: widthMm, height_mm: heightMm } : {} };
+          const raw = JSON.stringify(candidate);
           localStorage.setItem(key3, raw);
           if (localStorage.getItem(key3) !== raw) throw Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
+          pending2 = candidate;
         }
         busy2 = true;
         button.disabled = true;
@@ -1661,7 +1689,9 @@
           localStorage.removeItem(key3);
           pending2 = null;
           freeze(false);
-        } else if (pending2) status.textContent = "\u041E\u0442\u0432\u0435\u0442 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C\xBB: \u043A\u043E\u0434 \u0437\u0430\u0434\u0430\u043D\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D, \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
+          width.disabled = height.disabled = !sizedTarget(selected());
+          remember.disabled = ((_a3 = selected()) == null ? void 0 : _a3.can_remember) !== true;
+        } else if (pending2) status.textContent = "\u041E\u0442\u0432\u0435\u0442 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C\xBB: \u043A\u043E\u0434 \u0437\u0430\u0434\u0430\u043D\u0438\u044F \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B, \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
         button.textContent = "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C";
         button.disabled = false;
       } finally {

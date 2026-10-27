@@ -5,7 +5,11 @@ import {id,fail} from './model.js';
 export async function receiptLabels(action,p,{db,device,stationId}){
  if(!['receipt_label_jobs','receipt_label_ack'].includes(action))return undefined;
  if(device.kind!=='station')fail('Печать выполняется на кассовом ноутбуке',403);
- if(action==='receipt_label_jobs')return (await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=eq.done&payload->>kind=in.(receipt,labels)&result->>label_print_status=eq.pending&order=completed_at.asc&limit=50')).filter(job=>!job.result?.printer_name||p.label_pipeline===2);
+ if(action==='receipt_label_jobs')return (await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=eq.done&payload->>kind=in.(receipt,labels)&result->>label_print_status=eq.pending&order=completed_at.asc&limit=50')).filter(job=>{
+  const pipeline=Number.isSafeInteger(p.label_pipeline)?p.label_pipeline:1;
+  if(job.result?.width_mm!==undefined||job.result?.height_mm!==undefined)return pipeline>=3;
+  return !job.result?.printer_name||pipeline>=2;
+ });
  if(!id(p.id))fail('Неверный приход');
  const job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId))[0];
  if(!job||job.state!=='done'||!['receipt','labels'].includes(job.payload.kind)||!job.result?.label_print_status)fail('Задание печати не найдено',404);

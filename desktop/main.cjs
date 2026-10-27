@@ -176,6 +176,6 @@ app.whenReady().then(()=>{
  }
 
 });
-app.on('second-instance',()=>{if(win){win.restore();win.focus();}});
+app.on('second-instance',(_event,argv=[])=>{if(argv.includes('--background')||!win||win.isDestroyed())return;if(win.isMinimized())win.restore();win.show();win.focus();});
 app.on('window-all-closed',()=>app.quit());
 app.on('before-quit',()=>{warehouseRuntime?.close();try{store?.backup();store?.close();}catch{}});
