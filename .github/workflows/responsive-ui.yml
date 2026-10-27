@@ -1,10 +1,10 @@
 name: FastGo responsive UI
 on:
   pull_request:
-    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
+    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','scripts/check-warehouse-mobile-labels.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
   push:
     branches: [main]
-    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
+    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','scripts/check-warehouse-mobile-labels.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
   workflow_dispatch:
 permissions:
   contents: read
