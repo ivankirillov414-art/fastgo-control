@@ -42,6 +42,7 @@ public final class NativeLayoutTest {
             for (String[] profile : new String[][]{{"320x480", "1.5"}, {"360x640", "1.0"}}) {
                 display.apply(profile[0], profile[1]);
                 updates.refresh();
+                wakeAndUnlock();
                 try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
                     isolateUpdates(scenario);
                     awaitText(scenario, "Войти");
@@ -55,6 +56,7 @@ public final class NativeLayoutTest {
                         catch (Exception error) { throw new AssertionError(error); }
                     });
                     awaitLayout(scenario);
+                    awaitWindowFocus(scenario);
                     scenario.onActivity(a -> {
                         try {
                             LinearLayout content = (LinearLayout) field(a, "content");
@@ -74,6 +76,7 @@ public final class NativeLayoutTest {
                     });
                     onView(withText("Приход")).perform(scrollTo(), click());
                     awaitLayout(scenario);
+                    awaitWindowFocus(scenario);
                     scenario.onActivity(a -> {
                         try {
                             LinearLayout content = (LinearLayout) field(a, "content");
@@ -105,6 +108,7 @@ public final class NativeLayoutTest {
             prefs.put("auth", ""); prefs.put("device", "");
             display.apply("320x480", "1.5");
             updates.refresh();
+            wakeAndUnlock();
             try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
                 isolateUpdates(scenario);
                 awaitText(scenario, "Войти");
@@ -113,6 +117,7 @@ public final class NativeLayoutTest {
                     catch (Exception error) { throw new AssertionError(error); }
                 });
                 awaitLayout(scenario);
+                awaitWindowFocus(scenario);
                 scenario.onActivity(a -> assertEquals(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
                         a.getWindow().getAttributes().softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST));
                 // Uses the real focused editor without submitting credentials.
@@ -136,6 +141,7 @@ public final class NativeLayoutTest {
                 });
                 awaitText(scenario, second);
                 awaitLayout(scenario);
+                awaitWindowFocus(scenario);
                 onView(withText(first)).perform(scrollTo()).check(matches(isCompletelyDisplayed()));
                 onView(withText(second)).perform(scrollTo()).check(matches(isCompletelyDisplayed()));
             }
@@ -181,6 +187,31 @@ public final class NativeLayoutTest {
             Thread.sleep(20);
         }
         fail("Native page did not finish layout");
+    }
+
+    private static void wakeAndUnlock() {
+        DisplaySettings.shell("input keyevent KEYCODE_WAKEUP");
+        DisplaySettings.shell("wm dismiss-keyguard");
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+    }
+
+    private static void awaitWindowFocus(ActivityScenario<MainActivity> scenario) throws Exception {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            boolean[] focused = {false};
+            scenario.onActivity(a -> focused[0] = a.hasWindowFocus());
+            if (focused[0]) return;
+            if (attempt == 20) wakeAndUnlock();
+            Thread.sleep(50);
+        }
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.app.KeyguardManager keyguard = (android.app.KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
+        android.os.PowerManager power = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        StringBuilder windows = new StringBuilder();
+        for (String line : DisplaySettings.shell("dumpsys window windows").split("\\r?\\n"))
+            if (line.contains("mCurrentFocus=") || line.contains("mFocusedApp=") || line.contains("mShowingLockscreen="))
+                windows.append(line.trim()).append('\n');
+        fail("Native Activity has no window focus; interactive=" + power.isInteractive()
+                + ", keyguardLocked=" + keyguard.isKeyguardLocked() + "\n" + windows);
     }
 
     private static boolean containsText(View view, String text) {
@@ -241,17 +272,22 @@ public final class NativeLayoutTest {
         void apply(String size, String fontScale) throws Exception {
             shell("wm size " + size); shell("wm density 160"); shell("settings put system font_scale " + fontScale);
             Thread.sleep(500);
+            wakeAndUnlock();
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         }
 
         @Override public void close() throws Exception {
-            try { shell("wm size " + size); }
-            finally {
-                try { shell("wm density " + density); }
-                finally { shell(fontScale.matches("[0-9.]+") ? "settings put system font_scale " + fontScale : "settings delete system font_scale"); }
+            try {
+                try { shell("wm size " + size); }
+                finally {
+                    try { shell("wm density " + density); }
+                    finally { shell(fontScale.matches("[0-9.]+") ? "settings put system font_scale " + fontScale : "settings delete system font_scale"); }
+                }
+            } finally {
+                Thread.sleep(500);
+                wakeAndUnlock();
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync();
             }
-            Thread.sleep(500);
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         }
 
         private static String override(String output, String pattern) {
