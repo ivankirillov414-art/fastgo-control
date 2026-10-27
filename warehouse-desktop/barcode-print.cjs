@@ -1,5 +1,20 @@
 const path=require('node:path'),{PrinterProfiles,labelSize,profile,printerList,availablePrinter}=require('./printer-profiles.cjs');
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let code128;
+function widerCode128(svg,value,maxDots){
+ try{
+  if(!code128){
+   const fs=require('node:fs'),asset=['web/vendor/','../web/vendor/','../vendor/'].map(dir=>path.join(__dirname,dir,'jsbarcode-3.12.3.min.js')).find(file=>fs.existsSync(file));
+   if(!asset)return svg;
+   const scope={window:{}};require('node:vm').runInNewContext(fs.readFileSync(asset,'utf8'),scope,{timeout:1000});code128=scope.window.JsBarcode;
+  }
+  const encoded={};code128(encoded,value,{format:'CODE128B',displayValue:false,width:2,height:72,margin:0,marginLeft:20,marginRight:20});
+  const bits=encoded.encodings?.map(x=>x.data).join(''),width=bits?.length*2+40,previous=Number(svg.match(/\bviewBox="0 0 (\d+)/)?.[1]);
+  if(!bits||!/^[01]+$/.test(bits)||!Number.isInteger(previous)||width<=previous||width>maxDots)return svg;
+  const bars=[...bits.matchAll(/1+/g)].map(m=>'<rect x="'+m.index*2+'" y="0" width="'+m[0].length*2+'" height="72"/>').join('');
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="72" viewBox="0 0 '+width+' 72"><g transform="translate(20,0)" fill="#000000">'+bars+'</g></svg>';
+ }catch{return svg;}
+}
 function barcodePrintHTML(p){
  if(!p||typeof p.name!=='string'||p.name.length>200||typeof p.barcode!=='string'||p.barcode.length>100||!Number.isInteger(p.quantity)||p.quantity<1||p.quantity>1000||!['a4','label'].includes(p.format))throw Error('Проверьте количество и формат этикеток');
  if(p.price!==undefined&&(typeof p.price!=='number'||!Number.isFinite(p.price)||p.price<0||p.price>100000000))throw Error('Проверьте цену товара');
@@ -8,17 +23,22 @@ function barcodePrintHTML(p){
  if(typeof svg!=='string'||svg.length>100000||!/^<svg\b[\s\S]*<\/svg>$/.test(svg)||/<\/?(?!svg\b|g\b|rect\b|text\b)[a-z]/i.test(svg)||/\bon[a-z]+\s*=|href\s*=|url\s*\(|<\?|<!|javascript:|data:|https?:/i.test(svg.replace(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g,'')))throw Error('Некорректный штрихкод');
  const a4=p.format==='a4',size=a4?{widthMm:58,heightMm:30}:labelSize(p),width=size.widthMm,height=size.heightMm,barHeight=Math.min(15,height-15),p2=!a4&&require('./label-printer-setup.cjs').isP2({name:p.deviceName||''});
  let thermalCSS='';
- const thermal203=p2||!a4&&require('./pc365-setup.cjs').isPC365({name:p.deviceName||''});
+ const pc365=!a4&&require('./pc365-setup.cjs').isPC365({name:p.deviceName||''}),thermal203=p2||pc365;
  if(thermal203){
   // A narrow roll can sit inside the 48 mm P2 head. Keep both text lines in
   // its central 32 mm, and preserve whole-dot barcode widths at 203 dpi.
-  const box=svg.match(/\bviewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/),dots=box?.slice(1).map(Number),paperDots=Math.min(p2?384:576,Math.floor(width*203/25.4)),mm=n=>(n*25.4/203).toFixed(5)+'mm';
-  if(!dots||!dots.every(n=>Number.isInteger(n)&&n>0)||dots[0]>paperDots-32||dots[1]!==72)throw Error('Штрихкод не помещается без искажения. Выберите более широкую этикетку.');
+  const large=pc365&&height>=26,paperDots=Math.min(p2?384:576,Math.floor(width*203/25.4)),maxDots=paperDots-(large?24:32),mm=n=>(n*25.4/203).toFixed(5)+'mm';
+  // A wider legal Code128 B encoding uses the available PC365 label width
+  // without stretching two-dot modules. Longer codes retain automatic encoding.
+  if(large)svg=widerCode128(svg,p.barcode,maxDots);
+  const box=svg.match(/\bviewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/),dots=box?.slice(1).map(Number);
+  if(!dots||!dots.every(n=>Number.isInteger(n)&&n>0)||dots[0]>maxDots||dots[1]!==72)throw Error('Штрихкод не помещается без искажения. Выберите более широкую этикетку.');
   // Fit height independently: SVG's default `meet` would also shrink bar
   // widths to fractional dots when making room for the separate price line.
   svg=svg.replace(/\s+preserveAspectRatio="[^"]*"/g,'').replace(/^<svg\b/,'<svg preserveAspectRatio="none"');
   const textWidth=Math.min(256,paperDots-64),textLeft=Math.floor((paperDots-textWidth)/2),barTop=price?58:46,barHeight=price?64:72,codeTop=price?126:122;
   thermalCSS='.label{position:relative;padding:0;display:block}.label strong,.label small,.label .price{position:absolute;left:'+mm(textLeft)+';width:'+mm(textWidth)+';overflow:hidden;white-space:nowrap;text-align:center}.label strong{top:'+mm(price?8:16)+';height:'+mm(price?22:26)+';max-height:none;font-size:'+(price?'7.5':'8')+'pt;line-height:'+mm(price?22:26)+';text-overflow:ellipsis}.label svg{position:absolute;left:'+mm(Math.floor((paperDots-dots[0])/2))+';top:'+mm(barTop)+';width:'+mm(dots[0])+';height:'+mm(barHeight)+';shape-rendering:crispEdges}.label small{top:'+mm(codeTop)+';height:'+mm(20)+';font-size:7pt;line-height:'+mm(20)+'}.label .price{right:auto;top:'+mm(32)+';height:'+mm(22)+';line-height:'+mm(22)+';font-size:7.5pt}';
+  if(large)thermalCSS+='.label strong,.label small,.label .price{left:'+mm(24)+';width:'+mm(paperDots-48)+'}.label strong{top:'+mm(8)+';height:'+mm(32)+';line-height:'+mm(32)+';font-size:10pt}.label .price{top:'+mm(42)+';height:'+mm(34)+';line-height:'+mm(34)+';font-size:11pt}.label svg{top:'+mm(price?82:50)+';height:'+mm(price?80:104)+'}.label small{top:'+mm(price?166:158)+';height:'+mm(28)+';line-height:'+mm(28)+';font-size:9pt}';
  }else if(!a4){
   thermalCSS='.label{justify-content:flex-start;padding:2mm;gap:.5mm}.label strong{width:100%;max-height:none;height:3.3mm;flex:0 0 3.3mm;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}';
  }
