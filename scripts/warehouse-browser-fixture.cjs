@@ -52,8 +52,8 @@ async function scan(page,code='FGP-00000001',suffix='Enter'){
   const id=await page.evaluate(code=>{const id=crypto.randomUUID();window.__testInbox??=[];window.__testAcknowledged??=[];window.warehouseDesktop={...window.warehouseDesktop,usbInbox:async()=>({items:window.__testInbox}),usbResult:async(id,result)=>{window.__testAcknowledged.push({id,result});window.__testInbox=window.__testInbox.filter(x=>x.id!==id);}};window.__testInbox.push({id,kind:'receipt',code});return id;},code);
   await page.waitForFunction(id=>window.__testAcknowledged.some(x=>x.id===id),id);return;
  }
- // Deliver the decoded IME value atomically. Per-key automation round trips
- // can pause inside a long QR and accidentally test an incomplete scan.
- await page.keyboard.insertText(code);if(suffix)await page.keyboard.press(suffix);
+ // The first key exercises focus recovery from a button; deliver the rest
+ // as one decoded IME value so automation cannot pause inside a long QR.
+ await page.keyboard.type(code.slice(0,1));await page.keyboard.insertText(code.slice(1));if(suffix)await page.keyboard.press(suffix);
 }
 module.exports={actor,part,second,catalog,launchOptions,serve,backend,scan};
