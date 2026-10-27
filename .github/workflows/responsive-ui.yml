@@ -1,10 +1,10 @@
 name: FastGo responsive UI
 on:
   pull_request:
-    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
+    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','scripts/check-warehouse-mobile-labels.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
   push:
     branches: [main]
-    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
+    paths: ['workshop/**','workshop.css','workshop.html','warehouse/**','warehouse.html','scripts/check-fastgo-responsive-browser.cjs','scripts/check-warehouse-mobile-labels.cjs','design/fastgo-evolution-options.html','scripts/check-fastgo-concepts.cjs','.github/workflows/responsive-ui.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,6 +22,7 @@ jobs:
       - run: npm install --prefix /tmp/fastgo-responsive playwright@1.62.1
       - run: /tmp/fastgo-responsive/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-fastgo-responsive-browser.cjs ${{ matrix.browser }}
+      - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-mobile-labels.cjs ${{ matrix.browser }}
       - if: matrix.browser != 'firefox'
         run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-fastgo-concepts.cjs ${{ matrix.browser }}
       - uses: actions/upload-artifact@v4

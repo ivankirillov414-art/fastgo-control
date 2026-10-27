@@ -21,3 +21,25 @@ test('preorder browsing restarts automatically after idle even with a focused li
  const x=setup();x.window.location.hash='#preorders';x.setTime(120001);x.setFocus(true);x.document.activeElement.closest=()=>({});assert.equal(x.window.fastgoUpdateSafe(),true);
  x.events.change();assert.equal(x.window.fastgoUpdateSafe(),false);x.setTime(240002);assert.equal(x.window.fastgoUpdateSafe(),true);x.setDirty(true);assert.equal(x.window.fastgoUpdateSafe(),false);x.setDirty(false);x.setModal(true);assert.equal(x.window.fastgoUpdateSafe(),false);
 });
+
+test('a clean staff table can restart after two idle minutes while editing and the atomic lock remain protected',()=>{
+ const x=setup();x.window.location.hash='#staff';x.events.hashchange();
+ x.setTime(119999);assert.equal(x.window.fastgoUpdateSafe(),false);
+ x.setTime(120000);assert.equal(x.window.fastgoUpdateSafe(),true);
+ x.setDirty(true);assert.match(x.window.fastgoUpdateBlockReason(),/Сохраните/);assert.equal(x.window.fastgoLockForUpdate(),false);assert.equal(x.document.body.inert,false);
+ x.setDirty(false);x.setModal(true);assert.match(x.window.fastgoUpdateBlockReason(),/Закройте/);assert.equal(x.window.fastgoLockForUpdate(true),false);
+ x.setModal(false);x.setFocus(true);assert.match(x.window.fastgoUpdateBlockReason(),/Завершите ввод/);assert.equal(x.window.fastgoLockForUpdate(true),false);
+ x.setFocus(false);assert.equal(x.window.fastgoLockForUpdate(),true);assert.equal(x.document.body.inert,true);assert.equal(x.window.fastgoUpdateSafe(true),false);
+ x.window.fastgoReleaseUpdateLock();assert.equal(x.document.body.inert,false);assert.equal(x.window.fastgoUpdateSafe(),false);
+});
+
+test('staff-table activity resets automatic-update idle time without broadening other routes',()=>{
+ const x=setup();x.window.location.hash='#staff';let time=120000;
+ for(const event of ['pointerdown','keydown','input','change','wheel','hashchange']){
+  x.setTime(time);assert.equal(x.window.fastgoUpdateSafe(),true);
+  x.events[event]();assert.equal(x.window.fastgoUpdateSafe(),false);assert.match(x.window.fastgoUpdateBlockReason(),/две минуты/);
+  x.setTime(time+119999);assert.equal(x.window.fastgoUpdateSafe(),false);time+=120000;
+ }
+ x.setTime(time);assert.equal(x.window.fastgoUpdateSafe(),true);
+ x.window.location.hash='#account';assert.equal(x.window.fastgoUpdateSafe(true),false);
+});

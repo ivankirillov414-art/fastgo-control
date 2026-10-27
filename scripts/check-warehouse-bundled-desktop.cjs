@@ -5,5 +5,13 @@ fs.writeFileSync(wrapper,`const {app,net}=require('electron');app.setPath('userD
 (async()=>{const app=await _electron.launch({executablePath:process.env.FASTGO_ELECTRON||require(path.join(root,'node_modules/electron')),args:[wrapper],timeout:45000});try{
  let page;for(let i=0;i<60;i++){page=app.windows().find(p=>p.url()==='fastgo://app/warehouse.html');if(page)break;await new Promise(r=>setTimeout(r,200));}assert(page,'bundled warehouse window did not open');
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#login').waitFor();assert.equal(await page.locator('#login button').innerText(),'Войти');assert.equal(await page.evaluate(()=>Boolean(window.warehouseDesktop)),true);assert(fs.existsSync(path.join(data,'warehouse-bundled-ui-v1.txt')));assert.deepEqual(errors,[]);
+ const launchVisibility=await app.evaluate(({app,BrowserWindow})=>{
+  const window=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()==='fastgo://app/warehouse.html'),before=BrowserWindow.getAllWindows().length;
+  window.hide();const hidden=!window.isVisible();
+  app.emit('second-instance',{},[process.execPath,app.getAppPath(),'--background'],process.cwd());const quiet=!window.isVisible();
+  app.emit('second-instance',{},[process.execPath,app.getAppPath()],process.cwd());const reopened=window.isVisible();
+  app.emit('second-instance',{},[process.execPath,app.getAppPath(),'--background'],process.cwd());
+  return {hidden,quiet,reopened,visibleWorkPreserved:window.isVisible(),sameWindows:BrowserWindow.getAllWindows().length===before};
+ });assert.deepEqual(launchVisibility,{hidden:true,quiet:true,reopened:true,visibleWorkPreserved:true,sameWindows:true});
  console.log('PASS: standalone Electron warehouse boots from installed local assets with no internet, native USB bridge, preserved migration marker and login screen');
  }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

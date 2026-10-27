@@ -38,7 +38,15 @@ function barcodePrintHTML(p){
   svg=svg.replace(/\s+preserveAspectRatio="[^"]*"/g,'').replace(/^<svg\b/,'<svg preserveAspectRatio="none"');
   const textWidth=Math.min(256,paperDots-64),textLeft=Math.floor((paperDots-textWidth)/2),barTop=price?58:46,barHeight=price?64:72,codeTop=price?126:122;
   thermalCSS='.label{position:relative;padding:0;display:block}.label strong,.label small,.label .price{position:absolute;left:'+mm(textLeft)+';width:'+mm(textWidth)+';overflow:hidden;white-space:nowrap;text-align:center}.label strong{top:'+mm(price?8:16)+';height:'+mm(price?22:26)+';max-height:none;font-size:'+(price?'7.5':'8')+'pt;line-height:'+mm(price?22:26)+';text-overflow:ellipsis}.label svg{position:absolute;left:'+mm(Math.floor((paperDots-dots[0])/2))+';top:'+mm(barTop)+';width:'+mm(dots[0])+';height:'+mm(barHeight)+';shape-rendering:crispEdges}.label small{top:'+mm(codeTop)+';height:'+mm(20)+';font-size:7pt;line-height:'+mm(20)+'}.label .price{right:auto;top:'+mm(32)+';height:'+mm(22)+';line-height:'+mm(22)+';font-size:7.5pt}';
-  if(large)thermalCSS+='.label strong,.label small,.label .price{left:'+mm(24)+';width:'+mm(paperDots-48)+'}.label strong{top:'+mm(8)+';height:'+mm(32)+';line-height:'+mm(32)+';font-size:10pt}.label .price{top:'+mm(42)+';height:'+mm(34)+';line-height:'+mm(34)+';font-size:11pt}.label svg{top:'+mm(price?82:50)+';height:'+mm(price?80:104)+'}.label small{top:'+mm(price?166:158)+';height:'+mm(28)+';line-height:'+mm(28)+';font-size:9pt}';
+  if(large){
+   // A stacked title/price left the code only 2.7 mm from a 27 mm cut edge.
+   // Share the heading row, then centre the whole block inside equal safe bands.
+   // Only bar height changes; the encoded X modules and quiet zones stay intact.
+   const paperHeightDots=Math.floor(height*203/25.4),heading=34,gap=8,caption=28;
+   const bars=Math.min(128,Math.max(64,paperHeightDots-64-heading-caption-gap*2));
+   const block=heading+gap+bars+gap+caption,top=Math.floor((paperHeightDots-block)/2),barY=top+heading+gap,codeY=barY+bars+gap;
+   thermalCSS+='.label-heading{position:absolute;left:'+mm(24)+';top:'+mm(top)+';width:'+mm(paperDots-48)+';height:'+mm(heading)+';gap:'+mm(8)+';align-items:center}.label-heading strong,.label-heading .price{position:static;left:auto;top:auto;width:auto;height:'+mm(heading)+';line-height:'+mm(heading)+';max-height:none}.label-heading strong{flex:1;min-width:0;font-size:10pt;text-align:'+(price?'left':'center')+';text-overflow:ellipsis}.label-heading .price{flex:0 0 auto;font-size:'+(paperDots<320?9:11)+'pt;overflow:visible;text-align:right}.label svg{top:'+mm(barY)+';height:'+mm(bars)+'}.label small{left:'+mm(24)+';width:'+mm(paperDots-48)+';top:'+mm(codeY)+';height:'+mm(caption)+';line-height:'+mm(caption)+';font-size:9pt}';
+  }
  }else if(!a4){
   thermalCSS='.label{justify-content:flex-start;padding:2mm;gap:.5mm}.label strong{width:100%;max-height:none;height:3.3mm;flex:0 0 3.3mm;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}';
  }
@@ -83,8 +91,11 @@ function registerBarcodePrinting({app,ipcMain,BrowserWindow,getWindow,preference
   let service=false;try{const u=new URL(frame?.url);service=u.protocol==='fastgo:'&&u.hostname==='app'&&u.pathname==='/workshop.html';}catch{}
   if(!parent||parent.isDestroyed()||event.sender!==parent.webContents||frame!==parent.webContents.mainFrame||!service&&!require('./warehouse-bridge.cjs').allowedWarehouseURL(frame?.url))throw Error('Недоступно');
   if(!p?.items||!Array.isArray(p.items))throw Error('Неверное задание печати');
+  if((p.widthMm!==undefined)!==(p.heightMm!==undefined))throw Error('Укажите ширину и высоту этикетки вместе');
+  const requestedSize=p.widthMm!==undefined?labelSize({widthMm:p.widthMm,heightMm:p.heightMm}):null;
   const printers=printerList(await systemPrinters(parent));rememberP2(printers);
   let saved=settings.read().profiles.label;if(p.printer_name!==undefined){if(typeof p.printer_name!=='string')throw Error('Выберите принтер');saved=profile({...saved,format:'label',deviceName:p.printer_name});}if(!saved?.deviceName)throw Error('Подключите термопринтер и выберите его в настройках печати');
+  if(requestedSize)saved=profile({...saved,...requestedSize});
   availablePrinter(printers,saved.deviceName);
   for(const item of p.items)barcodePrintHTML({...item,...saved,format:'label'});
   return receipts.run(p,(item,before)=>print(parent,{...item,...saved,format:'label',remember:p.remember_printer===true},before));
