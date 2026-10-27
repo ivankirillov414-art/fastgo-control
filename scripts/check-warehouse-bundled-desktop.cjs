@@ -13,5 +13,6 @@ fs.writeFileSync(wrapper,`const {app,net}=require('electron');app.setPath('userD
   app.emit('second-instance',{},[process.execPath,app.getAppPath(),'--background'],process.cwd());
   return {hidden,quiet,reopened,visibleWorkPreserved:window.isVisible(),sameWindows:BrowserWindow.getAllWindows().length===before};
  });assert.deepEqual(launchVisibility,{hidden:true,quiet:true,reopened:true,visibleWorkPreserved:true,sameWindows:true});
+ await require('./fullscreen-smoke.cjs')({app,page});
  console.log('PASS: standalone Electron warehouse boots from installed local assets with no internet, native USB bridge, preserved migration marker and login screen');
  }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

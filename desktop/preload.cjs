@@ -1,5 +1,9 @@
 const {contextBridge,ipcRenderer}=require('electron');
 const invoke=(channel,...args)=>ipcRenderer.invoke(channel,...args).then(value=>{if(value?.__desktopError)throw Error(value.message);return value;});
+contextBridge.exposeInMainWorld('fastgoWindow',Object.freeze({
+ state:()=>ipcRenderer.invoke('fastgo-window:state'),command:action=>ipcRenderer.invoke('fastgo-window:command',action),
+ onChanged:callback=>{const listener=(_event,state)=>callback(state);ipcRenderer.on('fastgo-window:changed',listener);return ()=>ipcRenderer.removeListener('fastgo-window:changed',listener);}
+}));
 contextBridge.exposeInMainWorld('fastgoDesktop',Object.freeze({
  warehouseStation:()=>invoke('fg-warehouse-station-get'),saveWarehouseStation:value=>invoke('fg-warehouse-station-save',value),
  version:'1.0.11',getSession:()=>invoke('fg-session-get'),saveSession:s=>invoke('fg-session-save',s),clearSession:()=>invoke('fg-session-clear'),

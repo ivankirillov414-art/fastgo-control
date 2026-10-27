@@ -44,6 +44,7 @@
       "bundled-ui.cjs",
       "web/**/*",
       "background.cjs",
+      "window-controls.cjs",
       "barcode-print.cjs",
       "avito-toast.cjs",
       "avito-toast-preload.cjs",

@@ -1,4 +1,8 @@
 const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('fastgoWindow',Object.freeze({
+ state:()=>ipcRenderer.invoke('fastgo-window:state'),command:action=>ipcRenderer.invoke('fastgo-window:command',action),
+ onChanged:callback=>{const listener=(_event,state)=>callback(state);ipcRenderer.on('fastgo-window:changed',listener);return ()=>ipcRenderer.removeListener('fastgo-window:changed',listener);}
+}));
 contextBridge.exposeInMainWorld('warehouseDesktop',Object.freeze({
  openNetworkDiagnostics:()=>ipcRenderer.invoke('warehouse-network:open'),
  notifyAvito:p=>ipcRenderer.invoke('warehouse:notifyAvito',p),
