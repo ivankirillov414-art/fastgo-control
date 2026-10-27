@@ -3159,6 +3159,18 @@
   }
 
   // warehouse/window-controls.js
+  function windowStateUpdates(apply) {
+    let revision = -1;
+    return (state) => {
+      if (!state) return false;
+      if (Number.isSafeInteger(state.revision)) {
+        if (state.revision < revision) return false;
+        revision = state.revision;
+      } else if (revision >= 0) return false;
+      apply(state);
+      return true;
+    };
+  }
   function installWindowControls({ bar, native: native2 = window.fastgoWindow, document: document2 = window.document } = {}) {
     if (!bar || !native2 || bar.querySelector("[data-fastgo-window-controls]")) return;
     const style = document2.createElement("style");
@@ -3171,8 +3183,7 @@
     controls.innerHTML = '<button type="button" data-window-action="toggle-fullscreen" aria-label="\u041F\u043E\u043B\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D (F11)" title="\u041F\u043E\u043B\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D (F11)" aria-pressed="false">' + icon('<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>') + '</button><div class="fastgo-window-frame" hidden><button type="button" data-window-action="minimize" aria-label="\u0421\u0432\u0435\u0440\u043D\u0443\u0442\u044C" title="\u0421\u0432\u0435\u0440\u043D\u0443\u0442\u044C">' + icon('<path d="M5 16h14"/>') + '</button><button type="button" data-window-action="restore" aria-label="\u0412\u0435\u0440\u043D\u0443\u0442\u044C \u043E\u043A\u043D\u043E" title="\u0412\u0435\u0440\u043D\u0443\u0442\u044C \u043E\u043A\u043D\u043E">' + icon('<rect x="5" y="5" width="14" height="14"/>') + '</button><button type="button" data-window-action="close" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C" title="\u0417\u0430\u043A\u0440\u044B\u0442\u044C">' + icon('<path d="m6 6 12 12M6 18 18 6"/>') + "</button></div>";
     bar.append(controls);
     let fullscreen = false;
-    const update = (state) => {
-      if (!state) return;
+    const update = windowStateUpdates((state) => {
       fullscreen = state.fullscreen === true;
       document2.body.classList.toggle("fastgo-window-fullscreen", fullscreen);
       const button = controls.querySelector("[data-window-action=toggle-fullscreen]"), label = fullscreen ? "\u0412\u044B\u0439\u0442\u0438 \u0438\u0437 \u043F\u043E\u043B\u043D\u043E\u0433\u043E \u044D\u043A\u0440\u0430\u043D\u0430 (Esc)" : "\u041F\u043E\u043B\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D (F11)";
@@ -3180,7 +3191,7 @@
       button.title = label;
       button.setAttribute("aria-pressed", String(fullscreen));
       controls.querySelector(".fastgo-window-frame").hidden = !fullscreen;
-    };
+    });
     const action = async (value) => {
       try {
         update(await native2.command(value));

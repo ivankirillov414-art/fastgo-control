@@ -1,4 +1,13 @@
 // Native fullscreen stays opt-in; ordinary browser and phone headers are unchanged.
+export function windowStateUpdates(apply){
+ let revision=-1;
+ return state=>{
+  if(!state)return false;
+  if(Number.isSafeInteger(state.revision)){if(state.revision<revision)return false;revision=state.revision;}
+  else if(revision>=0)return false;
+  apply(state);return true;
+ };
+}
 export function installWindowControls({bar,native=window.fastgoWindow,document=window.document}={}){
  if(!bar||!native||bar.querySelector('[data-fastgo-window-controls]'))return;
  const style=document.createElement('style');style.textContent=`
@@ -16,7 +25,7 @@ export function installWindowControls({bar,native=window.fastgoWindow,document=w
  controls.innerHTML='<button type="button" data-window-action="toggle-fullscreen" aria-label="Полный экран (F11)" title="Полный экран (F11)" aria-pressed="false">'+icon('<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>')+'</button><div class="fastgo-window-frame" hidden><button type="button" data-window-action="minimize" aria-label="Свернуть" title="Свернуть">'+icon('<path d="M5 16h14"/>')+'</button><button type="button" data-window-action="restore" aria-label="Вернуть окно" title="Вернуть окно">'+icon('<rect x="5" y="5" width="14" height="14"/>')+'</button><button type="button" data-window-action="close" aria-label="Закрыть" title="Закрыть">'+icon('<path d="m6 6 12 12M6 18 18 6"/>')+'</button></div>';
  bar.append(controls);
  let fullscreen=false;
- const update=state=>{if(!state)return;fullscreen=state.fullscreen===true;document.body.classList.toggle('fastgo-window-fullscreen',fullscreen);const button=controls.querySelector('[data-window-action=toggle-fullscreen]'),label=fullscreen?'Выйти из полного экрана (Esc)':'Полный экран (F11)';button.setAttribute('aria-label',label);button.title=label;button.setAttribute('aria-pressed',String(fullscreen));controls.querySelector('.fastgo-window-frame').hidden=!fullscreen;};
+ const update=windowStateUpdates(state=>{fullscreen=state.fullscreen===true;document.body.classList.toggle('fastgo-window-fullscreen',fullscreen);const button=controls.querySelector('[data-window-action=toggle-fullscreen]'),label=fullscreen?'Выйти из полного экрана (Esc)':'Полный экран (F11)';button.setAttribute('aria-label',label);button.title=label;button.setAttribute('aria-pressed',String(fullscreen));controls.querySelector('.fastgo-window-frame').hidden=!fullscreen;});
  const action=async value=>{try{update(await native.command(value));}catch{/* Keep existing native frame and shortcuts available if IPC is closing. */}};
  controls.addEventListener('click',event=>{const button=event.target.closest('[data-window-action]');if(button)void action(button.dataset.windowAction);});
  // A modal keeps its existing Escape-to-close action; the next Escape exits fullscreen.
