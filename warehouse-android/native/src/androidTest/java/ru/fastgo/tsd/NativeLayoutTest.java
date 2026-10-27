@@ -192,7 +192,23 @@ public final class NativeLayoutTest {
     private static void wakeAndUnlock() {
         DisplaySettings.shell("input keyevent KEYCODE_WAKEUP");
         DisplaySettings.shell("wm dismiss-keyguard");
+        dismissLauncherCrashDialog();
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+    }
+
+    private static void dismissLauncherCrashDialog() {
+        // CI API29 Launcher3 can crash on the deliberately tiny/font-scaled display.
+        // Only close that proven external crash dialog; FastGo/other failures remain visible.
+        String windows = DisplaySettings.shell("dumpsys window windows");
+        Pattern dialog = Pattern.compile("(?s)Window #\\d+ Window\\{[^\\n]*Application Error: com\\.android\\.launcher3[^\\n]*\\}:.*?(?=\\n\\s*Window #|\\z)");
+        Matcher match = dialog.matcher(windows);
+        while (match.find()) {
+            String window = match.group();
+            if (window.contains("mViewVisibility=0x0") && window.contains("isVisible=true")) {
+                DisplaySettings.shell("am force-stop com.android.launcher3");
+                return;
+            }
+        }
     }
 
     private static void awaitWindowFocus(ActivityScenario<MainActivity> scenario) throws Exception {
@@ -200,14 +216,14 @@ public final class NativeLayoutTest {
             boolean[] focused = {false};
             scenario.onActivity(a -> focused[0] = a.hasWindowFocus());
             if (focused[0]) return;
-            if (attempt == 20) wakeAndUnlock();
+            if (attempt == 0 || attempt == 20) wakeAndUnlock();
             Thread.sleep(50);
         }
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         android.app.KeyguardManager keyguard = (android.app.KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
         android.os.PowerManager power = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
         StringBuilder windows = new StringBuilder();
-        for (String line : DisplaySettings.shell("dumpsys window windows").split("\\r?\\n"))
+        for (String line : DisplaySettings.shell("dumpsys window").split("\\r?\\n"))
             if (line.contains("mCurrentFocus=") || line.contains("mFocusedApp=") || line.contains("mShowingLockscreen="))
                 windows.append(line.trim()).append('\n');
         fail("Native Activity has no window focus; interactive=" + power.isInteractive()
@@ -301,7 +317,9 @@ public final class NativeLayoutTest {
                 byte[] buffer = new byte[1024]; int count;
                 while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                 String response = output.toString("UTF-8");
-                if (response.contains("Error:") || response.contains("Exception")) throw new AssertionError(command + ": " + response);
+                // Diagnostic state may legitimately contain an "Application Error:" window.
+                if (!command.startsWith("dumpsys ") && Pattern.compile("(?m)^\\s*(?:Error:|Error type \\d+|Exception occurred while executing|java\\.lang\\.[\\w.]*Exception:|Security exception:|Permission Denial:|Unknown command:)").matcher(response).find())
+                    throw new AssertionError(command + ": " + response);
                 return response;
             } catch (Exception error) { throw new AssertionError(command, error); }
         }
