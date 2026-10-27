@@ -70,6 +70,25 @@
     return pickup ? "QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0432\u044B\u0434\u0430\u0447\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439" : link ? "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430. \u0414\u043B\u044F QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB" : "";
   }
 
+  // warehouse/scan-normalize.js
+  var keys = { \u0439: "q", \u0446: "w", \u0443: "e", \u043A: "r", \u0435: "t", \u043D: "y", \u0433: "u", \u0448: "i", \u0449: "o", \u0437: "p", \u0445: "[", \u044A: "]", \u0444: "a", \u044B: "s", \u0432: "d", \u0430: "f", \u043F: "g", \u0440: "h", \u043E: "j", \u043B: "k", \u0434: "l", \u0436: ";", \u044D: "'", \u044F: "z", \u0447: "x", \u0441: "c", \u043C: "v", \u0438: "b", \u0442: "n", \u044C: "m", \u0431: ",", \u044E: ".", \u0451: "`" };
+  var shifted = { "[": "{", "]": "}", ";": ":", "'": '"', ",": "<", ".": ">", "`": "~" };
+  var punctuation = { '"': "@", "\u2116": "#", ";": "$", ":": "^", "?": "&", ".": "/", ",": "?", "/": "|" };
+  var clean = (value) => String(value != null ? value : "").replace(/^[\x00-\x20\uFEFF]+|[\x00-\x20]+$/g, "");
+  var aim = (value) => value.replace(/^\][a-z][0-9]/i, "");
+  function normalizeScan(value) {
+    const raw = clean(value);
+    if (/[а-яё]/i.test(raw)) {
+      const mapped = aim([...raw].map((c) => {
+        const low = c.toLowerCase(), key2 = keys[low];
+        if (key2) return c === low ? key2 : shifted[key2] || key2.toUpperCase();
+        return punctuation[c] || c;
+      }).join(""));
+      if (/^(?:FGP-\d|FGC-|FGPARTS1\.|https?:\/\/)/i.test(mapped)) return mapped;
+    }
+    return aim(raw);
+  }
+
   // warehouse/client.js
   var BASE = "https://oqgpjfikjpcplnxueoki.supabase.co";
   var KEY = "sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
@@ -152,8 +171,8 @@
   }
   var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
   function matchBarcode(parts2, value) {
-    const code = String(value).trim().toUpperCase();
-    return parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code);
+    const find = (code) => parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code), raw = String(value).trim().toUpperCase(), exact = find(raw);
+    return exact.length ? exact : find(normalizeScan(value).toUpperCase());
   }
 
   // warehouse/scanner-diagnostics.js
@@ -230,11 +249,11 @@
       await loader;
     }
     async function tick() {
-      var _a2, _b;
+      var _a2, _b, _c;
       if (stopped || running) return;
       running = true;
       try {
-        const jobs = await call2("receipt_label_jobs");
+        const jobs = await call2("receipt_label_jobs", { label_pipeline: 2 });
         if (!Array.isArray(jobs) || !jobs.length) return;
         await barcode();
         for (const job2 of jobs) {
@@ -244,9 +263,9 @@
             window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
             return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
           });
-          await bridge.printReceiptLabels({ id: job2.id, items });
+          await bridge.printReceiptLabels({ id: job2.id, items, ...((_b = job2.result) == null ? void 0 : _b.printer_name) ? { printer_name: job2.result.printer_name, remember_printer: job2.result.remember_printer === true } : {} });
           await call2("receipt_label_ack", { id: job2.id });
-          notify({ ok: true, text: (((_b = job2.payload) == null ? void 0 : _b.kind) === "labels" ? "\u041F\u0435\u0447\u0430\u0442\u044C \u0441 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430" : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D") + " \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
+          notify({ ok: true, text: (((_c = job2.payload) == null ? void 0 : _c.kind) === "labels" ? "\u041F\u0435\u0447\u0430\u0442\u044C \u0441 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430" : "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D") + " \xB7 " + items.reduce((n, x) => n + x.quantity, 0) + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043E \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443" });
         }
       } catch (error) {
         notify({ ok: false, text: "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043F\u0440\u0438\u0445\u043E\u0434\u0430 \u043E\u0436\u0438\u0434\u0430\u044E\u0442 \u043F\u0435\u0447\u0430\u0442\u0438: " + error.message });
@@ -998,9 +1017,9 @@
       }).then(async () => {
         await cache.delete(address);
         await cache.put(address, new Response(blob, { headers: { "Content-Type": blob.type, "x-fastgo-stored": String(Date.now()), "x-fastgo-size": String(blob.size) } }));
-        const keys = await cache.keys();
+        const keys2 = await cache.keys();
         let bytes = 0, items = [];
-        for (const request2 of keys) {
+        for (const request2 of keys2) {
           const saved = await cache.match(request2), time = Number(saved.headers.get("x-fastgo-stored")), size = Number(saved.headers.get("x-fastgo-size"));
           if (Date.now() - time >= MAX_AGE) {
             await cache.delete(request2);
@@ -2648,16 +2667,17 @@
 
   // warehouse/payment-scanner.js
   function paymentScan(code, parts2) {
-    const value = String(code || "").trim();
+    const value = normalizeScan(code);
     if (value.startsWith("FGPARTS1.")) return { kind: "parts", code: value };
     if (!scanError("repair", value)) return { kind: "repair", code: value };
     const problem = scanError("sale", value);
     if (problem) throw Error(problem);
-    const found = matchBarcode(parts2, value);
-    if (found.length !== 1) throw Error(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
-    return { kind: "sale", code: value, part: found[0] };
+    const found = matchBarcode(parts2, code);
+    if (found.length !== 1) throw Object.assign(Error(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D" : "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u043B\u0443\u0447\u0435\u043D \u043A\u043E\u0434: " + value.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 80) + ". \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D."), { code: found.length ? "ambiguous" : "product_not_found" });
+    return { kind: "sale", code: found[0].barcode || value, part: found[0] };
   }
-  function installPaymentScanner({ enabled, parts: parts2, accept, error }) {
+  function installPaymentScanner({ enabled, parts: parts2, accept, error, refresh, observed = () => {
+  } }) {
     const form = document.createElement("form");
     form.className = "scanner-sink";
     form.setAttribute("aria-hidden", "true");
@@ -2670,9 +2690,29 @@
       const code = input.value.trim();
       input.value = "";
       if (!code) return;
-      chain = chain.then(() => {
+      chain = chain.then(async () => {
         if (!enabled()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E \u043F\u0435\u0440\u0435\u0434 \u043E\u043F\u043B\u0430\u0442\u043E\u0439. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
-        return accept(paymentScan(code, parts2()));
+        let scan;
+        try {
+          try {
+            scan = paymentScan(code, parts2());
+          } catch (e2) {
+            if (e2.code !== "product_not_found" || !refresh) throw e2;
+            await refresh();
+            scan = paymentScan(code, parts2());
+          }
+        } catch (e2) {
+          try {
+            observed({ received: true, matched: false, characters: code.length, normalized: normalizeScan(code) !== code, code: normalizeScan(code) });
+          } catch (e3) {
+          }
+          throw e2;
+        }
+        try {
+          observed({ received: true, matched: true, characters: code.length, normalized: normalizeScan(code) !== code, code: scan.kind === "sale" ? scan.part.barcode : "" });
+        } catch (e2) {
+        }
+        return accept(scan);
       }).catch((e2) => error(e2.message));
     };
     return bindScanner(input, form, enabled, { silent: true });
@@ -3117,7 +3157,11 @@
     lastDeviceStatus = 0;
     await desktopStatus();
   } });
-  if (!terminal) installPaymentScanner({ enabled: () => !!device && !busy && !nativeUpdatePending && document.body.dataset.readonly !== "true" && !["login", "connection", "connect", "setup", "basket"].includes(screen) && !document.querySelector("dialog[open]"), parts: () => parts, error: (text) => message(text, true), accept: (scan) => run(async () => {
+  if (!terminal) installPaymentScanner({ enabled: () => !!device && !busy && !nativeUpdatePending && document.body.dataset.readonly !== "true" && !["login", "connection", "connect", "setup", "basket"].includes(screen) && !document.querySelector("dialog[open]"), parts: () => parts, refresh: catalog, observed: (scan) => {
+    scannerTest = { ...scan, source: "atol" };
+    lastDeviceStatus = 0;
+    void desktopStatus();
+  }, error: (text) => message(text, true), accept: (scan) => run(async () => {
     if (job || screen === "repair" || !live.canPaymentScan()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u043E\u043F\u043B\u0430\u0442\u0443. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
     if (scan.kind === "parts") {
       await live.issueParts(scan.code);

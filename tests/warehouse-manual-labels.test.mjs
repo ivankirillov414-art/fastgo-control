@@ -13,7 +13,7 @@ function fixture(){
  const db=async(table,q='',method='GET',body)=>{
   if(table==='workshop_terminal_stations')return [{station_id:station}];
   if(table==='workshop_warehouse_devices')return [{id:station,name:'Драгнир'},{id:other,name:'Чужой ноутбук'}];
-  if(table==='workshop_device_status')return [{station_id:station,last_seen:new Date().toISOString(),details:{printing:{label:{deviceName:'P2 Label Printer'}}}}];
+  if(table==='workshop_device_status')return [{station_id:station,last_seen:new Date().toISOString(),details:{printing:{label:{deviceName:'P2 Label Printer'},printers:[{name:'P2 Label Printer'},{name:'4BARCODE 3B-365B'}]}}}];
   if(table==='rpc/workshop_native_snapshot')return structuredClone(snapshot);
   if(table!=='workshop_warehouse_queue')throw Error('Unexpected database access: '+table);
   const params=new URLSearchParams(q),id=params.get('id')?.slice(3),stationId=params.get('station_id')?.slice(3);
@@ -48,4 +48,12 @@ test('existing cash receipt worker accepts and acknowledges mobile labels exactl
  await assert.rejects(receiptLabels('receipt_label_ack',{id},{...ctx,device:{kind:'terminal'}}),e=>e.status===403);
  assert.equal((await receiptLabels('receipt_label_ack',{id},ctx)).printed,true);assert.equal((await receiptLabels('receipt_label_ack',{id},ctx)).printed,true);
  assert.equal((await h.request('label_enqueue',{request_id:id,part_id:h.part,station_id:h.station,quantity:6})).status,'printed');assert.equal(h.writes,1);
+});
+test('an owner can test and remember PC365, while old workers cannot print it on P2',async()=>{
+ const h=fixture(),p={request_id:randomUUID(),part_id:h.part,station_id:h.station,quantity:1,printer_name:'4BARCODE 3B-365B',remember_printer:true};
+ await h.request('label_enqueue',p);assert.equal(h.jobs[0].result.printer_name,p.printer_name);assert.equal(h.jobs[0].result.remember_printer,true);
+ const ctx={db:h.db,device:{kind:'station'},stationId:h.station};assert.equal((await receiptLabels('receipt_label_jobs',{},ctx)).length,0);assert.equal((await receiptLabels('receipt_label_jobs',{label_pipeline:2},ctx)).length,1);
+ await assert.rejects(h.request('label_enqueue',{...p,printer_name:'Microsoft Print to PDF'}),e=>e.status===409);
+ await assert.rejects(h.request('label_enqueue',{...p,request_id:randomUUID()},{...h.actor,role:'admin'}),e=>e.status===403);
+ await assert.rejects(h.request('label_enqueue',{...p,request_id:randomUUID(),printer_name:'Missing printer'}),e=>e.status===409);
 });

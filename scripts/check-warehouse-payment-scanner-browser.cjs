@@ -19,7 +19,7 @@ const {serve,backend,launchOptions}=require('./warehouse-browser-fixture.cjs');
  // A cash scanner never adds stock, even when the receipt screen is open.
  await page.locator('#nav-receipt').click();await scan('FGP-00000001');await page.locator('#live-items').filter({hasText:'Покрышка'}).waitFor();
  assert.equal(await page.locator('#live-submit').innerText(),'Принять оплату');
- await scan('FGP-00000001');await page.locator('[data-count]').filter({hasText:'2 шт.'}).waitFor();
+ await scan('ъС0АПЗ-00000001');await page.locator('[data-count]').filter({hasText:'2 шт.'}).waitFor();
  assert(!calls.some(p=>p.action==='live_receive'||p.action==='receipt'));
  // Wrong URLs and unknown products leave no queue jobs.
  await page.waitForFunction(()=>Object.keys(localStorage).some(k=>k.includes(':live:sale:station')&&JSON.parse(localStorage.getItem(k)||'null')?.acked===3));
@@ -36,6 +36,7 @@ const {serve,backend,launchOptions}=require('./warehouse-browser-fixture.cjs');
  await scan('https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id=66666666-6666-4666-8666-666666666666');
  await page.locator('#repair-pay').waitFor();assert.equal(await page.locator('h1').innerText(),'Оплата ремонта');assert(calls.some(p=>p.action==='repair_quote'));
  assert.equal(api.payments.length,0);assert.deepEqual(errors,[]);
+ const fresh=backend(),freshContext=await browser.newContext({viewport:{width:1280,height:800}});await fresh.connect(freshContext,false);const freshPage=await freshContext.newPage();await freshPage.goto(base+'/warehouse.html');await freshPage.locator('#receipt').waitFor();fresh.state.parts.push({id:'99999999-9999-4999-8999-999999999999',name:'Новая деталь',barcode:'FGP-00000999',quantity:2,retail_price:100,active:true});await freshPage.locator('h1').click();await freshPage.keyboard.insertText(']C0FGP-00000999');await freshPage.keyboard.press('Enter');await freshPage.locator('#live-items').filter({hasText:'Новая деталь'}).waitFor();await freshPage.waitForFunction(()=>Object.keys(localStorage).some(k=>k.includes(':live:sale:station')&&JSON.parse(localStorage.getItem(k)||'null')?.acked>=2));assert.equal(fresh.jobs.size,1);assert.equal(fresh.payments.length,0);await freshContext.close();
  console.log('PASS: ATOL auto-routes products and repair QR; receipt mode receives no cash scans; pickup QR issues automatically; lost-response retry is idempotent, no sale or payment');
  await context.close();
  }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

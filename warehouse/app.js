@@ -36,7 +36,7 @@ function applyReadOnly(){if(document.body.dataset.readonly!=='true')return;if(!w
 const unknown=unknownScans({call:(a,p)=>call(a,p),parts:()=>parts,refresh:catalog,run,message,owner:()=>['owner','developer'].includes(memberRole)});
 function message(v,error=false){$('message').textContent=v;$('message').className=error?'error':'';}
 let scannerTest=null;installScannerDiagnostics({parts:()=>parts,report:async extra=>{if(extra.scan_test)scannerTest=extra.scan_test;lastDeviceStatus=0;await desktopStatus();}});
-if(!terminal)installPaymentScanner({enabled:()=>!!device&&!busy&&!nativeUpdatePending&&document.body.dataset.readonly!=='true'&&!['login','connection','connect','setup','basket'].includes(screen)&&!document.querySelector('dialog[open]'),parts:()=>parts,error:text=>message(text,true),accept:scan=>run(async()=>{
+if(!terminal)installPaymentScanner({enabled:()=>!!device&&!busy&&!nativeUpdatePending&&document.body.dataset.readonly!=='true'&&!['login','connection','connect','setup','basket'].includes(screen)&&!document.querySelector('dialog[open]'),parts:()=>parts,refresh:catalog,observed:scan=>{scannerTest={...scan,source:'atol'};lastDeviceStatus=0;void desktopStatus();},error:text=>message(text,true),accept:scan=>run(async()=>{
  if(job||screen==='repair'||!live.canPaymentScan())throw Error('Завершите или отмените текущую оплату. Скан отменён.');
  if(scan.kind==='parts'){await live.issueParts(scan.code);return;}
  if(scan.kind==='repair'){
