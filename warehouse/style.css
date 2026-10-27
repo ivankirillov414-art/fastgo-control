@@ -127,3 +127,34 @@ body.warehouse-native-window header>b.warehouse-top-brand{position:static}
 .product-metric[data-metric=unit_cost]{grid-column:1 / -1}
 
 .inventory-item>span:last-child{display:flex;flex-direction:column;align-items:flex-end;gap:4px}.inventory-item .purchase-price{color:#9cb2c7;font-size:12px;font-weight:400}
+
+/* Keep the price visible on narrow phones instead of clipping a fixed-width grid. */
+@media(max-width:440px){
+ .inventory-columns,.inventory-item{grid-template-columns:minmax(0,.95fr) minmax(0,.65fr) minmax(0,1.35fr);gap:8px}
+ .inventory-columns>span:first-child{display:none}
+ .inventory-item>.inventory-name{grid-column:1/-1;font-size:14px}
+ .inventory-item>span{min-width:0;overflow-wrap:anywhere}
+}
+
+/* A wrapped web header can be taller than the fixed native Windows title bar. */
+@media(min-width:701px){body[data-mode=station] .warehouse-sidebar{top:var(--warehouse-header-height,64px);overflow-y:auto;overscroll-behavior:contain}}
+
+/* The card close action stays reachable while details and photos scroll. */
+.product-dialog{padding-top:0}
+.product-dialog[open]{padding-top:0;row-gap:18px}
+.product-dialog-toolbar{position:sticky;top:0;z-index:3;grid-column:1/-1;grid-row:1;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;margin:0 -28px;padding:6px 16px;background:#0f1e2f;border-bottom:1px solid #294057;font-size:14px;color:#aec3d6}
+.product-dialog-toolbar>.product-close{position:static;flex:0 0 44px;width:44px;min-height:44px;font-size:30px;background:#142d43;border:1px solid #365670;border-radius:8px;padding:0}
+.product-dialog>.product-main{grid-column:1;grid-row:2}
+.product-dialog>.product-photos{grid-column:2;grid-row:2}
+.product-dialog>.product-error{grid-column:1/-1;grid-row:3;margin:0;overflow-wrap:anywhere}
+.product-dialog>.product-error:empty{display:none}
+@media(max-width:700px){.product-dialog{padding-top:0}.product-dialog-toolbar{margin-inline:-18px;padding-inline:12px;flex:0 0 auto}}
+
+/* Local dialog scroll also works in older WebViews without dynamic viewport units. */
+dialog{max-height:calc(100vh - 24px);max-height:calc(var(--fastgo-viewport-height,100vh) - 24px);overflow-y:auto}
+:root[data-fastgo-visual-constrained] dialog[open]{position:fixed;top:calc(var(--fastgo-viewport-top,0px) + 12px);bottom:auto;margin-top:0;margin-bottom:0;max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
+:root[data-fastgo-visual-constrained] .product-photo-viewer{height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
+@media(max-height:600px){
+ .product-dialog[open],.new-part-dialog,.barcode-print-dialog,.unknown-dialog{max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
+ .barcode-print-dialog .actions,.new-part-dialog .actions{position:sticky;bottom:0;padding-block:10px;background:#142438;z-index:2}
+}

@@ -14,9 +14,9 @@
   };
   var __copyProps = (to, from, except, desc) => {
     if (from && typeof from === "object" || typeof from === "function") {
-      for (let key2 of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key2) && key2 !== except)
-          __defProp(to, key2, { get: () => from[key2], enumerable: !(desc = __getOwnPropDesc(from, key2)) || desc.enumerable });
+      for (let key3 of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key3) && key3 !== except)
+          __defProp(to, key3, { get: () => from[key3], enumerable: !(desc = __getOwnPropDesc(from, key3)) || desc.enumerable });
     }
     return to;
   };
@@ -80,8 +80,8 @@
     const raw = clean(value);
     if (/[а-яё]/i.test(raw)) {
       const mapped = aim([...raw].map((c) => {
-        const low = c.toLowerCase(), key2 = keys[low];
-        if (key2) return c === low ? key2 : shifted[key2] || key2.toUpperCase();
+        const low = c.toLowerCase(), key3 = keys[low];
+        if (key3) return c === low ? key3 : shifted[key3] || key3.toUpperCase();
         return punctuation[c] || c;
       }).join(""));
       if (/^(?:FGP-\d|FGC-|FGPARTS1\.|https?:\/\/)/i.test(mapped)) return mapped;
@@ -969,6 +969,12 @@
     function draw() {
       if (!dialog || !selected) return;
       dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><h2>' + esc(selected.name) + '</h2><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438", money(selected.retail_price)) + metric("unit_cost", "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430", money(selected.unit_cost)) + '</div><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc(selected.barcode || "") + "</b>" + (selected.barcode ? '<button type="button" class="primary" data-print-barcode>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</button>' : "") + '</div><p class="product-error" role="alert"></p>';
+      const toolbar = document.createElement("div");
+      toolbar.className = "product-dialog-toolbar";
+      const title = document.createElement("span");
+      title.textContent = "\u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430 \u0442\u043E\u0432\u0430\u0440\u0430";
+      toolbar.append(title, dialog.querySelector("[data-close]"));
+      dialog.prepend(toolbar);
       dialog.querySelector(".product-main").append(dialog.querySelector(".product-barcode"));
       stopPhotos == null ? void 0 : stopPhotos();
       const gallery = document.createElement("section");
@@ -1090,10 +1096,10 @@
   var MAX_AGE = 7 * 864e5;
   var pending = /* @__PURE__ */ new Map();
   var writes = Promise.resolve();
-  var keyFor = (key2) => "https://fastgo-photo-cache.invalid/" + encodeURIComponent(key2);
-  async function cachedPhoto(url, key2, { enabled = !!(((_a2) => (_a2 = globalThis.window) == null ? void 0 : _a2.fastgoDesktop)() || ((_b) => (_b = globalThis.window) == null ? void 0 : _b.warehouseDesktop)()), refresh = false } = {}) {
-    if (!enabled || !key2 || !globalThis.caches) return null;
-    const address = keyFor(key2), flight = address + (refresh ? ":refresh" : "");
+  var keyFor = (key3) => "https://fastgo-photo-cache.invalid/" + encodeURIComponent(key3);
+  async function cachedPhoto(url, key3, { enabled = !!(((_a2) => (_a2 = globalThis.window) == null ? void 0 : _a2.fastgoDesktop)() || ((_b) => (_b = globalThis.window) == null ? void 0 : _b.warehouseDesktop)()), refresh = false } = {}) {
+    if (!enabled || !key3 || !globalThis.caches) return null;
+    const address = keyFor(key3), flight = address + (refresh ? ":refresh" : "");
     if (pending.has(flight)) return pending.get(flight);
     const task = (async () => {
       var _a3;
@@ -1411,10 +1417,10 @@
 
   // workshop/product-intake.js
   var keyFor2 = (actor) => "fastgo_product_intake_v1:" + actor;
-  var write = (storage, key2, value) => {
+  var write = (storage, key3, value) => {
     const encoded = JSON.stringify(value);
-    storage.setItem(key2, encoded);
-    if (storage.getItem(key2) !== encoded) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0445\u043E\u0434 \u043F\u0440\u0438\u0451\u043C\u043A\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.");
+    storage.setItem(key3, encoded);
+    if (storage.getItem(key3) !== encoded) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0445\u043E\u0434 \u043F\u0440\u0438\u0451\u043C\u043A\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.");
   };
   function loadProductIntake(storage, actor) {
     var _a2, _b, _c;
@@ -1440,31 +1446,31 @@
   }
   async function continueProductIntake(storage, actor, { api: api2, uploadPhoto, onProgress = () => {
   } }) {
-    const key2 = keyFor2(actor), state = loadProductIntake(storage, actor);
+    const key3 = keyFor2(actor), state = loadProductIntake(storage, actor);
     if (!state) throw new Error("\u041D\u0435\u0442 \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u043E\u0439 \u043F\u0440\u0438\u0451\u043C\u043A\u0438.");
     if (!state.part) {
       onProgress("\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u0442\u043E\u0432\u0430\u0440\u2026");
       try {
         state.part = await api2("part_save", { ...state.product, request_id: state.ids.product });
       } catch (error) {
-        if ([400, 403, 404, 409, 413, 422].includes(error.status)) storage.removeItem(key2);
+        if ([400, 403, 404, 409, 413, 422].includes(error.status)) storage.removeItem(key3);
         throw error;
       }
-      write(storage, key2, state);
+      write(storage, key3, state);
     }
     if (state.quantity > 0 && !state.received) {
       onProgress("\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0437\u0434\u0430\u043D. \u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u2026");
       await api2("stock", { part_id: state.part.id, movement_type: "receipt", quantity: state.quantity, note: "\u041F\u0435\u0440\u0432\u0438\u0447\u043D\u0430\u044F \u0440\u0443\u0447\u043D\u0430\u044F \u043F\u0440\u0438\u0451\u043C\u043A\u0430", request_id: state.ids.stock });
       state.received = true;
-      write(storage, key2, state);
+      write(storage, key3, state);
     }
     if (state.photo && !state.photoSaved) {
       onProgress("\u0422\u043E\u0432\u0430\u0440 \u0438 \u043F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u0435 \u0444\u043E\u0442\u043E\u2026");
       await uploadPhoto(state.part, state.photo, state.ids.photo);
       state.photoSaved = true;
-      write(storage, key2, state);
+      write(storage, key3, state);
     }
-    storage.removeItem(key2);
+    storage.removeItem(key3);
     return state.part;
   }
 
@@ -1576,10 +1582,10 @@
   function offerLabelPrinting(part, quantity, { call: call2, actor }) {
     var _a2;
     if (!(part == null ? void 0 : part.barcode) || !Number.isInteger(quantity) || quantity < 1) return;
-    const key2 = "fastgo_label_offer_v1:" + actor + ":" + part.id;
+    const key3 = "fastgo_label_offer_v1:" + actor + ":" + part.id;
     let pending2 = null;
     try {
-      pending2 = JSON.parse(localStorage.getItem(key2) || "null");
+      pending2 = JSON.parse(localStorage.getItem(key3) || "null");
     } catch (e) {
     }
     if ((pending2 == null ? void 0 : pending2.part_id) !== part.id) pending2 = null;
@@ -1634,8 +1640,8 @@
         if (!pending2) {
           pending2 = { request_id: uuid(), part_id: part.id, quantity: count, station_id: station.value };
           const raw = JSON.stringify(pending2);
-          localStorage.setItem(key2, raw);
-          if (localStorage.getItem(key2) !== raw) throw Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
+          localStorage.setItem(key3, raw);
+          if (localStorage.getItem(key3) !== raw) throw Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
         }
         busy2 = true;
         button.disabled = true;
@@ -1645,14 +1651,14 @@
         error.textContent = "";
         const result = await call2("label_enqueue", pending2);
         if ((result == null ? void 0 : result.id) !== pending2.request_id || !["pending", "printed"].includes(result.status)) throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043F\u0435\u0447\u0430\u0442\u044C. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u044D\u0442\u043E \u0436\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435.");
-        localStorage.removeItem(key2);
+        localStorage.removeItem(key3);
         status.textContent = result.status === "printed" ? "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u0443\u0436\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u043D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0435\u043C." : "\u0417\u0430\u0434\u0430\u043D\u0438\u0435 \u043D\u0430 " + pending2.quantity + " \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u043D\u0430 \u043A\u0430\u0441\u0441\u0443. \u041F\u0435\u0447\u0430\u0442\u044C \u043D\u0430\u0447\u043D\u0451\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.";
         button.hidden = true;
         close.textContent = "\u0413\u043E\u0442\u043E\u0432\u043E";
       } catch (e2) {
         error.textContent = e2.message;
         if ([400, 403, 404, 409, 413, 422].includes(e2.status)) {
-          localStorage.removeItem(key2);
+          localStorage.removeItem(key3);
           pending2 = null;
           freeze(false);
         } else if (pending2) status.textContent = "\u041E\u0442\u0432\u0435\u0442 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C\xBB: \u043A\u043E\u0434 \u0437\u0430\u0434\u0430\u043D\u0438\u044F \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D, \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
@@ -2036,7 +2042,7 @@
 
   // warehouse/live-basket.js?v=20261016-scan-2
   function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh, repair: repair2, stationRepair, canOpen = () => true }) {
-    const $2 = (id) => document.getElementById(id), key2 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
+    const $2 = (id) => document.getElementById(id), key3 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
     let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve();
     const product2 = (x) => parts2().find((p) => p.id === (x == null ? void 0 : x.part_id));
     const shown = /* @__PURE__ */ new Map();
@@ -2056,7 +2062,7 @@
       if ((_a2 = local == null ? void 0 : local.usb_ids) == null ? void 0 : _a2.length) save3("usb:accepted", [...load2("usb:accepted") || [], ...local.usb_ids].slice(-1e4));
     }
     const cache = () => {
-      if (draft2) save3(key2(draft2.kind), draft2);
+      if (draft2) save3(key3(draft2.kind), draft2);
     };
     function checkpoint() {
       if (terminal2) return;
@@ -2077,7 +2083,7 @@
         await openMirror(latest || saved.current);
         return true;
       }
-      if (((_a2 = load2(key2(saved.kind))) == null ? void 0 : _a2.id) === saved.draft_id) {
+      if (((_a2 = load2(key3(saved.kind))) == null ? void 0 : _a2.id) === saved.draft_id) {
         await open(saved.kind);
         return true;
       }
@@ -2124,17 +2130,17 @@
     function finished(job2) {
       var _a2;
       if (!active) return;
-      const local = draft2 || load2(key2(job2.payload.kind)), extra = remaining(local, job2);
+      const local = draft2 || load2(key3(job2.payload.kind)), extra = remaining(local, job2);
       if (!terminal2) {
         save3("live:resume:station", null);
         save3("live-method:" + job2.id, null);
       }
       if ((local == null ? void 0 : local.id) === job2.id) {
         rememberUSB(local);
-        save3(key2(local.kind), null);
+        save3(key3(local.kind), null);
       }
       if (draft2) {
-        save3(key2(draft2.kind), null);
+        save3(key3(draft2.kind), null);
         save3("live:" + draft2.kind, null);
       }
       if (extra.length) {
@@ -2170,7 +2176,7 @@
         }
         if (r.state !== "queued") throw Error("\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0441\u044F \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435");
         local.acked = Math.max(local.acked || 0, r.payload.revision);
-        save3(key2(local.kind), local);
+        save3(key3(local.kind), local);
         if (active && draft2 === local && $2("live-sync")) $2("live-sync").textContent = "";
       }).catch(async (e) => {
         const job2 = await call2("job", { id: local.id }).catch(() => null);
@@ -2320,13 +2326,13 @@
       locked = false;
       overrides = {};
       lastId = "";
-      draft2 = load2(key2(kind)) || (terminal2 ? load2("live:" + kind) : null);
+      draft2 = load2(key3(kind)) || (terminal2 ? load2("live:" + kind) : null);
       if (draft2) {
         const r = await call2("job", { id: draft2.id }).catch(() => null);
         if ((r == null ? void 0 : r.state) === "done") {
           const extra = remaining(draft2, r);
           rememberUSB(draft2);
-          save3(key2(kind), null);
+          save3(key3(kind), null);
           save3("live:" + kind, null);
           draft2 = extra.length ? { ...newDraft(kind), items: extra, last_part_id: extra[extra.length - 1].part_id } : null;
         } else if ((r == null ? void 0 : r.state) === "processing") {
@@ -2589,7 +2595,7 @@
   }
 
   // warehouse/usb-client.js
-  function bindUSBInbox({ key: key2, label, container, enabled, add, error, bridge = window.warehouseDesktop }) {
+  function bindUSBInbox({ key: key3, label, container, enabled, add, error, bridge = window.warehouseDesktop }) {
     if (!(bridge == null ? void 0 : bridge.usbTarget)) {
       container.hidden = true;
       return () => {
@@ -2620,16 +2626,16 @@
         };
         container.append(b);
       };
-      if (unassigned) button("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043A\u0430\u043D\u044B (" + unassigned + ")", () => bridge.usbClaim(key2));
-      if (blocked) button("\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0441\u043A\u0430\u043D", () => bridge.usbAck(key2, [blocked.id]));
+      if (unassigned) button("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043A\u0430\u043D\u044B (" + unassigned + ")", () => bridge.usbClaim(key3));
+      if (blocked) button("\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0441\u043A\u0430\u043D", () => bridge.usbAck(key3, [blocked.id]));
     }
     async function poll2() {
       if (!live2() || working) return;
       working = true;
       try {
-        await bridge.usbTarget({ key: key2, label });
+        await bridge.usbTarget({ key: key3, label });
         if (!live2()) return;
-        const batch = await bridge.usbBatch(key2);
+        const batch = await bridge.usbBatch(key3);
         if (!live2()) return;
         let blocked;
         for (const item of batch.items) {
@@ -2638,7 +2644,7 @@
             blocked = item;
             break;
           }
-          await bridge.usbAck(key2, [item.id]);
+          await bridge.usbAck(key3, [item.id]);
         }
         if (live2()) render(batch.unassigned, blocked);
       } catch (e) {
@@ -2721,18 +2727,18 @@
     delete body.request_id;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical({ action, body })));
     const signature = Array.from(new Uint8Array(digest), (n) => n.toString(16).padStart(2, "0")).join("");
-    const key2 = "fastgo_pending_v1:" + actor + ":" + signature;
+    const key3 = "fastgo_pending_v1:" + actor + ":" + signature;
     let entry;
     try {
-      entry = JSON.parse(storage.getItem(key2) || "null");
+      entry = JSON.parse(storage.getItem(key3) || "null");
     } catch (e) {
     }
     if (!entry) {
       entry = { request_id: params.request_id || crypto.randomUUID(), action, created_at: (/* @__PURE__ */ new Date()).toISOString() };
-      storage.setItem(key2, JSON.stringify(entry));
+      storage.setItem(key3, JSON.stringify(entry));
     }
-    if (!storage.getItem(key2)) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u043E\u0434 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435. \u041E\u0441\u0432\u043E\u0431\u043E\u0434\u0438\u0442\u0435 \u043C\u0435\u0441\u0442\u043E \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
-    return { key: key2, params: { ...params, request_id: entry.request_id }, finish: () => storage.removeItem(key2) };
+    if (!storage.getItem(key3)) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u043E\u0434 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435. \u041E\u0441\u0432\u043E\u0431\u043E\u0434\u0438\u0442\u0435 \u043C\u0435\u0441\u0442\u043E \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
+    return { key: key3, params: { ...params, request_id: entry.request_id }, finish: () => storage.removeItem(key3) };
   }
 
   // warehouse/preorders.js
@@ -2740,7 +2746,7 @@
   var esc2 = (value) => String(value != null ? value : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var money3 = (value) => Number(value || 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " \u20BD";
   var date = (value, time = false) => value ? new Date(value.length === 10 ? value + "T12:00:00+05:00" : value).toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg", year: "numeric", month: "2-digit", day: "2-digit", ...time ? { hour: "2-digit", minute: "2-digit" } : {} }) : "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430";
-  var options = (values, selected) => Object.entries(values).map(([key2, label]) => '<option value="'.concat(key2, '"').concat(key2 === selected ? " selected" : "", ">").concat(label, "</option>")).join("");
+  var options = (values, selected) => Object.entries(values).map(([key3, label]) => '<option value="'.concat(key3, '"').concat(key3 === selected ? " selected" : "", ">").concat(label, "</option>")).join("");
   var fullName = (r) => [r.last_name, r.first_name, r.middle_name].filter(Boolean).join(" ");
   var preorderAccess = (me) => ["developer", "owner", "admin", "receiver", "manager", "seller"].includes(me == null ? void 0 : me.role) || (me == null ? void 0 : me.can_sell) === true;
   function mountPreorders({ root, call: call2, actor, onDirty = () => {
@@ -3047,7 +3053,83 @@
     return { ready, dispose, hasDraft: () => dirty || saving };
   }
 
+  // workshop/viewport-layout.js
+  var key = /* @__PURE__ */ Symbol.for("fastgo.viewport-layout");
+  function installViewportLayout({ header = null } = {}) {
+    var _a2, _b;
+    const win = window, root = document.documentElement;
+    if (win[key]) {
+      if (header) win[key].observeHeader(header);
+      win[key].update();
+      return win[key].dispose;
+    }
+    let frame = 0, observer = null, observedHeader = null, disposed = false;
+    const set = (name, value) => {
+      if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
+    };
+    function update() {
+      var _a3, _b2;
+      if (disposed) return;
+      if (frame) {
+        win.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      const viewport = win.visualViewport, useVisual = viewport && Math.abs((viewport.scale || 1) - 1) < 0.05;
+      const height = Math.round(useVisual && viewport.height || win.innerHeight), top = useVisual ? Math.max(0, Math.round(viewport.offsetTop || 0)) : 0;
+      const constrained = height < win.innerHeight - 80;
+      if (height > 0) {
+        set("--fastgo-viewport-height", height + "px");
+        set("--fastgo-viewport-top", top + "px");
+        if (constrained) root.setAttribute("data-fastgo-visual-constrained", "");
+        else root.removeAttribute("data-fastgo-visual-constrained");
+      }
+      if (observedHeader == null ? void 0 : observedHeader.isConnected) set("--warehouse-header-height", Math.ceil(observedHeader.getBoundingClientRect().height) + "px");
+      const active = document.activeElement, panel = (_a3 = active == null ? void 0 : active.closest) == null ? void 0 : _a3.call(active, "dialog[open],.compact-panel-body.is-open,.repair-pane-body");
+      if (constrained && panel && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
+        const bounds = panel.getBoundingClientRect(), toolbar = panel.querySelector(".product-dialog-toolbar");
+        const lower = Math.min(bounds.bottom, top + height) - 20, upper = Math.max(bounds.top, top) + ((toolbar == null ? void 0 : toolbar.getBoundingClientRect().height) || 12);
+        const editor = (_b2 = active.closest(".metric-editor")) == null ? void 0 : _b2.getBoundingClientRect(), field = editor && editor.height <= lower - upper ? editor : active.getBoundingClientRect();
+        if (field.bottom > lower) panel.scrollTop += field.bottom - lower;
+        else if (field.top < upper) panel.scrollTop -= upper - field.top;
+      }
+    }
+    const schedule = () => {
+      if (!disposed && !frame) frame = win.requestAnimationFrame(update);
+    };
+    function observeHeader(value) {
+      if (value === observedHeader) return;
+      observer == null ? void 0 : observer.disconnect();
+      observedHeader = value;
+      if (value && win.ResizeObserver) {
+        observer = new win.ResizeObserver(schedule);
+        observer.observe(value);
+      }
+      schedule();
+    }
+    function dispose() {
+      var _a3, _b2;
+      if (disposed) return;
+      disposed = true;
+      if (frame) win.cancelAnimationFrame(frame);
+      observer == null ? void 0 : observer.disconnect();
+      win.removeEventListener("resize", schedule);
+      win.removeEventListener("orientationchange", schedule);
+      (_a3 = win.visualViewport) == null ? void 0 : _a3.removeEventListener("resize", schedule);
+      (_b2 = win.visualViewport) == null ? void 0 : _b2.removeEventListener("scroll", schedule);
+      delete win[key];
+    }
+    win.addEventListener("resize", schedule);
+    win.addEventListener("orientationchange", schedule);
+    (_a2 = win.visualViewport) == null ? void 0 : _a2.addEventListener("resize", schedule);
+    (_b = win.visualViewport) == null ? void 0 : _b.addEventListener("scroll", schedule);
+    win[key] = { update, dispose, observeHeader };
+    observeHeader(header);
+    update();
+    return dispose;
+  }
+
   // warehouse/app.js
+  installViewportLayout({ header: document.querySelector("body > header") });
   var formValues = (form) => {
     const p = {};
     new FormData(form).forEach((v, k) => p[k] = v);
@@ -3091,15 +3173,15 @@
     printerButton.hidden = !printerSetupAvailable();
     printerButton.onclick = setupLabelPrinter;
   }
-  var key = (n) => "fgwarehouse:" + userId() + ":" + n;
+  var key2 = (n) => "fgwarehouse:" + userId() + ":" + n;
   var load = (n) => {
     try {
-      return JSON.parse(localStorage.getItem(key(n)) || "null");
+      return JSON.parse(localStorage.getItem(key2(n)) || "null");
     } catch (e) {
       throw Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
     }
   };
-  var save2 = (n, v) => localStorage.setItem(key(n), JSON.stringify(v));
+  var save2 = (n, v) => localStorage.setItem(key2(n), JSON.stringify(v));
   var repair = repairPayment({ call: (a, p) => call(a, p), render: (html) => {
     live.cleanup();
     screen = "repair";

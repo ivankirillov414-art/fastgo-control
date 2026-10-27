@@ -1,4 +1,5 @@
 import {layoutRepairCard} from './repair-card.js';
+import {installViewportLayout} from './viewport-layout.js';
 import {startNotifications} from './notifications.js';
 import {avitoApi} from './core.js';
 import {uploadsPending} from './upload-ui.js';
@@ -15,6 +16,7 @@ import {canSell,canEditCatalog,api,invalidateReads,esc,money,date,today,fio,numb
 import {renderIntake,renderDetail} from './orders.js';
 import {renderDocument} from './documents.js';
 import {renderQa} from './qa.js';
+installViewportLayout();
 installSuggestions();
 const $=id=>document.getElementById(id),app=$('app');let me=null,epoch=0,cache=null,dirty=false,loadingTimer=null;
 window.fastgoHasUnsavedChanges=()=>dirty||uploadsPending();

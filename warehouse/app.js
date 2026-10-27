@@ -17,6 +17,8 @@ import {installPaymentScanner} from './payment-scanner.js';
 import {setupLabelPrinter,printerSetupAvailable} from './printer-settings.js';
 import {mountPreorders,preorderAccess} from './preorders.js';
 import {api,serviceApi,login,logout,userId,esc,money,uuid,matchBarcode} from './client.js';
+import {installViewportLayout} from '../workshop/viewport-layout.js';
+installViewportLayout({header:document.querySelector('body > header')});
 const formValues=form=>{const p={};new FormData(form).forEach((v,k)=>p[k]=v);return p;};
 const $=id=>document.getElementById(id),terminal=document.body.dataset.mode==='terminal';let device,parts=[],staff=[],screen='home',draft,job,busy=false,polling=false,memberRole='',lastActivity=Date.now();
 let stopScanner,stopUSB,preorderView;
