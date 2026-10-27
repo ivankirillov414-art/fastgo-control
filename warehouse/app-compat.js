@@ -175,6 +175,107 @@
     return exact.length ? exact : find(normalizeScan(value).toUpperCase());
   }
 
+  // warehouse/scanner.js
+  function bindScanner(input, form, enabled, { silent = false } = {}) {
+    let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
+    const editable = (el) => el && (el.matches("input,textarea,select") || el.isContentEditable);
+    const reset = () => {
+      clearTimeout(timer);
+      previous = "";
+      lastAt = 0;
+      burst = 0;
+    };
+    const live2 = () => !disposed && input.isConnected && enabled();
+    const focus = () => {
+      if (live2() && (!editable(document.activeElement) || document.activeElement === input)) {
+        input.focus({ preventScroll: true });
+      }
+    };
+    if (silent) {
+      input.setAttribute("inputmode", "none");
+      input.tabIndex = -1;
+    }
+    const submit = () => {
+      reset();
+      if (live2() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    };
+    const onInput = (e) => {
+      if (!live2() || e.isComposing) return reset();
+      const value = input.value, now = performance.now();
+      if (value === previous) return;
+      clearTimeout(timer);
+      const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
+      if (added <= 0) {
+        reset();
+        previous = value;
+        return;
+      }
+      burst = appended && now - lastAt <= 65 ? burst + added : added;
+      previous = value;
+      lastAt = now;
+      if (added >= 4 || burst >= 4) timer = setTimeout(() => {
+        if (live2() && (silent || document.activeElement === input) && input.value === value) submit();
+      }, 200);
+    };
+    const onKey = (e) => {
+      if (!live2() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.target === input && (e.key === "Enter" || e.key === "Tab") && input.value.trim()) {
+        e.preventDefault();
+        submit();
+        return;
+      }
+      if (!editable(e.target) && e.key && e.key.length === 1) {
+        e.preventDefault();
+        focus();
+        input.setRangeText(e.key, input.selectionStart, input.selectionEnd, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    const onPaste = () => {
+      setTimeout(() => {
+        if (live2()) onInput({ isComposing: false });
+      }, 0);
+    };
+    const suspend = () => {
+      if (silent) {
+        reset();
+        input.blur();
+      }
+    };
+    const onVisible = () => {
+      if (document.hidden) suspend();
+      else focus();
+    };
+    const onClick = (e) => {
+      if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
+    };
+    input.addEventListener("input", onInput);
+    input.addEventListener("change", onInput);
+    input.addEventListener("compositionend", onInput);
+    input.addEventListener("paste", onPaste);
+    form.addEventListener("submit", reset, true);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onClick);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", onVisible);
+    focus();
+    const paint = requestAnimationFrame(focus);
+    return () => {
+      disposed = true;
+      reset();
+      cancelAnimationFrame(paint);
+      input.removeEventListener("input", onInput);
+      input.removeEventListener("change", onInput);
+      input.removeEventListener("compositionend", onInput);
+      input.removeEventListener("paste", onPaste);
+      form.removeEventListener("submit", reset, true);
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }
+
   // warehouse/scanner-diagnostics.js
   function installScannerDiagnostics({ parts: parts2, report = async () => {
   } }) {
@@ -188,34 +289,26 @@
       const dialog = document.createElement("dialog");
       dialog.className = "barcode-print-dialog";
       dialog.setAttribute("aria-label", "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u043A\u0430\u043D\u0435\u0440\u0430");
-      dialog.innerHTML = '<h2>\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u043A\u0430\u043D\u0435\u0440\u0430</h2><div data-devices>\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 Windows\u2026</div><p>\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u043E\u0434\u043D\u0443 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0443. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u043F\u0440\u0438\u0445\u043E\u0434 \u0438\u043B\u0438 \u043F\u0440\u043E\u0434\u0430\u0436\u0443.</p><label>\u041A\u043E\u0434 \u0441\u043E \u0441\u043A\u0430\u043D\u0435\u0440\u0430<input data-scan autocomplete="off" spellcheck="false"></label><p data-result role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
+      dialog.innerHTML = '<h2>\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u043A\u0430\u043D\u0435\u0440\u0430</h2><div data-devices>\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 Windows\u2026</div><p>\u0421\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043F\u043E \u043E\u0447\u0435\u0440\u0435\u0434\u0438. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u043F\u0440\u0438\u0445\u043E\u0434 \u0438\u043B\u0438 \u043F\u0440\u043E\u0434\u0430\u0436\u0443.</p><form><label>\u041A\u043E\u0434 \u0441\u043E \u0441\u043A\u0430\u043D\u0435\u0440\u0430<input data-scan autocomplete="off" spellcheck="false"></label><button type="submit">\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043A\u043E\u0434</button></form><p data-result role="status"></p><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
       document.body.append(dialog);
       dialog.showModal();
-      dialog.onclose = () => dialog.remove();
       dialog.querySelector("[data-close]").onclick = () => dialog.close();
-      const input = dialog.querySelector("[data-scan]"), result = dialog.querySelector("[data-result]");
-      const check = () => {
+      const form = dialog.querySelector("form"), input = dialog.querySelector("[data-scan]"), result = dialog.querySelector("[data-result]");
+      form.onsubmit = (e) => {
+        e.preventDefault();
         const code = input.value.trim();
+        input.value = "";
         if (!code) return;
         const matches = matchBarcode(parts2(), code);
         result.textContent = matches.length === 1 ? "\u0421\u043A\u0430\u043D\u0435\u0440 \u043F\u0435\u0440\u0435\u0434\u0430\u043B \u043A\u043E\u0434 \xB7 " + matches[0].name : "\u041A\u043E\u0434 \u043F\u043E\u043B\u0443\u0447\u0435\u043D, \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0439 \u0432 \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0435: " + matches.length;
         void report({ scan_test: { received: true, matched: matches.length === 1, characters: code.length } }).catch(() => {
         });
       };
-      let timer;
-      input.oninput = () => {
-        clearTimeout(timer);
-        timer = setTimeout(check, 250);
+      const dispose = bindScanner(input, form, () => dialog.open);
+      dialog.onclose = () => {
+        dispose();
+        dialog.remove();
       };
-      input.onkeydown = (e) => {
-        if (e.key === "Enter" || e.key === "Tab") {
-          e.preventDefault();
-          clearTimeout(timer);
-          check();
-        }
-      };
-      dialog.addEventListener("close", () => clearTimeout(timer));
-      input.focus();
       try {
         const status = await bridge.scannerStatus();
         if (!dialog.isConnected) return;
@@ -1939,107 +2032,6 @@
       });
     }
     return { terminal: terminal2, station, checkout: checkout2 };
-  }
-
-  // warehouse/scanner.js
-  function bindScanner(input, form, enabled, { silent = false } = {}) {
-    let timer, previous = "", lastAt = 0, burst = 0, disposed = false;
-    const editable = (el) => el && (el.matches("input,textarea,select") || el.isContentEditable);
-    const reset = () => {
-      clearTimeout(timer);
-      previous = "";
-      lastAt = 0;
-      burst = 0;
-    };
-    const live2 = () => !disposed && input.isConnected && enabled();
-    const focus = () => {
-      if (live2() && (!editable(document.activeElement) || document.activeElement === input)) {
-        input.focus({ preventScroll: true });
-      }
-    };
-    if (silent) {
-      input.setAttribute("inputmode", "none");
-      input.tabIndex = -1;
-    }
-    const submit = () => {
-      reset();
-      if (live2() && input.value.trim()) form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    };
-    const onInput = (e) => {
-      if (!live2() || e.isComposing) return reset();
-      const value = input.value, now = performance.now();
-      if (value === previous) return;
-      clearTimeout(timer);
-      const appended = value.startsWith(previous), added = appended ? value.length - previous.length : value.length;
-      if (added <= 0) {
-        reset();
-        previous = value;
-        return;
-      }
-      burst = appended && now - lastAt <= 65 ? burst + added : added;
-      previous = value;
-      lastAt = now;
-      if (added >= 4 || burst >= 4) timer = setTimeout(() => {
-        if (live2() && (silent || document.activeElement === input) && input.value === value) submit();
-      }, 200);
-    };
-    const onKey = (e) => {
-      if (!live2() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
-      if (e.target === input && (e.key === "Enter" || e.key === "Tab") && input.value.trim()) {
-        e.preventDefault();
-        submit();
-        return;
-      }
-      if (!editable(e.target) && e.key && e.key.length === 1) {
-        e.preventDefault();
-        focus();
-        input.setRangeText(e.key, input.selectionStart, input.selectionEnd, "end");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    };
-    const onPaste = () => {
-      setTimeout(() => {
-        if (live2()) onInput({ isComposing: false });
-      }, 0);
-    };
-    const suspend = () => {
-      if (silent) {
-        reset();
-        input.blur();
-      }
-    };
-    const onVisible = () => {
-      if (document.hidden) suspend();
-      else focus();
-    };
-    const onClick = (e) => {
-      if (!editable(e.target) && !e.target.closest("button,a,label")) focus();
-    };
-    input.addEventListener("input", onInput);
-    input.addEventListener("change", onInput);
-    input.addEventListener("compositionend", onInput);
-    input.addEventListener("paste", onPaste);
-    form.addEventListener("submit", reset, true);
-    document.addEventListener("keydown", onKey, true);
-    document.addEventListener("click", onClick);
-    window.addEventListener("focus", focus);
-    document.addEventListener("visibilitychange", onVisible);
-    focus();
-    const paint = requestAnimationFrame(focus);
-    return () => {
-      disposed = true;
-      reset();
-      cancelAnimationFrame(paint);
-      input.removeEventListener("input", onInput);
-      input.removeEventListener("change", onInput);
-      input.removeEventListener("compositionend", onInput);
-      input.removeEventListener("paste", onPaste);
-      form.removeEventListener("submit", reset, true);
-      document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("click", onClick);
-      window.removeEventListener("focus", focus);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
   }
 
   // warehouse/live-basket.js?v=20261016-scan-2
