@@ -28,3 +28,10 @@
 [aria-busy="true"] label.btn{pointer-events:none;opacity:.6}
 
 .price-adjustment{margin:16px 0}.price-adjustment .total{display:flex;justify-content:space-between;gap:16px;font-size:24px;margin:12px 0}.price-adjustment .total b{white-space:nowrap}.price-actions{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0}.price-actions button{font-size:15px;min-height:44px;border:1px solid #397192;border-radius:8px;padding:10px 14px;color:inherit;background:#123951;cursor:pointer}.price-adjustment label{display:grid;gap:6px;margin:12px 0}.price-adjustment input,.price-adjustment select{width:100%;min-height:44px;border:1px solid #425571;border-radius:8px;padding:10px 14px;color:inherit;background:#101c2d;font:inherit}.price-adjustment [id$="-discount-field"]{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.6fr);gap:14px}.price-adjustment [hidden]{display:none!important}.price-adjustment [id$="-total-reset"]{border:1px solid #397192;border-radius:8px;padding:10px 14px;min-height:44px;background:#102539;color:inherit;cursor:pointer}.price-adjustment .muted:empty{display:none}@media(max-width:600px){.price-adjustment .total{font-size:20px}.price-adjustment [id$="-discount-field"]{grid-template-columns:1fr}.price-actions button{flex:1}}
+
+/* Short laptop/tablet windows scroll the navigation locally, without moving the page. */
+@media screen and (min-width:761px){.sidebar{height:100vh;height:var(--fastgo-viewport-height,100vh);overflow-y:auto;overscroll-behavior:contain}.sidebar .nav,.sidebar .profile{flex-shrink:0}}
+@media(max-width:600px){.pagehead{flex-wrap:wrap}.pagehead>div{min-width:0}}
+dialog{max-height:90vh;max-height:calc(var(--fastgo-viewport-height,100vh) - 24px);overflow-y:auto}
+:root[data-fastgo-visual-constrained] dialog[open]{position:fixed;top:calc(var(--fastgo-viewport-top,0px) + 12px);bottom:auto;margin-top:0;margin-bottom:0;max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
+:root[data-fastgo-visual-constrained] .compact-panel-body.is-open{top:calc(var(--fastgo-viewport-top,0px) + 12px);max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}

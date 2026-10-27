@@ -177,10 +177,10 @@ body:has(#desktop-status) .repair-visual{top:65px}
  .repair-workspace .repair-card-save{bottom:82px}
 }
 @media(max-width:760px){
- .workspace.repair-workspace{padding:8px 8px 88px;height:100dvh;overflow:hidden}
+ .workspace.repair-workspace{padding:8px 8px 88px;height:100vh;height:var(--fastgo-viewport-height,100dvh);overflow:hidden}
  .repair-card{display:flex;flex-direction:column;height:100%;padding:10px;gap:10px;min-height:0}
  .repair-card-top{display:block;flex:0 0 auto;width:100%}
- .repair-brand{min-height:34px;padding:0}
+ .repair-brand{min-height:34px;padding:0 42px 0 0;gap:8px}
  .repair-brand .brand{font-size:26px}
  .repair-workspace .order-detail-head{margin-top:10px;gap:8px;flex-wrap:wrap}
  .repair-pane-tabs{display:flex;gap:4px;width:100%;overflow-x:auto;flex:0 0 auto;padding-bottom:4px}
@@ -200,3 +200,5 @@ body:has(#desktop-status) .repair-visual{top:65px}
  .repair-pane-body:has(#repair-payment-panel:not([hidden])) .repair-payment-options{display:block}
  .repair-pane-body:has(#repair-payment-panel:not([hidden])) .repair-payment-options> :not(summary){display:block}
 }
+@media(max-width:760px){body:has(.repair-workspace) .fg-notice-bell{top:16px;right:20px;width:34px;height:34px}body:has(.repair-workspace) .fg-notice-bell svg{width:19px;height:19px}}
+@media(max-width:760px){:root[data-fastgo-visual-constrained] .workspace.repair-workspace{padding-bottom:8px}:root[data-fastgo-visual-constrained] .mobile-nav{display:none}}

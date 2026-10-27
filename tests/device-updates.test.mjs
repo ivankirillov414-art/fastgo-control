@@ -1,8 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {liveWarehouse} from '../supabase/functions/fastgo-warehouse/live.js';
 import {deviceStatus} from '../supabase/functions/fastgo-warehouse/device-status.js';
+
+test('managed TSD 2.1.9 channel ships the exact APK while preserving the legacy package and signing identity',()=>{
+ const metadata=JSON.parse(readFileSync(new URL('../warehouse/native-update.json',import.meta.url),'utf8'));
+ assert.equal(metadata.package,'ru.fastgo.tsd');assert.equal(metadata.versionCode,1);assert.equal(metadata.versionName,'2.0.0');
+ assert.equal(metadata.url,'https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/FastGo-TSD-2.0.0.apk');
+ assert.equal(metadata.sha256,'52121ec8e872e9adace7e3ba932a334ff6f12b220fa3ba944cee50f572a08ce3');
+ const channel=metadata.channels['ru.fastgo.tsd.app'];assert.equal(channel.package,'ru.fastgo.tsd.app');assert.equal(channel.versionCode,12);assert.equal(channel.versionName,'2.1.9');
+ assert.equal(channel.url,'https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/FastGo-TSD-2.1.9.apk');
+ assert.equal(channel.certificate_sha256,'72817ae5c97c8c60255ca3c029d4ecdd171ec0c33bc28a640e8c7ab0bdb637dd');
+ const apk=readFileSync(new URL('../warehouse/native/FastGo-TSD-2.1.9.apk',import.meta.url));
+ assert.equal(apk.length,channel.size);assert.equal(createHash('sha256').update(apk).digest('hex'),channel.sha256);
+});
 
 test('inactive empty native templates are acknowledged without reopening a laptop or changing stock',async()=>{
  const calls=[],db=async(...args)=>{calls.push(args);return [];};
