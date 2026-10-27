@@ -48,6 +48,7 @@
       "avito-toast.cjs",
       "avito-toast-preload.cjs",
       "backup-replica.cjs",
+      "backup-scheduler.cjs",
       "network-diagnostics.cjs",
       "network-window.cjs",
       "network-preload.cjs",

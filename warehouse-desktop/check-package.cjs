@@ -8,7 +8,7 @@ const pkg=require('./package.json'),dist=path.join(__dirname,'dist'),unpacked=pa
 assert.equal(pkg.build.productName,'FastGo Склад');assert.equal(pkg.build.nsis.shortcutName,'FastGo Склад');assert.equal(pkg.build.appId,'ru.fastgo.warehouse');
 const manifest=yaml.load(fs.readFileSync(path.join(dist,'latest.yml'),'utf8')),entry=manifest.files.find(x=>x.url===`FastGo-Warehouse-Setup-${pkg.version}-Windows-x64.exe`);
 assert(entry);assert.equal(manifest.version,pkg.version);assert.equal(crypto.createHash('sha512').update(fs.readFileSync(path.join(dist,entry.url))).digest('base64'),entry.sha512);assert(fs.existsSync(path.join(dist,entry.url+'.blockmap')));
-assert(asar.extractFile(archive,'backup-replica.cjs').toString().includes('class BackupReplica'));assert(asar.extractFile(archive,path.join('web','warehouse','app-compat.js')).toString().includes('warehouseUpdateSafe'));
+assert(asar.extractFile(archive,'backup-replica.cjs').toString().includes('class BackupReplica'));assert(asar.extractFile(archive,'backup-scheduler.cjs').toString().includes('class BackupScheduler'));assert(asar.extractFile(archive,path.join('web','warehouse','app-compat.js')).toString().includes('warehouseUpdateSafe'));
 for(const file of ['network-diagnostics.cjs','network-window.cjs','network-preload.cjs','network-snapshot.ps1','network.html','network.css','network-ui.js'])assert(asar.extractFile(archive,file).length>0,'Missing installed diagnostics: '+file);
 assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('class PrinterProfiles'));
 (async()=>{
