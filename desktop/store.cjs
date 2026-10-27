@@ -3,6 +3,14 @@ const {randomUUID}=require('node:crypto');
 const fs=require('node:fs'),path=require('node:path');
 const stable=v=>JSON.stringify(v??null);
 const contentKey=v=>JSON.stringify(v??null,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,value[key]])):value);
+const linkedRepairParts=rows=>(Array.isArray(rows)?rows:[]).filter(line=>typeof(line?.part_id||line?.id)==='string'&&String(line.part_id||line.id).trim()&&typeof line.quantity!=='boolean'&&Number.isSafeInteger(Number(line.quantity))&&Number(line.quantity)>0);
+function repairPartsState(record,current,p){
+ const linked=linkedRepairParts(current.parts);
+ if(linked.length)return {mode:linked.some(line=>line.tsd_issue_id)?'issued':'legacy'};
+ if(p.no_parts===true)return {mode:'none',pending:true};
+ if(p.no_parts===false||p.reopen_reason||String(current.assigned_master_id||'')!==String(record.assigned_master_id||'')||record.parts_status?.mode!=='none')return {mode:'pending',pending:true};
+ return record.parts_status;
+}
 const writes=new Set(['create','update','contact','payment','extend','upload','documents','storage_close','storage_delete']);
 const final=new Set(['issued','returned','cancelled','deleted']);
 const omit=new Set(['request_id','revision','id','kind','desktop_id','auto_assign','tags']);
@@ -32,7 +40,7 @@ class Store{
  rebuild(actor,kind,id){const row=this.row(actor,kind,id);if(!row)return;let record=JSON.parse(row.base);for(const op of this.pending(actor).filter(x=>x.kind===kind&&x.record_id===id))record=this.apply(record,op.action,op.patch,op.params);this.db.prepare('UPDATE records SET local=? WHERE actor=? AND kind=? AND id=?').run(stable(record),actor,kind,id);return record;}
  apply(record,action,patch,p){let r={...record};
   if(action==='create')return {...record,...patch};
-  if(['update','contact'].includes(action)){Object.assign(r,patch);if(action==='update'){const gross=[...(r.works||[]),...(r.parts||[])].reduce((s,x)=>s+Number(x.price||0)*Number(x.quantity||1),0);r.total_amount=r.total_override??Math.max(0,gross-Number(r.discount||0));if(r.total_override!=null)r.discount=Math.max(0,Math.round((gross-r.total_override)*100)/100);if(p.no_parts===true&&!(r.parts||[]).length)r.parts_status={mode:'none',pending:true};else if(!(r.parts||[]).length&&(record.parts_status?.mode!=='none'||r.assigned_master_id!==record.assigned_master_id))r.parts_status={mode:'pending'};}if(p.approve){r.approved_amount=r.total_amount;r.approval_note=p.approval_note||'';}}
+  if(['update','contact'].includes(action)){Object.assign(r,patch);if(action==='update'){const gross=[...(r.works||[]),...(r.parts||[])].reduce((s,x)=>s+Number(x.price||0)*Number(x.quantity||1),0);r.total_amount=r.total_override??Math.max(0,gross-Number(r.discount||0));if(r.total_override!=null)r.discount=Math.max(0,Math.round((gross-r.total_override)*100)/100);r.parts_status=repairPartsState(record,r,p);}if(p.approve){r.approved_amount=r.total_amount;r.approval_note=p.approval_note||'';}}
   if(action==='payment')r.paid_amount=Number(r.paid_amount||0)+Number(p.amount);
   if(action==='extend'){r.storage_amount=Number(r.storage_amount||0)+Number(p.months)*1990;r.extension_months=Number(r.extension_months||0)+Number(p.months);r.extension_amount=Number(r.extension_amount||0)+Number(p.months)*1990;const d=new Date(r.planned_return_date+'T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+Number(p.months));r.planned_return_date=d.toISOString().slice(0,10);}
   if(action==='storage_close'){r.status='returned';r.handover_notes=p.note;r.issued_at=new Date().toISOString();}
@@ -50,13 +58,15 @@ class Store{
    this.db.prepare('INSERT INTO records VALUES(?,?,?,?,?,0)').run(actor,kind,id,stable(before),stable(patch));
   }else{
    before=this.record(actor,kind,id);if(p.revision!==undefined&&Number(p.revision)!==Number(before.revision))throw Object.assign(Error('Карточка уже изменена в приложении. Обновите её.'),{status:409});
-   if(final.has(before.status)&&!['upload','documents'].includes(action)&&!p.reopen_reason)throw Error('Заказ закрыт. Откройте его повторно перед изменением.');
+   const authorizedReopen=action==='update'&&['issued','returned','cancelled'].includes(before.status)&&['owner','developer','admin'].includes(this.cache(actor,'me')?.role)&&String(p.reopen_reason||'').trim()&&p.status===(kind==='storage'?'stored':'accepted');
+   if(final.has(before.status)&&!['upload','documents'].includes(action)&&!authorizedReopen)throw Error('Заказ закрыт. Открыть его повторно может администратор с причиной.');
    if(kind==='repair'&&action==='update'){
     if(this.cache(actor,'me')?.role==='mechanic'&&p.parts!==undefined&&contentKey(p.parts)!==contentKey(before.parts||[]))throw Error('Запчасти выдаются только через ТСД; выданные детали изменяются на кассе');
     if(p.parts!==undefined){const available=(before.parts||[]).map(contentKey);if(!Array.isArray(p.parts)||!p.parts.every(line=>{const at=available.indexOf(contentKey(line));if(at<0)return false;available.splice(at,1);return true;}))throw Error('Запчасти в ремонт выдаются только через ТСД на кассе');}
-    const master=p.assigned_master_id??before.assigned_master_id,member=this.cache(actor,'me');
-    if(p.no_parts===true&&((p.parts||before.parts||[]).length||actor!==master&&!(member?.role==='mechanic'&&!master)&&!['owner','developer'].includes(member?.role)))throw Error('Отметку «Без замены запчастей» ставит мастер ремонта');
-    if(['ready','issued'].includes(p.status||before.status)&&!(p.parts||before.parts||[]).length&&p.no_parts!==true&&(before.parts_status?.mode!=='none'||master!==before.assigned_master_id))throw Error('Получите запчасти через ТСД или подтвердите «Без замены запчастей»');
+    const master=String(p.assigned_master_id??before.assigned_master_id??''),member=this.cache(actor,'me'),linked=linkedRepairParts(p.parts??before.parts);
+    if(p.no_parts===true&&(linked.length||actor!==master&&!(member?.role==='mechanic'&&!master)&&!['owner','developer'].includes(member?.role)))throw Error('Отметку «Ремонт без запчастей» ставит мастер ремонта');
+    const noParts=p.no_parts===true||!Object.hasOwn(p,'no_parts')&&!p.reopen_reason&&before.parts_status?.mode==='none'&&master===String(before.assigned_master_id||'');
+    if(['ready','issued'].includes(p.status||before.status)&&(p.status||before.status)!==before.status&&!linked.length&&!noParts)throw Error('Выдайте запчасти в этот ремонт на кассе или отметьте «Ремонт без запчастей»');
    }
    if(['update','contact'].includes(action))for(const [key,value] of Object.entries(p))if(!omit.has(key)&&stable(value)!==stable(before[key]))patch[key]=value;
    if(action==='payment'){if(!Number.isFinite(Number(p.amount))||!Number(p.amount))throw Error('Укажите сумму оплаты');if(!['cash','card','transfer'].includes(p.method))throw Error('Выберите способ оплаты');}

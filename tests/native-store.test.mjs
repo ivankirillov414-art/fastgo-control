@@ -141,8 +141,18 @@ test('repair cancellation requires a reason and records it',async()=>{
  const details=await h.call('get',{kind:'repair',id:r.id});
  assert.equal(details.events.find(e=>e.details?.to_status==='cancelled')?.details.note,'Клиент отказался от ремонта');
 });
-test('two simultaneous sales of the last unit result in one sale and one outbox job',async()=>{
- const h=harness(),shift=await h.call('shift_open',{register:'Основная',opening_cash:0}),p={shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]};const results=await Promise.allSettled([h.call('sale',p),h.call('sale',p,{...manager,role:'seller'})]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.sheets['Продажи'].rows.length,1);assert.equal(h.outbox.length,2);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);
+test('two simultaneous sales of the last equipment unit still permit only one sale',async()=>{
+ const h=harness();h.sheets['Товары'].rows[0]['Категория']='Техника · Электросамокаты';const shift=await h.call('shift_open',{register:'Основная',opening_cash:0}),p={shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]};const results=await Promise.allSettled([h.call('sale',p),h.call('sale',p,{...manager,role:'seller'})]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(h.sheets['Продажи'].rows.length,1);assert.equal(h.outbox.length,2);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);
+});
+
+test('concurrent parts sales may go negative but CAS and retries still produce exactly one sale per request',async()=>{
+ const h=harness(),shift=await h.call('shift_open',{register:'Запчасти',opening_cash:0}),first={request_id:randomUUID(),shift_id:shift.id,payment_method:'cash',items:[{part_id:part,quantity:1}]},second={...first,request_id:randomUUID()};
+ await Promise.all([h.call('sale',first),h.call('sale',second,{...manager,role:'seller'})]);await h.call('sale',first);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],-1);assert.equal(h.sheets['Продажи'].rows.length,2);assert.equal(h.outbox.length,3);
+ const receipt={request_id:randomUUID(),part_id:part,movement_type:'receipt',quantity:5};await h.call('stock',receipt);await h.call('stock',receipt);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],4);await h.call('stock',{part_id:part,movement_type:'return',quantity:1});assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+});
+
+test('a lost confirmation-revocation response retries one audit tombstone and cannot later complete without parts',async()=>{
+ const h=harness();let r=await h.call('create',intake());for(const status of ['diagnostics','repair'])r=await h.call('update',{id:r.id,revision:r.revision,status,diagnostics_notes:'Проверено',no_parts:true});const p={request_id:randomUUID(),id:r.id,revision:r.revision,status:'repair',no_parts:false};h.failResponse();await assert.rejects(h.call('update',p),/response lost/);r=await h.call('update',p);assert.equal(r.parts_status.mode,'pending');assert.equal(h.sheets['События'].rows.filter(x=>x['Действие']==='parts_required').length,1);await assert.rejects(h.call('update',{id:r.id,revision:r.revision,status:'ready',quality_checked:true}),/Ремонт без запчастей/);
 });
 test('a lost response replays the committed receipt without a second stock write',async()=>{
  const h=harness(),p={request_id:randomUUID(),part_id:part,movement_type:'receipt',quantity:2,note:'test'};h.failResponse();await assert.rejects(h.call('stock',p),/response lost/);await h.call('stock',p);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);assert.equal(h.outbox.length,1);
@@ -293,7 +303,7 @@ test('repair with no stock parts or a customer-supplied tube reaches ready witho
  for(const parts of [[],[{name:'Камера клиента',quantity:1,price:0}]]){
   const h=harness();let r=await h.call('create',intake());if(parts.length)h.sheets['Ремонты'].rows[0]['Строки запчастей']=JSON.stringify(parts);
   const work={kind:'repair',id:r.id,diagnostics_notes:'Прокол камеры',works:[{name:'Замена камеры',quantity:1,price:600}],parts};
-  for(const status of ['diagnostics','repair','ready'])r=await h.call('update',{...work,revision:r.revision,status,...(status==='repair'?{approve:true,approval_note:'Согласовано'}:{}),quality_checked:status==='ready',no_parts:parts.length===0});
+  for(const status of ['diagnostics','repair','ready'])r=await h.call('update',{...work,revision:r.revision,status,...(status==='repair'?{approve:true,approval_note:'Согласовано'}:{}),quality_checked:status==='ready',no_parts:true});
   assert.equal(r.status,'ready');assert.equal(r.total_amount,600);assert.deepEqual(r.parts,parts);
   assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],1);
   assert.equal(h.outbox.flat().some(change=>change.sheet==='Товары'),false);

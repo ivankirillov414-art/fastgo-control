@@ -120,6 +120,8 @@ function validateOrderUpdate_(p,actor){
   const kind=p.kind==='storage'?'storage':'repair',r=find_(kind==='storage'?SHEETS.storage:SHEETS.repairs,kind==='storage'?'storage_id':'repair_id',p.id);
   if(!r)throw httpError_('Заказ не найден',404);requireOrderAccess_(actor,kind,r);assertRevision_(r,p);
   const before=normStatus_(r['Статус'],kind),status=p.status||before,closed=['issued','returned','cancelled'];
+  const authorizedReopen=closed.includes(before)&&['owner','admin'].includes(role_(actor))&&!!String(p.reopen_reason||'').trim()&&status===(kind==='storage'?'stored':'accepted');
+  if(String(p.reopen_reason||'').trim()&&!authorizedReopen)throw httpError_('Повторно открыть можно только закрытый заказ с причиной',409);
   if(closed.includes(before)&&!(role_(actor)==='owner'||role_(actor)==='admin')||closed.includes(before)&&(!String(p.reopen_reason||'').trim()||status!==(kind==='storage'?'stored':'accepted')))throw httpError_('Закрытый заказ может открыть администратор с причиной',409);
   if(kind==='storage'){
     if(before==='deleted')throw httpError_('Приёмка удалена',409);
@@ -130,6 +132,7 @@ function validateOrderUpdate_(p,actor){
   }
   if(!['accepted','diagnostics','waiting_parts','repair','ready','issued','cancelled'].includes(status))throw httpError_('Неверный статус',400);
   const works=p.works||parseJson_(r['Работы'],[]),parts=p.parts||parseJson_(r['Строки запчастей'],[]);
+  requireRepairParts_(r,p,actor);
   for(const line of [...works,...parts])if(!Number.isInteger(Number(line.quantity))||Number(line.quantity)<1||!Number.isFinite(Number(line.price))||Number(line.price)<0)throw httpError_('Проверьте количество и цену',400);
   const discount=num_(p.discount===undefined?r['Скидка']:p.discount),amount=[...works,...parts].reduce((s,x)=>s+Number(x.price)*Number(x.quantity),0)-discount;
   if(amount<0||discount<0)throw httpError_('Неверная скидка',400);

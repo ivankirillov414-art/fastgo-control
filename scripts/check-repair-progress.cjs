@@ -14,7 +14,7 @@ const server=createServer((req,res)=>{
  fs.mkdirSync('browser-results',{recursive:true});
  try{for(const viewport of [{width:1366,height:768},{width:1280,height:720},{width:390,height:844}]){
   const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[],updates=[];
-  let personalStock=false,failUpdate=false,permission={can_mark_ready:true,can_issue:true,can_cancel:true};
+  let personalStock=false,failUpdate=false,role='owner',permission={can_mark_ready:true,can_issue:true,can_cancel:true};
   let record={id:'progress-fixture',repair_number:16,revision:1,status:'accepted',brand:'Kugoo',model:'M4',last_name:'Тест',first_name:'Клиент',phone:'+79990000000',created_at:'2026-10-16',promised_date:'2026-10-20',works:[{name:'Назначенная стоимость ремонта',quantity:1,price:500}],parts:[],approved_amount:null,diagnostics_notes:'',paid_amount:0,total_amount:500,fault_photo_paths:['photo-one.jpg','photo-two.jpg'],signed_document_paths:[]};
   await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'progress-fixture',user_id:'progress-fixture',expires_at:4102444800})));
   page.on('pageerror',error=>errors.push(error.message));
@@ -25,7 +25,7 @@ const server=createServer((req,res)=>{
    if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
    const {action,params}=req.postDataJSON();let data={};
    if(action==='request_access')data={active:true};
-   if(action==='me')data={role:'owner',name:'Тест',profile_id:'progress-fixture',active:true,status_permissions:permission};
+   if(action==='me')data={role,name:'Тест',profile_id:'progress-fixture',active:true,status_permissions:permission};
    if(action==='parts_pickup')data={code:'FGPARTS1.fixture.signed',number:16,vehicle:'Kugoo M4',master_name:'Мастер'};
    if(action==='get')data={record,events:[],payments:[],linked:[]};
    if(action==='signed_url')data={url:'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="'+(params.path==='photo-one.jpg'?'#24455c':'#416a73')+'"/><text x="80" y="300" fill="white">'+params.path+'</text></svg>')};
@@ -36,15 +36,15 @@ const server=createServer((req,res)=>{
     assert.equal(params.revision,record.revision);
     updates.push(structuredClone(params));record={...record,...params,revision:record.revision+1};
     record.total_amount=[...record.works,...record.parts].reduce((sum,x)=>sum+x.price*x.quantity,0);
-    if(params.approve)record.approved_amount=record.total_amount;if(params.no_parts)record.parts_status={mode:'none'};
+    if(params.approve)record.approved_amount=record.total_amount;if(params.no_parts===true)record.parts_status={mode:'none'};else if(params.no_parts===false)record.parts_status={mode:'pending'};
     if(['diagnostics','waiting_parts','repair'].includes(record.status))record.quality_checked=false;
     data=record;
    }
    return route.fulfill({headers,json:{data}});
   });
   const pane=async id=>{if(viewport.width<=760)await page.locator('[data-repair-pane="'+id+'"]').click();};
-  const open=async()=>{
-   await page.goto(origin+'/workshop.html#order?kind=repair&id=progress-fixture');
+  let navigation=0;const open=async()=>{
+   await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?kind=repair&id=progress-fixture');
    await page.locator('#work-search').waitFor({state:'attached'});await pane('work');
   };
   const transition=async name=>{await page.locator('.repair-status-menu > summary').click();await page.getByRole('button',{name,exact:true}).click();};
@@ -92,11 +92,20 @@ const server=createServer((req,res)=>{
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'repair');assert.deepEqual(record.parts,[]);
    await transition('Ремонт готов');
-   await page.locator('[name="flow_quality"]').check();await page.locator('[name="flow_no_parts"]').check();
+   await page.locator('[name="flow_quality"]').check();
+   const completionWrites=updates.length;await page.locator('#modal-form button[type="submit"]').click();
+   assert.equal(await page.locator('[name="flow_no_parts"]').evaluate(input=>input.validity.valueMissing),true);assert.equal(updates.length,completionWrites);assert.equal(record.status,'repair');
+   await page.locator('[name="flow_no_parts"]').check();
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'ready');assert.deepEqual(record.parts,[]);
    assert.equal(await page.locator('[data-repair-status=issued]').count(),1);
    assert.equal(await page.locator('#part-picker,#scan-part,#customer-part,#add-part').count(),0);
+   // Revoking an existing choice stays explicit and blocks the next issue transition.
+   await pane('parts');assert.equal(await page.locator('#no-parts').isChecked(),true);await page.locator('#no-parts').uncheck();
+   await saved(()=>page.locator('#repair-save').click());assert.equal(updates.at(-1).no_parts,false);assert.equal(record.parts_status.mode,'pending');
+   await transition('Выдать клиенту');await page.locator('#f-flow_handover').fill('Комплектно');const issueWrites=updates.length;
+   await page.locator('#modal-form button[type="submit"]').click();assert.equal(updates.length,issueWrites);assert.equal(record.status,'ready');assert.equal(await page.locator('[name="flow_no_parts"]').isChecked(),false);
+   await page.locator('#dialog [aria-label="Закрыть"]').click();
    // Price edits at an advanced stage offer approval here, not in a hidden panel.
    await page.locator('#work-rows [data-prop="price"]').first().fill('550');
    await page.locator('#repair-save').click();await page.locator('[name="flow_approved"]').check();
@@ -124,6 +133,18 @@ const server=createServer((req,res)=>{
    await page.getByRole('button',{name:'Хранение и выдача'}).click();
    assert.ok(await page.locator('#f-status').isVisible());assert.ok(await page.locator('#f-planned_return_date').isVisible());
    personalStock=true;record.status='accepted';record.assigned_master_id='progress-fixture';await open();assert.equal(await page.locator('[data-held-part]').count(),0);await pane('parts');await page.locator('#take-parts').click();await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor();assert.ok(await page.locator('[data-pickup-qr] svg').count());await page.getByRole('dialog',{name:'Взять запчасти'}).getByRole('button',{name:'Закрыть',exact:true}).click();
+   // A text-only historic line or a zero quantity cannot hide the mandatory choice.
+   permission={can_mark_ready:true,can_issue:true,can_cancel:true};role='mechanic';
+   for(const line of [{name:'Камера клиента',quantity:1,price:0},{part_id:'stock-part',name:'Нулевая старая строка',quantity:0,price:0}]){
+    record={...record,status:'repair',works:[],parts:[line],parts_status:{mode:'legacy'},total_amount:0,approved_amount:0,diagnostics_notes:'Проверено',quality_checked:true,assigned_master_id:'progress-fixture'};
+    await open();await pane('parts');assert.equal(await page.locator('#no-parts').count(),1);assert.equal(await page.locator('#repair-parts-condition').getAttribute('data-parts-condition'),'pending');
+    const count=updates.length;await transition('Ремонт готов');await page.locator('#modal-form button[type="submit"]').click();assert.equal(updates.length,count);assert.equal(record.status,'repair');assert.equal(await page.locator('[name="flow_no_parts"]').evaluate(input=>input.validity.valueMissing),true);await page.locator('#dialog [aria-label="Закрыть"]').click();
+   }
+   // Previously linked product-ID allocations count without a second issue or manual stock edit.
+   record={...record,parts:[{id:'old-product-id',name:'Ранее выданный амортизатор',quantity:2,price:0}],parts_status:{mode:'legacy'}};await open();await pane('parts');assert.equal(await page.locator('#no-parts').count(),0);assert.equal(await page.locator('#repair-parts-condition').getAttribute('data-parts-condition'),'issued');
+   await saved(()=>transition('Ремонт готов'));assert.equal(record.status,'ready');assert.equal(Object.hasOwn(updates.at(-1),'no_parts'),false);assert.equal(record.parts[0].quantity,2);
+   // A cashier cannot impersonate the assigned mechanic's confirmation.
+   role='receiver';record={...record,status:'repair',parts:[],parts_status:{mode:'pending'},assigned_master_id:'another-mechanic'};await open();await pane('parts');assert.equal(await page.locator('#no-parts').isDisabled(),true);const noPermissionWrites=updates.length;await transition('Ремонт готов');assert.equal(await page.locator('#modal-form [type="submit"]').isDisabled(),true);assert.equal(await page.locator('[name="flow_no_parts"]').count(),0);assert.equal(updates.length,noPermissionWrites);await page.locator('#dialog [aria-label="Закрыть"]').click();
    assert.deepEqual(errors,[]);console.log(`PASS ${viewport.width}: work suggestions, own work, inline layout and saving, diagnostics → repair → ready without parts, pickup QR, manual parts removed, price approval, conflict, permissions and storage`);
   }catch(error){console.error('PAGE',await page.locator('body').innerText(),errors);throw error;}finally{await context.close();}
  }}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

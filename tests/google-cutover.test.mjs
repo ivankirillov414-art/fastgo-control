@@ -28,6 +28,19 @@ test('non-admin cannot refund',async()=>{const r=await setup({role:'manager'}).g
 test('stale revision fails before mutation',async()=>{const r=await setup().go({action:'update',params:{id:rid,revision:99,status:'repair'}});assert.equal(r.status,409);});
 test('cannot attach arbitrary private Drive file',async()=>{const r=await setup().go({action:'documents',params:{id:rid,slot:'photos',paths:['https://drive.google.com/file/d/unknown/view']}});assert.equal(r.status,403);});
 test('cannot issue an unpaid/unapproved repair',async()=>{const r=await setup().go({action:'update',params:{id:rid,revision:1,status:'issued'}});assert.equal(r.status,409);});
+
+test('direct API completion uses only saved positive parts or an explicit valid no-parts choice, on both adapters',async()=>{
+ for(const native of [false,true]){
+  let record={id:rid,status:'repair',revision:1,assigned_master_id:'',diagnostics_notes:'Проверено',works:[],parts:[],discount:0,total_amount:0,paid_amount:0,approved_amount:0,quality_checked:true},updates=0;
+  const s=setup({native,google:b=>{if(b.action==='health')return {capabilities:{}};if(b.action==='get')return {record:structuredClone(record),events:[],payments:[]};if(b.action==='update'){updates++;return {...record,...b.params};}return {};}}),params={kind:'repair',id:rid,revision:1,request_id:pid,status:'ready',quality_checked:true};
+  for(const extra of [{},{no_parts:false},{parts:[{part_id:pid,name:'Подставная деталь',quantity:1,price:0}]}]){const r=await s.go({action:'update',params:{...params,...extra}});assert.equal(r.status,409,await r.text());}assert.equal(updates,0);
+  let r=await s.go({action:'update',params:{...params,no_parts:true}});assert.equal(r.status,200,await r.text());assert.equal(updates,1);
+  record.parts_status={mode:'none',master_id:''};r=await s.go({action:'update',params});assert.equal(r.status,200,await r.text());r=await s.go({action:'update',params:{...params,no_parts:false}});assert.equal(r.status,409,await r.text());
+  record.parts_status={mode:'legacy'};record.parts=[{id:pid,name:'Сохранённая старая деталь',quantity:1,price:0}];r=await s.go({action:'update',params});assert.equal(r.status,200,await r.text());
+  record={...record,status:'ready',parts:[],parts_status:{mode:'none',master_id:''}};r=await s.go({action:'update',params:{...params,status:'issued',handover_notes:'Проверено',reopen_reason:'Обход'}});assert.equal(r.status,409,await r.text());
+  record.parts_status={mode:'pending'};r=await s.go({action:'update',params:{...params,status:'ready',note:'Историческое уточнение'}});assert.equal(r.status,200,await r.text());r=await s.go({action:'update',params:{...params,status:'issued',handover_notes:'Проверено'}});assert.equal(r.status,409,await r.text());
+ }
+});
 test('formula-like user text neutralized before Sheets write',async()=>{let received;const s=setup({google:b=>{received=b;return{movement_id:'m'};}});const r=await s.go({action:'stock',params:{part_id:pid,request_id:rid,quantity:1,movement_type:'receipt',note:'=IMPORTXML("evil")'}});assert.equal(r.status,200);assert.ok(received.params.note.startsWith("'="));});
 
 test('atomic backend resolves committed retry before stale revision validation',async()=>{const s=setup({google:b=>b.action==='health'?{capabilities:{atomic_writes:true}}:b.action==='operation_retry'?{status:'committed',result:{id:rid,revision:3}}:null});const r=await s.go({action:'update',params:{request_id:pid,id:rid,revision:1,status:'repair'}});assert.equal(r.status,200);assert.equal((await r.json()).data.revision,3);assert.ok(!s.calls.some(x=>x.url.includes('script.google')&&JSON.parse(x.o.body).action==='get'));});

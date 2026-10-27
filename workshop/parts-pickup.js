@@ -4,7 +4,7 @@ export async function showPartsPickup(record,{dirty,refresh}){
  const ticket=await api('parts_pickup',{kind:'repair',id:record.id});
  const dialog=document.createElement('dialog');dialog.setAttribute('aria-label','Взять запчасти');
  dialog.style.cssText='max-width:440px;width:calc(100% - 32px);border:1px solid #456078;border-radius:16px;padding:24px;background:#152638;color:#eef6ff';
- dialog.innerHTML='<h2>Взять запчасти</h2><p>Ремонт № '+esc(ticket.number)+' · '+esc(ticket.vehicle)+'</p><p>'+esc(ticket.master_name)+'</p><div data-pickup-qr style="background:white;padding:12px;text-align:center"></div><p>На кассе сначала отсканируйте детали, затем этот QR. Подтвердите «Выдать» на ТСД.</p><p data-pickup-state role="status">Ожидаем выдачу запчастей на кассе…</p><button type="button" class="btn secondary">Закрыть</button>';
+ dialog.innerHTML='<h2>Взять запчасти</h2><p>Ремонт № '+esc(ticket.number)+' · '+esc(ticket.vehicle)+'</p><p>'+esc(ticket.master_name)+'</p><div data-pickup-qr style="background:white;padding:12px;text-align:center"></div><p>На кассе сначала отсканируйте детали, затем этот QR. На ТСД подтвердите «Выдать»; сканер АТОЛ привяжет детали к ремонту автоматически.</p><p data-pickup-state role="status">Ожидаем выдачу запчастей на кассе…</p><button type="button" class="btn secondary">Закрыть</button>';
  const qr=window.qrcode(0,'M');qr.addData(ticket.code);qr.make();dialog.querySelector('[data-pickup-qr]').innerHTML=qr.createSvgTag({scalable:true,margin:4});
  document.body.append(dialog);dialog.showModal();dialog.querySelector('button').onclick=()=>dialog.close();
  let checking=false;

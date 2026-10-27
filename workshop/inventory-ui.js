@@ -3,7 +3,7 @@ import {preparePartPhoto,fileBase64} from './photo-upload.js';
 import {displayPrivatePhoto} from './private-photo.js';
 import {uploadStatus,holdUpload} from './upload-ui.js';
 import {createSaleCamera} from './sale-camera.js';
-import {equipmentTypes} from './equipment-core.js';
+import {equipmentTypes,equipmentType} from './equipment-core.js';
 import {canSell,api,esc,money,csvDownload} from './core.js';
 import {labelRows,labelJobs,labelDocument,LABELS_PER_SHEET} from './label-layout.js';
 import {loadLibrary as loadScript} from './library-loader.js';
@@ -242,13 +242,14 @@ export async function newPartForm(prefill='',{equipment=false}={}){
 
 const cartSignature=()=>JSON.stringify([...cart.values()].map(x=>[x.part.id,x.qty,salePrice(x)]));
 const salePrice=x=>x.priceMode==='free'?Number(x.freePrice):Number(x.part.retail_price||0);
+const saleQuantityLimit=part=>equipmentType(part)?Math.min(1000,Number(part.quantity)||0):1000;
 function renderCart(){
   saveSale();
   const host=$('sales-cart');if(!host)return;
   const rows=[...cart.values()];cartPrice=priceAdjustment({prefix:'sale',base:()=>[...cart.values()].reduce((s,x)=>s+x.qty*salePrice(x),0),read:()=>pendingSale?.payload?.total_override!==undefined?{value:String(pendingSale.payload.total_override)}:saleAdjustment?.signature===cartSignature()?saleAdjustment:null,write:edit=>{saleAdjustment=edit?{...edit,signature:cartSignature()}:null;saveSale();},locked:()=>!!pendingSale||saleBusy});
   host.innerHTML=rows.length?rows.map(x=>`<div class="cart-row"><div><b>${esc(x.part.name)}</b><small>${esc(x.part.barcode)} · остаток ${x.part.quantity}</small><div class="sale-price-options"><label><input type="radio" name="price-${x.part.id}" data-price-mode="${x.part.id}" value="base" ${x.priceMode!=='free'?'checked':''}> Основная цена · ${money(x.part.retail_price)}</label><label><input type="radio" name="price-${x.part.id}" data-price-mode="${x.part.id}" value="free" ${x.priceMode==='free'?'checked':''}> Свободная цена</label>${x.priceMode==='free'?`<input aria-label="Свободная цена, ₽" data-free-price="${x.part.id}" type="number" min="0" max="1000000000" step="0.01" value="${esc(x.freePrice??x.part.retail_price)}">`: ''}</div></div><div class="cart-qty"><button data-minus="${x.part.id}">−</button><strong>${x.qty}</strong><button data-plus="${x.part.id}">+</button></div><b>${money(x.qty*salePrice(x))}</b><button class="inv-icon" data-remove="${x.part.id}">✕</button></div>`).join('')+cartPrice.markup():`<div class="empty"><strong>Корзина пустая</strong><p>Сканируйте штрих-код товара или найдите его вручную.</p></div>`;
   host.querySelectorAll('[data-minus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.minus);if(x){x.qty--;if(x.qty<1)cart.delete(b.dataset.minus);renderCart();}});
-  host.querySelectorAll('[data-plus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.plus);if(x&&x.qty<x.part.quantity){x.qty++;renderCart();}else notice('Больше остатка на складе добавить нельзя','bad');});
+  host.querySelectorAll('[data-plus]').forEach(b=>b.onclick=()=>{const x=cart.get(b.dataset.plus);if(x&&x.qty<saleQuantityLimit(x.part)){x.qty++;renderCart();}else notice(x?.qty>=1000?'Не больше 1000 штук одного товара':'Больше остатка техники на складе добавить нельзя','bad');});
   host.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{cart.delete(b.dataset.remove);renderCart();});
   host.querySelectorAll('[data-price-mode]').forEach(input=>input.onchange=()=>{const x=cart.get(input.dataset.priceMode);x.priceMode=input.value;x.freePrice??=Number(x.part.retail_price||0);renderCart();});
   host.querySelectorAll('[data-free-price]').forEach(input=>{input.oninput=()=>{const x=cart.get(input.dataset.freePrice);x.freePrice=input.value;saveSale();cartPrice.draw();input.closest('.cart-row').querySelector(':scope > b').textContent=money(x.qty*salePrice(x));};});
@@ -261,8 +262,8 @@ function renderCart(){
   const btn=$('sale-complete');if(btn){btn.disabled=!rows.length||saleBusy;btn.textContent=pendingSale?'Проверить и завершить продажу':'Провести продажу';}
 }
 function addToCart(part){
-  if(Number(part.quantity)<=0)return notice('Этого товара нет в наличии','bad');
-  const x=cart.get(part.id);if(x){if(x.qty>=part.quantity)return notice('В корзине уже весь доступный остаток','bad');x.qty++;}else cart.set(part.id,{part,qty:1});renderCart();
+  if(saleQuantityLimit(part)<=0)return notice('Этой техники нет в наличии','bad');
+  const x=cart.get(part.id);if(x){if(x.qty>=saleQuantityLimit(part))return notice(x.qty>=1000?'Не больше 1000 штук одного товара':'В корзине уже весь доступный остаток техники','bad');x.qty++;}else cart.set(part.id,{part,qty:1});renderCart();
 }
 
 export async function openSales(shiftId,partId){

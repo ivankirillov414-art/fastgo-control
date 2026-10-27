@@ -32,7 +32,7 @@ module.exports=async function({browser,origin}){
   await pane('work');const form=await page.locator('#order-form').elementHandle();await page.locator('#repair-save').click();await page.waitForFunction(x=>!x.isConnected,form);
   await pane('parts');await page.locator('#take-parts').click();await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor();assert.equal(pickups,1);
   assert.equal(await page.locator('[data-pickup-qr] svg').count(),1);
-  record={...record,revision:record.revision+1,parts:[{name:'Амортизатор',quantity:2,price:1500,tsd_issue_id:'cash-issued'}]};
+  record={...record,revision:record.revision+1,parts:[{part_id:'cash-part',name:'Амортизатор',quantity:2,price:1500,tsd_issue_id:'cash-issued'}],parts_status:{mode:'issued'}};
   await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor({state:'detached',timeout:9000});await pane('parts');
   await page.locator('#part-rows').filter({hasText:'2 шт.'}).waitFor();assert.equal(writes.length,1);assert.deepEqual(writes[0].parts,[]);
   assert.equal(await page.locator('[data-return-part],#part-picker,#scan-part,#add-part').count(),0);
