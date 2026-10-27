@@ -36,12 +36,14 @@ public final class NativeLayoutTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         SecurePrefs prefs = new SecurePrefs(context);
         String auth = prefs.get("auth"), device = prefs.get("device");
-        try (DisplaySettings display = new DisplaySettings()) {
+        try (DisplaySettings display = new DisplaySettings(); UpdateCheckState updates = new UpdateCheckState(context)) {
             // A clean local fixture prevents login/provisioning or production API writes.
             prefs.put("auth", ""); prefs.put("device", "");
             for (String[] profile : new String[][]{{"320x480", "1.5"}, {"360x640", "1.0"}}) {
                 display.apply(profile[0], profile[1]);
+                updates.refresh();
                 try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+                    isolateUpdates(scenario);
                     awaitText(scenario, "Войти");
                     scenario.onActivity(a -> {
                         try {
@@ -52,7 +54,7 @@ public final class NativeLayoutTest {
                         }
                         catch (Exception error) { throw new AssertionError(error); }
                     });
-                    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                    awaitLayout(scenario);
                     scenario.onActivity(a -> {
                         try {
                             LinearLayout content = (LinearLayout) field(a, "content");
@@ -71,7 +73,7 @@ public final class NativeLayoutTest {
                         catch (Exception error) { throw new AssertionError(error); }
                     });
                     onView(withText("Приход")).perform(scrollTo(), click());
-                    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                    awaitLayout(scenario);
                     scenario.onActivity(a -> {
                         try {
                             LinearLayout content = (LinearLayout) field(a, "content");
@@ -99,18 +101,22 @@ public final class NativeLayoutTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         SecurePrefs prefs = new SecurePrefs(context);
         String auth = prefs.get("auth"), device = prefs.get("device");
-        try (DisplaySettings display = new DisplaySettings()) {
+        try (DisplaySettings display = new DisplaySettings(); UpdateCheckState updates = new UpdateCheckState(context)) {
             prefs.put("auth", ""); prefs.put("device", "");
             display.apply("320x480", "1.5");
+            updates.refresh();
             try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+                isolateUpdates(scenario);
                 awaitText(scenario, "Войти");
                 scenario.onActivity(a -> {
                     try { set(a, "resumed", false); }
                     catch (Exception error) { throw new AssertionError(error); }
                 });
+                awaitLayout(scenario);
                 scenario.onActivity(a -> assertEquals(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
                         a.getWindow().getAttributes().softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST));
-                // Exercises focus/IME resizing too; this never submits credentials.
+                // Uses the real focused editor without submitting credentials.
+                // A hardware-keyboard emulator need not show a software IME.
                 onView(withHint("Пароль")).perform(scrollTo(), click(), typeText("fixture-only"));
                 onView(withText("Войти")).perform(scrollTo()).check(matches(isCompletelyDisplayed()));
                 androidx.test.espresso.Espresso.closeSoftKeyboard();
@@ -129,6 +135,7 @@ public final class NativeLayoutTest {
                     } catch (Exception error) { throw new AssertionError(error); }
                 });
                 awaitText(scenario, second);
+                awaitLayout(scenario);
                 onView(withText(first)).perform(scrollTo()).check(matches(isCompletelyDisplayed()));
                 onView(withText(second)).perform(scrollTo()).check(matches(isCompletelyDisplayed()));
             }
@@ -140,6 +147,40 @@ public final class NativeLayoutTest {
         assertTrue(view.getGlobalVisibleRect(visible));
         assertEquals(view.getHeight(), visible.height());
         assertEquals(view.getWidth(), visible.width());
+    }
+
+    private static void isolateUpdates(ActivityScenario<MainActivity> scenario) {
+        scenario.onActivity(a -> {
+            try {
+                set(a, "resumed", false);
+                set(a, "ready", false);
+                LocalStore store = (LocalStore) field(a, "store");
+                // Do not consume/delete an APK staged by UpgradeTest, regardless of test order.
+                store.put("update_last_check", Long.toString(System.currentTimeMillis()));
+                store.put("update_waiting_documents", "");
+                AppUpdates fixture = new AppUpdates(a, store, (url, limit) -> {
+                    throw new java.io.IOException("Network disabled in layout fixture");
+                });
+                set(a, "updates", fixture);
+                set(a, "updatePrompted", fixture.readyVersion());
+            } catch (Exception error) { throw new AssertionError(error); }
+        });
+    }
+
+    private static void awaitLayout(ActivityScenario<MainActivity> scenario) throws Exception {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            boolean[] measured = {false};
+            scenario.onActivity(a -> {
+                try {
+                    View content = (View) field(a, "content"), root = (View) field(a, "root");
+                    measured[0] = content.getWidth() > 0 && content.getHeight() > 0
+                            && !content.isLayoutRequested() && !root.isLayoutRequested();
+                } catch (Exception error) { throw new AssertionError(error); }
+            });
+            if (measured[0]) return;
+            Thread.sleep(20);
+        }
+        fail("Native page did not finish layout");
     }
 
     private static boolean containsText(View view, String text) {
@@ -169,6 +210,29 @@ public final class NativeLayoutTest {
         Method method = object.getClass().getDeclaredMethod(name); method.setAccessible(true); method.invoke(object);
     }
 
+    private static final class UpdateCheckState implements AutoCloseable {
+        private final LocalStore store;
+        private final String lastCheck, waiting;
+
+        UpdateCheckState(Context context) {
+            store = new LocalStore(context);
+            lastCheck = store.get("update_last_check");
+            waiting = store.get("update_waiting_documents");
+        }
+
+        void refresh() {
+            store.put("update_last_check", Long.toString(System.currentTimeMillis()));
+            store.put("update_waiting_documents", "");
+        }
+
+        @Override public void close() {
+            try {
+                store.put("update_last_check", lastCheck);
+                store.put("update_waiting_documents", waiting);
+            } finally { store.close(); }
+        }
+    }
+
     private static final class DisplaySettings implements AutoCloseable {
         private final String size = override(shell("wm size"), "Override size: (\\d+x\\d+)");
         private final String density = override(shell("wm density"), "Override density: (\\d+)");
@@ -186,6 +250,7 @@ public final class NativeLayoutTest {
                 try { shell("wm density " + density); }
                 finally { shell(fontScale.matches("[0-9.]+") ? "settings put system font_scale " + fontScale : "settings delete system font_scale"); }
             }
+            Thread.sleep(500);
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         }
 

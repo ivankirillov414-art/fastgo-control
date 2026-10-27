@@ -9,11 +9,17 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class CoalescingTaskTest {
+    private static int count(JSONObject document) {
+        try { return ScanDocument.count(document); }
+        catch (JSONException error) { throw new AssertionError(error); }
+    }
+
     private static final class QueueExecutor implements Executor {
         final Queue<Runnable> queue = new ArrayDeque<>();
         boolean rejectNext;
@@ -48,7 +54,7 @@ public class CoalescingTaskTest {
         int initialRevision = document.getInt("revision");
         JSONObject part = new JSONObject().put("id", "part-1").put("name", "Амортизатор");
         List<Integer> snapshots = new ArrayList<>();
-        CoalescingTask task = new CoalescingTask(executor, () -> snapshots.add(ScanDocument.count(document)));
+        CoalescingTask task = new CoalescingTask(executor, () -> snapshots.add(count(document)));
         for (int i = 0; i < 100; i++) {
             ScanDocument.append(document, "FGP-00000036", part);
             task.request();
@@ -93,7 +99,7 @@ public class CoalescingTaskTest {
         List<Integer> snapshots = new ArrayList<>();
         CoalescingTask[] task = new CoalescingTask[1];
         task[0] = new CoalescingTask(executor, () -> {
-            snapshots.add(ScanDocument.count(document));
+            snapshots.add(count(document));
             if (snapshots.size() == 1) {
                 try { ScanDocument.append(document, "FGP-00000036", part); }
                 catch (Exception error) { throw new AssertionError(error); }
