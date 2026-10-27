@@ -68,6 +68,15 @@ async function workshopContext(browser,base,{role='owner',fake=false,session=tru
    }
    if(width===320)await page.screenshot({path:path.join(out,'product-scrolled-320.png')});await page.keyboard.press('Escape');
   }
+  // Platform system fonts have different minimum text widths (Linux CI caught this).
+  for(const width of [320,360]){
+   await page.setViewportSize({width,height:568});await visit(page,base+'/warehouse.html');await page.locator('.inventory-item').first().click();
+   for(const family of ['Verdana','Tahoma','monospace']){
+    const geometry=await page.locator('.product-dialog').evaluate((el,family)=>{el.style.fontFamily=family;el.querySelector('.product-error').textContent='Не удалось загрузить фотографию. Повторите попытку после восстановления связи.';const metrics=el.querySelector('.product-metrics');return {scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,metricsScrollWidth:metrics.scrollWidth,metricsClientWidth:metrics.clientWidth};},family);
+    check(geometry.scrollWidth<=geometry.clientWidth+1&&geometry.metricsScrollWidth<=geometry.metricsClientWidth+1,'narrow-product-platform-font',{width,height:568,family,...geometry});
+   }
+   await page.keyboard.press('Escape');
+  }
   await context.close();
  }
  progress('keyboard and native caption');

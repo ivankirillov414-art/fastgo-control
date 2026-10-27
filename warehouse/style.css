@@ -149,6 +149,8 @@ body.warehouse-native-window header>b.warehouse-top-brand{position:static}
 .product-dialog>.product-error{grid-column:1/-1;grid-row:3;margin:0;overflow-wrap:anywhere}
 .product-dialog>.product-error:empty{display:none}
 @media(max-width:700px){.product-dialog{padding-top:0}.product-dialog-toolbar{margin-inline:-18px;padding-inline:12px;flex:0 0 auto}}
+/* Wide platform fonts need a full metric row on the smallest phones. */
+@media(max-width:360px){.product-dialog .product-metrics{grid-template-columns:minmax(0,1fr)}}
 
 /* Local dialog scroll also works in older WebViews without dynamic viewport units. */
 dialog{max-height:calc(100vh - 24px);max-height:calc(var(--fastgo-viewport-height,100vh) - 24px);overflow-y:auto}
