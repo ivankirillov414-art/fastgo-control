@@ -7,8 +7,8 @@ export async function editInventory(p,{db,actor,device,digest,remote=false}){
  if((device?.kind!=='station'&&!remote)||!['owner','developer','admin'].includes(actor.role))fail('Нет права изменять цену и остаток',403);
  const {request_id,part_id,field,value,expected}=p;
  if(!id(request_id)||!id(part_id)||!['quantity','retail_price','unit_cost'].includes(field))fail('Неверные данные товара');
- const valid=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=(field==='quantity'?1000000:100000000)&&(field==='quantity'?Number.isInteger(n):Math.abs(n*100-Math.round(n*100))<0.00001);
- if(!valid(value)||!valid(expected))fail(field==='quantity'?'Остаток: целое число от 0 до 1 000 000':'Цена: от 0 до 100 000 000 ₽, до двух знаков после запятой');
+ const valid=n=>typeof n==='number'&&Number.isFinite(n)&&n>=(field==='quantity'?-1000000:0)&&n<=(field==='quantity'?1000000:100000000)&&(field==='quantity'?Number.isInteger(n):Math.abs(n*100-Math.round(n*100))<0.00001);
+ if(!valid(value)||!valid(expected))fail(field==='quantity'?'Остаток: целое число от −1 000 000 до 1 000 000':'Цена: от 0 до 100 000 000 ₽, до двух знаков после запятой');
  const action=field==='quantity'?'stock':'part_save',fingerprint=await digest(JSON.stringify({part_id,field,value,expected}));
  const previous=async()=>{const r=(await db('workshop_native_receipts','request_id=eq.'+request_id))[0];if(!r)return null;if(r.actor_id!==actor.id||r.action!==action||r.fingerprint!==fingerprint)fail('Код операции уже использован',409);return r.result;};
  for(let attempt=0;attempt<4;attempt++){

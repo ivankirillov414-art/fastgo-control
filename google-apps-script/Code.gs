@@ -167,14 +167,60 @@ function stockReceive_(p,actor){
 function stockReceipts_(p,actor){requireCash_(actor);return rows_(SHEETS.events).filter(x=>x['Тип']==='stock_receipt').sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,50).map(x=>JSON.parse(x['Детали']));}
 
 function stockHistory_(p){ if(!p.part_id) throw httpError_('Не указана запчасть',400); return rows_(SHEETS.movements).filter(r=>String(r.product_id)===String(p.part_id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).slice(0,100).map(r=>({id:r.movement_id,part_id:r.product_id,movement_type:({'Приход':'receipt','Расход':'issue','Продажа':'issue','Возврат':'return','Корректировка':'adjustment'})[r['Тип']]||r['Тип'],quantity:num_(r['Количество']),note:r['Комментарий'],created_at:r['Дата']})); }
+// Use the same catalogue boundary as equipment-core/preorders. Catalogue goods
+// have no serial field; a vehicle category must never become negative stock.
+function isEquipmentProduct_(product){
+ const category=String(product['Категория']||'').trim();
+ return category.startsWith('Техника · ')||['Электросамокаты','Электровелосипеды','Велосипеды','Электромопеды','Электроскутеры','Другая техника'].some(x=>x.toLowerCase()===category.toLowerCase());
+}
+
+function positiveRepairParts_(parts){
+ return Array.isArray(parts)?parts.filter(x=>x&&typeof (x.part_id||x.id)==='string'&&String(x.part_id||x.id).trim()&&typeof x.quantity!=='boolean'&&Number.isSafeInteger(Number(x.quantity))&&Number(x.quantity)>0):[];
+}
+
+function repairPartsStatus_(repair,parts,masterId){
+ const attached=positiveRepairParts_(parts===undefined?parseJson_(repair['Строки запчастей'],[]):parts);
+ if(attached.length)return {mode:attached.some(x=>x.tsd_issue_id)?'issued':'legacy'};
+ const event=rows_(SHEETS.events).filter(x=>x['Тип']==='repair'&&x.record_id===repair.repair_id&&['parts_not_needed','parts_issued','parts_required'].includes(x['Действие'])).sort((a,b)=>Number(b.__row)-Number(a.__row))[0];
+ let details={};try{details=JSON.parse(String(event?.['Детали']||'{}'));}catch{}
+ const currentMaster=masterId===undefined?String(repair.master_id||''):String(masterId||'');
+ return event&&event['Действие']==='parts_not_needed'&&details.master_id===currentMaster?{mode:'none',master_id:currentMaster,confirmed_by:event.actor_id,at:event['Дата']}:{mode:'pending'};
+}
+
+function repairPartsSubset_(parts,before){
+ if(!Array.isArray(parts)||!Array.isArray(before))return false;
+ const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+ const available=before.map(stable);return parts.every(line=>{const at=available.indexOf(stable(line));if(at<0)return false;available.splice(at,1);return true;});
+}
+
+function requireRepairParts_(repair,p,actor){
+ if(p.no_parts!==undefined&&typeof p.no_parts!=='boolean')throw httpError_('Подтвердите отметку «Ремонт без запчастей»',400);
+ const saved=parseJson_(repair['Строки запчастей'],[]),parts=p.parts===undefined?saved:p.parts;
+ if(p.parts!==undefined&&!repairPartsSubset_(parts,saved))throw httpError_('Запчасти в ремонт выдаются только через ТСД на кассе',403);
+ const attached=positiveRepairParts_(parts),masterId=p.assigned_master_id===undefined?String(repair.master_id||''):String(p.assigned_master_id||'');
+ if(p.no_parts===true&&(attached.length||actor.id!==masterId&&!(role_(actor)==='mechanic'&&!masterId)&&!['owner','developer'].includes(role_(actor))))throw httpError_('Отметку «Без замены запчастей» ставит мастер ремонта',403);
+ const status=p.status||normStatus_(repair['Статус'],'repair'),savedNone=p.no_parts===undefined&&repairPartsStatus_(repair,parts,masterId).mode==='none';
+ if(status!==normStatus_(repair['Статус'],'repair')&&['ready','issued'].includes(status)&&!attached.length&&p.no_parts!==true&&!savedNone)throw httpError_('Выдайте запчасти в этот ремонт на кассе или отметьте „Ремонт без запчастей“',409);
+}
+
+function recordRepairPartsChoice_(repair,p,actor,before,previousMaster){
+ const masterId=String(repair.master_id||'');
+ const returnedAll=['issued','legacy'].includes(before.mode)&&!positiveRepairParts_(parseJson_(repair['Строки запчастей'],[])).length;
+ const invalidated=returnedAll||before.mode==='none'&&(p.no_parts===false||masterId!==previousMaster||String(p.reopen_reason||'').trim());
+ if(invalidated)addEvent_('repair',repair.repair_id,'parts_required',actor,{master_id:masterId,previous_master_id:previousMaster,note:returnedAll?'Все запчасти из ремонта возвращены':p.no_parts===false?'Подтверждение ремонта без запчастей отменено':String(p.reopen_reason||'').trim()?'Ремонт открыт повторно':'Мастер ремонта изменён'});
+ // A deliberate new choice belongs to the new master/current cycle and must
+ // remain the last event, after invalidating an earlier confirmation.
+ if(p.no_parts===true&&(invalidated||before.mode!=='none'||before.master_id!==masterId))addEvent_('repair',repair.repair_id,'parts_not_needed',actor,{master_id:masterId,note:'Ремонт без запчастей'});
+}
+
 function stock_(p,actor){
-  if(!Number.isInteger(Number(p.quantity))||Number(p.quantity)<1)throw httpError_('Неверное количество',400);
+  if(typeof p.quantity==='boolean'||!Number.isSafeInteger(Number(p.quantity))||Number(p.quantity)<1)throw httpError_('Неверное количество',400);
   if(!['receipt','return','issue','adjustment'].includes(p.movement_type))throw httpError_('Неверное движение',400);
-  if(p.movement_type==='adjustment'){requireAdmin_(actor);if(!Number.isInteger(Number(p.balance_after))||Number(p.balance_after)<0)throw httpError_('Неверный остаток',400);}
+  if(p.movement_type==='adjustment'){requireAdmin_(actor);if(p.balance_after===null||p.balance_after===''||typeof p.balance_after==='boolean'||!Number.isSafeInteger(Number(p.balance_after))||Math.abs(Number(p.balance_after))>1000000)throw httpError_('Неверный остаток',400);}
   const req=String(p.request_id||''); if(req){ const old=find_(SHEETS.movements,'request_id',req); if(old) return old; }
   const r=find_(SHEETS.products,'product_id',p.part_id); if(!r) throw httpError_('Товар не найден',404);
   const q=Math.max(1,Math.floor(num_(p.quantity))), type=String(p.movement_type||'receipt'); let stock=num_(r['Остаток, шт.']);
-  if(type==='receipt'||type==='return') stock+=q; else if(type==='issue'){ if(stock<q) throw httpError_('Недостаточно товара на складе',409); stock-=q; } else if(type==='adjustment') stock=num_(p.balance_after!==undefined?p.balance_after:q);
+  if(type==='receipt'||type==='return') stock+=q; else if(type==='issue'){ if(isEquipmentProduct_(r)&&stock<q) throw httpError_('Недостаточно техники на складе',409); stock-=q; } else if(type==='adjustment'){stock=num_(p.balance_after!==undefined?p.balance_after:q);if(isEquipmentProduct_(r)&&stock<0)throw httpError_('Остаток техники не может быть отрицательным',409);}
   patchRow_(SHEETS.products,r.__row,{'Остаток, шт.':stock,updated_at:now_()});
   const mt=({receipt:'Приход',issue:'Расход',return:'Возврат',adjustment:'Корректировка'})[type]||type;
   const movement={movement_id:uid_(),'Дата':now_(),'Тип':mt,product_id:r.product_id,'Штрих-код':r['Штрих-код'],'Товар':r['Модель / название'],'Количество':q,'Цена закупки':num_(r['Цена закупки, ₽']),'Цена продажи':num_(r['Цена продажи, ₽']),'Сумма':q*num_(r['Цена закупки, ₽']),'Источник':'Приложение',reference_id:String(p.reference_id||''),'Сотрудник':actor.email||actor.id||'','Комментарий':String(p.note||''),'Остаток после':stock,request_id:req};
@@ -196,7 +242,7 @@ function sale_(p,actor){
   const merged={};for(const x of (Array.isArray(p.items)?p.items:[])){const id=x.part_id||x.id,q=Number(x.quantity);if(!id||!Number.isInteger(q)||q<1)throw httpError_('Неверное количество',400);const old=merged[id];if(old&&(old.price_mode!==x.price_mode||old.unit_price!==x.unit_price))throw httpError_('У товара разные цены в корзине',400);merged[id]={part_id:id,quantity:(old?.quantity||0)+q,price_mode:x.price_mode,unit_price:x.unit_price};}
   const items=Object.values(merged);if(!items.length)throw httpError_('Корзина пустая',400);
   if(!['cash','card','transfer'].includes(p.payment_method))throw httpError_('Укажите оплату',400);if(num_(p.discount)>0)requireAdmin_(actor);
-  const prepared=items.map(i=>{ const r=find_(SHEETS.products,'product_id',i.part_id||i.id); if(!r||r['Активен']===false) throw httpError_('Товар не найден',404); const q=Math.max(1,Math.floor(num_(i.quantity))); const stock=num_(r['Остаток, шт.']); if(stock<q) throw httpError_('Недостаточно на складе: '+r['Модель / название'],409); if(i.price_mode!==undefined&&!['base','free'].includes(i.price_mode))throw httpError_('Неверный режим цены',400); let price=num_(r['Цена продажи, ₽']); if(i.price_mode==='free'){price=Number(i.unit_price);if(i.unit_price===null||i.unit_price===''||typeof i.unit_price==='boolean'||!Number.isFinite(price)||price<0||price>1e9||Math.abs(price*100-Math.round(price*100))>0.0001)throw httpError_('Проверьте свободную цену',400);price=Math.round(price*100)/100;} return {r,q,price}; });
+  const prepared=items.map(i=>{ const r=find_(SHEETS.products,'product_id',i.part_id||i.id); if(!r||r['Активен']===false) throw httpError_('Товар не найден',404); if(typeof i.quantity==='boolean'||!Number.isSafeInteger(Number(i.quantity))||Number(i.quantity)<1)throw httpError_('Неверное количество',400); const q=Number(i.quantity); const stock=num_(r['Остаток, шт.']); if(isEquipmentProduct_(r)&&stock<q) throw httpError_('Недостаточно на складе: '+r['Модель / название'],409); if(i.price_mode!==undefined&&!['base','free'].includes(i.price_mode))throw httpError_('Неверный режим цены',400); let price=num_(r['Цена продажи, ₽']); if(i.price_mode==='free'){price=Number(i.unit_price);if(i.unit_price===null||i.unit_price===''||typeof i.unit_price==='boolean'||!Number.isFinite(price)||price<0||price>1e9||Math.abs(price*100-Math.round(price*100))>0.0001)throw httpError_('Проверьте свободную цену',400);price=Math.round(price*100)/100;} return {r,q,price}; });
   const no=nextSeq_('next_sale_seq'), id=uid_(), created=now_(), subtotal=prepared.reduce((s,x)=>s+x.q*x.price,0), discount=Math.max(0,num_(p.discount)), total=Math.round(Math.max(0,subtotal-discount)*100)/100;
   const sale={sale_id:id,'Номер':'FGS-'+pad_(no,6),'Дата':created,client_id:String(p.client_id||''),'Клиент':String(p.client_name||''),'Сотрудник':actor.email||actor.id||'','Способ оплаты':({'cash':'Наличные','card':'Карта','transfer':'Перевод','mixed':'Смешанная'})[p.payment_method]||p.payment_method||'Наличные','Сумма':subtotal,'Скидка':discount,'Итого':total,'Статус':'Проведена','Комментарий':String(p.note||''),updated_at:created,request_id:req,'Документ URL':''}; append_(SHEETS.sales,sale);
   prepared.forEach((x,idx)=>{ const stock=num_(x.r['Остаток, шт.'])-x.q; patchRow_(SHEETS.products,x.r.__row,{'Остаток, шт.':stock,updated_at:created}); const movementId=uid_(); append_(SHEETS.movements,{movement_id:movementId,'Дата':created,'Тип':'Продажа',product_id:x.r.product_id,'Штрих-код':x.r['Штрих-код'],'Товар':x.r['Модель / название'],'Количество':x.q,'Цена закупки':num_(x.r['Цена закупки, ₽']),'Цена продажи':x.price,'Сумма':x.q*x.price,'Источник':'Продажа',reference_id:id,'Сотрудник':actor.email||actor.id||'','Комментарий':'Продажа '+sale['Номер'],'Остаток после':stock,request_id:req?req+':'+idx:''}); append_(SHEETS.saleItems,{sale_item_id:uid_(),sale_id:id,product_id:x.r.product_id,'Штрих-код':x.r['Штрих-код'],'Товар':x.r['Модель / название'],'Количество':x.q,'Цена':x.price,'Скидка':0,'Сумма строки':x.q*x.price,movement_id:movementId}); });
@@ -354,7 +400,7 @@ function mapRepair_(r){
     issue_description:intake['Описание неисправности']||'',accessories:intake['Комплектность']||'',condition_notes:intake['Состояние при приёмке']||'',
     status:normStatus_(r['Статус'],'repair'),paid_amount:num_(r['Оплачено']),created_at:r['Создано'],issued_at:r['Выдано']||'',total_amount:num_(r['Итого']),
     assigned_master:r['Мастер'],assigned_master_id:r.master_id||'',promised_date:r['Плановая дата']||intake['Плановая дата']||'',
-    quality_checked:bool_(r['Контроль качества']),storage_id:r.storage_id||'',diagnostics_notes:r['Диагностика']||'',
+    parts_status:repairPartsStatus_(r),quality_checked:bool_(r['Контроль качества']),storage_id:r.storage_id||'',diagnostics_notes:r['Диагностика']||'',
     works:parseJson_(r['Работы'],[]),parts:parseJson_(r['Строки запчастей'],[]),discount:num_(r['Скидка']),
     warranty_days:num_(r['Гарантия, дней']),revision:Math.max(1,num_(r.revision)||1),note:r['Примечание']||'',
     approved_amount:r['Согласовано, ₽']===''||r['Согласовано, ₽']===null?null:num_(r['Согласовано, ₽']),approval_note:r['Примечание согласования']||'',
@@ -419,12 +465,15 @@ function updateOrder_(p,actor){
   }
   const r=find_(SHEETS.repairs,'repair_id',p.id); if(!r) throw httpError_('Ремонт не найден',404);
   requireOrderAccess_(actor,kind,r); const rev=assertRevision_(r,p);
+  const partsChoiceBefore=repairPartsStatus_(r),previousMaster=String(r.master_id||'');
   const works=Array.isArray(p.works)?p.works:parseJson_(r['Работы'],[]), parts=Array.isArray(p.parts)?JSON.parse(JSON.stringify(p.parts)):parseJson_(r['Строки запчастей'],[]), oldParts=parseJson_(r['Строки запчастей'],[]);
+  if(role_(actor)==='mechanic'&&(parts.length!==oldParts.length||!repairPartsSubset_(parts,oldParts)))throw httpError_('Выданные детали изменяются на кассе',403);
   reconcileMasterParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), total=Math.max(0,worksTotal+partsTotal-num_(p.discount));
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
   const fromStatus=normStatus_(r['Статус'],'repair'), approvalAmount=bool_(p.approve)?total:r['Согласовано, ₽'], approvalNote=bool_(p.approve)?String(p.approval_note||''):r['Примечание согласования'];
   patchRow_(SHEETS.repairs,r.__row,{'Статус':humanStatus_(status,'repair'),'Мастер':staff?staff['ФИО']:String(p.assigned_master||r['Мастер']||''),'Диагностика':p.diagnostics_notes===undefined?r['Диагностика']:String(p.diagnostics_notes||''),'Работы':JSON.stringify(works),'Стоимость работ':worksTotal,'Запчасти':partsTotal,'Скидка':num_(p.discount),'Итого':total,'Гарантия, дней':num_(p.warranty_days),'Начато':!r['Начато']&&['diagnostics','repair','waiting_parts'].includes(status)?now_():r['Начато'],'Завершено':status==='ready'?now_():r['Завершено'],'Выдано':status==='issued'?now_():r['Выдано'],'Примечание':p.note===undefined?r['Примечание']:String(p.note||''),updated_at:now_(),'Строки запчастей':JSON.stringify(parts),master_id:masterId,'Контроль качества':p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked),'Плановая дата':p.promised_date===undefined?r['Плановая дата']:String(p.promised_date||''),revision:rev+1,'Согласовано, ₽':approvalAmount,'Примечание согласования':approvalNote});
+  recordRepairPartsChoice_(r,p,actor,partsChoiceBefore,previousMaster);
   addEvent_(kind,p.id,'update',actor,{from_status:fromStatus,to_status:status,note:String(p.reopen_reason||'')});
   return mapRepair_(find_(SHEETS.repairs,'repair_id',p.id));
 }

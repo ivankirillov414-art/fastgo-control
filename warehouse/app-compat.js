@@ -917,6 +917,14 @@
     return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}.label-heading{display:flex;align-items:center;justify-content:space-between;gap:1mm;width:100%}.label-heading strong{min-width:0;flex:1;text-align:left}.price{font-size:8pt;font-weight:bold;white-space:nowrap}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
   }
 
+  // workshop/equipment-core.js
+  var equipmentTypes = ["\u042D\u043B\u0435\u043A\u0442\u0440\u043E\u0441\u0430\u043C\u043E\u043A\u0430\u0442\u044B", "\u042D\u043B\u0435\u043A\u0442\u0440\u043E\u0432\u0435\u043B\u043E\u0441\u0438\u043F\u0435\u0434\u044B", "\u0412\u0435\u043B\u043E\u0441\u0438\u043F\u0435\u0434\u044B", "\u042D\u043B\u0435\u043A\u0442\u0440\u043E\u043C\u043E\u043F\u0435\u0434\u044B", "\u042D\u043B\u0435\u043A\u0442\u0440\u043E\u0441\u043A\u0443\u0442\u0435\u0440\u044B", "\u0414\u0440\u0443\u0433\u0430\u044F \u0442\u0435\u0445\u043D\u0438\u043A\u0430"];
+  function equipmentType(product2) {
+    const category = String(product2.category || "").trim();
+    if (category.startsWith("\u0422\u0435\u0445\u043D\u0438\u043A\u0430 \xB7 ")) return category.slice(10);
+    return equipmentTypes.find((type) => type.toLowerCase() === category.toLowerCase()) || null;
+  }
+
   // warehouse/product-panel.js
   var pencil = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
   function productPanel({ parts: parts2, editable, call: call2, run: run2, changed, message: message2, photos: photos2, offerLabels: offerLabels2 = () => {
@@ -999,8 +1007,8 @@
       editing = field;
       pending2 = null;
       draw();
-      const host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
-      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : field === "unit_cost" ? "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD" : "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD") + '<input type="number" min="0" max="' + (field === "quantity" ? "1000000" : "100000000") + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + ((_a2 = selected[field]) != null ? _a2 : 0) + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
+      const min = field === "quantity" && !equipmentType(selected) ? -1e6 : 0, max = field === "quantity" ? 1e6 : 1e8, host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
+      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : field === "unit_cost" ? "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD" : "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD") + '<input type="number" min="' + min + '" max="' + max + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + ((_a2 = selected[field]) != null ? _a2 : 0) + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
       const input = host.querySelector("input");
       input.focus();
       input.select();
@@ -1013,7 +1021,7 @@
         var _a3;
         e.preventDefault();
         const part = selected, value = Number(input.value), field2 = editing;
-        if (input.value.trim() === "" || !Number.isFinite(value) || value < 0 || field2 === "quantity" && !Number.isInteger(value) || field2 !== "quantity" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
+        if (input.value.trim() === "" || !Number.isFinite(value) || value < min || value > max || field2 === "quantity" && !Number.isInteger(value) || field2 !== "quantity" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
           dialog.querySelector(".product-error").textContent = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435";
           return;
         }

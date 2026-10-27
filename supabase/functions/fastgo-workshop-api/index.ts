@@ -354,7 +354,7 @@ async function main(req){
     }
     if(action==='stock'){
       required(p,['note']);if(!uuid(p.part_id)||!uuid(p.request_id))fail('Неверный код операции');p.quantity=integer(p.quantity,'количество');
-      if(!['receipt','issue','return','adjustment'].includes(p.movement_type))fail('Неверное движение');if(p.movement_type==='adjustment'){if(!admin(me))fail('Нет права корректировки',403);p.balance_after=integer(p.balance_after??p.quantity,'остаток',0);}
+      if(!['receipt','issue','return','adjustment'].includes(p.movement_type))fail('Неверное движение');if(p.movement_type==='adjustment'){if(!admin(me))fail('Нет права корректировки',403);p.balance_after=integer(p.balance_after??p.quantity,'остаток',-1000000,1000000);}
     }
     if(['sale','shift_close'].includes(action)&&!uuid(p.shift_id))fail('Выберите открытую смену');
     if(action==='sale'){
@@ -391,21 +391,30 @@ async function main(req){
     }
     if(['update','payment','extend','contact','upload','documents'].includes(action)){
       const d=await g('get',{kind:p.kind,id:p.id}),r=recordDates(d.record);
+      const authorizedReopen=action==='update'&&terminal.has(r.status)&&admin(me)&&!!text(p.reopen_reason)&&p.status===(p.kind==='storage'?'stored':'accepted');
+      if(action==='update'&&text(p.reopen_reason)&&!authorizedReopen)fail('Повторно открыть можно только закрытый заказ с причиной',409);
       if(['update','extend','contact'].includes(action)){if(Number(p.revision)!==Number(r.revision))fail('Карточка изменена. Обновите страницу.',409);}
       if(terminal.has(r.status)&&!['documents','upload'].includes(action)){
-        if(!(action==='update'&&admin(me)&&text(p.reopen_reason)&&p.status===(p.kind==='storage'?'stored':'accepted')))fail('Заказ закрыт. Повторное открытие доступно администратору.',409);
+        if(!authorizedReopen)fail('Заказ закрыт. Повторное открытие доступно администратору.',409);
       }
       if(action==='update'){
         if(p.kind==='repair'){
           const targetStatus=p.status||r.status,permissionKey=targetStatus!==r.status?statusPermissionKey(targetStatus):'';
           if(!repairTransitions[targetStatus])fail('Неверный статус');
-          requireRepairTransition(r.status,targetStatus);
+          if(!authorizedReopen)requireRepairTransition(r.status,targetStatus);
           if(permissionKey){const permissions=await rolePermission(me.role);if(!permissions[permissionKey])fail('У вашей роли нет права на этот статус ремонта',403);}
           if(p.works!==undefined)p.works=lines(p.works);if(p.parts!==undefined)p.parts=lines(p.parts);
           p.discount=numeric(p.discount??r.discount??0,'скидку');p.warranty_days=integer(p.warranty_days??r.warranty_days??0,'гарантию',0,3650);
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
           const assignedMaster=p.assigned_master_id===undefined?r.assigned_master_id:p.assigned_master_id;
           if(assignedMaster)await requireActiveMechanic(assignedMaster);
+          if(p.no_parts!==undefined&&typeof p.no_parts!=='boolean')fail('Подтвердите отметку «Ремонт без запчастей»');
+          const partRef=line=>line?.part_id||line?.id;
+          const positive=line=>line&&typeof partRef(line)==='string'&&partRef(line).trim()&&typeof line.quantity!=='boolean'&&Number.isSafeInteger(Number(line.quantity))&&Number(line.quantity)>0;
+          const attached=(r.parts||[]).some(saved=>positive(saved)&&(p.parts===undefined||p.parts.some(line=>positive(line)&&partRef(line)===partRef(saved)&&Number(line.quantity)===Number(saved.quantity))));
+          const noPartsSaved=p.no_parts===undefined&&String(assignedMaster||'')===String(r.assigned_master_id||'')&&r.parts_status?.mode==='none';
+          if(p.no_parts===true&&(attached||user.id!==assignedMaster&&!(me.role==='mechanic'&&!assignedMaster)&&!['owner','developer'].includes(me.role)))fail('Отметку «Без замены запчастей» ставит мастер ремонта',403);
+          if(targetStatus!==r.status&&['ready','issued'].includes(targetStatus)&&!attached&&p.no_parts!==true&&!noPartsSaved)fail('Выдайте запчасти в этот ремонт на кассе или отметьте „Ремонт без запчастей“',409);
           const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
           if(['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
           if(['diagnostics','waiting_parts','repair'].includes(targetStatus))p.quality_checked=false;
