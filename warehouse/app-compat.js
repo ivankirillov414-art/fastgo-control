@@ -1625,7 +1625,7 @@
       remember.disabled = !!pending2 || (target == null ? void 0 : target.can_remember) !== true;
       status.textContent = pending2 ? "\u041F\u043E\u0432\u0442\u043E\u0440\u044F\u0435\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u0441 \u0442\u0435\u043C \u0436\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u043C, \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E\u043C \u0438 \u0444\u043E\u0440\u043C\u0430\u0442\u043E\u043C." : !target ? "\u041A\u0430\u0441\u0441\u0430 \u043F\u043E\u043A\u0430 \u043D\u0435 \u0441\u043E\u043E\u0431\u0449\u0438\u043B\u0430 \u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u043E\u043C \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0435." : target.online ? "\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043A\u0430\u0441\u0441\u043E\u0432\u043E\u0433\u043E \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430." : "\u041A\u0430\u0441\u0441\u0430 \u0441\u0435\u0439\u0447\u0430\u0441 \u043D\u0435 \u0432 \u0441\u0435\u0442\u0438. \u0417\u0430\u0434\u0430\u043D\u0438\u0435 \u0434\u043E\u0436\u0434\u0451\u0442\u0441\u044F \u0435\u0451 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F.";
     }
-    void call2("label_targets").then((result) => {
+    void call2("label_targets", { label_pipeline: 3 }).then((result) => {
       if (!dialog.isConnected) return;
       targets = Array.isArray(result) ? result : [];
       station.innerHTML = targets.map((x) => '<option value="' + esc(targetKey(x)) + '">' + esc(x.name + " \xB7 " + (x.displayName || x.printer) + (x.isDefault ? " \xB7 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439" : "")) + "</option>").join("");
@@ -3158,8 +3158,73 @@
     return dispose;
   }
 
+  // warehouse/window-controls.js
+  function windowStateUpdates(apply) {
+    let revision = -1;
+    return (state) => {
+      if (!state) return false;
+      if (Number.isSafeInteger(state.revision)) {
+        if (state.revision < revision) return false;
+        revision = state.revision;
+      } else if (revision >= 0) return false;
+      apply(state);
+      return true;
+    };
+  }
+  function installWindowControls({ bar, native: native2 = window.fastgoWindow, document: document2 = window.document } = {}) {
+    if (!bar || !native2 || bar.querySelector("[data-fastgo-window-controls]")) return;
+    const style = document2.createElement("style");
+    style.textContent = "\n .fastgo-window-controls{display:flex;align-items:center;gap:4px;flex:0 0 auto;order:99;-webkit-app-region:no-drag}\n .fastgo-window-controls button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;min-width:36px;min-height:30px;padding:5px!important;border:1px solid #334453;border-radius:6px;background:#0b121e;color:#e7f2fc;cursor:pointer;-webkit-app-region:no-drag}\n .fastgo-window-controls button:hover{background:#0873df}.fastgo-window-controls button:focus-visible{outline:2px solid #47bdff;outline-offset:2px}\n .fastgo-window-controls button svg{width:18px;height:18px;pointer-events:none}.fastgo-window-frame{display:flex;gap:4px}.fastgo-window-frame[hidden]{display:none}\n .fastgo-window-controls [data-window-action=close]:hover{background:#ad3041}\n body.fastgo-window-fullscreen #desktop-status:not(.desktop-status){left:0;width:100%;right:0}\n body.fastgo-window-fullscreen.warehouse-native-window header{padding-right:12px}\n @media print{.fastgo-window-controls{display:none!important}}\n ";
+    document2.head.append(style);
+    const controls = document2.createElement("div");
+    controls.className = "fastgo-window-controls";
+    controls.setAttribute("data-fastgo-window-controls", "");
+    const icon = (paths) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' + paths + "</svg>";
+    controls.innerHTML = '<button type="button" data-window-action="toggle-fullscreen" aria-label="\u041F\u043E\u043B\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D (F11)" title="\u041F\u043E\u043B\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D (F11)" aria-pressed="false">' + icon('<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>') + '</button><div class="fastgo-window-frame" hidden><button type="button" data-window-action="minimize" aria-label="\u0421\u0432\u0435\u0440\u043D\u0443\u0442\u044C" title="\u0421\u0432\u0435\u0440\u043D\u0443\u0442\u044C">' + icon('<path d="M5 16h14"/>') + '</button><button type="button" data-window-action="restore" aria-label="\u0412\u0435\u0440\u043D\u0443\u0442\u044C \u043E\u043A\u043D\u043E" title="\u0412\u0435\u0440\u043D\u0443\u0442\u044C \u043E\u043A\u043D\u043E">' + icon('<rect x="5" y="5" width="14" height="14"/>') + '</button><button type="button" data-window-action="close" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C" title="\u0417\u0430\u043A\u0440\u044B\u0442\u044C">' + icon('<path d="m6 6 12 12M6 18 18 6"/>') + "</button></div>";
+    bar.append(controls);
+    let fullscreen = false;
+    const update = windowStateUpdates((state) => {
+      fullscreen = state.fullscreen === true;
+      document2.body.classList.toggle("fastgo-window-fullscreen", fullscreen);
+      const button = controls.querySelector("[data-window-action=toggle-fullscreen]"), label = fullscreen ? "\u0412\u044B\u0439\u0442\u0438 \u0438\u0437 \u043F\u043E\u043B\u043D\u043E\u0433\u043E \u044D\u043A\u0440\u0430\u043D\u0430 (Esc)" : "\u041F\u043E\u043B\u043D\u044B\u0439 \u044D\u043A\u0440\u0430\u043D (F11)";
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.setAttribute("aria-pressed", String(fullscreen));
+      controls.querySelector(".fastgo-window-frame").hidden = !fullscreen;
+    });
+    const action = async (value) => {
+      try {
+        update(await native2.command(value));
+      } catch (e) {
+      }
+    };
+    controls.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-window-action]");
+      if (button) void action(button.dataset.windowAction);
+    });
+    const escape2 = (event) => {
+      if (event.key === "Escape" && fullscreen && !document2.querySelector('dialog[open],[aria-modal="true"]')) {
+        event.preventDefault();
+        event.stopPropagation();
+        void action("exit-fullscreen");
+      }
+    };
+    document2.addEventListener("keydown", escape2, true);
+    const stop = native2.onChanged(update);
+    void native2.state().then(update).catch(() => {
+    });
+    return () => {
+      stop();
+      document2.removeEventListener("keydown", escape2, true);
+      controls.remove();
+      style.remove();
+      document2.body.classList.remove("fastgo-window-fullscreen");
+    };
+  }
+
   // warehouse/app.js
   installViewportLayout({ header: document.querySelector("body > header") });
+  installWindowControls({ bar: document.querySelector("body > header") });
   var formValues = (form) => {
     const p = {};
     new FormData(form).forEach((v, k) => p[k] = v);
