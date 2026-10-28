@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'ru.fastgo.mobile'
  compileSdk 35
- defaultConfig { applicationId 'ru.fastgo.mobile'; minSdk 23; targetSdk 35; versionCode 3; versionName '1.0.2'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
+ defaultConfig { applicationId 'ru.fastgo.mobile'; minSdk 23; targetSdk 35; versionCode 4; versionName '1.0.3'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
  buildTypes { release { minifyEnabled false }; debug { applicationIdSuffix '.test' } }
 }
 dependencies {
