@@ -1,4 +1,5 @@
 import {unknownScan} from './unknown.js';
+import {finalReport} from './final-report.js';
 import {repairScan} from './repair-scan.js';
 import {cancelDocument} from './cancel.js';
 import {deviceStatus} from './device-status.js';
@@ -83,6 +84,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(action==='queue'){station();return out({data:(await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=neq.done&order=created_at.asc&limit=100')).filter(x=>!x.payload.live&&x.payload.kind!=='unknown')});}
  if(action==='job'){if(!id(p.id))fail('Неверная корзина');const job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId+(device.kind==='terminal'?'&terminal_id=eq.'+device.id:'')))[0]||null;if(job?.payload.kind==='repair'&&job.state!=='done')job.repair=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),job.payload.repair_id,actor);return out({data:job});}
  if(action==='receipt'){if(!['owner','developer','seller'].includes(member.role))fail('Нет права принимать товар',403);if(!String(p.note||'').trim())fail('Укажите поставщика / документ');return out({data:await mutate('stock_receive',{request_id:p.request_id,note:String(p.note).slice(0,500),items:items(p.items)})});}
+ if(action==='final_report'){station();const snapshot=await db('rpc/workshop_native_snapshot','','POST',{});return out({data:finalReport(snapshot.sheets,p)});}
  if(action==='cash_state'){station();return out({data:await g('cash_state')});}
  if(action==='shift_open'){station();return out({data:await mutate('shift_open',{request_id:p.request_id,register:String(p.register||device.name).slice(0,80),opening_cash:Number(p.opening_cash)})});}
  if(action==='checkout'){
