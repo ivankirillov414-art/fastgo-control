@@ -63,7 +63,7 @@
     },
     {
       "id": "09-pickup",
-      "title": "Взять запчасти · QR и цены",
+      "title": "Взять запчасти · QR ремонта",
       "stage": "pickup",
       "route": "#order?kind=repair&id=demo-repair&step=parts",
       "note": ""
