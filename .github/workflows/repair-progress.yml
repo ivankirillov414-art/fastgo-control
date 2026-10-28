@@ -2,9 +2,9 @@ name: Repair progress checks
 on:
   push:
     branches: [main]
-    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
+    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'scripts/check-mobile-intake.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
   pull_request:
-    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
+    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'scripts/check-mobile-intake.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
 permissions:
   contents: read
 jobs:
@@ -23,6 +23,7 @@ jobs:
       - run: npm install --prefix /tmp/fastgo-progress playwright@1.62.1
       - run: /tmp/fastgo-progress/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
       - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-progress.cjs
+      - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-mobile-intake.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
