@@ -2628,6 +2628,15 @@
   function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh, repair: repair2, stationRepair, canOpen = () => true, manual }) {
     const $2 = (id) => document.getElementById(id), key3 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
     let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve(), stopKeys = null, emptyClosing = null;
+    let pageHidden = false;
+    window.addEventListener("pagehide", () => {
+      pageHidden = true;
+      clearTimeout(timer);
+    });
+    window.addEventListener("pageshow", (event) => {
+      pageHidden = false;
+      if (event.persisted && active) void sync().catch((e) => feedback(e.message, true));
+    });
     const product2 = (x) => parts2().find((p) => p.id === (x == null ? void 0 : x.part_id));
     const shown = /* @__PURE__ */ new Map();
     const jobStamp = (value) => String((value == null ? void 0 : value.payload.updated_at) || (value == null ? void 0 : value.created_at) || "");
@@ -2715,7 +2724,7 @@
     }
     function finished(job2) {
       var _a3;
-      if (!active) return;
+      if (pageHidden || !active) return;
       const local = draft2 || load2(key3(job2.payload.kind)), extra = remaining(local, job2);
       if (!terminal2) {
         save3("live:resume:station", null);
@@ -2748,6 +2757,7 @@
       message2(((_a3 = job2.result) == null ? void 0 : _a3.cancelled) ? job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
     }
     async function sync() {
+      if (pageHidden) return;
       if (syncing) {
         await syncing;
         if (draft2 && draft2.acked < draft2.revision) return sync();
@@ -2756,6 +2766,7 @@
       if (!draft2 || locked && !draft2.cancel_empty || draft2.acked >= draft2.revision) return;
       const local = draft2, body = JSON.parse(JSON.stringify(local));
       syncing = call2("draft_sync", { request_id: body.id, kind: body.kind, revision: body.revision, items: body.items, note: body.note || "", active: active && draft2 === local }).then((r) => {
+        if (pageHidden) return;
         if (r.state === "done") {
           if (draft2 === local) finished(r);
           return;
@@ -2765,7 +2776,9 @@
         save3(key3(local.kind), local);
         if (active && draft2 === local && $2("live-sync")) $2("live-sync").textContent = "";
       }).catch(async (e) => {
+        if (pageHidden) return;
         const job2 = await call2("job", { id: local.id }).catch(() => null);
+        if (pageHidden) return;
         if ((job2 == null ? void 0 : job2.state) === "done" && draft2 === local) {
           finished(job2);
           return;
@@ -2910,6 +2923,7 @@
       return next;
     }
     async function clearEmpty() {
+      if (pageHidden) return;
       if (emptyClosing) return emptyClosing;
       const local = draft2;
       if (!(local == null ? void 0 : local.cancel_empty)) return;
@@ -2919,13 +2933,15 @@
         var _a3, _b;
         try {
           await sync();
-          if (draft2 !== local) return;
+          if (pageHidden || draft2 !== local) return;
           const result = await call2("cancel_document", { id: local.id, kind: "sale", revision: local.revision });
           if ((result == null ? void 0 : result.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443");
           finished(result);
           if ((_a3 = result.result) == null ? void 0 : _a3.cancelled) message2("\u0411\u0443\u0444\u0435\u0440 \u043E\u0447\u0438\u0449\u0435\u043D. \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
         } catch (e) {
+          if (pageHidden) return;
           const result = await call2("job", { id: local.id }).catch(() => null);
+          if (pageHidden) return;
           if ((result == null ? void 0 : result.state) === "done") {
             finished(result);
             if ((_b = result.result) == null ? void 0 : _b.cancelled) message2("\u0411\u0443\u0444\u0435\u0440 \u043E\u0447\u0438\u0449\u0435\u043D. \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
@@ -3145,7 +3161,7 @@
       return issuePending();
     }
     async function poll2() {
-      if (polling2 || !active) return;
+      if (pageHidden || polling2 || !active) return;
       polling2 = true;
       try {
         if (draft2 == null ? void 0 : draft2.cancel_empty) {
@@ -3157,8 +3173,8 @@
           void sync().catch(() => {
           });
           const r = await call2("job", { id: local.id });
-          if (active && draft2 === local && (r == null ? void 0 : r.state) === "done") finished(r);
-          else if (active && draft2 === local && r) {
+          if (!pageHidden && active && draft2 === local && (r == null ? void 0 : r.state) === "done") finished(r);
+          else if (!pageHidden && active && draft2 === local && r) {
             locked = r.state === "processing";
             draw();
           }
@@ -3166,7 +3182,7 @@
         }
         if (current) {
           const id = current.id, r = await call2("job", { id });
-          if (!active || (current == null ? void 0 : current.id) !== id || !r) return;
+          if (pageHidden || !active || (current == null ? void 0 : current.id) !== id || !r) return;
           if (r.state === "done") {
             finished(r);
             return;
@@ -3185,9 +3201,9 @@
     }
     async function pollMirror() {
       var _a3, _b;
-      if (terminal2 || !canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
+      if (pageHidden || terminal2 || !canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const jobs = await call2("live_jobs");
-      if (!canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
+      if (pageHidden || !canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const candidates = jobs.filter((j) => j.state !== "done").sort((a, b) => String(b.payload.updated_at || b.created_at).localeCompare(String(a.payload.updated_at || a.created_at)));
       const found = candidates.find((j) => (!j.station_id || j.terminal_id !== j.station_id) && j.id !== (current == null ? void 0 : current.id) && shown.get(j.id) !== j.payload.revision && j.id + ":" + j.payload.revision !== dismissed && (!active || !current || jobStamp(j) > jobStamp(current)));
       if (found) {

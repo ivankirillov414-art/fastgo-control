@@ -73,7 +73,7 @@ const {serve,backend,scan,launchOptions}=require('./warehouse-browser-fixture.cj
  await t.locator('#scanner-compat').click();await t.locator('#live-back').click();
  // Unknown code is visible as an error; the next hardware scan works without tapping the sink.
  await t.locator('#pay').click();await t.locator('.scan-empty').waitFor();await scan(t,'UNKNOWN-CODE');await t.waitForFunction(()=>document.getElementById('scan-feedback').textContent.includes('не найден'));
- if(await d.locator('#pay').count())await d.locator('#pay').click();await d.locator('.scan-empty').waitFor();
+ if(await d.locator('#pay').count()){try{await d.locator('#pay').click({timeout:2000});}catch(error){if(!await d.locator('.scan-empty').isVisible())throw error;}}await d.locator('.scan-empty').waitFor();
  const beforeWrongScan=JSON.stringify([...api.jobs]);await scan(t,'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+api.quote.id);await t.waitForFunction(()=>document.getElementById('scan-feedback').textContent.includes('Оплата ремонта'));assert.equal(JSON.stringify([...api.jobs]),beforeWrongScan);await t.locator('#live-back').click();await t.locator('#repair-scan').click();
  await scan(t,'https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+api.quote.id);
  await t.getByRole('heading',{name:'Ремонт № 0026'}).waitFor();await d.locator('#repair-pay').waitFor();assert.equal(await t.locator('#repair-pay,#repair-check').count(),0);
