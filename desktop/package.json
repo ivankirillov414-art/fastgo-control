@@ -1,6 +1,6 @@
 {
   "name": "fastgo-desktop",
-  "version": "1.0.51",
+  "version": "1.0.53",
   "private": true,
   "description": "FastGo workshop for Windows with offline database and remote printing",
   "author": "FastGo",
@@ -9,7 +9,7 @@
     "test": "node --test tests/*.test.cjs",
     "start": "electron .",
     "prepare-web": "node prepare-web.cjs",
-    "build": "node prepare-web.cjs && electron-builder --win nsis --x64 --publish never"
+    "build": "node prepare-web.cjs && node ../scripts/release-content.cjs . && electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
     "electron": "44.7.0",
@@ -32,7 +32,8 @@
       "warehouse-runtime.cjs",
       "warehouse-native/**/*",
       "warehouse-station.cjs",
-      "warehouse-updater.cjs"
+      "warehouse-updater.cjs",
+      "release-content.json"
     ],
     "win": {
       "target": "nsis",

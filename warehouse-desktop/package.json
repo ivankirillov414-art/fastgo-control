@@ -1,12 +1,12 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.43",
+  "version": "1.0.45",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
   "main": "main.cjs",
   "scripts": {
-    "build": "node prepare.cjs && electron-builder --win nsis --x64 --publish never"
+    "build": "node prepare.cjs && node ../scripts/release-content.cjs . && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "electron-updater": "6.8.10"
@@ -63,7 +63,8 @@
       "label-printer-setup.cjs",
       "label-printer-setup.ps1",
       "pc365-setup.cjs",
-      "pc365-setup.ps1"
+      "pc365-setup.ps1",
+      "release-content.json"
     ],
     "win": {
       "target": "nsis",
