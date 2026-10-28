@@ -17,7 +17,7 @@ function create(root){
  }
  for(const resource of pkg.build.extraResources||[]){
   if(typeof resource!=='object'||!resource.from||!resource.to||resource.filter)throw Error('Unsupported extra resource definition');
-  for(const name of walk(path.resolve(root,resource.from)))resources[resource.to+'/'+name]=digest(fs.readFileSync(path.resolve(root,resource.from,name)));
+  for(const name of walk(path.resolve(root,resource.from)))if(path.basename(name)!=='.gitattributes')resources[resource.to+'/'+name]=digest(fs.readFileSync(path.resolve(root,resource.from,name)));
  }
  const inputs={};
  for(const name of ['package.json','package-lock.json',pkg.build.nsis?.include].filter(Boolean))inputs[name]=digest(fs.readFileSync(path.join(root,name)));
