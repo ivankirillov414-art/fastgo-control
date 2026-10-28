@@ -2,7 +2,7 @@ const {createServer}=require('node:http');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const engines=require('playwright'),browserName=process.env.FASTGO_REPAIR_BROWSER||'chromium';
 assert.ok(['chromium','firefox','webkit'].includes(browserName),'Unknown repair test browser');
-const root=path.resolve(__dirname,'..');const evidence=path.join(root,'browser-results','mobile-intake');fs.mkdirSync(evidence,{recursive:true});
+const root=path.resolve(__dirname,'..');const evidence=path.join(root,'browser-results','mobile-intake',browserName);fs.mkdirSync(evidence,{recursive:true});
 const server=createServer((req,res)=>{
  const file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
  if(!file.startsWith(root+path.sep)||!fs.existsSync(file))return res.writeHead(404).end();
@@ -20,7 +20,7 @@ const server=createServer((req,res)=>{
   await context.addInitScript(()=>localStorage.setItem('fastgo_workshop_session',JSON.stringify({access_token:'progress-fixture',user_id:'progress-fixture',expires_at:4102444800})));
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',async route=>{
-   const req=route.request();if(req.url().startsWith(origin))return route.continue();
+   const req=route.request();if(req.url().startsWith(origin)||/^(blob:|data:)/.test(req.url()))return route.continue();
    if(!req.url().includes('/functions/v1/fastgo-workshop-api'))return route.abort();
    const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'POST,OPTIONS'};
    if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
@@ -59,22 +59,22 @@ const server=createServer((req,res)=>{
     await page.setViewportSize(size);
     await page.goto(origin+'/workshop.html?width='+size.width+'#new?kind=repair');await page.locator('[data-intake-next]').waitFor();
     await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#intake-form').getAttribute('data-intake-current'),'0');
-    await page.locator('#f-phone').fill('+79990000000');await page.locator('#f-last_name').fill('Учебный');await page.locator('#f-first_name').fill('Клиент');
+    await page.locator('#f-phone').fill('123');await page.locator('#f-last_name').fill('Учебный');await page.locator('#f-first_name').fill('Клиент');await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#intake-form').getAttribute('data-intake-current'),'0');await page.locator('#f-phone').fill('+79990000000');
     await page.screenshot({path:path.join(evidence,`mobile-client-${size.width}.png`)});
     await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#intake-form').getAttribute('data-intake-current'),'1');
     await page.locator('#f-equipment_name').fill('Kugoo M4');await page.locator('#f-issue_description').fill('Прокол колеса');await page.screenshot({path:path.join(evidence,`mobile-equipment-${size.width}.png`)});
     await page.locator('[data-intake-back]').click();assert.equal(await page.locator('#f-phone').inputValue(),'+79990000000');await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#f-equipment_name').inputValue(),'Kugoo M4');
     await page.locator('[data-intake-next]').click();await page.locator('#f-intake_amount').fill('600');
     await page.locator('#intake-photos').setInputFiles({name:'equipment.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aANsAAAAASUVORK5CYII=','base64')});
-    assert.equal(await page.locator('.intake-photo-selected').innerText(),'equipment.png');
+    assert.equal(await page.locator('.intake-photo-selected').innerText(),'equipment.png');await page.locator('[data-intake-back]').click();await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#intake-photos').evaluate(el=>el.files.length),1);await page.setViewportSize({width:size.width,height:360});await page.locator('#f-intake_amount').focus();await page.locator('#intake-save').scrollIntoViewIfNeeded();await page.locator('#intake-save').click({trial:true});await page.setViewportSize(size);
     await page.screenshot({path:path.join(evidence,`mobile-confirm-${size.width}.png`)});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await page.locator('#intake-save').scrollIntoViewIfNeeded();await page.locator('#intake-save').click({trial:true});assert(await page.locator('[data-intake-next]').isHidden());
     if(size.width===430){await page.locator('#intake-photos').setInputFiles({name:'equipment.png',mimeType:'image/png',buffer:await page.screenshot()});await page.locator('#intake-save').click();await page.locator('.repair-card').waitFor();assert.equal(record.status,'accepted');assert.equal(record.works[0].price,600);await page.goto(origin+'/workshop.html?desktop=1#new?kind=repair');await page.locator('#intake-form').waitFor();}await page.setViewportSize({width:1366,height:768});assert(await page.locator('#f-phone').isVisible());assert(await page.locator('#f-equipment_name').isVisible());assert(await page.locator('#intake-save').isVisible());
    }
-   await page.setViewportSize({width:320,height:568});await page.goto(origin+'/workshop.html#new?kind=storage');await page.locator('[data-intake-next]').waitFor();await page.locator('#f-phone').fill('+79990000000');await page.locator('#f-last_name').fill('Учебный');await page.locator('#f-first_name').fill('Клиент');await page.locator('[data-intake-next]').click();await page.locator('#f-equipment_name').fill('Kugoo M4');await page.locator('[data-intake-next]').click();assert(await page.locator('#f-storage_tariff').isVisible());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+   await page.setViewportSize({width:320,height:568});await page.goto(origin+'/workshop.html#new?kind=storage');await page.locator('[data-intake-next]').waitFor();await page.locator('#f-phone').fill('123');await page.locator('#f-last_name').fill('Учебный');await page.locator('#f-first_name').fill('Клиент');await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#intake-form').getAttribute('data-intake-current'),'0');await page.locator('#f-phone').fill('+79990000000');await page.locator('[data-intake-next]').click();await page.locator('#f-equipment_name').fill('Kugoo M4');await page.locator('[data-intake-next]').click();assert(await page.locator('#f-storage_tariff').isVisible());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    assert.deepEqual(errors,[]);console.log('MOBILE_INTAKE_OK: 320/390/430, required fields, back retention, file selection, save reachable, desktop, storage');
-  } finally {await context.close();}
+  } catch(error){console.log(JSON.stringify(await page.evaluate(()=>({viewport:[innerWidth,innerHeight],scroll:[scrollX,scrollY],save:document.querySelector("#intake-save")?.getBoundingClientRect().toJSON(),active:document.activeElement?.id,step:document.querySelector("#intake-form")?.dataset.intakeCurrent}))));await page.screenshot({path:path.join(evidence,"failure.png")});throw error;} finally {await context.close();}
  }} finally {await browser.close();server.close();}
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});
 

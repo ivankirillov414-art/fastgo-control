@@ -11,6 +11,7 @@
  #intake-form[data-mobile-intake] .intake-step-inactive{display:none}
  #intake-form[data-mobile-intake] .form-layout{display:block}
  #intake-form[data-mobile-intake] .panel{padding:16px;margin-bottom:12px}
+ #intake-form[data-mobile-intake] .fg-suggestions{position:static;width:100%;max-height:200px;margin-top:6px;overscroll-behavior:contain}
  #intake-form[data-mobile-intake] .side-sticky>.panel>h2{display:none}
  #intake-form[data-mobile-intake] input,#intake-form[data-mobile-intake] select,#intake-form[data-mobile-intake] textarea{font-size:16px}
  .intake-step-nav{display:block;scroll-margin-top:12px}

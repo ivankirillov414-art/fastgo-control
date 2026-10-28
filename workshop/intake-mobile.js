@@ -28,6 +28,7 @@ export function mountMobileIntake(form) {
  }
  function reveal(control){const panel=control?.closest('[data-intake-step]');if(panel){current=Number(panel.dataset.intakeStep);draw();}const details=control?.closest('details');if(details)details.open=true;}
  next.onclick=()=>{
+  for(const input of panels[current].querySelectorAll('input[required]'))input.value=input.value.trim();
   const invalid=[...panels[current].querySelectorAll('input,select,textarea')].find(el=>el.willValidate&&!el.validity.valid);
   if(invalid){reveal(invalid);invalid.reportValidity();invalid.focus();return;}
   if(current===0){const phone=form.querySelector('[name="phone"]');let digits=phone.value.replace(/\D/g,'');if(digits[0]==='8')digits='7'+digits.slice(1);if(!/^7\d{10}$/.test(digits)){phone.setCustomValidity('Введите полный телефон: 11 цифр, начиная с 7 или 8');phone.reportValidity();phone.oninput=()=>phone.setCustomValidity('');return;}}
