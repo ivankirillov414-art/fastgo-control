@@ -104,3 +104,22 @@ jobs:
      with:
       name: fastgo-android-installed-${{ matrix.api }}
       path: browser-results/android-phone-${{ matrix.api }}/
+ publish:
+  if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+  needs: [verify, release-check]
+  runs-on: ubuntu-latest
+  permissions: {contents: write}
+  steps:
+   - uses: actions/checkout@v4
+   - name: Publish only the installed and tested signed phone APK
+     env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
+     run: |
+      node - <<'JS'
+      const fs=require('fs'),crypto=require('crypto'),dir='warehouse-android/phone/release/',r=JSON.parse(fs.readFileSync(dir+'receipt.json','utf8'));
+      if(crypto.createHash('sha256').update(fs.readFileSync(dir+r.file)).digest('hex')!==r.sha256)throw Error('Final APK hash mismatch');
+      fs.writeFileSync(dir+'SHA256SUMS.txt',r.sha256+'  '+r.file+'\n');
+      r.release_device_tests='passed: exact signed APK on Android 10 and 15 emulators';fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
+      JS
+      tag=fastgo-android-v1.0.0
+      if gh release view "$tag" >/dev/null 2>&1; then exit 0; fi
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.0' --notes 'Приложение для обычного телефона: сервис и просмотр склада. Подписанный APK проверен установкой и запуском, вводом текста, поворотом и перезапуском на Android 10 и 15 в эмуляторах. Вход через вашу учётную запись FastGo. Приход и кассовые операции сохраняют привязку к двум рабочим ноутбукам.' warehouse-android/phone/release/FastGo-Android-1.0.0.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
