@@ -160,3 +160,14 @@ dialog{max-height:calc(100vh - 24px);max-height:calc(var(--fastgo-viewport-heigh
  .product-dialog[open],.new-part-dialog,.barcode-print-dialog,.unknown-dialog{max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
  .barcode-print-dialog .actions,.new-part-dialog .actions{position:sticky;bottom:0;padding-block:10px;background:#142438;z-index:2}
 }
+
+/* Print receipts share the content gutter and never sit under the sidebar. */
+#receipt-label-notice{max-width:1180px;margin:0 auto;padding:0 22px 22px;white-space:pre-wrap;overflow-wrap:anywhere}
+body[data-mode=station] #receipt-label-notice{margin-left:238px;margin-right:0;padding:0 30px 24px;max-width:none}
+body[data-mode=station] .live-heading{justify-content:flex-start;flex-wrap:wrap}
+body[data-mode=station] .live-heading h1{margin:0}
+body[data-mode=station] .desktop-status{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:1000px){body[data-mode=station] #receipt-label-notice{margin-left:200px}}
+@media(max-width:700px){body[data-mode=station] #receipt-label-notice{margin-left:0;padding-inline:12px}}
+body[data-mode=station] header .fg-notice-bell{position:relative;inset:auto;flex:0 0 36px;width:36px;height:36px;min-height:36px;padding:6px;box-shadow:none;-webkit-app-region:no-drag}
+body[data-mode=station] .fg-notice-drawer{top:calc(var(--warehouse-header-height,64px) + 12px);max-height:calc(100vh - var(--warehouse-header-height,64px) - 32px)}
