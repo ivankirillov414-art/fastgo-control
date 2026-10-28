@@ -68,7 +68,8 @@
         "from": "../warehouse-desktop/pc365-driver",
         "to": "pc365-driver"
       }
-    ]
+    ],
+    "disableDefaultIgnoredFiles": true
   },
   "dependencies": {
     "electron-updater": "6.8.10"
