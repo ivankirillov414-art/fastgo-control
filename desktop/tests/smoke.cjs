@@ -40,6 +40,7 @@ async function launch(){const app=await _electron.launch({executablePath:require
  const save=async action=>{const form=await opened.page.locator('#order-form').elementHandle();await action();await opened.page.waitForFunction(form=>!form.isConnected,form);await opened.page.locator('#repair-save').waitFor();};
  await save(()=>opened.page.locator('#repair-save').click());
  await save(()=>transition('Начать диагностику'));
+ await opened.page.locator('#add-work').click();await opened.page.locator('#work-rows [data-prop=name]').fill('Замена камеры');await opened.page.locator('#work-rows [data-prop=price]').fill('500');await save(()=>opened.page.locator('#repair-save').click());
  await transition('Начать ремонт');
  await opened.page.locator('#f-flow_diagnostics').fill('Прокол камеры, деталь клиента');
  await opened.page.locator('[name="flow_approved"]').check();await opened.page.locator('#f-flow_approval_note').fill('Согласовано');
