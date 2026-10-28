@@ -6,7 +6,7 @@ async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-phone.xml
 async function loginReady(){let xml='';for(let i=0;i<30;i++){xml=await dump();if(xml.includes('Вход для сотрудников'))return xml;await pause(500);}throw Error('Installed APK login did not finish rendering');}
 (async()=>{
  const previous=path.join(dir,'FastGo-Android-1.0.1.apk');
- const packageInfo=()=>{const raw=adb('shell','dumpsys','package','ru.fastgo.mobile');return {uid:raw.match(/userId=(\d+)/)?.[1],first:raw.match(/firstInstallTime=([^\r\n]+)/)?.[1]?.trim(),version:raw.match(/versionName=([^\r\n]+)/)?.[1]?.trim()};};
+ const packageInfo=()=>{const raw=adb('shell','dumpsys','package','ru.fastgo.mobile');const identity={uid:raw.match(/\b(?:userId|appId)=(\d+)/)?.[1],first:raw.match(/firstInstallTime=([^\r\n]+)/)?.[1]?.trim(),version:raw.match(/versionName=([^\r\n]+)/)?.[1]?.trim()};console.log('Android package identity: '+JSON.stringify(identity));return identity;};
  adb('install','-r',previous);const before=packageInfo();assert(before.uid&&before.first,'Previous Android package identity missing');
  adb('install','-r',apk);const after=packageInfo();assert.equal(after.uid,before.uid,'Update must retain Android application UID');assert.equal(after.first,before.first,'Update must retain original installation');assert.equal(after.version,receipt.version,'Installed Android version differs from signed receipt');adb('shell','am','force-stop','ru.fastgo.mobile');adb('shell','am','start','-W','-n','ru.fastgo.mobile/.MainActivity');
  let xml=await loginReady();
