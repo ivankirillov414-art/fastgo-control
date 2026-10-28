@@ -3454,7 +3454,7 @@
   }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: canReceiveIncoming, manual: () => run(showManualPayment) });
   var call = (action, p = {}) => {
     if (!device && document.body.dataset.readonly === "true") {
-      if (action === "catalog") return api("work_catalog");
+      if (action === "catalog") return api("service_catalog");
       if (action === "inventory_edit") return serviceApi(action, p);
       if (action === "work_catalog") return api("service_catalog").then((c) => c.services);
       if (action === "work_catalog_save") return serviceApi("catalog_save", p);
