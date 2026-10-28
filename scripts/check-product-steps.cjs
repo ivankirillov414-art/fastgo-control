@@ -21,7 +21,8 @@ const {barcodePrintHTML}=require('../warehouse-desktop/barcode-print.cjs');
   const bounds=await page.locator('.label').evaluate(label=>{const r=label.getBoundingClientRect(),els=['.label-heading','.label-details','svg','small'].map(s=>{const el=label.querySelector(s),b=el.getBoundingClientRect();return {top:b.top-r.top,bottom:b.bottom-r.top,width:el.clientWidth,scroll:el.scrollWidth};});return {height:r.height,els};});
   for(const el of bounds.els){assert(el.top>=0&&el.bottom<=bounds.height);assert(el.scroll<=el.width+1);}for(let i=1;i<bounds.els.length;i++)assert(bounds.els[i-1].bottom<=bounds.els[i].top+.1);
   const raw=(await page.locator('.label svg').screenshot()).toString('base64');assert.equal(await decoder.evaluate(async raw=>(await new ZXingBrowser.BrowserMultiFormatReader().decodeFromImageUrl('data:image/png;base64,'+raw)).getText(),raw),'FGP-00000002');
-  await page.locator('.label').screenshot({path:path.join(out,(deviceName.startsWith('P2')?'p2':'pc365')+'-'+heightMm+'.png')});
+  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:path.join(out,'whole-'+(deviceName.startsWith('P2')?'p2':'pc365')+'-'+heightMm+'.png')});
+  await page.screenshot({clip:{x:0,y:0,width:50*96/25.4,height:heightMm*96/25.4},path:path.join(out,(deviceName.startsWith('P2')?'p2':'pc365')+'-'+heightMm+'.png')});
  }
  console.log('PRODUCT_STEPS_OK: phone/laptop, field validation, retained values, automatic SKU input omitted, stock write, label metadata and 20/27mm geometry');
  }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
