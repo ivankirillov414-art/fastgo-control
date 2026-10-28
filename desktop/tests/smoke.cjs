@@ -17,8 +17,10 @@ async function launch(){const app=await _electron.launch({executablePath:require
   return {hidden,quiet,reopened,visibleWorkPreserved:window.isVisible(),sameWindows:BrowserWindow.getAllWindows().length===before};
  });assert.deepEqual(launchVisibility,{hidden:true,quiet:true,reopened:true,visibleWorkPreserved:true,sameWindows:true});
  const chrome=await opened.app.evaluate(({Menu,BrowserWindow})=>({menu:Menu.getApplicationMenu(),menuVisible:BrowserWindow.getAllWindows()[0].isMenuBarVisible()}));assert.equal(chrome.menu,null);assert.equal(chrome.menuVisible,false);
- if(process.platform==='win32'){assert.equal(await opened.page.evaluate(()=>navigator.windowControlsOverlay.visible),true);const rect=await opened.page.evaluate(()=>{const r=navigator.windowControlsOverlay.getTitlebarAreaRect();const bar=document.querySelector('#desktop-status').getBoundingClientRect();return {width:r.width,barRight:bar.right};});assert.ok(rect.barRight<=rect.width+1);}
  await require('../../scripts/fullscreen-smoke.cjs')(opened);
+ // The fullscreen probe exits to windowed mode before checking its native caption area.
+ if(process.platform==='win32')await opened.page.waitForFunction(()=>{const r=navigator.windowControlsOverlay.getTitlebarAreaRect(),bar=document.querySelector('#desktop-status').getBoundingClientRect();return navigator.windowControlsOverlay.visible&&r.width>0&&bar.right<=r.width+1;});
+ if(process.platform==='win32'){assert.equal(await opened.page.evaluate(()=>navigator.windowControlsOverlay.visible),true);const rect=await opened.page.evaluate(()=>{const r=navigator.windowControlsOverlay.getTitlebarAreaRect();const bar=document.querySelector('#desktop-status').getBoundingClientRect();return {width:r.width,barRight:bar.right};});assert.ok(rect.barRight<=rect.width+1);}
  await opened.page.waitForFunction(()=>document.querySelector('#desktop-state-text')?.textContent.includes('Работа без сети'));
  await opened.page.evaluate(()=>location.hash='#new?kind=repair');
  await opened.page.locator('#f-last_name').fill('Клиент');await opened.page.locator('#f-first_name').fill('Тест');await opened.page.locator('#f-phone').fill('79999999999');await opened.page.locator('#f-equipment_name').fill('Kugoo Max Speed');
