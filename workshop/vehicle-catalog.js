@@ -20,7 +20,12 @@ const indexVehicle=x=>({...x,key:phonetic(x.brand+' '+(x.model||'')),searchKey:p
 const indexed=[...brands.map(brand=>({brand,model:''})),...vehicles].map(indexVehicle);
 const brandByName=new Map(names.map(x=>[norm(x.name),x.brand]));
 const knownByKey=new Map(indexed.filter(x=>x.model).map(x=>[x.key,x]));
-const nativeScriptBrands=new Set(['Десна','Аист','Урал','Кама']);
+const nativeScriptBrands=new Set(['Десна','Аист','Урал','Кама','Аккумулятор','Мотор']);
+function repairComponent(value){
+ const text=String(value||'').replace(/\s+/g,' ').trim(),match=text.match(/^(аккумулятор|акб|battery|мотор-колесо|мотор|двигатель|motor)\s+(.+)$/i);
+ if(!match||match[2].length>120||/[<>\x00-\x1f\x7f]/.test(text))return null;
+ return {brand:/^(аккумулятор|акб|battery)$/i.test(match[1])?'Аккумулятор':'Мотор',model:match[2],source:'Узел, принятый в ремонт'};
+}
 function cleanHistory(item){if(!item?.brand||!item?.model)return null;const brand=brandByName.get(norm(item.brand))||String(item.brand).trim(),model=String(item.model).trim();const known=knownByKey.get(phonetic(brand+' '+model));if(known)return known;if(/[а-яё]/i.test(brand+model)&&!nativeScriptBrands.has(brand))return null;return {...item,brand,model};}
 export function splitEquipment(value){
  const text=String(value??'').replace(/\s+/g,' ').trim(),known=brandPrefix(text);
@@ -29,6 +34,7 @@ export function splitEquipment(value){
 }
 export function equipmentChoices(query,history=[]){
  const q=norm(query);if(!q)return [];
+ const component=repairComponent(query);if(component)return [{value:component.brand+' '+component.model,label:component.brand+' '+component.model,search:query,item:component}];
  const prefix=brandPrefix(query),canonical=prefix?norm(prefix.brand)+' '+norm(splitEquipment(query).model):q;
  const words=tokens(canonical),seen=new Set();
  const candidates=[...indexed,...history.map(cleanHistory).filter(Boolean).map(indexVehicle)];
@@ -42,6 +48,7 @@ export function equipmentChoices(query,history=[]){
  }).slice(0,40).map(item=>({value:item.brand+(item.model?' '+item.model:''),label:item.brand+(item.model?' '+item.model:''),search:query,item}));
 }
 export function resolveEquipment(query,history=[]){
+ const component=repairComponent(query);if(component)return component;
  const choices=equipmentChoices(query,history).filter(x=>x.item.model&&(sameWords(x.value,query)||sameWords(x.item.model,query)));
  const prefix=brandPrefix(query),canonical=prefix?prefix.brand+' '+splitEquipment(query).model:query;
  const exact=choices.filter(x=>phonetic(x.value)===phonetic(canonical));
@@ -61,7 +68,7 @@ export function bindEquipment(input,form,setDirty){
  const history=[];let selected=null;const preview=document.createElement('p');preview.className='muted';preview.setAttribute('role','status');preview.style.cssText='margin:8px 0 0;font-size:13px';input.after(preview);
  const more=document.createElement('section');more.className='equipment-original';more.innerHTML='<button type="button" data-original-open class="btn ghost">Нет нужной модели?</button><div data-original-fields hidden><p>Перепишите оригинальное название с техники. Русское написание зарубежных названий используйте для поиска в подсказках.</p><label>Марка на технике<input data-original-brand maxlength="80" autocomplete="off"></label><label>Модель на технике<input data-original-model maxlength="120" autocomplete="off"></label><p data-original-error role="alert"></p><button type="button" data-original-use class="btn">Использовать название</button> <button type="button" data-original-cancel class="btn ghost">Отмена</button><p class="muted">Название сохранится вместе с приёмкой и появится в истории техники. Тип техники выбирать не требуется.</p></div>';preview.after(more);
  const fields=more.querySelector('[data-original-fields]'),brandField=more.querySelector('[data-original-brand]'),modelField=more.querySelector('[data-original-model]'),error=more.querySelector('[data-original-error]');
- const sync=()=>{const item=selected||resolveEquipment(input.value,history);form.elements.brand.value=item?.brand||'';form.elements.model.value=item?.model||'';input.setCustomValidity(input.value.trim()&&!item?.model?'Выберите бренд и модель из подсказок или укажите оригинальную маркировку':'');preview.textContent=item?.model?'Выбрано: '+item.brand+' '+item.model:input.value.trim()?'Выберите технику из подсказок. Название сохранится как в каталоге.':'Начните вводить модель или бренд — например «макс спид», «стелс» или «найнбот».';return !!item?.model;};
+ const sync=()=>{const item=selected||resolveEquipment(input.value,history);form.elements.brand.value=item?.brand||'';form.elements.model.value=item?.model||'';input.setCustomValidity(input.value.trim()&&!item?.model?'Выберите бренд и модель из подсказок или укажите оригинальную маркировку':'');preview.textContent=item?.model?'Выбрано: '+item.brand+' '+item.model:input.value.trim()?'Выберите технику из подсказок или введите «Аккумулятор 7,5 А·ч», «Мотор 350 Вт».':'Начните вводить модель или бренд — например «макс спид», «стелс» или «найнбот».';return !!item?.model;};
  more.querySelector('[data-original-open]').onclick=()=>{const parts=splitEquipment(input.value);brandField.value=parts.brand;modelField.value=parts.model;error.textContent='';fields.hidden=false;(brandField.value?modelField:brandField).focus();};
  for(const field of [brandField,modelField])field.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();more.querySelector('[data-original-use]').click();}else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();fields.hidden=true;input.focus();}});
  more.querySelector('[data-original-cancel]').onclick=()=>{fields.hidden=true;error.textContent='';input.focus();};
