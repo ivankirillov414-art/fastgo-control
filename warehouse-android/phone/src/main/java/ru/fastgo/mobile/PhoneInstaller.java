@@ -28,9 +28,9 @@ final class PhoneInstaller {
    try(InputStream in=new FileInputStream(verifiedApk);OutputStream out=session.openWrite("base.apk",0,verifiedApk.length())){
     byte[] buffer=new byte[32768];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);session.fsync(out);
    }
-   Intent result=new Intent(context,PhoneInstallResultActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+   Intent result=new Intent(context,PhoneInstallReceiver.class);
    int flags=PendingIntent.FLAG_UPDATE_CURRENT;if(Build.VERSION.SDK_INT>=31)flags|=PendingIntent.FLAG_MUTABLE;
-   PendingIntent callback=PendingIntent.getActivity(context,id,result,flags);
+   PendingIntent callback=PendingIntent.getBroadcast(context,id,result,flags);
    if(!state(context).edit().putInt("session",id).putString("install_version",version).commit())throw new IOException("Не удалось сохранить состояние установки");
    session.commit(callback.getIntentSender());committed=true;
   }finally{if(!committed){installer.abandonSession(id);state(context).edit().remove("session").apply();}}

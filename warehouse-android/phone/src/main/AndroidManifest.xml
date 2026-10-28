@@ -5,7 +5,7 @@
   <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
-  <activity android:name=".PhoneInstallResultActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Material.NoActionBar"/>
+  <receiver android:name=".PhoneInstallReceiver" android:exported="false"/>
   <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/photo_paths"/></provider>
  </application>
 </manifest>

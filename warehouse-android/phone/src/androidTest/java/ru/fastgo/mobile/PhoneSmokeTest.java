@@ -38,7 +38,7 @@ public class PhoneSmokeTest {
  }
  @Test public void installerUsesOwnPackageAndPrivateCallback()throws Exception{
   android.content.Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();android.content.pm.PackageInstaller.SessionParams params=PhoneInstaller.parameters(c,123);assertNotNull(params);
-  android.content.pm.ActivityInfo callback=c.getPackageManager().getActivityInfo(new android.content.ComponentName(c,PhoneInstallResultActivity.class),0);assertFalse("Installer callback must not be callable by other apps",callback.exported);
+  android.content.pm.ActivityInfo callback=c.getPackageManager().getReceiverInfo(new android.content.ComponentName(c,PhoneInstallReceiver.class),0);assertFalse("Installer callback must not be callable by other apps",callback.exported);
   if(android.os.Build.VERSION.SDK_INT>=31)assertEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,c.checkSelfPermission("android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"));
  }
 }
