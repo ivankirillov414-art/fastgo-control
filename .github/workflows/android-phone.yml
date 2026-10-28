@@ -159,5 +159,6 @@ jobs:
       gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.7' --notes 'Приложение для обычного телефона: сервис и просмотр склада. Подписанный APK проверен установкой и запуском, вводом текста, поворотом и перезапуском на Android 10 и 15 в эмуляторах. Вход через вашу учётную запись FastGo. Приход и кассовые операции сохраняют привязку к двум рабочим ноутбукам.' warehouse-android/phone/release/FastGo-Android-1.0.7.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
 
    - name: Publish automatic phone update channel after installed APK checks
+     if: steps.package.outputs.ready == 'true'
      env: {GH_TOKEN: '${{ github.token }}'}
      run: node scripts/publish-phone-update.cjs
