@@ -24,6 +24,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-compact-report-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-services-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-manual-update-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-mobile-login.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-mobile-labels.cjs chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-browser.cjs
