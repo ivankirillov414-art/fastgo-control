@@ -1,10 +1,7 @@
 name: FastGo iPhone
 on:
- push:
-  branches: [main]
-  paths: ['ios/**','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/ios-app.yml']
- pull_request:
-  paths: ['ios/**','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/ios-app.yml']
+ # Native iPhone releases are deferred by the user until the final desktop release.
+ # Resume explicitly when requested; web/mobile browser checks remain active.
  workflow_dispatch:
 permissions: {contents: read}
 jobs:

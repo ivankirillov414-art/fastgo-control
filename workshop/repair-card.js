@@ -94,7 +94,7 @@ function installRepairPanes({card,top,rail,main,client,form,progress,partSection
  const tabs=make('nav','repair-pane-tabs');tabs.setAttribute('aria-label','Блоки ремонта');
  const panes=[['vehicle','Техника'],['work','Работы'],['parts','Запчасти'],['photos','Фото'],...(!master?[['payment','Оплата'],['history','История']]:[])];
  const body=make('div','repair-pane-body');body.append(rail,main);card.append(tabs,body);if(footer)card.append(footer);
- const narrow=matchMedia('(max-width:760px)');let selected='vehicle';
+ const narrow=matchMedia('(max-width:760px)');let selected=master?'work':'vehicle';
  const children=[...detailBody.children];
  const show=()=>{
   const phone=narrow.matches;

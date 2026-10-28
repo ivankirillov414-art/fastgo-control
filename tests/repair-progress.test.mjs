@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {repairActions,repairRequirements,repairPartsCondition,repairNoPartsAllowed} from '../workshop/repair-progress.js';
+import {repairActions,repairRequirements,repairPartsCondition,repairNoPartsAllowed,repairGuide} from '../workshop/repair-progress.js';
 
 test('next repair actions advance after saving and retain role permissions',()=>{
  assert.deepEqual(repairActions('accepted',{}),['diagnostics']);
@@ -60,4 +60,27 @@ test('missing and stale approval cannot pass through NaN comparisons',()=>{
  for(const approved_amount of [undefined,null,'','oops',500])assert.deepEqual(repairRequirements({approved_amount},values),['approval']);
  assert.deepEqual(repairRequirements({approved_amount:null},{...values,approve:true,approval_note:'Согласовано'}),[]);
  assert.deepEqual(repairRequirements({approved_amount:600},{...values,approve:true,approval_note:' '}),['approval']);
+});
+
+
+test('repair guide points to the real next transition and its unresolved conditions',()=>{
+ const record={status:'repair',approved_amount:600,parts:[],paid_amount:0},values={works:[{name:'Замена',quantity:1,price:600}],parts:[],diagnostics_notes:'Проверено',quality_checked:false};
+ const guide=repairGuide(record,values,{role:'mechanic',status_permissions:{can_mark_ready:true}});
+ assert.equal(guide.target,'ready');assert.deepEqual(guide.missing,['parts','quality']);assert.match(guide.detail,/QR/);assert.equal(guide.disabled,false);
+ assert.equal(repairGuide(record,values,{role:'mechanic',status_permissions:{can_mark_ready:false}}).target,null);
+});
+
+test('ready guide keeps unpaid handover blocked and respects actual issue permissions',()=>{
+ const record={status:'ready',approved_amount:600,parts:[{part_id:'issued',quantity:1,price:600}],paid_amount:100},values={works:[],parts:record.parts,diagnostics_notes:'Проверено',quality_checked:true};
+ const owner={role:'owner',status_permissions:{can_issue:true}};
+ let guide=repairGuide(record,values,owner);assert.equal(guide.target,'issued');assert.equal(guide.due,500);assert.equal(guide.disabled,true);
+ guide=repairGuide({...record,paid_amount:600},values,owner);assert.equal(guide.disabled,false);assert.deepEqual(guide.missing,['handover']);
+ const master=repairGuide(record,values,{role:'mechanic',status_permissions:{can_issue:false}});assert.equal(master.target,null);assert.match(master.detail,/касс/);
+});
+
+test('waiting for parts is its own visible stop and closed orders cannot advance',()=>{
+ const values={works:[],parts:[],diagnostics_notes:'Проверено',quality_checked:true};
+ const waiting=repairGuide({status:'waiting_parts'},values,{role:'mechanic'});assert.equal(waiting.title,'Ожидаем запчасти');assert.equal(waiting.label,'Продолжить ремонт');assert.equal(waiting.target,'repair');
+ for(const status of ['issued','cancelled'])assert.equal(repairGuide({status},values,{role:'owner',status_permissions:{can_issue:true,can_mark_ready:true}}).target,null);
+ assert.equal(repairGuide({status:'accepted'},values,{}).target,'diagnostics');
 });

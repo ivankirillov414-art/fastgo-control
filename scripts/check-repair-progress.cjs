@@ -12,7 +12,7 @@ const server=createServer((req,res)=>{
  const origin='http://127.0.0.1:'+server.address().port;
  const browser=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,args:['--no-sandbox']}:{});
  fs.mkdirSync('browser-results',{recursive:true});
- try{for(const viewport of [{width:1366,height:768},{width:1280,height:720},{width:390,height:844}]){
+ try{for(const viewport of [{width:1366,height:768},{width:1280,height:720},{width:390,height:844},{width:320,height:568}]){
   const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[],updates=[];
   let personalStock=false,failUpdate=false,role='owner',permission={can_mark_ready:true,can_issue:true,can_cancel:true};
   let record={id:'progress-fixture',repair_number:16,revision:1,status:'accepted',brand:'Kugoo',model:'M4',last_name:'Тест',first_name:'Клиент',phone:'+79990000000',created_at:'2026-10-16',promised_date:'2026-10-20',works:[{name:'Назначенная стоимость ремонта',quantity:1,price:500}],parts:[],approved_amount:null,diagnostics_notes:'',paid_amount:0,total_amount:500,fault_photo_paths:['photo-one.jpg','photo-two.jpg'],signed_document_paths:[]};
@@ -84,20 +84,22 @@ const server=createServer((req,res)=>{
    assert.deepEqual(updates.at(-1).parts,[]);assert.equal(updates.at(-1).status,'accepted');assert.equal(Object.hasOwn(updates.at(-1),'promised_date'),false);
    assert.equal(record.promised_date,'2026-10-20');
    // Saving refreshes the inline card and its permitted transitions.
-   await saved(()=>transition('Начать диагностику'));
+   assert.equal(await page.locator('[data-guide-advance]').innerText(),'Начать диагностику');
+   await saved(()=>page.locator('[data-guide-advance]').click());
    assert.equal(record.status,'diagnostics');assert.equal(await page.locator('[data-repair-status=repair]').count(),1);
-   await transition('Начать ремонт');
+   await page.locator('[data-guide-advance]').click();
    await page.locator('#f-flow_diagnostics').fill('Прокол камеры; клиент принёс свою камеру');
    await page.locator('[name="flow_approved"]').check();await page.locator('#f-flow_approval_note').fill('Согласовано при приёмке');
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'repair');assert.deepEqual(record.parts,[]);
-   await transition('Ремонт готов');
+   await page.locator('[data-guide-advance]').click();
    await page.locator('[name="flow_quality"]').check();
    const completionWrites=updates.length;await page.locator('#modal-form button[type="submit"]').click();
    assert.equal(await page.locator('[name="flow_no_parts"]').evaluate(input=>input.validity.valueMissing),true);assert.equal(updates.length,completionWrites);assert.equal(record.status,'repair');
    await page.locator('[name="flow_no_parts"]').check();
    await saved(()=>page.locator('#modal-form button[type="submit"]').click());
    assert.equal(record.status,'ready');assert.deepEqual(record.parts,[]);
+   assert.ok(await page.locator('[data-guide-advance]').isDisabled());
    assert.equal(await page.locator('[data-repair-status=issued]').count(),1);
    assert.equal(await page.locator('#part-picker,#scan-part,#customer-part,#add-part').count(),0);
    // Revoking an existing choice stays explicit and blocks the next issue transition.
@@ -126,7 +128,7 @@ const server=createServer((req,res)=>{
    await page.screenshot({path:`browser-results/repair-progress-saved-${viewport.width}.png`});
    // Fresh roles still control transitions, and closed records stay read-only.
    record.status='repair';permission={};await page.reload();await page.locator('#repair-progress-panel').waitFor({state:'attached'});await pane('work');
-   assert.equal(await page.locator('[data-repair-status="ready"],[data-repair-status="cancelled"]').count(),0);
+   assert.equal(await page.locator('[data-repair-status="ready"],[data-repair-status="cancelled"]').count(),0);assert.equal(await page.locator('[data-guide-advance]').count(),0);
    record.status='issued';await page.reload();await page.locator('#repair-progress-panel').waitFor({state:'attached'});await pane('work');
    assert.equal(await page.locator('#repair-save,[data-repair-status]').count(),0);assert.ok(await page.locator('#add-work').isDisabled());
    record.status='stored';await page.goto(origin+'/workshop.html#order?kind=storage&id=progress-fixture');
