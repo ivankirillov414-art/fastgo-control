@@ -3462,7 +3462,14 @@
     }
     return api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
   };
+  var receiptNoticeTimer;
+  function clearReceiptNotice() {
+    var _a3;
+    clearTimeout(receiptNoticeTimer);
+    (_a3 = document.getElementById("receipt-label-notice")) == null ? void 0 : _a3.remove();
+  }
   var receiptLabels = !terminal ? startReceiptLabels({ call: (a, p) => device ? call(a, p) : Promise.resolve([]), notify: (value) => {
+    clearTimeout(receiptNoticeTimer);
     let box = $("receipt-label-notice");
     if (!box) {
       box = document.createElement("p");
@@ -3472,6 +3479,7 @@
     }
     box.textContent = value.text;
     box.className = value.ok ? "notice" : "error";
+    if (value.ok) receiptNoticeTimer = setTimeout(clearReceiptNotice, 1e4);
   } }) : null;
   function applyReadOnly() {
     if (document.body.dataset.readonly !== "true") return;
@@ -3548,6 +3556,7 @@
   });
   function shell(html) {
     var _a3;
+    clearReceiptNotice();
     if (serviceView) {
       (_a3 = serviceView.dispose) == null ? void 0 : _a3.call(serviceView);
       serviceView = null;
@@ -3558,7 +3567,7 @@
     }
     document.body.dataset.screen = screen;
     const section = document.getElementById("warehouse-section");
-    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", services: "\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B", "manual-payment": "\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
+    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", services: "\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B", "manual-payment": "\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", holdings: "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445", shift: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: live.kind() === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
     if (stopUSB) {
       stopUSB();
       stopUSB = null;
@@ -3619,7 +3628,10 @@
     if ($("master-stock")) $("master-stock").onclick = () => run(holdings);
   }
   function notifications() {
-    if (!terminal) startNotifications({ actor: userId(), call: avitoApi, station: async () => device });
+    if (terminal) return;
+    startNotifications({ actor: userId(), call: avitoApi, station: async () => device });
+    const bell = document.querySelector(".fg-notice-bell");
+    if (bell) document.querySelector("body > header").append(bell);
   }
   async function catalog() {
     const c = await call("catalog");
