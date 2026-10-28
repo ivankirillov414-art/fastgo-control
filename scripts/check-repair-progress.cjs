@@ -52,7 +52,7 @@ const server=createServer((req,res)=>{
   const saved=async action=>{
    const form=await page.locator('#order-form').elementHandle(),count=updates.length;
    await action();await page.waitForFunction(form=>!form.isConnected,form);
-   assert.equal(updates.length,count+1);await pane('work');await page.locator('#repair-save').waitFor();
+   assert.equal(updates.length,count+1);await page.locator('#dialog[open]').waitFor({state:'hidden'});await pane('work');await page.locator('#repair-save').waitFor();
   };
   try{
    await open();

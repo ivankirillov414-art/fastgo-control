@@ -23,8 +23,7 @@ jobs:
       - run: npm install --prefix /tmp/fastgo-progress playwright@1.62.1
       - run: /tmp/fastgo-progress/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
       - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-progress.cjs
-      - if: matrix.browser == 'chromium'
-        run: NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-step-flow.cjs
+      - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-step-flow.cjs
       - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-mobile-intake.cjs
       - uses: actions/upload-artifact@v4
         if: always()

@@ -99,7 +99,7 @@ async function workshopContext(browser,base,{role='owner',fake=false,session=tru
   const context=await workshopContext(browser,base,{role}),page=await context.newPage();await pageErrorsOn(page);
   for(const [width,height] of sizes){await page.setViewportSize({width,height});await visit(page,base+'/workshop.html#repairs');await page.locator('.records').waitFor();await pageFits(page,'service-list',{role,width,height});check(await page.locator('.view-switch,.order-board').count()===0,'table-only-no-selector',{role,width});}
   if(role==='owner'){await page.setViewportSize({width:320,height:568});await visit(page,base+'/workshop.html#new?kind=repair');await page.locator('#intake-form').waitFor();await pageFits(page,'service-intake',{width:320,height:568});}
-  await visit(page,base+'/workshop.html#order?kind=repair&id=responsive-repair');await page.locator('.repair-card').waitFor();for(const [width,height] of sizes){await page.setViewportSize({width,height});if(width<=760){for(const pane of ['vehicle','work','parts','photos']){await page.locator('[data-repair-pane="'+pane+'"]').click();await pageFits(page,'repair-pane',{role,pane,width,height});}}else await pageFits(page,'repair-desktop',{role,width,height});if(width===390)await page.screenshot({path:path.join(out,'repair-'+role+'-390.png')});}
+  await visit(page,base+'/workshop.html#order?kind=repair&id=responsive-repair');await page.locator('.repair-steps').waitFor();for(const [width,height] of sizes){await page.setViewportSize({width,height});if(width<=760){for(const pane of ['card','works','parts','finish']){await page.locator('[data-step="'+pane+'"]').click();await pageFits(page,'repair-pane',{role,pane,width,height});}}else await pageFits(page,'repair-desktop',{role,width,height});if(width===390)await page.screenshot({path:path.join(out,'repair-'+role+'-390.png')});}
   if(role==='mechanic')check(await page.locator('#payment,#refund,#warehouse-service').count()===0,'master-no-payment-actions',{role});await context.close();
  }
  progress('touch and legacy viewport');
@@ -121,7 +121,7 @@ async function workshopContext(browser,base,{role='owner',fake=false,session=tru
   });check(lifecycle.same&&lifecycle.coalesced===1&&lifecycle.afterDispose===1,'viewport-singleton-coalescing-cleanup',lifecycle);await context.close();
  }
  {
-  const context=await workshopContext(browser,base,{fake:true}),page=await context.newPage();await pageErrorsOn(page);await visit(page,base+'/workshop.html#order?kind=repair&id=responsive-repair');await page.locator('[data-repair-pane=work]').click();await setVisualHeight(page,360);await boxInside(page,'.repair-card-save',360,'repair-save-above-keyboard',{width:390,height:360});await page.screenshot({path:path.join(out,'repair-keyboard-390.png')});await context.close();
+  const context=await workshopContext(browser,base,{fake:true}),page=await context.newPage();await pageErrorsOn(page);await visit(page,base+'/workshop.html#order?kind=repair&id=responsive-repair');await page.locator('[data-step=works]').click();await setVisualHeight(page,360);await boxInside(page,'.rs-bottom',360,'repair-save-above-keyboard',{width:390,height:360});await page.screenshot({path:path.join(out,'repair-keyboard-390.png')});await context.close();
  }
  progress('TSD fallback');
  // Web TSD fallback: home and scanned receipt remain reachable in a 320x480 viewport.
