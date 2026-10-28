@@ -10,6 +10,10 @@ permissions:
 jobs:
   repair-progress:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,10 +21,10 @@ jobs:
           node-version: '24'
       - run: node --test tests/repair-progress.test.mjs tests/native-store.test.mjs tests/repair-parts.test.mjs
       - run: npm install --prefix /tmp/fastgo-progress playwright@1.62.1
-      - run: /tmp/fastgo-progress/node_modules/.bin/playwright install --with-deps chromium
-      - run: NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-progress.cjs
+      - run: /tmp/fastgo-progress/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
+      - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-progress.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: repair-progress-screenshots
+          name: repair-progress-screenshots-${{ matrix.browser }}
           path: browser-results/
