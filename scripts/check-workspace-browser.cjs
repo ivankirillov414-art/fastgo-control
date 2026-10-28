@@ -175,7 +175,7 @@ const server=createServer((req,res)=>{
  await page.locator('#receipt-add').click();
  const row=page.locator('#receipt-lines section').nth(1);
  await row.locator('select').selectOption('');
- await row.getByLabel('Название',{exact:true}).fill('Камера');
+ await row.getByLabel('Наименование по модели',{exact:true}).fill('Камера');
  await row.getByLabel('Категория',{exact:true}).fill('Колёса');
  await row.getByLabel('Количество',{exact:true}).fill('2');
  await page.getByRole('button',{name:'Сохранить весь приход'}).click();
@@ -184,7 +184,7 @@ const server=createServer((req,res)=>{
  await page.reload();
  await page.getByRole('button',{name:'Проверить и повторить сохранение'}).click();
  await page.getByRole('heading',{name:'Приход сохранён'}).waitFor();
- assert.equal(attempts,2);assert.deepEqual(requests[0],requests[1]);assert.equal(requests[1].items[0].quantity,15);assert.equal(requests[1].items[1].name,'Камера');
+ assert.equal(attempts,2);assert.deepEqual(requests[0],requests[1]);assert.equal(requests[1].items[0].quantity,15);assert.equal(requests[1].items[1].name,'Камера');assert.match(requests[1].items[1].sku,/^FG-[A-F0-9]{12}$/);
  assert.equal(await page.getByRole('button',{name:'Этикетка',exact:true}).count(),2);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  assert.deepEqual(errors,[]);await page.screenshot({path:`browser-results/${kind}-receipt.png`,fullPage:true});await context.close();
