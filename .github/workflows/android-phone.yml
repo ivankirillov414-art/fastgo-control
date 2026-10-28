@@ -1,10 +1,10 @@
 name: FastGo Android Phone
 on:
  pull_request:
-  paths: ['scripts/check-phone-*.cjs','scripts/check-phone-apk.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
+  paths: ['scripts/check-phone-*.cjs','scripts/check-phone-*.py','tests/phone_apk_identity_test.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  push:
   branches: [main]
-  paths: ['scripts/check-phone-*.cjs','scripts/check-phone-apk.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
+  paths: ['scripts/check-phone-*.cjs','scripts/check-phone-*.py','tests/phone_apk_identity_test.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -31,6 +31,8 @@ jobs:
    - name: Build final phone package
      run: gradle :phone:assembleRelease :phone:assembleDebug --no-daemon
      working-directory: warehouse-android
+   - name: Verify APK identity guard
+     run: python3 -m unittest discover -s tests -p phone_apk_identity_test.py
    - name: Audit final release APK manifest
      run: python3 scripts/check-phone-apk.py warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk --output warehouse-android/phone/build/security-audit.json
    - name: Save public Android signing utility for local signing
@@ -101,6 +103,7 @@ jobs:
        installed=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
        assert installed['files']==expected['files'], 'Signed APK is older than verified source; sign the fresh package before publishing'
       PY
+      python3 scripts/check-phone-apk-identity.py verify-package/build/outputs/apk/release/phone-release-unsigned.apk warehouse-android/phone/release/FastGo-Android-1.0.6.apk --output browser-results/android-phone-${{ matrix.api }}/apk-identity.json
    - uses: actions/setup-java@v4
      if: steps.signed.outputs.ready == 'true'
      with: {distribution: temurin, java-version: '17'}
