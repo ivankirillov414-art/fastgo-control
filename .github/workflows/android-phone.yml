@@ -138,7 +138,7 @@ jobs:
       const fs=require('fs'),crypto=require('crypto'),dir='warehouse-android/phone/release/',r=JSON.parse(fs.readFileSync(dir+'receipt.json','utf8'));
       if(crypto.createHash('sha256').update(fs.readFileSync(dir+r.file)).digest('hex')!==r.sha256)throw Error('Final APK hash mismatch');
       fs.writeFileSync(dir+'SHA256SUMS.txt',r.sha256+'  '+r.file+'\n');
-      r.release_device_tests='passed: exact signed APK on Android 10 and 15 emulators';fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
+      r.release_device_tests='passed: exact signed APK upgraded from 1.0.1 on Android 10 and 15 emulators';fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
       JS
       tag=fastgo-android-v1.0.5
       if gh release view "$tag" >/dev/null 2>&1; then
