@@ -4206,7 +4206,7 @@
   var lastDeviceStatus = 0;
   var nativeUpdatePending = false;
   async function desktopStatus() {
-    var _a3, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    var _a3, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     const el = $("desktop-status");
     if (!el) return;
     if (((_a3 = window.fastgoInstalledApp) == null ? void 0 : _a3.platform) === "ios") {
@@ -4223,17 +4223,17 @@
       if (device && userId() && Date.now() - lastDeviceStatus > 6e4) {
         lastDeviceStatus = Date.now();
         const printing = await ((_d = (_c = window.warehouseDesktop).printers) == null ? void 0 : _d.call(_c).catch(() => null)), scanner = await ((_f = (_e = window.warehouseDesktop).scannerStatus) == null ? void 0 : _f.call(_e).catch(() => null));
-        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing, scanner, scan_test: scannerTest }).catch(() => {
+        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing, scanner, input_health: { screen, busy, focused: document.hasFocus(), tag: ((_g = document.activeElement) == null ? void 0 : _g.tagName) || "", disabled: ((_h = document.activeElement) == null ? void 0 : _h.disabled) === true, readonly: ((_i = document.activeElement) == null ? void 0 : _i.readOnly) === true, payment_pending: !!((_j = load("manual-service-payment")) == null ? void 0 : _j.pending) }, scan_test: scannerTest }).catch(() => {
         });
       }
       let note = "";
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
-      if ((_g = s.terminalUpdate) == null ? void 0 : _g.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
-      if (((_h = s.recovery) == null ? void 0 : _h.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_i = s.recovery) == null ? void 0 : _i.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_j = s.recovery) == null ? void 0 : _j.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
+      if ((_k = s.terminalUpdate) == null ? void 0 : _k.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
+      if (((_l = s.recovery) == null ? void 0 : _l.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_m = s.recovery) == null ? void 0 : _m.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_n = s.recovery) == null ? void 0 : _n.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {
