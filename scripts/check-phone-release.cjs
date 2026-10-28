@@ -19,4 +19,14 @@ async function loginReady(){let xml='';for(let i=0;i<30;i++){xml=await dump();if
  adb('shell','am','force-stop','ru.fastgo.mobile');adb('shell','am','start','-W','-n','ru.fastgo.mobile/.MainActivity');xml=await loginReady();assert(xml.includes('Вход для сотрудников'),'restart failed');
  const installed=adb('shell','pm','path','ru.fastgo.mobile').trim().replace(/^package:/,'');const pulled=path.join(out,'installed.apk');adb('pull',installed,pulled);assert.equal(sha(pulled),receipt.sha256,'installed bytes differ from download');fs.unlinkSync(pulled);
  fs.writeFileSync(path.join(out,'installed-login.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({api:process.env.FASTGO_ANDROID_API,sha256:receipt.sha256,package:'ru.fastgo.mobile',install:true,in_place_upgrade_from:'1.0.1',intermediateVersion,android_uid_preserved:true,first_install_time_preserved:true,login:true,typing:true,rotation:true,restart:true,installed_bytes_match:true},null,2));console.log('PASS: exact signed APK in-place upgrade, login, typing, rotation, restart and installed hash');
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(async e=>{
+ console.error(e);
+ // Preserve the actual failing emulator state; a timeout is not proof of an app bug
+ // or an infrastructure failure. Never retry installation or relax the assertion here.
+ try{fs.writeFileSync(path.join(out,'failure-screen.xml'),await dump());}catch{}
+ try{fs.writeFileSync(path.join(out,'failure-screen.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));}catch{}
+ for(const [file,args]of [['failure-logcat.txt',['logcat','-d','-t','500']],['failure-activity.txt',['shell','dumpsys','activity','top']]]){
+  try{fs.writeFileSync(path.join(out,file),execFileSync('adb',args,{timeout:30000}));}catch{}
+ }
+ process.exitCode=1;
+});
