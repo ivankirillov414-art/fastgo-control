@@ -36,4 +36,11 @@ public class PhoneSmokeTest {
    ready(scenario);java.util.concurrent.atomic.AtomicReference<Throwable> failure=new java.util.concurrent.atomic.AtomicReference<>();scenario.onActivity(a->{PhoneUpdates updater=new PhoneUpdates(a,(WebView)a.findViewById(14001));try{java.io.File file=new java.io.File(a.getApplicationInfo().sourceDir);JSONObject meta=new JSONObject().put("sha256","invalid");try{updater.verify(file,meta);failure.set(new AssertionError("Tampered APK accepted"));}catch(java.io.IOException expected){}java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");try(java.io.InputStream in=new java.io.FileInputStream(file)){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)digest.update(b,0,n);}StringBuilder hash=new StringBuilder();for(byte b:digest.digest())hash.append(String.format(java.util.Locale.ROOT,"%02x",b&255));android.content.pm.PackageInfo own=a.getPackageManager().getPackageInfo(a.getPackageName(),0);meta.put("sha256",hash.toString()).put("versionCode",own.versionCode).put("versionName",own.versionName);try{updater.verify(file,meta);failure.set(new AssertionError("Same version APK accepted"));}catch(java.io.IOException expected){} }catch(Throwable e){failure.set(e);}finally{updater.close();}});if(failure.get()!=null)throw new AssertionError(failure.get());
   }
  }
+ @Test public void installerUsesOwnPackageAndPrivateCallback()throws Exception{
+  android.content.Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();android.content.pm.PackageInstaller.SessionParams params=PhoneInstaller.parameters(c,123);
+  if(android.os.Build.VERSION.SDK_INT>=26)assertEquals(android.content.pm.PackageManager.INSTALL_REASON_USER,params.getInstallReason());
+  if(android.os.Build.VERSION.SDK_INT>=31)assertEquals(android.content.pm.PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED,params.getRequireUserAction());
+  android.content.pm.ActivityInfo callback=c.getPackageManager().getActivityInfo(new android.content.ComponentName(c,PhoneInstallResultActivity.class),0);assertFalse("Installer callback must not be callable by other apps",callback.exported);
+  assertEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,c.checkSelfPermission("android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"));
+ }
 }

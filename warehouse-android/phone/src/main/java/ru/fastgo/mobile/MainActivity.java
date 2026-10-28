@@ -49,7 +49,7 @@ public final class MainActivity extends Activity {
    @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return navigate(request.getUrl());}
    @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return navigate(Uri.parse(url));}
    @Override public void onReceivedSslError(WebView view,android.webkit.SslErrorHandler handler,android.net.http.SslError error){handler.cancel();}
-   @Override public void onPageFinished(WebView view,String url){if(internal(Uri.parse(url)))view.evaluateJavascript("window.fastgoInstalledApp=Object.freeze({platform:'android',version:'1.0.5',bundled:true});window.print=()=>FastGoPhone.print();window.fastgoRequestAppUpdate=()=>FastGoPhone.checkUpdate();",null);}
+   @Override public void onPageFinished(WebView view,String url){if(internal(Uri.parse(url)))view.evaluateJavascript("window.fastgoInstalledApp=Object.freeze({platform:'android',version:'1.0.6',bundled:true});window.print=()=>FastGoPhone.print();window.fastgoRequestAppUpdate=()=>FastGoPhone.checkUpdate();",null);}
    @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){if(request.isForMainFrame())Toast.makeText(MainActivity.this,"Не удалось открыть экран. Вернитесь назад и повторите.",Toast.LENGTH_LONG).show();}
   });
   web.setWebChromeClient(new WebChromeClient(){
