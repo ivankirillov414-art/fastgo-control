@@ -3,6 +3,8 @@ on:
   push:
     branches: [main, codex/repair-part-scanning-20261010]
     paths: ['workshop/**','workshop.html','workshop.css','scripts/check-workspace-browser.cjs','scripts/check-repair-pickup.cjs','.github/workflows/workspace-browser.yml']
+  pull_request:
+    paths: ['workshop/**','workshop.html','workshop.css','scripts/check-workspace-browser.cjs','scripts/check-repair-pickup.cjs','.github/workflows/workspace-browser.yml']
   workflow_dispatch:
 permissions:
   contents: read
