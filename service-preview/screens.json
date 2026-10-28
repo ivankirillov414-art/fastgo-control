@@ -1,6 +1,5 @@
 {
-  "version": "1.0.6",
-  "apk_sha256": "f361231d5aba507dfd83198b78660e47c13e4b6c8bae63f05acfdb6efaba4baa",
+  "version": "repair-steps-candidate",
   "viewport": {
     "width": 390,
     "height": 844
@@ -8,7 +7,7 @@
   "screens": [
     {
       "id": "01-list",
-      "title": "Список ремонтов",
+      "title": "Ремонты · открыть касанием",
       "stage": "accepted",
       "route": "#repairs",
       "note": ""
@@ -35,102 +34,102 @@
       "note": ""
     },
     {
-      "id": "05-accepted",
-      "title": "Техника принята · карточка",
+      "id": "05-card",
+      "title": "Карточка техники · начать диагностику",
       "stage": "accepted",
       "route": "#order?kind=repair&id=demo-repair",
       "note": ""
     },
     {
-      "id": "06-diagnostics",
-      "title": "Диагностика · результаты и работы",
+      "id": "06-works",
+      "title": "Диагностика · выбрать работы",
       "stage": "diagnostics",
-      "route": "#order?kind=repair&id=demo-repair",
+      "route": "#order?kind=repair&id=demo-repair&step=works",
       "note": ""
     },
     {
-      "id": "07-approval",
-      "title": "Согласование стоимости и начало ремонта",
-      "stage": "approval",
-      "route": "#order?kind=repair&id=demo-repair",
-      "note": "Показано открытое окно перехода к ремонту."
-    },
-    {
-      "id": "08-repair",
-      "title": "В ремонте · состав работ",
+      "id": "07-priced",
+      "title": "Работы · изменить цену в ремонте",
       "stage": "repair",
-      "route": "#order?kind=repair&id=demo-repair",
+      "route": "#order?kind=repair&id=demo-repair&step=works",
       "note": ""
     },
     {
-      "id": "09-photos",
-      "title": "Фото и документы ремонта",
-      "stage": "repair",
-      "route": "#order?kind=repair&id=demo-repair",
+      "id": "08-parts",
+      "title": "Запчасти · взять или заказать",
+      "stage": "parts",
+      "route": "#order?kind=repair&id=demo-repair&step=parts",
       "note": ""
     },
     {
-      "id": "10-quality",
-      "title": "Завершение работ · контроль качества",
-      "stage": "quality",
-      "route": "#order?kind=repair&id=demo-repair",
-      "note": "Открыто окно подтверждения готовности."
+      "id": "09-pickup",
+      "title": "Взять запчасти · QR и цены",
+      "stage": "pickup",
+      "route": "#order?kind=repair&id=demo-repair&step=parts",
+      "note": ""
     },
     {
-      "id": "11-ready",
-      "title": "Готов к выдаче · расчёт",
+      "id": "10-order",
+      "title": "Заказать запчасть · срок доставки",
+      "stage": "order-part",
+      "route": "#order?kind=repair&id=demo-repair&step=parts",
+      "note": ""
+    },
+    {
+      "id": "11-waiting",
+      "title": "Ожидаем запчасть · статус клиента",
+      "stage": "waiting",
+      "route": "#order?kind=repair&id=demo-repair&step=parts",
+      "note": ""
+    },
+    {
+      "id": "12-finish",
+      "title": "Завершение · комментарий мастера",
+      "stage": "finish",
+      "route": "#order?kind=repair&id=demo-repair&step=finish",
+      "note": ""
+    },
+    {
+      "id": "13-ready",
+      "title": "Мастер · ремонт завершён",
       "stage": "ready",
-      "route": "#order?kind=repair&id=demo-repair",
+      "route": "#order?kind=repair&id=demo-repair&step=finish",
       "note": ""
     },
     {
-      "id": "12-payment",
-      "title": "Оплата ремонта",
+      "id": "14-completion-act",
+      "title": "Акт выполненных работ · цены и мастер",
       "stage": "ready",
-      "route": "#order?kind=repair&id=demo-repair",
-      "note": "Открыто окно приёма оплаты."
+      "route": "#document?kind=repair&id=demo-repair&type=completion",
+      "note": ""
     },
     {
-      "id": "13-handover",
-      "title": "Выдача техники клиенту",
+      "id": "15-payment",
+      "title": "Приёмщик · оплата",
+      "stage": "payment",
+      "route": "#order?kind=repair&id=demo-repair&step=cash",
+      "note": ""
+    },
+    {
+      "id": "16-handover",
+      "title": "Приёмщик · выдача клиенту",
       "stage": "handover",
-      "route": "#order?kind=repair&id=demo-repair",
-      "note": "Открыто окно подтверждения выдачи."
-    },
-    {
-      "id": "14-issued",
-      "title": "Выдано · закрытая карточка",
-      "stage": "issued",
-      "route": "#order?kind=repair&id=demo-repair",
+      "route": "#order?kind=repair&id=demo-repair&step=cash",
       "note": ""
     },
     {
-      "id": "15-history",
-      "title": "История ремонта и оплаты",
+      "id": "17-issued",
+      "title": "Техника выдана · карточка закрыта",
       "stage": "issued",
-      "route": "#order?kind=repair&id=demo-repair",
+      "route": "#order?kind=repair&id=demo-repair&step=cash",
       "note": ""
     },
     {
-      "id": "16-contract",
-      "title": "Акт приёмки в ремонт",
+      "id": "18-intake-act",
+      "title": "Акт приёмки · без стоимости ремонта",
       "stage": "accepted",
-      "route": "#document?kind=repair&id=demo-repair&type=contract",
-      "note": "Печатный документ из приложения."
-    },
-    {
-      "id": "17-master",
-      "title": "Лист мастера",
-      "stage": "repair",
       "route": "#document?kind=repair&id=demo-repair&type=master",
-      "note": "Печатный документ из приложения."
-    },
-    {
-      "id": "18-handover-act",
-      "title": "Акт выдачи техники",
-      "stage": "issued",
-      "route": "#document?kind=repair&id=demo-repair&type=handover",
-      "note": "Печатный документ из приложения."
+      "note": ""
     }
   ],
   "errors": []
