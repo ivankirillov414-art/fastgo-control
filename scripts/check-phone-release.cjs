@@ -1,0 +1,17 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+const dir=path.resolve('warehouse-android/phone/release'),receipt=JSON.parse(fs.readFileSync(path.join(dir,'receipt.json'),'utf8')),apk=path.join(dir,receipt.file),out=path.resolve('browser-results/android-phone-'+process.env.FASTGO_ANDROID_API);
+fs.mkdirSync(out,{recursive:true});const sha=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');assert.equal(sha(apk),receipt.sha256);
+const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:45000}),pause=ms=>new Promise(r=>setTimeout(r,ms));
+async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-phone.xml');return adb('shell','cat','/sdcard/fastgo-phone.xml');}
+async function loginReady(){let xml='';for(let i=0;i<30;i++){xml=await dump();if(xml.includes('Вход для сотрудников'))return xml;await pause(500);}throw Error('Installed APK login did not finish rendering');}
+(async()=>{
+ adb('install','-r',apk);adb('shell','am','force-stop','ru.fastgo.mobile');adb('shell','am','start','-W','-n','ru.fastgo.mobile/.MainActivity');
+ let xml=await loginReady();
+ const node=(xml.match(/<node\b[^>]*class="android.widget.EditText"[^>]*>/g)||[])[0];assert(node,'editable email field missing');const b=node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);assert(b,'email bounds missing');
+ adb('shell','input','tap',String(Math.round((Number(b[1])+Number(b[3]))/2)),String(Math.round((Number(b[2])+Number(b[4]))/2)));adb('shell','input','text','releaseprobe');await pause(500);xml=await dump();assert(xml.includes('releaseprobe'),'typing into final installed APK failed');
+ fs.writeFileSync(path.join(out,'installed-keyboard.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));
+ adb('shell','input','keyevent','KEYCODE_BACK');adb('shell','settings','put','system','accelerometer_rotation','0');adb('shell','settings','put','system','user_rotation','1');await pause(700);xml=await dump();assert(xml.includes('Вход для сотрудников'),'rotation lost screen');adb('shell','settings','put','system','user_rotation','0');
+ adb('shell','am','force-stop','ru.fastgo.mobile');adb('shell','am','start','-W','-n','ru.fastgo.mobile/.MainActivity');xml=await loginReady();assert(xml.includes('Вход для сотрудников'),'restart failed');
+ const installed=adb('shell','pm','path','ru.fastgo.mobile').trim().replace(/^package:/,'');const pulled=path.join(out,'installed.apk');adb('pull',installed,pulled);assert.equal(sha(pulled),receipt.sha256,'installed bytes differ from download');fs.unlinkSync(pulled);
+ fs.writeFileSync(path.join(out,'installed-login.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({api:process.env.FASTGO_ANDROID_API,sha256:receipt.sha256,package:'ru.fastgo.mobile',install:true,login:true,typing:true,rotation:true,restart:true,installed_bytes_match:true},null,2));console.log('PASS: exact signed APK install, login, typing, rotation, restart and installed hash');
+})().catch(e=>{console.error(e);process.exitCode=1;});
