@@ -21,16 +21,16 @@ async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-self-upda
  }
  assert.equal(version(),before+1,'The app did not install the next version through its own PackageInstaller session');
  assert.equal(adb('shell','run-as',pkg,'cat','files/phone-upgrade-proof.txt').trim(),'retained-before-self-update','Self-update lost app data');
- let callback=false;
+ let callback=false,completionSource='';
  for(let i=0;i<20;i++){
   const prefs=adb('shell','run-as',pkg,'cat','shared_prefs/phone-updates.xml');
-  if(!/name="session"/.test(prefs)){callback=true;break;}await pause(500);
+  if(!/name="session"/.test(prefs)){callback=true;completionSource=prefs.match(/name="install_completion_source">([^<]+)/)?.[1]||'';break;}await pause(500);
  }
- assert(callback,'Android installation result did not reach the app callback');
+ assert(callback,'Android installation result did not reach the app callback');assert(['package_replaced','installer_result'].includes(completionSource),'No authoritative system completion source recorded');
  adb('shell','am','start','-W','-n',pkg+'/ru.fastgo.mobile.MainActivity');
  for(let i=0;i<30;i++){xml=await dump();if(xml.includes('Вход для сотрудников'))break;await pause(300);}
  assert(xml.includes('Вход для сотрудников'),'Self-updated app did not reopen');
  fs.writeFileSync(path.join(out,'installed.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));
- fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({api:process.env.FASTGO_ANDROID_API,package:pkg,from:before,to:before+1,installedByOwnPackageInstaller:true,dataRetained:true,callbackReceived:true,reopened:true,systemConfirmationRequired:confirmation,scope:'Emulator self-update. This does not prove a Play Protect or OEM verdict on a user device.'},null,2));
+ fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({api:process.env.FASTGO_ANDROID_API,package:pkg,from:before,to:before+1,installedByOwnPackageInstaller:true,dataRetained:true,callbackReceived:true,completionSource,reopened:true,systemConfirmationRequired:confirmation,scope:'Emulator self-update. This does not prove a Play Protect or OEM verdict on a user device.'},null,2));
  console.log('PASS: native self-update, retained data, installation callback and restart; system confirmation='+confirmation);
 })().catch(e=>{console.error(e);process.exitCode=1;});
