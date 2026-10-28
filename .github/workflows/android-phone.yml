@@ -25,6 +25,8 @@ jobs:
    - name: Build final phone package
      run: gradle :phone:assembleRelease :phone:assembleDebug --no-daemon
      working-directory: warehouse-android
+   - name: Save public Android signing utility for local signing
+     run: cp "$(find "$ANDROID_HOME/build-tools" -name apksigner.jar | sort -V | tail -n1)" warehouse-android/phone/build/apksigner.jar
    - name: Verify embedded UI integrity
      run: |
       python3 - <<'PY'
@@ -56,6 +58,7 @@ jobs:
      with:
       name: fastgo-android-phone-verified
       path: |
+       warehouse-android/phone/build/apksigner.jar
        warehouse-android/phone/build/outputs/apk/release/*.apk
        warehouse-android/phone/build/outputs/apk/debug/*.apk
        warehouse-android/phone/build/reports/androidTests/
