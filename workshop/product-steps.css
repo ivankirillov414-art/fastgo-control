@@ -1,0 +1,15 @@
+.product-step-form,.product-step-form h2,.product-step-form h3,.product-step-form label,.product-step-nav{text-align:left}
+[data-product-save][hidden]{display:none!important}
+.product-step-form [hidden],.product-step-controls [hidden]{display:none!important}
+.product-step-form .new-part-fields:empty,.product-step-form .inv-grid:empty{display:none}
+.product-step-nav ol{display:grid;grid-template-columns:.7fr 1fr 1.3fr;gap:8px;list-style:none;margin:0 0 8px;padding:0}
+.product-step-nav li{font-size:12px;padding:8px 0;border-bottom:2px solid #435366;color:#b7c6d6}
+.product-step-nav li[aria-current]{border-color:#16d2e2;color:#5be3ee}
+.product-step-nav p{font-size:13px;color:#b7c6d6;margin:0 0 16px}
+.product-step-form section[data-product-step]{display:grid;gap:12px}
+.product-step-form section h3{margin:0 0 4px}
+.product-step-controls{display:flex;justify-content:space-between;gap:12px;margin-top:16px}
+.product-step-controls button{min-height:44px;min-width:96px}
+.product-step-form input,.product-step-form select{font-size:16px}
+.new-part-dialog:has(.product-step-form){max-height:calc(100dvh - 32px)}
+.product-step-form .actions{margin-top:16px}
