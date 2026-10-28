@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 /** Only an APK signed by the installed app's key may reach the system installer. */
 final class PhoneUpdates {
  static final String ROOT="https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/";
+ static final String SITE="https://ivankirillov414-art.github.io/fastgo-control/";
  static final String FEED=ROOT+"warehouse-android/phone/update.json";
  private final Activity activity;private final WebView web;
  private final Handler handler=new Handler(Looper.getMainLooper());
@@ -56,8 +57,10 @@ final class PhoneUpdates {
   finally{handler.post(()->busy=false);}});
  }
  private HttpURLConnection connection(String url)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(15000);c.setReadTimeout(30000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Cache-Control","no-cache");if(c.getResponseCode()!=200){c.disconnect();throw new IOException("Сервер обновлений недоступен");}return c;}
- private byte[] read(String url,int limit)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Ответ слишком большой");out.write(b,0,n);}return out.toByteArray();}finally{c.disconnect();}}
- private void download(String url,File file)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();FileOutputStream out=new FileOutputStream(file)){byte[] b=new byte[32768];int n,total=0;while((n=in.read(b))!=-1){if(Thread.currentThread().isInterrupted())throw new IOException("Загрузка остановлена");total+=n;if(total>50000000)throw new IOException("APK слишком большой");out.write(b,0,n);}out.getFD().sync();}finally{c.disconnect();}}
+ private byte[] read(String url,int limit)throws Exception{try{return readOnce(url,limit);}catch(Exception first){if(!url.startsWith(ROOT))throw first;return readOnce(SITE+url.substring(ROOT.length()),limit);}}
+ private byte[] readOnce(String url,int limit)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Ответ слишком большой");out.write(b,0,n);}return out.toByteArray();}finally{c.disconnect();}}
+ private void download(String url,File file)throws Exception{try{downloadOnce(url,file);}catch(Exception first){if(!url.startsWith(ROOT)||Thread.currentThread().isInterrupted())throw first;downloadOnce(SITE+url.substring(ROOT.length()),file);}}
+ private void downloadOnce(String url,File file)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();FileOutputStream out=new FileOutputStream(file)){byte[] b=new byte[32768];int n,total=0;while((n=in.read(b))!=-1){if(Thread.currentThread().isInterrupted())throw new IOException("Загрузка остановлена");total+=n;if(total>50000000)throw new IOException("APK слишком большой");out.write(b,0,n);}out.getFD().sync();}finally{c.disconnect();}}
  private boolean valid(File f,JSONObject m){try{verify(f,m);return true;}catch(Exception e){return false;}}
  void verify(File file,JSONObject meta)throws Exception{
   MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream in=new FileInputStream(file)){byte[] b=new byte[32768];int n;while((n=in.read(b))!=-1)digest.update(b,0,n);}
