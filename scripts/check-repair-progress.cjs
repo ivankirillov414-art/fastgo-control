@@ -1,6 +1,7 @@
 const {createServer}=require('node:http');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const {chromium}=require('playwright');
+const engines=require('playwright'),browserName=process.env.FASTGO_REPAIR_BROWSER||'chromium';
+assert.ok(['chromium','firefox','webkit'].includes(browserName),'Unknown repair test browser');
 const root=path.resolve(__dirname,'..');
 const server=createServer((req,res)=>{
  const file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
@@ -10,7 +11,7 @@ const server=createServer((req,res)=>{
 (async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const origin='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,args:['--no-sandbox']}:{});
+ const browser=await engines[browserName].launch(browserName==='chromium'&&process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,args:['--no-sandbox']}:{});
  fs.mkdirSync('browser-results',{recursive:true});
  try{for(const viewport of [{width:1366,height:768},{width:1280,height:720},{width:390,height:844},{width:320,height:568}]){
   const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[],updates=[];
