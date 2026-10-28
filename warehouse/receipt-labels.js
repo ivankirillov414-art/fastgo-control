@@ -10,9 +10,12 @@ export function startReceiptLabels({call,bridge=window.warehouseDesktop,notify=(
   try{
    const jobs=await call('receipt_label_jobs',{label_pipeline:3});if(!Array.isArray(jobs)||!jobs.length)return;
    await barcode();
+   let currentParts;
    for(const job of jobs){
     if(stopped)return;
-    const items=(job.result?.items||[]).map(part=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');window.JsBarcode(svg,String(part.barcode),{format:'CODE128',displayValue:false,width:2,height:72,margin:0,marginLeft:20,marginRight:20,background:'#ffffff',lineColor:'#000000'});return {name:part.name,model:part.model,sku:part.sku,barcode:String(part.barcode),quantity:part.quantity,price:part.retail_price,svg:svg.outerHTML};});
+    const rows=job.result?.items||[];
+    if(rows.some(p=>(p.id||p.part_id)&&(!p.sku||!p.model))&&!currentParts)currentParts=(await call('catalog')).parts||[];
+    const items=rows.map(original=>{const saved=currentParts?.find(x=>x.id===(original.id||original.part_id)),part={...original,model:original.model||saved?.model,sku:original.sku||saved?.sku};const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');window.JsBarcode(svg,String(part.barcode),{format:'CODE128',displayValue:false,width:2,height:72,margin:0,marginLeft:20,marginRight:20,background:'#ffffff',lineColor:'#000000'});return {name:part.name,model:part.model,sku:part.sku,barcode:String(part.barcode),quantity:part.quantity,price:part.retail_price,svg:svg.outerHTML};});
     await bridge.printReceiptLabels({id:job.id,items,...(job.result?.printer_name?{printer_name:job.result.printer_name,remember_printer:job.result.remember_printer===true}:{}),...(job.result?.width_mm!==undefined||job.result?.height_mm!==undefined?{widthMm:job.result.width_mm,heightMm:job.result.height_mm}:{})});
     await call('receipt_label_ack',{id:job.id});
     notify({ok:true,text:(job.payload?.kind==='labels'?'Печать с телефона':'Приход оформлен')+' · '+items.reduce((n,x)=>n+x.quantity,0)+' этикеток передано термопринтеру'});

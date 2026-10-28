@@ -1,6 +1,7 @@
 import {suggest,partChoices} from './autocomplete.js';
 import {api,esc,date} from './core.js';
 import {printPartLabel,chooseLabels} from './inventory-ui.js';
+import {automaticProductSKU} from './product-intake.js';
 
 export async function renderReceipt(ctx,token){
   const [catalog,history]=await Promise.all([api('catalog',{}, {fresh:true}),api('stock_receipts',{}, {fresh:true})]);
@@ -57,6 +58,7 @@ export async function renderReceipt(ctx,token){
     host.querySelector('#receipt-add-new').onclick=()=>{draft.items.push({part_id:'',quantity:1});saveDraft();draw();host.querySelector('section:last-child [data-field=name]')?.focus();};
     form.onsubmit=async e=>{
       e.preventDefault();if(!draft.items.length){host.querySelector('#receipt-error').textContent='Добавьте хотя бы одну позицию';return;}
+      if(!draft.submitted)for(const item of draft.items)if(!item.part_id&&!item.sku)item.sku=automaticProductSKU(crypto.randomUUID());
       draft.submitted=true;try{saveDraft();}catch(err){draft.submitted=false;host.querySelector('#receipt-error').textContent=err.message;return;}
       draw();const button=host.querySelector('[type=submit]');button.disabled=true;
       try{

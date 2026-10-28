@@ -138,7 +138,6 @@ function partSave_(p,actor){
   const value={'Категория':category,'Модель / название':name,'Модель':model,'Артикул / SKU':sku,'Ед.':String(p.unit||r&&r['Ед.']||'шт').trim().slice(0,20),'Цена закупки, ₽':cost,'Цена продажи, ₽':retail,'Активен':p.active===undefined?(r?r['Активен']!==false:true):p.active!==false,updated_at:now};
   if(r){const before=num_(r['Цена закупки, ₽']);patchRow_(SHEETS.products,r.__row,value);if(actor&&cost!==before)addEvent_('stock',p.id,'purchase_price_update',actor,{field:'unit_cost',before,after:cost});return mapProduct_(find_(SHEETS.products,'product_id',p.id));}
   const id=uid_(),barcode=barcodeNext_(SHEETS.products,'Штрих-код','next_product_seq','FGP-',8);
-  if(!value['Артикул / SKU']){const base='FG-'+barcode.slice(4);let auto=base,n=2;while(others.some(x=>norm(x['Артикул / SKU'])===norm(auto)))auto=base+'-'+n++;value['Артикул / SKU']=auto;}
   append_(SHEETS.products,{...value,'Штрих-код':barcode,'Приход, шт.':0,'Сумма прихода, ₽':0,'Фото / примечание':'',product_id:id,'Остаток, шт.':0,'Фото URL':''});
   return mapProduct_(find_(SHEETS.products,'product_id',id));
 }
@@ -156,7 +155,7 @@ function stockReceive_(p,actor){
     if(!r['Штрих-код'])patchRow_(SHEETS.products,r.__row,{'Штрих-код':barcodeNext_(SHEETS.products,'Штрих-код','next_product_seq','FGP-',8)});
     stock_({part_id:r.product_id,quantity:x.quantity,movement_type:'receipt',note,reference_id:id,request_id:p.request_id+':'+index},actor);
     const product=mapProduct_(find_(SHEETS.products,'product_id',r.product_id));
-    items.push({id:product.id,name:product.name,barcode:product.barcode,quantity:x.quantity,balance:product.quantity,retail_price:product.retail_price,category:product.category,model:product.model,sku:product.sku});
+    items.push({id:product.id,name:product.name,barcode:product.barcode,quantity:x.quantity,balance:product.quantity,retail_price:product.retail_price,category:product.category,model:product.model});
   });
   const result={id,created_at:now_(),note,items};addEvent_('stock_receipt',id,'stock_receive',actor,result);return result;
 }

@@ -583,9 +583,13 @@
         const jobs = await call2("receipt_label_jobs", { label_pipeline: 3 });
         if (!Array.isArray(jobs) || !jobs.length) return;
         await barcode();
+        let currentParts;
         for (const job2 of jobs) {
           if (stopped) return;
-          const items = (((_a3 = job2.result) == null ? void 0 : _a3.items) || []).map((part) => {
+          const rows = ((_a3 = job2.result) == null ? void 0 : _a3.items) || [];
+          if (rows.some((p) => (p.id || p.part_id) && (!p.sku || !p.model)) && !currentParts) currentParts = (await call2("catalog")).parts || [];
+          const items = rows.map((original) => {
+            const saved = currentParts == null ? void 0 : currentParts.find((x) => x.id === (original.id || original.part_id)), part = { ...original, model: original.model || (saved == null ? void 0 : saved.model), sku: original.sku || (saved == null ? void 0 : saved.sku) };
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
             return { name: part.name, model: part.model, sku: part.sku, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
@@ -1772,6 +1776,7 @@
 
   // workshop/product-intake.js
   var keyFor2 = (actor) => "fastgo_product_intake_v1:" + actor;
+  var automaticProductSKU = (id) => "FG-" + String(id).replace(/-/g, "").slice(0, 12).toUpperCase();
   var write = (storage, key3, value) => {
     const encoded = JSON.stringify(value);
     storage.setItem(key3, encoded);
@@ -1796,6 +1801,7 @@
     if (!String(product2.name || "").trim() || !String(product2.category || "").trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 1e5) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435, \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044E \u0438 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E (\u043E\u0442 0 \u0434\u043E 100000).");
     for (const name of ["unit_cost", "retail_price"]) if (!Number.isFinite(product2[name]) || product2[name] < 0 || product2[name] > 1e9) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0446\u0435\u043D\u0443 \u0442\u043E\u0432\u0430\u0440\u0430.");
     const state = { version: 1, product: product2, quantity, photo, ids: { product: crypto.randomUUID(), stock: crypto.randomUUID(), photo: crypto.randomUUID() }, part: null, received: false, photoSaved: false };
+    state.product = { ...product2, sku: String(product2.sku || "").trim() || automaticProductSKU(state.ids.product) };
     write(storage, keyFor2(actor), state);
     return state;
   }

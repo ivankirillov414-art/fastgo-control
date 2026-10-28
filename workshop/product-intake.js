@@ -1,6 +1,7 @@
 // Product/receipt/photo workflow checkpoints contain product fields and IDs,
 // never image bytes, credentials or customer data.
 const keyFor=actor=>'fastgo_product_intake_v1:'+actor;
+export const automaticProductSKU=id=>'FG-'+String(id).replace(/-/g,'').slice(0,12).toUpperCase();
 const write=(storage,key,value)=>{const encoded=JSON.stringify(value);storage.setItem(key,encoded);if(storage.getItem(key)!==encoded)throw new Error('Не удалось сохранить ход приёмки в браузере.');};
 export function loadProductIntake(storage,actor){
   const raw=storage.getItem(keyFor(actor));if(!raw)return null;
@@ -13,6 +14,7 @@ export function startProductIntake(storage,actor,{product,quantity,photo=null}){
   if(!String(product.name||'').trim()||!String(product.category||'').trim()||!Number.isInteger(quantity)||quantity<0||quantity>100000)throw new Error('Проверьте наименование, категорию и количество (от 0 до 100000).');
   for(const name of ['unit_cost','retail_price'])if(!Number.isFinite(product[name])||product[name]<0||product[name]>1e9)throw new Error('Проверьте цену товара.');
   const state={version:1,product,quantity,photo,ids:{product:crypto.randomUUID(),stock:crypto.randomUUID(),photo:crypto.randomUUID()},part:null,received:false,photoSaved:false};
+  state.product={...product,sku:String(product.sku||'').trim()||automaticProductSKU(state.ids.product)};
   write(storage,keyFor(actor),state);return state;
 }
 export async function continueProductIntake(storage,actor,{api,uploadPhoto,onProgress=()=>{}}){

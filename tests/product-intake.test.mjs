@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {loadProductIntake,startProductIntake,continueProductIntake} from '../workshop/product-intake.js';
 const product={name:'QA',category:'Test',model:'Model',sku:'QA-1',unit_cost:0,retail_price:0,unit:'шт'};
 const spec={product,quantity:1,photo:{sha256:'image-hash',type:'image/png',primary:true}};
+test('automatic article is persisted before submission and remains identical after lost response',async()=>{
+ const s=storage(),backend=server('part'),withoutSKU={...product};delete withoutSKU.sku;
+ const first=startProductIntake(s,'owner',{...spec,product:withoutSKU});assert.match(first.product.sku,/^FG-[A-F0-9]{12}$/);
+ await assert.rejects(()=>continueProductIntake(s,'owner',backend),/response lost/);
+ const resumed=startProductIntake(s,'owner',{...spec,product:withoutSKU});assert.equal(resumed.product.sku,first.product.sku);await continueProductIntake(s,'owner',backend);assert.equal(backend.counts.part,1);
+ const next=startProductIntake(s,'owner',{...spec,product:withoutSKU});assert.notEqual(next.product.sku,first.product.sku);
+});
 function storage(){const data=new Map();return {data,getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};}
 function server(lost){const receipts=new Map(),counts={part:0,stock:0,photo:0},ids=[];let lose=lost;const commit=(step,id)=>{ids.push([step,id]);if(receipts.has(id))return receipts.get(id);counts[step]++;const result={id:'product-id',barcode:'FGP-00000081'};receipts.set(id,result);if(lose===step){lose=null;throw Error('response lost');}return result;};return {counts,ids,api:async(a,p)=>commit(a==='part_save'?'part':'stock',p.request_id),uploadPhoto:async(p,m,id)=>commit('photo',id)};}
 for(const step of ['part','stock','photo'])test(`reload after lost ${step} response resumes once with original IDs`,async()=>{const s=storage(),backend=server(step);const original=startProductIntake(s,'owner',spec);await assert.rejects(()=>continueProductIntake(s,'owner',backend),/response lost/);assert.ok(loadProductIntake(s,'owner'));const resumed=startProductIntake(s,'owner',{...spec,quantity:90,product:{...product,name:'Changed'}});assert.equal(resumed.quantity,1);assert.equal(resumed.product.name,'QA');assert.deepEqual(resumed.ids,original.ids);await continueProductIntake(s,'owner',backend);assert.deepEqual(backend.counts,{part:1,stock:1,photo:1});assert.equal(loadProductIntake(s,'owner'),null);assert.equal(backend.ids.filter(x=>x[0]===step).length,2);});
