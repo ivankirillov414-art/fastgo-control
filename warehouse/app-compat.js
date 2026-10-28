@@ -262,9 +262,10 @@
   var money2 = (n) => Number(n || 0).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
   var refreshing;
   async function request(path, body, auth) {
+    const payload = JSON.stringify(body);
     let r;
     try {
-      r = await fetch(BASE + path, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json", ...auth ? { Authorization: "Bearer " + auth } : {} }, body: JSON.stringify(body), signal: (() => {
+      r = await fetch(BASE + path, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json", ...auth ? { Authorization: "Bearer " + auth } : {} }, body: payload, keepalive: path === "/functions/v1/fastgo-warehouse" && body.action === "draft_sync" && payload.length < 2e4, signal: (() => {
         if (typeof AbortController === "undefined") return void 0;
         const c = new AbortController();
         setTimeout(() => c.abort(), 3e4);
