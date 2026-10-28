@@ -282,92 +282,87 @@
     } };
   }
   function mountManualPayment({ root, call: call2, load: load2, save: save3, home: home2, message: message2 }) {
+    var _a3, _b, _c, _d, _e, _f;
     root.classList.add("service-workspace", "manual-payment-workspace");
-    let catalog2 = [], draft2 = load2("manual-service-payment") || { id: uuid(), items: [], method: "", total: "" }, paying = false;
-    const persist2 = () => save3("manual-service-payment", draft2);
-    const $2 = (s) => root.querySelector(s);
-    root.innerHTML = '<div class="live-heading"><button type="button" data-back>\u2190 \u041A \u043E\u043F\u043B\u0430\u0442\u0435</button><h1>\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442</h1></div><p>\u0411\u0435\u0437 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430 \u0438 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u0440\u0435\u043C\u043E\u043D\u0442\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043D\u0435 \u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F.</p><div class="manual-payment-grid"><section><form data-add class="panel"><label>\u0420\u0430\u0431\u043E\u0442\u0430<input name="work" list="service-choices" maxlength="200" autocomplete="off" required placeholder="\u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435"><datalist id="service-choices"></datalist></label><label>\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C, \u20BD<input name="price" type="number" min="0" max="100000000" step="0.01" required></label><button>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443</button></form><div data-lines></div></section><form data-payment class="panel"><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input name="total" type="number" min="0.01" max="100000000" step="0.01" required></label><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, n]) => '<label><input type="radio" name="method" value="' + v + '" required>' + n + "</label>").join("") + '</fieldset><button class="primary" data-submit>\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p data-payment-error role="status"></p></form></div>';
+    let catalog2 = [], draft2 = load2("manual-service-payment") || { id: uuid(), items: [], method: "", total: "", simple: true }, paying = false, storageError = false;
+    draft2.items || (draft2.items = []);
+    if (!draft2.pending && ((_a3 = draft2.work) == null ? void 0 : _a3.trim()) && !draft2.simple) {
+      draft2.items.push({ title: draft2.work.trim(), quantity: 1, unit_price: Number(draft2.price) || 0 });
+      delete draft2.work;
+      delete draft2.price;
+    }
+    const $2 = (s) => root.querySelector(s), persist2 = () => save3("manual-service-payment", draft2);
+    const methods = [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"]];
+    if (((_b = draft2.pending) == null ? void 0 : _b.payment_method) === "transfer" || draft2.method === "transfer") methods.push(["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434 \xB7 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430"]);
+    root.innerHTML = '<div class="live-heading"><button type="button" data-back>\u2190 \u041A \u043E\u043F\u043B\u0430\u0442\u0435</button><h1>\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442</h1></div><p>\u0411\u0435\u0437 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430 \u0438 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u0440\u0435\u043C\u043E\u043D\u0442\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043D\u0435 \u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F.</p><div class="manual-payment-grid"><section class="panel" data-add><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0440\u0430\u0431\u043E\u0442\u044B<input form="manual-work-payment" name="work" list="service-choices" maxlength="200" autocomplete="off" required placeholder="\u041D\u0430\u043F\u0440\u0438\u043C\u0435\u0440, \u0437\u0430\u043C\u0435\u043D\u0430 \u043A\u0430\u043C\u0435\u0440\u044B"><datalist id="service-choices"></datalist></label><div data-lines aria-live="polite"></div></section><form id="manual-work-payment" data-payment class="panel"><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input name="total" type="number" min="0.01" max="100000000" step="0.01" required placeholder="\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u0443\u043C\u043C\u0443"></label><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + methods.map(([value, title]) => '<label><input type="radio" name="method" value="' + value + '" required>' + title + "</label>").join("") + '</fieldset><button class="primary" data-submit>\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p data-payment-error role="status"></p></form></div>';
+    const work = $2("[name=work]"), payment = $2("[data-payment]"), error = $2("[data-payment-error]");
+    work.value = draft2.simple ? draft2.work || ((_c = draft2.items[0]) == null ? void 0 : _c.title) || "" : draft2.items.map((x) => x.title).join("; ");
+    const gross = Math.round(draft2.items.reduce((sum, x) => sum + x.quantity * x.unit_price, 0) * 100) / 100;
+    payment.elements.total.value = (_e = (_d = draft2.pending) == null ? void 0 : _d.total_override) != null ? _e : draft2.total === "" ? gross > 0 ? gross : "" : draft2.total;
+    for (const input of payment.querySelectorAll("[name=method]")) input.checked = input.value === (((_f = draft2.pending) == null ? void 0 : _f.payment_method) || draft2.method);
     function state() {
       root.querySelectorAll("input,button").forEach((x) => x.disabled = paying || !!draft2.pending);
-      $2("[data-submit]").disabled = paying || !draft2.items.length;
-      $2("[data-back]").disabled = paying || !!draft2.pending;
-      $2("[data-cancel]").disabled = paying || !!draft2.pending;
+      const valid = work.value.trim() && draft2.items.length && payment.elements.total.validity.valid && Number(payment.elements.total.value) > 0 && payment.elements.method.value;
+      $2("[data-submit]").disabled = paying || !draft2.pending && (!valid || storageError);
+      $2("[data-back]").disabled = $2("[data-cancel]").disabled = paying || !!draft2.pending;
       root.querySelectorAll("button").forEach((x) => x.dataset.unavailable = String(x.disabled));
       $2("[data-submit]").textContent = draft2.pending ? "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443";
-      if (draft2.pending && !paying && !$2("[data-payment-error]").textContent) $2("[data-payment-error]").textContent = "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D. \u041F\u043E\u043B\u044F \u0437\u0430\u0449\u0438\u0449\u0435\u043D\u044B \u043E\u0442 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B\xBB \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E\u0433\u043E \u0441\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
+      if (draft2.pending && !paying && !error.textContent) error.textContent = "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B\xBB \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E\u0433\u043E \u0441\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
     }
     function draw() {
-      const gross = Math.round(draft2.items.reduce((s, x) => s + x.quantity * x.unit_price, 0) * 100) / 100;
-      $2("[data-lines]").innerHTML = draft2.items.map((x, i) => '<div class="row"><span>' + esc(x.title) + "</span><strong>" + money(x.unit_price) + '</strong><button type="button" data-remove="' + i + '">\u0423\u0434\u0430\u043B\u0438\u0442\u044C</button></div>').join("");
-      const form = $2("[data-payment]");
-      form.elements.total.value = draft2.total === "" ? gross : draft2.total;
-      for (const x of form.querySelectorAll("[name=method]")) x.checked = x.value === draft2.method;
-      root.querySelectorAll("[data-remove]").forEach((b) => b.onclick = () => {
-        if (draft2.pending) return;
-        draft2.items.splice(Number(b.dataset.remove), 1);
-        draft2.total = "";
-        persist2();
-        draw();
-      });
+      $2("[data-lines]").innerHTML = draft2.items.map((x) => '<p class="manual-work-added">\u2713 ' + esc(x.title) + "</p>").join("");
       state();
     }
-    const add = $2("[data-add]");
-    add.elements.work.value = draft2.work || "";
-    add.elements.price.value = draft2.price || "";
-    add.elements.price.oninput = () => {
-      draft2.price = add.elements.price.value;
-      persist2();
-    };
-    add.elements.work.oninput = () => {
-      draft2.work = add.elements.work.value;
-      const selected = catalog2.find((x) => x.title === add.elements.work.value);
-      if (selected) add.elements.price.value = selected.labor_price;
-      draft2.price = add.elements.price.value;
-      persist2();
-    };
-    add.onsubmit = (e) => {
-      e.preventDefault();
-      if (draft2.pending || !add.reportValidity()) return;
-      const title = add.elements.work.value.trim(), selected = catalog2.find((x) => x.title === title), before = JSON.parse(JSON.stringify(draft2));
+    function remember() {
       try {
-        draft2.items.push({ title, quantity: 1, unit_price: Number(add.elements.price.value), ...selected ? { service_id: selected.id } : {} });
-        draft2.total = "";
-        delete draft2.work;
-        delete draft2.price;
         persist2();
-        add.reset();
-        draw();
-        add.elements.work.focus();
-      } catch (error) {
-        draft2 = before;
-        message2("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A: " + error.message, true);
+        storageError = false;
+        error.textContent = "";
+      } catch (e) {
+        storageError = true;
+        error.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A: " + e.message;
+      }
+      draw();
+    }
+    work.oninput = () => {
+      if (draft2.pending) return;
+      draft2.simple = true;
+      draft2.work = work.value;
+      const title = work.value.trim(), selected = catalog2.find((x) => x.title === title);
+      draft2.items = title ? [{ title, quantity: 1, unit_price: 0, ...selected ? { service_id: selected.id } : {} }] : [];
+      remember();
+    };
+    work.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        payment.elements.total.focus();
       }
     };
-    const payment = $2("[data-payment]");
     payment.oninput = () => {
       if (draft2.pending) return;
       draft2.total = payment.elements.total.value;
       draft2.method = payment.elements.method.value;
-      persist2();
+      remember();
     };
     payment.onsubmit = async (e) => {
       e.preventDefault();
-      if (paying || !payment.reportValidity() || !draft2.items.length) return;
-      const p = draft2.pending || { request_id: draft2.id, items: draft2.items, payment_method: payment.elements.method.value, total_override: Number(payment.elements.total.value) };
+      if (paying || !draft2.pending && (storageError || !payment.reportValidity() || !work.value.trim() || !draft2.items.length)) return;
+      const amount = Number(payment.elements.total.value);
+      const payload = draft2.pending || { request_id: draft2.id, items: draft2.simple ? draft2.items.map((x) => ({ ...x, unit_price: amount })) : draft2.items, payment_method: payment.elements.method.value, total_override: amount };
       try {
-        draft2.pending = p;
+        draft2.pending = payload;
         persist2();
         paying = true;
         state();
-        $2("[data-payment-error]").textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043E\u043F\u043B\u0430\u0442\u0443\u2026";
-        const result = await call2("work_payment", p);
+        error.textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043E\u043F\u043B\u0430\u0442\u0443\u2026";
+        const result = await call2("work_payment", payload);
         save3("manual-service-payment", null);
-        draft2 = { id: uuid(), items: [], method: "", total: "" };
+        draft2 = { id: uuid(), items: [], method: "", total: "", simple: true };
         home2();
         message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442 \u043F\u0440\u0438\u043D\u044F\u0442\u0430: " + money(result.total));
-      } catch (error) {
-        $2("[data-payment-error]").textContent = error.message;
-        if (error.status && error.status < 500) {
+      } catch (e2) {
+        error.textContent = e2.message;
+        if (e2.status && e2.status < 500) {
           delete draft2.pending;
           persist2();
         }
@@ -380,14 +375,14 @@
     $2("[data-cancel]").onclick = () => {
       if (draft2.pending || paying) return;
       save3("manual-service-payment", null);
-      draft2 = { id: uuid(), items: [], method: "", total: "" };
+      draft2 = { id: uuid(), items: [], method: "", total: "", simple: true };
       home2();
       message2("\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430. \u0414\u0435\u043D\u044C\u0433\u0438 \u0438 \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u044B.");
     };
     draw();
     return { ready: call2("work_catalog").then((x) => {
       catalog2 = x;
-      $2("datalist").innerHTML = x.map((s) => '<option value="' + esc(s.title) + '">' + money(s.labor_price) + "</option>").join("");
+      $2("datalist").innerHTML = x.map((s) => '<option value="' + esc(s.title) + '"></option>').join("");
     }) };
   }
 
