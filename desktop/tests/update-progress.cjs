@@ -30,7 +30,7 @@ require(${JSON.stringify(path.join(root,'main.cjs'))});`);
  await app.evaluate(()=>testUpdater.emit('update-downloaded',{version:'99.0.0'}));await page.waitForFunction(()=>document.querySelector('#desktop-update-detail').textContent.includes('Сохраните изменения'));
  assert.deepEqual(await app.evaluate(()=>updateInstalls),[]);await page.locator('[data-background]').click();assert.equal(await page.locator('#f-phone').inputValue(),'79999999999');
  // Save the intake normally, then request installation while its clean card stays open.
- await page.locator('#f-last_name').fill('Тест');await page.locator('#f-first_name').fill('Обновление');await page.locator('#f-equipment_name').fill('Kugoo M4');await page.locator('#f-intake_amount').fill('500');
+ await page.locator('#f-last_name').fill('Тест');await page.locator('#f-first_name').fill('Обновление');await page.locator('#f-equipment_name').fill('Kugoo M4');
  await page.locator('#intake-save').click();await page.locator('#repair-save').waitFor();
  // The original manual request remains active. A queued receipt without a printer is durable, not a permanent update block.
  for(let attempt=0;attempt<150&&!(await app.evaluate(()=>updateInstalls.length));attempt++)await new Promise(resolve=>setTimeout(resolve,100));

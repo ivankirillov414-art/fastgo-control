@@ -21,7 +21,7 @@ async function launch(){const app=await _electron.launch({executablePath:require
  await require('../../scripts/fullscreen-smoke.cjs')(opened);
  await opened.page.waitForFunction(()=>document.querySelector('#desktop-state-text')?.textContent.includes('Работа без сети'));
  await opened.page.evaluate(()=>location.hash='#new?kind=repair');
- await opened.page.locator('#f-last_name').fill('Клиент');await opened.page.locator('#f-first_name').fill('Тест');await opened.page.locator('#f-phone').fill('79999999999');await opened.page.locator('#f-equipment_name').fill('Kugoo Max Speed');await opened.page.locator('#f-intake_amount').fill('500');
+ await opened.page.locator('#f-last_name').fill('Клиент');await opened.page.locator('#f-first_name').fill('Тест');await opened.page.locator('#f-phone').fill('79999999999');await opened.page.locator('#f-equipment_name').fill('Kugoo Max Speed');
  await opened.page.locator('#intake-save').click();await opened.page.waitForFunction(()=>location.hash.startsWith('#order?'),{},{timeout:45000});
  await opened.page.locator('h1').waitFor();assert.match(await opened.page.locator('h1').innerText(),/Ремонт/);await opened.page.waitForFunction(async()=> (await window.fastgoDesktop.state()).pending===2);
  assert(Array.isArray(await opened.page.evaluate(()=>window.fastgoDesktop.printers())));

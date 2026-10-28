@@ -133,7 +133,7 @@ const server=createServer((req,res)=>{
   const before=creates.length;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Телефон'}).waitFor();assert.equal(creates.length,before);
   for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);
   await page.locator('#f-equipment_name').fill('max speed kugoo');await page.getByRole('option',{name:'Kugoo Max Speed',exact:true}).click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==','base64')});
-  await page.locator('#f-intake_amount').fill('400');failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
+  failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
   await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor({state:'attached'});
   assert.equal(creates.length,before+2);assert.equal(creates[before].request_id,creates[before+1].request_id);assert.equal(creates[before+1].phone,'+79991234567');assert.equal(creates[before+1].promised_date,'');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
