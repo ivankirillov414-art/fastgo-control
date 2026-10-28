@@ -25,6 +25,7 @@ public class PhoneSmokeTest {
    js(scenario,"document.querySelector('#login input').focus();localStorage.setItem('fastgo-phone-smoke','kept');true");
    scenario.onActivity(a->{WebView w=a.findViewById(14001);w.requestFocus();});
    InstrumentationRegistry.getInstrumentation().sendStringSync("typing123");
+   InstrumentationRegistry.getInstrumentation().waitForIdleSync();for(int i=0;i<40;i++){if("\"typing123\"".equals(js(scenario,"document.querySelector('#login input').value")))break;Thread.sleep(50);}
    assertEquals("\"typing123\"",js(scenario,"document.querySelector('#login input').value"));
    assertEquals("true",js(scenario,"document.documentElement.scrollWidth<=innerWidth+1"));
    scenario.recreate();ready(scenario);assertEquals("\"kept\"",js(scenario,"localStorage.getItem('fastgo-phone-smoke')"));
