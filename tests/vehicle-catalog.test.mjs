@@ -1,5 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {brands,vehicles,equipmentChoices,resolveEquipment,originalEquipment} from '../workshop/vehicle-catalog.js';
+import {intakeReference} from '../workshop/intake-reference-data.js';
+test('intake shares sourced warehouse model names without copying prices or stock',()=>{
+ assert.ok(vehicles.length>3000);
+ assert.ok(intakeReference.length>1900);
+ for(const item of intakeReference){assert.deepEqual(Object.keys(item).sort(),['brand','model','source']);assert.match(item.source,/^https:\/\//);}
+ for(const item of intakeReference.slice(0,10))assert.ok(resolveEquipment(item.brand+' '+item.model));
+ assert.equal(resolveEquipment('Gotway Luffy 10″ 130WH White')?.brand,'Gotway');
+ assert.equal(new Set(brands.map(x=>x.toLowerCase())).size,brands.length);
+});
 test('vehicle preview recognizes model transliteration and reversed brand order but stores catalog spelling',()=>{for(const q of ['макс спид','max speed kugoo','Куго Макс Спид','Kugoo Max Speed']){const result=resolveEquipment(q);assert.equal(result?.brand,'Kugoo',q);assert.equal(result?.model,'Max Speed',q);}assert.equal(resolveEquipment('куго м4про')?.model,'M4 Pro');assert.equal(equipmentChoices('макс спид')[0].value,'Kugoo Max Speed');});
 test('free text, incomplete brands and ambiguous model-only names require selecting a preview',()=>{assert.equal(resolveEquipment('самодельный макс спид без бренда'),null);assert.equal(resolveEquipment('Kugoo'),null);assert.equal(resolveEquipment('Max Speed',[{brand:'Other',model:'Max Speed'}]),null);const choices=equipmentChoices('макс спид',[{brand:'Куга',model:'Макс Спид'}]);assert.equal(choices.filter(x=>x.value==='Куга Макс Спид').length,0);});
 
