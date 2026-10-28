@@ -8,6 +8,9 @@ import {esc,money,uuid,matchBarcode} from './client.js';
 export function liveBasket({terminal,call,parts,render,home,run,message,load,save,refresh,repair,stationRepair,canOpen=()=>true,manual}){
  const $=id=>document.getElementById(id),key=kind=>'live:'+kind+':'+(terminal?'terminal':'station');
  let draft=null,current=null,kind='',active=false,locked=false,stop=null,timer=null,pollTimer=null,syncing=null,polling=false,overrides={},dismissed='',lastId='',scanChain=Promise.resolve(),stopKeys=null,emptyClosing=null;
+ let pageHidden=false;
+ window.addEventListener('pagehide',()=>{pageHidden=true;clearTimeout(timer);});
+ window.addEventListener('pageshow',event=>{pageHidden=false;if(event.persisted&&active)void sync().catch(e=>feedback(e.message,true));});
  const product=x=>parts().find(p=>p.id===x?.part_id);
  const shown=new Map();
  const jobStamp=value=>String(value?.payload.updated_at||value?.created_at||'');
@@ -31,7 +34,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
  function changed(){draft.revision++;cache();clearTimeout(timer);timer=setTimeout(()=>void sync().catch(e=>feedback(e.message,true)),120);}
  function feedback(text,error=false){if(!$('scan-feedback'))return;$('scan-feedback').textContent=text;$('scan-feedback').className=error?'error':'';}
  function finished(job){
-  if(!active)return;
+  if(pageHidden||!active)return;
   // A scan received while the laptop was committing belongs to the next document.
   const local=draft||load(key(job.payload.kind)),extra=remaining(local,job);
   if(!terminal){save('live:resume:station',null);save('live-method:'+job.id,null);}
@@ -41,16 +44,20 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   draft=null;current=null;locked=false;cleanup();void refresh().catch(()=>{});home();message(job.result?.cancelled?(job.payload.kind==='receipt'?'Приход отменён':'Документ отменён'):kind==='receipt'?'Приход оформлен':'Оплата принята');
  }
  async function sync(){
+  if(pageHidden)return;
   if(syncing){await syncing;if(draft&&draft.acked<draft.revision)return sync();return;}
   if(!draft||locked&&!draft.cancel_empty||draft.acked>=draft.revision)return;
   const local=draft,body=JSON.parse(JSON.stringify(local));
   syncing=call('draft_sync',{request_id:body.id,kind:body.kind,revision:body.revision,items:body.items,note:body.note||'',active:active&&draft===local}).then(r=>{
+   if(pageHidden)return;
    if(r.state==='done'){if(draft===local)finished(r);return;}
    if(r.state!=='queued')throw Error('Операция проводится на ноутбуке');
    local.acked=Math.max(local.acked||0,r.payload.revision);save(key(local.kind),local);
    if(active&&draft===local&&$('live-sync'))$('live-sync').textContent='';
   }).catch(async e=>{
+   if(pageHidden)return;
    const job=await call('job',{id:local.id}).catch(()=>null);
+   if(pageHidden)return;
    if(job?.state==='done'&&draft===local){finished(job);return;}
    if(active&&draft===local&&$('live-sync'))$('live-sync').textContent='Нет связи · сканы сохранены';throw e;
   }).finally(()=>syncing=null);
@@ -103,16 +110,19 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   });scanChain=next.catch(()=>{});return next;
  }
  async function clearEmpty(){
+  if(pageHidden)return;
   if(emptyClosing)return emptyClosing;
   const local=draft;if(!local?.cancel_empty)return;
   locked=true;draw();
   emptyClosing=(async()=>{try{
-   await sync();if(draft!==local)return;
+   await sync();if(pageHidden||draft!==local)return;
    const result=await call('cancel_document',{id:local.id,kind:'sale',revision:local.revision});
    if(result?.state!=='done')throw Error('Сервер не подтвердил отмену');
    finished(result);if(result.result?.cancelled)message('Буфер очищен. Продажа не проведена.');
   }catch(e){
+   if(pageHidden)return;
    const result=await call('job',{id:local.id}).catch(()=>null);
+   if(pageHidden)return;
    if(result?.state==='done'){finished(result);if(result.result?.cancelled)message('Буфер очищен. Продажа не проведена.');return;}
    if(draft===local){locked=true;draw();feedback('Ожидаем связь для отмены пустого буфера. Сканы сохранены.',true);}throw e;
   }finally{emptyClosing=null;}})();return emptyClosing;
@@ -185,16 +195,16 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
   draft.pickup={code,request_id:uuid()};cache();checkpoint();return issuePending();
  }
  async function poll(){
-  if(polling||!active)return;polling=true;try{
+  if(pageHidden||polling||!active)return;polling=true;try{
    if(draft?.cancel_empty){await clearEmpty();return;}
-   if(draft){const local=draft;void sync().catch(()=>{});const r=await call('job',{id:local.id});if(active&&draft===local&&r?.state==='done')finished(r);else if(active&&draft===local&&r){locked=r.state==='processing';draw();}return;}
-   if(current){const id=current.id,r=await call('job',{id});if(!active||current?.id!==id||!r)return;if(r.state==='done'){finished(r);return;}if(r.payload.revision!==current.payload.revision||r.state!==current.state){current=r;locked=r.state==='processing';draw();}return;}
+   if(draft){const local=draft;void sync().catch(()=>{});const r=await call('job',{id:local.id});if(!pageHidden&&active&&draft===local&&r?.state==='done')finished(r);else if(!pageHidden&&active&&draft===local&&r){locked=r.state==='processing';draw();}return;}
+   if(current){const id=current.id,r=await call('job',{id});if(pageHidden||!active||current?.id!==id||!r)return;if(r.state==='done'){finished(r);return;}if(r.payload.revision!==current.payload.revision||r.state!==current.state){current=r;locked=r.state==='processing';draw();}return;}
    if(!terminal)await pollMirror();
   }finally{polling=false;}
  }
  async function pollMirror(){
-  if(terminal||!canOpen()||active&&(locked||draft?.items.length))return;
-  const jobs=await call('live_jobs');if(!canOpen()||active&&(locked||draft?.items.length))return;
+  if(pageHidden||terminal||!canOpen()||active&&(locked||draft?.items.length))return;
+  const jobs=await call('live_jobs');if(pageHidden||!canOpen()||active&&(locked||draft?.items.length))return;
   const candidates=jobs.filter(j=>j.state!=='done').sort((a,b)=>String(b.payload.updated_at||b.created_at).localeCompare(String(a.payload.updated_at||a.created_at)));
   const found=candidates.find(j=>(!j.station_id||j.terminal_id!==j.station_id)&&j.id!==current?.id&&shown.get(j.id)!==j.payload.revision&&j.id+':'+j.payload.revision!==dismissed&&(!active||!current||jobStamp(j)>jobStamp(current)));
   if(found){suspend();await openMirror(found);void window.warehouseDesktop?.showIncoming?.();return;}

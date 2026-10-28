@@ -1,3 +1,4 @@
+import {renderStepRepair} from './repair-steps.js';
 import {mountMobileIntake} from './intake-mobile.js';
 import {mountRepairGuide} from './repair-guide.js';
 import {createRepairPhotoGallery} from './repair-card.js';
@@ -34,7 +35,7 @@ export async function renderIntake(ctx,p,token){const kind=p.kind==='storage'?'s
   ctx.toast('Приёмка № '+number(saved,kind)+' сохранена');ctx.go('order',{kind,id:saved.id,created:1,remote_print:remotePrint});
  }catch(error){$('intake-error').innerHTML=`<p class="error">${esc(error.message)}</p>${saved?`<p class="notice">Приёмка № ${number(saved,kind)} уже сохранена. Завершите загрузку файлов.</p><a class="btn secondary" href="${ctx.href('order',{kind,id:saved.id})}">Открыть сохранённую карточку</a>`:''}`;$('intake-error').scrollIntoView({block:'center',behavior:'smooth'});}finally{b.disabled=false;b.textContent=saved?'Завершить сохранение':'Сохранить приёмку';}};
 }
-export async function renderDetail(ctx,p,token){const kind=p.kind==='storage'?'storage':'repair',isStorage=kind==='storage';const [result,c]=await Promise.all([api('get',{kind,id:p.id,qr_token:p.token}),ctx.catalog(true)]);let r=result.record,works=structuredClone(r.works||[]),parts=structuredClone(r.parts||[]);const closed=['issued','returned','cancelled','deleted'].includes(r.status),permission=ctx.me.status_permissions||{},nextActions=repairActions(r.status,permission);
+export async function renderDetail(ctx,p,token){if(p.kind!=='storage'&&p.legacy!=='1')return renderStepRepair(ctx,p,token);const kind=p.kind==='storage'?'storage':'repair',isStorage=kind==='storage';const [result,c]=await Promise.all([api('get',{kind,id:p.id,qr_token:p.token}),ctx.catalog(true)]);let r=result.record,works=structuredClone(r.works||[]),parts=structuredClone(r.parts||[]);const closed=['issued','returned','cancelled','deleted'].includes(r.status),permission=ctx.me.status_permissions||{},nextActions=repairActions(r.status,permission);
  const linkedParts=repairPartsCondition(r),canConfirmNoParts=repairNoPartsAllowed(r,ctx.me);
  const info=(label,value)=>`<div><label>${label}</label><p>${esc(value||'Не указано')}</p></div>`;
  const actor=id=>c.staff.find(s=>s.profile_id===id)?.name||'Сотрудник';

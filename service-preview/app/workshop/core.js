@@ -21,7 +21,7 @@ export const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Yekaterin
 export const fio=r=>[r.last_name,r.first_name,r.middle_name].filter(Boolean).join(' ');
 export const number=(r,k)=>String(k==='repair'?r.repair_number:r.storage_number).padStart(4,'0');
 export const roles={seller:'Продажник',owner:'Владелец',admin:'Администратор',receiver:'Мастер-приёмщик',manager:'Менеджер',mechanic:'Мастер'};
-export const statuses={repair:{accepted:'Принят',diagnostics:'Диагностика',waiting_parts:'Ждём запчасти',repair:'В ремонте',ready:'Готов',issued:'Выдан',cancelled:'Отменён'},storage:{accepted:'Принят',stored:'На хранении',ready_return:'К выдаче',returned:'Исполнено',cancelled:'Отменён'}};
+export const statuses={repair:{accepted:'Принято',diagnostics:'Диагностика',waiting_parts:'Ожидаем запчасти',repair:'В работе',ready:'Готово к выдаче',issued:'Выдано',cancelled:'Отменено'},storage:{accepted:'Принят',stored:'На хранении',ready_return:'К выдаче',returned:'Исполнено',cancelled:'Отменён'}};
 export const badge=(s,k)=>`<span class="badge ${esc(s)}">${esc(statuses[k]?.[s]||(s==='deleted'?'Удалено':s))}</span>`;
 export const total=(r,k)=>Number(k==='repair'?r.total_amount:r.storage_amount)||0;
 export const opts=(values,selected,blank)=> (blank?`<option value="">${esc(blank)}</option>`:'')+Object.entries(values).map(([v,l])=>`<option value="${esc(v)}"${String(v)===String(selected)?' selected':''}>${esc(l)}</option>`).join('');
