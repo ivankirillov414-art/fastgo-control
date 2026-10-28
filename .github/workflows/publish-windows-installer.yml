@@ -49,7 +49,12 @@ jobs:
         run: |
           tag="fastgo-windows-v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo 'This version already exists; never overwrite an installed release.'
+            existing=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)
+            if test "$existing" != "$BUILD_SHA"; then
+              echo "Version $VERSION is occupied by $existing. Choose a new version instead of publishing a stale package."
+              exit 1
+            fi
+            echo 'This exact tested version is already published.'
             exit 0
           fi
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'

@@ -51,3 +51,22 @@ export function repairRequirements(record, values) {
  if (status === 'cancelled' && !String(values.note || '').trim()) required.push('cancel');
  return required;
 }
+
+// Guide the existing transition; never invent a shortcut or a second workflow.
+export function repairGuide(record, values, actor = {}) {
+ const status=record.status, permissions=actor.status_permissions||{};
+ const stages=[['accepted','Приёмка'],['diagnostics','Диагностика'],['repair','Ремонт'],['issued','Выдача']];
+ const index={accepted:0,diagnostics:1,waiting_parts:2,repair:2,ready:3,issued:3,cancelled:-1}[status]??-1;
+ const target={accepted:'diagnostics',diagnostics:'repair',waiting_parts:'repair',repair:'ready',ready:'issued'}[status];
+ const amount=repairAmount(values),due=Math.max(0,Math.round((amount-Number(record.paid_amount||0))*100)/100);
+ const allowed=target&&repairActions(status,permissions).includes(target);
+ const missing=allowed?repairRequirements(record,{...values,status:target}):[];
+ const title={accepted:'Начните диагностику',diagnostics:'Зафиксируйте диагностику и работы',waiting_parts:'Ожидаем запчасти',repair:'Завершите работы и проверку',ready:'Ремонт готов к выдаче',issued:'Техника выдана клиенту',cancelled:'Ремонт отменён'}[status]||'Карточка ремонта';
+ const hints={diagnostics:'Запишите результат диагностики',approval:'Согласуйте текущую стоимость',parts:'Получите детали по QR или подтвердите ремонт без запчастей',quality:'Выполните контроль качества',handover:'Зафиксируйте комплектность при выдаче'};
+ let detail=missing.map(key=>hints[key]).filter(Boolean).join(' · ');
+ if(status==='waiting_parts')detail='Получите детали на кассе по QR «Взять запчасти». Когда можно продолжить, вернитесь к ремонту.';
+ if(status==='ready'&&!allowed)detail='Передайте технику на кассу. Оплату и выдачу клиенту оформляет сотрудник с доступом к кассе.';
+ else if(status==='ready'&&due>0)detail='Перед выдачей нужно принять оставшуюся оплату.';
+ if(!detail)detail=status==='issued'||status==='cancelled'?'История и документы сохранены.':allowed?'Данные этапа сохранятся вместе с переходом.':'Для продолжения нужен сотрудник с правом на следующий этап.';
+ return {stages,index,title,detail,due,missing,target:allowed?target:null,disabled:status==='ready'&&due>0,label:status==='waiting_parts'?'Продолжить ремонт':repairActionLabels[target]||''};
+}
