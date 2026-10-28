@@ -11,6 +11,6 @@ if(process.env.FASTGO_ESBUILD)execFileSync(process.env.FASTGO_ESBUILD,args,{stdi
 fs.unlinkSync(entry);
 let html=fs.readFileSync(path.join(out,'workshop.html'),'utf8');html=html.replace(/<script type="importmap">[\s\S]*?<\/script>/g,'').replace(/<script type="module"[^>]*><\/script>/g,'');html=html.replace('</head>','<script defer src="phone-bootstrap.js"></script><script defer src="workshop/app-phone.js"></script></head>');fs.writeFileSync(path.join(out,'workshop.html'),html);
 html=fs.readFileSync(path.join(out,'warehouse.html'),'utf8').replace('<script defer src="vendor/','<script defer src="phone-bootstrap.js"></script><script defer src="vendor/');fs.writeFileSync(path.join(out,'warehouse.html'),html);
-const manifest={platform:'android',version:'1.0.5',bundle_source:'installed-apk',files:{}};
+const manifest={platform:'android',version:'1.0.6',bundle_source:'installed-apk',files:{}};
 for(const file of ['workshop.html','workshop/app-phone.js','phone-bootstrap.js','warehouse.html','warehouse/app-compat.js','warehouse/style.css'])manifest.files[file]=crypto.createHash('sha256').update(fs.readFileSync(path.join(out,file))).digest('hex');
 fs.writeFileSync(path.join(out,'bundle-receipt.json'),JSON.stringify(manifest,null,2));console.log('Prepared Android phone bundle',manifest.version);
