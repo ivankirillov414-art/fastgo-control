@@ -52,6 +52,14 @@
     }
   });
 
+  // warehouse/manual-payment-state.js
+  function hasManualPaymentDraft(value) {
+    var _a3;
+    if (value == null) return false;
+    if (typeof value !== "object" || Array.isArray(value)) return true;
+    return !!(value.pending || ((_a3 = value.items) == null ? void 0 : _a3.length) || String(value.work || "").trim() || value.method || ["price", "total"].some((key3) => value[key3] !== void 0 && value[key3] !== null && String(value[key3]) !== ""));
+  }
+
   // warehouse/scan-normalize.js
   var keys = { \u0439: "q", \u0446: "w", \u0443: "e", \u043A: "r", \u0435: "t", \u043D: "y", \u0433: "u", \u0448: "i", \u0449: "o", \u0437: "p", \u0445: "[", \u044A: "]", \u0444: "a", \u044B: "s", \u0432: "d", \u0430: "f", \u043F: "g", \u0440: "h", \u043E: "j", \u043B: "k", \u0434: "l", \u0436: ";", \u044D: "'", \u044F: "z", \u0447: "x", \u0441: "c", \u043C: "v", \u0438: "b", \u0442: "n", \u044C: "m", \u0431: ",", \u044E: ".", \u0451: "`" };
   var shifted = { "[": "{", "]": "}", ";": ":", "'": '"', ",": "<", ".": ">", "`": "~" };
@@ -3756,11 +3764,11 @@
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
-    var _a3, _b, _c, _d;
-    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) && !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "services", "report", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_d = document.activeElement) == null ? void 0 : _d.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    var _a3, _b;
+    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !hasManualPaymentDraft(load("manual-service-payment")) && !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "services", "manual-payment", "report", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_b = document.activeElement) == null ? void 0 : _b.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
-    var _a3, _b, _c;
+    var _a3;
     try {
       live.checkpoint();
     } catch (error) {
@@ -3769,7 +3777,7 @@
       e.returnValue = "";
       return;
     }
-    if (((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) || ((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) || busy || screen === "basket" || screen === "checkout" || screen === "repair" || screen === "live" && live.hasDraft()) {
+    if (((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) || hasManualPaymentDraft(load("manual-service-payment")) || busy || screen === "basket" || screen === "checkout" || screen === "repair" || screen === "live" && live.hasDraft()) {
       e.preventDefault();
       e.returnValue = "";
     }
@@ -4467,8 +4475,8 @@
   window.warehouseRequestUpdate = () => void updateNow();
   if ($("warehouse-update-now")) $("warehouse-update-now").onclick = () => void updateNow();
   window.fastgoWarehouseCanLeave = () => {
-    var _a3, _b, _c;
-    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) && !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
+    var _a3;
+    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !hasManualPaymentDraft(load("manual-service-payment")) && !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
   };
   window.fastgoWarehouseOpenMode = async (kind) => {
     if (!["receipt", "sale"].includes(kind) || !window.fastgoWarehouseCanLeave() && !live.canUSB(kind)) return false;

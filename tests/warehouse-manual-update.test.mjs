@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {hasManualPaymentDraft as dirty} from '../warehouse/manual-payment-state.js';
+test('empty manual payment permits an idle application update',()=>{for(const value of [null,undefined,{}, {id:'draft-id',items:[],method:'',total:''},{items:[],work:'  ',price:'',total:'',method:''}])assert.equal(dirty(value),false);});
+test('partial entries, zero amounts and unknown payment outcomes remain protected',()=>{for(const value of [{work:'Замена камеры'},{price:'0'},{price:0},{total:'1600'},{total:0},{method:'cash'},{items:[{title:'Работа',unit_price:1600}]},{pending:{request_id:'same-request'}},'corrupt',[]])assert.equal(dirty(value),true);});
