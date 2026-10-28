@@ -12,7 +12,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.webkit.WebView;
 import android.widget.Toast;
-import androidx.core.content.FileProvider;
+
 import org.json.JSONObject;
 import java.io.*;
 import java.net.*;
@@ -24,15 +24,16 @@ import java.util.concurrent.ExecutorService;
 /** Only an APK signed by the installed app's key may reach the system installer. */
 final class PhoneUpdates {
  static final String ROOT="https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/";
+ static final String SITE="https://ivankirillov414-art.github.io/fastgo-control/";
  static final String FEED=ROOT+"warehouse-android/phone/update.json";
  private final Activity activity;private final WebView web;
  private final Handler handler=new Handler(Looper.getMainLooper());
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
  private boolean resumed,busy,closed,prompting;private int offered=-1;private long lastCheck;
  private JSONObject ready;private final File apk;
- PhoneUpdates(Activity a,WebView w){activity=a;web=w;apk=new File(a.getCacheDir(),"phone-update/update.apk");}
+ PhoneUpdates(Activity a,WebView w){activity=a;web=w;apk=new File(a.getCacheDir(),"phone-update/update.apk");offered=PhoneInstaller.state(a).getInt("offered_version",-1); }
  private final Runnable tick=new Runnable(){public void run(){if(!resumed||closed)return;check(false);handler.postDelayed(this,60000);}};
- void resume(){resumed=true;handler.removeCallbacks(tick);handler.post(tick);}
+ void resume(){resumed=true;String result=PhoneInstaller.state(activity).getString("install_result","");if(!result.isEmpty()){notice(result);PhoneInstaller.state(activity).edit().remove("install_result").apply();}if(PhoneInstaller.state(activity).getBoolean("permission_requested",false)){PhoneInstaller.state(activity).edit().remove("permission_requested").apply();if(Build.VERSION.SDK_INT<26||activity.getPackageManager().canRequestPackageInstalls())offered=-1;}handler.removeCallbacks(tick);handler.post(tick);}
  void pause(){resumed=false;handler.removeCallbacks(tick);}
  void close(){closed=true;pause();worker.shutdownNow();}
  private void notice(String text){if(!closed)Toast.makeText(activity,text,Toast.LENGTH_LONG).show();}
@@ -56,8 +57,10 @@ final class PhoneUpdates {
   finally{handler.post(()->busy=false);}});
  }
  private HttpURLConnection connection(String url)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(15000);c.setReadTimeout(30000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Cache-Control","no-cache");if(c.getResponseCode()!=200){c.disconnect();throw new IOException("Сервер обновлений недоступен");}return c;}
- private byte[] read(String url,int limit)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Ответ слишком большой");out.write(b,0,n);}return out.toByteArray();}finally{c.disconnect();}}
- private void download(String url,File file)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();FileOutputStream out=new FileOutputStream(file)){byte[] b=new byte[32768];int n,total=0;while((n=in.read(b))!=-1){if(Thread.currentThread().isInterrupted())throw new IOException("Загрузка остановлена");total+=n;if(total>50000000)throw new IOException("APK слишком большой");out.write(b,0,n);}out.getFD().sync();}finally{c.disconnect();}}
+ private byte[] read(String url,int limit)throws Exception{try{return readOnce(url,limit);}catch(Exception first){if(!url.startsWith(ROOT))throw first;return readOnce(SITE+url.substring(ROOT.length()),limit);}}
+ private byte[] readOnce(String url,int limit)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Ответ слишком большой");out.write(b,0,n);}return out.toByteArray();}finally{c.disconnect();}}
+ private void download(String url,File file)throws Exception{try{downloadOnce(url,file);}catch(Exception first){if(!url.startsWith(ROOT)||Thread.currentThread().isInterrupted())throw first;downloadOnce(SITE+url.substring(ROOT.length()),file);}}
+ private void downloadOnce(String url,File file)throws Exception{HttpURLConnection c=connection(url);try(InputStream in=c.getInputStream();FileOutputStream out=new FileOutputStream(file)){byte[] b=new byte[32768];int n,total=0;while((n=in.read(b))!=-1){if(Thread.currentThread().isInterrupted())throw new IOException("Загрузка остановлена");total+=n;if(total>50000000)throw new IOException("APK слишком большой");out.write(b,0,n);}out.getFD().sync();}finally{c.disconnect();}}
  private boolean valid(File f,JSONObject m){try{verify(f,m);return true;}catch(Exception e){return false;}}
  void verify(File file,JSONObject meta)throws Exception{
   MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream in=new FileInputStream(file)){byte[] b=new byte[32768];int n;while((n=in.read(b))!=-1)digest.update(b,0,n);}
@@ -66,6 +69,6 @@ final class PhoneUpdates {
   if(next==null||!own.packageName.equals(next.packageName)||next.versionCode!=meta.getInt("versionCode")||next.versionCode<=own.versionCode||!next.versionName.equals(meta.getString("versionName"))||next.signatures==null||own.signatures==null||next.signatures.length!=1||own.signatures.length!=1||!own.signatures[0].equals(next.signatures[0]))throw new IOException("Подпись или версия APK не совпала");
  }
  private void safe(Runnable action,boolean manual){if(!resumed||closed)return;web.evaluateJavascript("(()=>{try{return !!(window.fastgoHasUnsavedChanges? !window.fastgoHasUnsavedChanges():window.warehouseUpdateSafe?window.warehouseUpdateSafe(true):false)&&!document.querySelector('dialog[open]');}catch(e){return false;}})()",value->{if(closed||!resumed)return;if("true".equals(value))action.run();else if(manual)notice("Обновление загружено. Сохраните приёмку и закройте открытые окна.");});}
- private void offer(boolean manual){if(ready==null||prompting||(!manual&&offered==ready.optInt("versionCode")))return;safe(()->{if(prompting||ready==null)return;prompting=true;offered=ready.optInt("versionCode");new AlertDialog.Builder(activity).setTitle("Обновление FastGo "+ready.optString("versionName")).setMessage("Обновление уже загружено. Установить сейчас? Данные приложения сохранятся.").setPositiveButton("Обновить",(d,w)->{prompting=false;safe(this::install,true);}).setNegativeButton("Позже",(d,w)->prompting=false).setOnCancelListener(d->prompting=false).show();},manual);}
- private void install(){try{verify(apk,ready);if(Build.VERSION.SDK_INT>=26&&!activity.getPackageManager().canRequestPackageInstalls()){offered=-1;notice("Разрешите FastGo устанавливать обновления и вернитесь в приложение");activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+activity.getPackageName())));return;}Uri uri=FileProvider.getUriForFile(activity,activity.getPackageName()+".files",apk);activity.startActivity(new Intent(Intent.ACTION_INSTALL_PACKAGE).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));}catch(Exception e){notice("Установка не началась: "+e.getMessage());}}
+ private void offer(boolean manual){if(ready==null||prompting||(!manual&&offered==ready.optInt("versionCode")))return;safe(()->{if(prompting||ready==null)return;prompting=true;offered=ready.optInt("versionCode");PhoneInstaller.state(activity).edit().putInt("offered_version",offered).apply();new AlertDialog.Builder(activity).setTitle("Обновление FastGo "+ready.optString("versionName")).setMessage("Обновление уже загружено. Установить сейчас? Данные приложения сохранятся.").setPositiveButton("Обновить",(d,w)->{prompting=false;safe(this::install,true);}).setNegativeButton("Позже",(d,w)->prompting=false).setOnCancelListener(d->prompting=false).show();},manual);}
+ private void install(){try{verify(apk,ready);if(Build.VERSION.SDK_INT>=26&&!activity.getPackageManager().canRequestPackageInstalls()){PhoneInstaller.state(activity).edit().putBoolean("permission_requested",true).apply();notice("Разрешите FastGo устанавливать обновления и вернитесь в приложение");activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+activity.getPackageName())));return;}PhoneInstaller.install(activity,apk,ready.getString("versionName"));}catch(Exception e){notice("Установка не началась: "+e.getMessage());}}
 }

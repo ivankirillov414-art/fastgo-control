@@ -1,10 +1,10 @@
 name: FastGo Android Phone
 on:
  pull_request:
-  paths: ['scripts/check-phone-release.cjs','warehouse-android/phone/**','!warehouse-android/phone/update.json','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
+  paths: ['scripts/check-phone-*.cjs','scripts/check-phone-*.py','tests/phone_apk_identity_test.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/phone/**','!warehouse-android/phone/update.json','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  push:
   branches: [main]
-  paths: ['scripts/check-phone-release.cjs','warehouse-android/phone/**','!warehouse-android/phone/update.json','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
+  paths: ['scripts/check-phone-*.cjs','scripts/check-phone-*.py','tests/phone_apk_identity_test.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/phone/**','!warehouse-android/phone/update.json','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -20,12 +20,22 @@ jobs:
    - uses: android-actions/setup-android@v3
      with: {packages: platform-tools}
    - uses: gradle/actions/setup-gradle@v4
-     with: {gradle-version: '8.9'}
+     with: {gradle-version: '8.11.1'}
    - run: node --test warehouse-android/phone/tests/*.test.cjs
    - run: node warehouse-android/phone/prepare-web.cjs
+   - name: Build next-version debug self-update fixture
+     run: |
+      gradle :phone:assembleDebug -PfastgoPhoneFixture=true --no-daemon
+      mkdir -p phone/src/debug/assets
+      cp phone/build/outputs/apk/debug/phone-debug.apk phone/src/debug/assets/update-fixture.apk
+     working-directory: warehouse-android
    - name: Build final phone package
      run: gradle :phone:assembleRelease :phone:assembleDebug --no-daemon
      working-directory: warehouse-android
+   - name: Verify APK identity guard
+     run: python3 -m unittest discover -s tests -p phone_apk_identity_test.py
+   - name: Audit final release APK manifest
+     run: python3 scripts/check-phone-apk.py warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk --output warehouse-android/phone/build/security-audit.json
    - name: Save public Android signing utility for local signing
      run: cp "$(find "$ANDROID_HOME/build-tools" -name apksigner.jar | sort -V | tail -n1)" warehouse-android/phone/build/apksigner.jar
    - name: Verify embedded UI integrity
@@ -61,6 +71,7 @@ jobs:
      with:
       name: fastgo-android-phone-verified
       path: |
+       warehouse-android/phone/build/security-audit.json
        warehouse-android/phone/build/apksigner.jar
        warehouse-android/phone/build/outputs/apk/release/*.apk
        warehouse-android/phone/build/outputs/apk/debug/*.apk
@@ -74,7 +85,7 @@ jobs:
   timeout-minutes: 20
   strategy:
    fail-fast: false
-   matrix: {api: [29, 35]}
+   matrix: {api: [29, 35, 36]}
   steps:
    - uses: actions/checkout@v4
    - id: signed
@@ -95,6 +106,7 @@ jobs:
        installed=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
        assert installed==expected, 'Signed APK is older than verified source; sign the fresh package before publishing'
       PY
+      python3 scripts/check-phone-apk-identity.py verify-package/build/outputs/apk/release/phone-release-unsigned.apk warehouse-android/phone/release/FastGo-Android-1.0.7.apk --output browser-results/android-phone-${{ matrix.api }}/apk-identity.json
    - uses: actions/setup-java@v4
      if: steps.signed.outputs.ready == 'true'
      with: {distribution: temurin, java-version: '17'}
@@ -124,9 +136,44 @@ jobs:
      with:
       name: fastgo-android-installed-${{ matrix.api }}
       path: browser-results/android-phone-${{ matrix.api }}/
+ self-update-check:
+  needs: verify
+  runs-on: ubuntu-latest
+  timeout-minutes: 20
+  strategy:
+   fail-fast: false
+   matrix: {api: [29, 35, 36]}
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/download-artifact@v4
+     with: {name: fastgo-android-phone-verified, path: verify-package}
+   - uses: actions/setup-java@v4
+     with: {distribution: temurin, java-version: '17'}
+   - uses: actions/setup-node@v4
+     with: {node-version: '24'}
+   - uses: android-actions/setup-android@v3
+     with: {packages: platform-tools}
+   - name: Enable KVM
+     run: |
+      echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+      sudo udevadm control --reload-rules
+      sudo udevadm trigger --name-match=kvm
+   - uses: reactivecircus/android-emulator-runner@v2
+     env: {FASTGO_ANDROID_API: '${{ matrix.api }}', FASTGO_SELFUPDATE_APK: 'verify-package/build/outputs/apk/debug/phone-debug.apk'}
+     with:
+      api-level: ${{ matrix.api }}
+      arch: x86_64
+      profile: Nexus 5
+      disable-animations: true
+      script: node scripts/check-phone-self-update.cjs
+   - uses: actions/upload-artifact@v4
+     if: always()
+     with:
+      name: fastgo-phone-self-update-${{ matrix.api }}
+      path: browser-results/android-phone-${{ matrix.api }}/self-update/
  publish:
   if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.release-check.outputs.ready == 'true'
-  needs: [verify, release-check]
+  needs: [verify, release-check, self-update-check]
   runs-on: ubuntu-latest
   permissions: {contents: write}
   steps:
