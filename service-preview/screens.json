@@ -1,0 +1,137 @@
+{
+  "version": "1.0.6",
+  "apk_sha256": "f361231d5aba507dfd83198b78660e47c13e4b6c8bae63f05acfdb6efaba4baa",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "screens": [
+    {
+      "id": "01-list",
+      "title": "Список ремонтов",
+      "stage": "accepted",
+      "route": "#repairs",
+      "note": ""
+    },
+    {
+      "id": "02-client",
+      "title": "Приёмка · клиент",
+      "stage": "intake",
+      "route": "#new?kind=repair",
+      "note": ""
+    },
+    {
+      "id": "03-vehicle",
+      "title": "Приёмка · техника и неисправность",
+      "stage": "intake",
+      "route": "#new?kind=repair",
+      "note": ""
+    },
+    {
+      "id": "04-intake-photo",
+      "title": "Приёмка · фото и сохранение",
+      "stage": "intake",
+      "route": "#new?kind=repair",
+      "note": ""
+    },
+    {
+      "id": "05-accepted",
+      "title": "Техника принята · карточка",
+      "stage": "accepted",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "06-diagnostics",
+      "title": "Диагностика · результаты и работы",
+      "stage": "diagnostics",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "07-approval",
+      "title": "Согласование стоимости и начало ремонта",
+      "stage": "approval",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": "Показано открытое окно перехода к ремонту."
+    },
+    {
+      "id": "08-repair",
+      "title": "В ремонте · состав работ",
+      "stage": "repair",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "09-photos",
+      "title": "Фото и документы ремонта",
+      "stage": "repair",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "10-quality",
+      "title": "Завершение работ · контроль качества",
+      "stage": "quality",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": "Открыто окно подтверждения готовности."
+    },
+    {
+      "id": "11-ready",
+      "title": "Готов к выдаче · расчёт",
+      "stage": "ready",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "12-payment",
+      "title": "Оплата ремонта",
+      "stage": "ready",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": "Открыто окно приёма оплаты."
+    },
+    {
+      "id": "13-handover",
+      "title": "Выдача техники клиенту",
+      "stage": "handover",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": "Открыто окно подтверждения выдачи."
+    },
+    {
+      "id": "14-issued",
+      "title": "Выдано · закрытая карточка",
+      "stage": "issued",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "15-history",
+      "title": "История ремонта и оплаты",
+      "stage": "issued",
+      "route": "#order?kind=repair&id=demo-repair",
+      "note": ""
+    },
+    {
+      "id": "16-contract",
+      "title": "Акт приёмки в ремонт",
+      "stage": "accepted",
+      "route": "#document?kind=repair&id=demo-repair&type=contract",
+      "note": "Печатный документ из приложения."
+    },
+    {
+      "id": "17-master",
+      "title": "Лист мастера",
+      "stage": "repair",
+      "route": "#document?kind=repair&id=demo-repair&type=master",
+      "note": "Печатный документ из приложения."
+    },
+    {
+      "id": "18-handover-act",
+      "title": "Акт выдачи техники",
+      "stage": "issued",
+      "route": "#document?kind=repair&id=demo-repair&type=handover",
+      "note": "Печатный документ из приложения."
+    }
+  ],
+  "errors": []
+}

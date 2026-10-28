@@ -1,0 +1,16 @@
+{
+  "app_version": "1.0.6",
+  "source_apk_sha256": "f361231d5aba507dfd83198b78660e47c13e4b6c8bae63f05acfdb6efaba4baa",
+  "screens": 18,
+  "rendered_from": "published APK HTML/CSS/JS",
+  "demo_only": true,
+  "production_api_requests": false,
+  "storage": "isolated in-memory preview storage",
+  "checked": [
+    "18 screenshots",
+    "live agreement screen",
+    "live payment simulation",
+    "existing production session preserved",
+    "zero external API requests"
+  ]
+}
