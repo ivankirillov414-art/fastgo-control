@@ -1,7 +1,10 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
 const root=path.resolve(__dirname,'../..'),out=path.join(__dirname,'src/main/assets/fastgo');
-fs.mkdirSync(out,{recursive:true});
-for(const folder of ['workshop','vendor','warehouse'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true,filter:p=>!p.endsWith('.apk')&&!p.includes(path.sep+'native'+path.sep)});
+const expectedOut=path.resolve(__dirname,'src/main/assets/fastgo');
+if(path.resolve(out)!==expectedOut||!expectedOut.startsWith(root+path.sep))throw Error('Refusing to clean an unexpected Android asset directory');
+fs.rmSync(out,{recursive:true,force:true});fs.mkdirSync(out,{recursive:true});
+const desktopUpdates=path.join(root,'warehouse','update');
+for(const folder of ['workshop','vendor','warehouse'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true,filter:p=>!p.endsWith('.apk')&&!p.includes(path.sep+'native'+path.sep)&&p!==desktopUpdates&&!p.startsWith(desktopUpdates+path.sep)});
 for(const file of ['workshop.html','workshop.css','fastgo-logo.png','warehouse.html','repair-status.html'])fs.copyFileSync(path.join(root,file),path.join(out,file));
 for(const file of ['documents.js','customer-link.js','repair-print.js']){const p=path.join(out,'workshop',file);let s=fs.readFileSync(p,'utf8');s=s.replaceAll("new URL('workshop.html',location.href)","new URL('https://ivankirillov414-art.github.io/fastgo-control/workshop.html')").replaceAll("new URL('repair-status.html',location.href)","new URL('https://ivankirillov414-art.github.io/fastgo-control/repair-status.html')");fs.writeFileSync(p,s);}
 fs.copyFileSync(path.join(__dirname,'phone-bootstrap.js'),path.join(out,'phone-bootstrap.js'));
