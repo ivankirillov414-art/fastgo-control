@@ -4,9 +4,9 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const user='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
-function setup(role='mechanic',permissions={}){
+function setup(role='mechanic',permissions={},recordOverrides={}){
  let handler;const writes=[];
- const record={id,revision:1,status:'accepted',assigned_master_id:'',works:[],parts:[],total_amount:0,paid_amount:0};
+ const record={id,revision:1,status:'accepted',assigned_master_id:'',works:[],parts:[],total_amount:0,paid_amount:0,...recordOverrides};
  const fetch=async url=>{
   if(url.endsWith('/auth/v1/user'))return Response.json({id:user,email:'master@example.invalid'});
   if(url.includes('/workshop_members'))return Response.json([{profile_id:user,role,active:true,...permissions}]);
@@ -42,4 +42,13 @@ test('individual sales and catalogue rights are enforced without granting admini
  for(const action of ['part_save','staff_create','stock_receive','legal_save'])assert.equal((await granted.invoke(action)).status,403,action);
  const denied=setup();assert.equal((await denied.invoke('cash_state')).status,403);assert.equal((await denied.invoke('catalog_save',{id,title:'Работа',labor_price:500})).status,403);
  const forged=setup();assert.equal((await forged.invoke('cash_state',{can_sell:true})).status,403);
+});
+
+
+test('step actions derive API status and preserve quality confirmation without manual approval',async()=>{
+ const works=[{catalog_id:'service',name:'Настройка тормозов',quantity:1,price:1000}];
+ for(const [action,status,target,extra] of [['save_works','diagnostics','repair',{}],['wait_parts','repair','waiting_parts',{waiting_part:'Трос',waiting_due:'2026-11-10'}],['complete','repair','ready',{quality_checked:true,no_parts:true}]]){
+  const s=setup('mechanic',{}, {status,assigned_master_id:user,diagnostics_notes:'',works,total_amount:1000,approved_amount:null,parts_status:{mode:'none'},quality_checked:false});
+  const response=await s.invoke('update',{kind:'repair',id,revision:1,step_flow:true,flow_action:action,works,...extra});assert.equal(response.status,200,await response.clone().text());const saved=s.writes.find(x=>x.action==='update');assert.equal(saved.p.status,target);if(action==='complete')assert.equal(saved.p.quality_checked,true);
+ }
 });

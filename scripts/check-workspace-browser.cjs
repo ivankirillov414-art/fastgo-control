@@ -86,7 +86,7 @@ const server=createServer((req,res)=>{
   }
   return route.fulfill({json:{data},headers});
  });
- await page.setViewportSize({width:390,height:844});await page.goto(origin+'/workshop.html#order?kind=repair&id=photo-order');await page.locator('[data-repair-pane=photos]').click();await page.locator('#photo-grid').filter({hasText:'не добавлены'}).waitFor();
+ await page.setViewportSize({width:390,height:844});await page.goto(origin+'/workshop.html#order?legacy=1&kind=repair&id=photo-order');await page.locator('[data-repair-pane=photos]').click();await page.locator('#photo-grid').filter({hasText:'не добавлены'}).waitFor();
  await page.locator('#phone-photos').click();await page.locator('#phone-photo-link img').waitFor();assert.ok((await page.locator('#phone-photo-link a').getAttribute('href')).includes('id=photo-order'));
  const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=2400;c.height=1800;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,2400,1800);g.addColorStop(0,'red');g.addColorStop(1,'blue');x.fillStyle=g;x.fillRect(0,0,2400,1800);return c.toDataURL('image/png').split(',')[1];});
  const file={name:'phone.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')};

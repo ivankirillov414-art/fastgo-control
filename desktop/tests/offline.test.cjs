@@ -19,3 +19,11 @@ test('master cannot enqueue a payment or refund and cannot read finance or stock
  for(const action of ['finance','stock','stock_history','cash_state','sales'])assert.throws(()=>f.store.read(other,action),/недоступны мастеру/);
  assert.equal(f.store.pending(other).length,0);assert.equal(f.store.record(other,'repair',r.id).paid_amount,0);f.store.close();
 });
+
+test('offline step actions retain workflow intent, comments and completion print fence until server sync',async()=>{
+ const f=fixture(),r={...record(),assigned_master_id:other,assigned_master:'Алексей Иванов',master_first_name:'Алексей'};f.store.cache(other,'me',{profile_id:other,role:'mechanic'});f.store.remember(other,'repair',r);
+ let local=f.store.localWrite(other,'update',{kind:'repair',id:r.id,revision:1,request_id:randomUUID(),step_flow:true,flow_action:'diagnose'});assert.equal(local.status,'diagnostics');
+ local=f.store.localWrite(other,'update',{kind:'repair',id:r.id,revision:local.revision,request_id:randomUUID(),step_flow:true,flow_action:'save_works',works:[{catalog_id:'work',name:'Настройка тормозов',quantity:1,price:1500}]});assert.equal(local.status,'repair');
+ const request=randomUUID();local=f.store.localWrite(other,'update',{kind:'repair',id:r.id,revision:local.revision,request_id:request,step_flow:true,flow_action:'complete',quality_checked:true,no_parts:true,master_comment:'Проверено на стенде'});assert.equal(local.status,'ready');assert.equal(local.step_state.completion_request_id,request);assert.equal(local.step_state.local_pending,true);assert.equal(local.step_state.master_comment,'Проверено на стенде');
+ let remoteRecord={...r},sent=[];const sync=new Synchronizer(f.store,async(action,p)=>{if(action==='get')return {record:remoteRecord};sent.push(p);remoteRecord={...remoteRecord,...p,revision:remoteRecord.revision+1,step_state:{action:p.flow_action,master_comment:p.master_comment||'',...(p.flow_action==='complete'?{completion_request_id:p.request_id,completion_master_name:'Алексей'}:{})}};return remoteRecord;});await sync.run(other);assert.equal(f.store.pending(other).length,0);assert.deepEqual(sent.map(p=>p.flow_action),['diagnose','save_works','complete']);assert.equal(f.store.record(other,'repair',r.id).step_state.local_pending,undefined);assert.equal(f.store.record(other,'repair',r.id).step_state.completion_request_id,request);f.store.close();
+});
