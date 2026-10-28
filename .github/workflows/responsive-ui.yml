@@ -24,6 +24,7 @@ jobs:
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-fastgo-responsive-browser.cjs ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-mobile-labels.cjs ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-screen-layout-browser.cjs ${{ matrix.browser }}
+      - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-cash-buffer-browser.cjs ${{ matrix.browser }}
       - if: matrix.browser != 'firefox'
         run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-fastgo-concepts.cjs ${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
