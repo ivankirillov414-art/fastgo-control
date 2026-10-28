@@ -226,3 +226,6 @@ body[data-mode=station] .desktop-status,body[data-mode=station] #message,body[da
 .final-report [data-more]{margin:8px 14px}
 @media(max-width:700px){.manual-payment-grid .panel{padding:12px}.manual-payment-workspace .payment-options{display:flex;flex-wrap:wrap;gap:8px}.report-operation{grid-template-columns:minmax(0,1fr) auto}.report-operation time{grid-column:1/-1}.final-report [data-period]>button{flex:1}.final-report summary{padding:10px}.final-report summary>strong{font-size:18px}}
 input,textarea,select,[contenteditable=true]{-webkit-app-region:no-drag}
+/* Preserve the native caption-button area after compact header spacing. */
+body[data-mode=station].warehouse-native-window header{padding-right:164px}
+body[data-mode=station].warehouse-native-window.fastgo-window-fullscreen header{padding-right:12px}
