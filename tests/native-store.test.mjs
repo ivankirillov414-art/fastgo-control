@@ -19,11 +19,18 @@ function harness(){
   if(failResponse){failResponse=false;throw Error('response lost');}return {result:p.p_result};
  };
  const client=actor=>nativeClient({db,actor,google:async()=>{googleCalls++;throw Error('Google unavailable');},storage:{put:async()=>{},sign:async p=>'signed:'+p}});
- const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['stock_receive','shift_open','shift_close','storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
+ const call=async(action,p={},actor=owner)=>{const g=client(actor);if(['part_save','stock_receive','shift_open','shift_close','storage_close','storage_delete','create','update','stock','sale','payment','part_photo_upload','upload'].includes(action)){p={kind:'repair',request_id:randomUUID(),...p};p.__request_fingerprint=createHash('sha256').update(JSON.stringify(p)).digest('hex');const old=await g('operation_retry',{request_id:p.request_id,action,fingerprint:p.__request_fingerprint});if(old.status==='committed')return old.result;}return g(action,p);};
  const issue=async repairId=>{const p={request_id:randomUUID(),items:[{part_id:part,quantity:1}]},raw=sheets['Ремонты'].rows.find(x=>x.repair_id===repairId);const prepared=preparePartsIssue({sheets},p,{id:randomUUID(),repair_id:repairId,master_id:raw.master_id},owner);await db('rpc/workshop_native_commit','','POST',{p_actor:owner.id,p_action:'warehouse_parts_issue',p_request_id:p.request_id,p_fingerprint:'fixture',p_version:version,p_changes:prepared.changes,p_result:prepared.result});return (await call('get',{kind:'repair',id:repairId})).record;};
  return {call,issue,sheets,seed,outbox,receipts,googleCalls:()=>googleCalls,failResponse:()=>failResponse=true};
 }
 const intake=()=>({kind:'repair',last_name:'Тест',first_name:'Приёмка',phone:'+70000000000',brand:'Test',model:'Unit'});
+test('new product receives an automatic SKU while model size and existing articles survive edits',async()=>{
+ const h=harness();
+ const p=await h.call('part_save',{name:'Камера Макс Спид',category:'Камеры',model:'10 × 2,5',unit_cost:120,retail_price:300});
+ assert.match(p.sku,/^FG-\d{8}(?:-\d+)?$/);assert.equal(p.model,'10 × 2,5');assert.equal(p.name,'Камера Макс Спид');
+ const updated=await h.call('part_save',{...p,retail_price:350});assert.equal(updated.sku,p.sku);assert.equal(updated.barcode,p.barcode);
+ const other=await h.call('part_save',{name:'Камера M4',category:'Камеры',model:'10 × 2',unit_cost:100,retail_price:200});assert.notEqual(other.sku,p.sku);
+});
 test('cash final repair price survives subsequent repair and issue updates, then can be explicitly reset',async()=>{
  const h=harness();let r=await h.call('create',intake());
  r=await h.call('update',{id:r.id,revision:r.revision,status:'diagnostics',works:[{name:'Диагностика',price:1000,quantity:1}],parts:[],discount:0});

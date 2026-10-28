@@ -9,3 +9,7 @@ test('retail price prints in rubles for thermal and A4 labels and invalid prices
  for(const format of ['label','a4']){const html=barcodePrintHTML({...payload(),format,price:1500.50});assert.match(html,/<b class="price">1.500,5 ₽<\/b>/);}
  for(const price of [-1,NaN,Infinity,'1500'])assert.throws(()=>barcodePrintHTML({...payload(),price}));
 });
+test('label contains separate size and automatic article with escaped values',()=>{
+ const html=barcodePrintHTML({...payload(),name:'Камера Макс Спид',model:'10 × 2,5',sku:'FG-00000002',price:300});
+ assert.match(html,/Камера Макс Спид/);assert.match(html,/Размер: 10 × 2,5/);assert.match(html,/Арт\. FG-00000002/);assert.match(html,/300 ₽/);
+});

@@ -54,7 +54,7 @@ export async function manualLabels(action,p,{db,actor}){
  if(p.printer_name&&!targets.some(x=>x.id===p.station_id&&x.printer===p.printer_name))fail('Выбранный термопринтер не найден на кассе',409);
  const g=nativeClient({db,actor,google:async()=>fail('Каталог недоступен',503),storage:{}}),catalog=await g('catalog'),part=catalog.parts.find(x=>x.id===p.part_id&&x.active!==false);
  if(!part?.barcode)fail('У товара нет штрихкода или он отключён',404);
- const job={id:p.request_id,station_id:p.station_id,terminal_id:p.station_id,created_by:actor.id,state:'done',completed_at:new Date().toISOString(),payload:{kind:'labels',source:'mobile_catalog',fingerprint,items:[{part_id:part.id,quantity:p.quantity}]},result:{label_print_status:'pending',...destination,items:[{part_id:part.id,name:part.name,barcode:part.barcode,retail_price:part.retail_price,quantity:p.quantity}]}};
+ const job={id:p.request_id,station_id:p.station_id,terminal_id:p.station_id,created_by:actor.id,state:'done',completed_at:new Date().toISOString(),payload:{kind:'labels',source:'mobile_catalog',fingerprint,items:[{part_id:part.id,quantity:p.quantity}]},result:{label_print_status:'pending',...destination,items:[{part_id:part.id,name:part.name,model:part.model,sku:part.sku,barcode:part.barcode,retail_price:part.retail_price,quantity:p.quantity}]}};
  try{await db('workshop_warehouse_queue','','POST',job);}catch(e){const found=await previous();if(found)return found;throw e;}
  return {id:job.id,status:'pending'};
 }
