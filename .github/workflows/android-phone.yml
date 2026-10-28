@@ -21,6 +21,7 @@ jobs:
      with: {packages: platform-tools}
    - uses: gradle/actions/setup-gradle@v4
      with: {gradle-version: '8.9'}
+   - run: node --test warehouse-android/phone/tests/*.test.cjs
    - run: node warehouse-android/phone/prepare-web.cjs
    - name: Build final phone package
      run: gradle :phone:assembleRelease :phone:assembleDebug --no-daemon
@@ -35,6 +36,8 @@ jobs:
       with zipfile.ZipFile(p) as z:
        m=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
        assert m['platform']=='android' and m['version']=='1.0.3'
+       packaged={n[len('assets/fastgo/'):] for n in z.namelist() if n.startswith('assets/fastgo/') and not n.endswith('/') and n!='assets/fastgo/bundle-receipt.json'}
+       assert packaged==set(m['files']), 'APK contains missing or unrecorded interface assets'
        for name,expected in m['files'].items(): assert hashlib.sha256(z.read('assets/fastgo/'+name)).hexdigest()==expected
       print('PASS: installed APK contains verified service and warehouse assets')
       PY
