@@ -19,12 +19,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '24'}
+      - run: node --test tests/vehicle-catalog.test.mjs
       - run: npm install --prefix /tmp/fastgo-responsive playwright@1.62.1
       - run: /tmp/fastgo-responsive/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-fastgo-responsive-browser.cjs ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-mobile-labels.cjs ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-screen-layout-browser.cjs ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-cash-buffer-browser.cjs ${{ matrix.browser }}
+      - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-vehicle-catalog-browser.cjs ${{ matrix.browser }}
       - run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-warehouse-compact-report-browser.cjs ${{ matrix.browser }}
       - if: matrix.browser != 'firefox'
         run: NODE_PATH=/tmp/fastgo-responsive/node_modules node scripts/check-fastgo-concepts.cjs ${{ matrix.browser }}
