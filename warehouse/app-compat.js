@@ -2312,10 +2312,32 @@
     return { terminal: terminal2, station, checkout: checkout2 };
   }
 
+  // warehouse/scan-history.js
+  function rememberScan(draft2, partId) {
+    draft2.scan_history = [...Array.isArray(draft2.scan_history) ? draft2.scan_history : [], partId].slice(-1e3);
+  }
+  function lastBufferedScan(draft2) {
+    return [...Array.isArray(draft2 == null ? void 0 : draft2.scan_history) ? draft2.scan_history : []].reverse().find((id) => draft2.items.some((x) => x.part_id === id && Number.isSafeInteger(x.quantity) && x.quantity > 0)) || "";
+  }
+  function editScanBuffer(draft2, removePart) {
+    var _a3;
+    if (!draft2 || draft2.kind !== "sale" || draft2.pickup) throw Error("\u042D\u0442\u043E\u0442 \u0431\u0443\u0444\u0435\u0440 \u043D\u0435\u043B\u044C\u0437\u044F \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C");
+    const id = removePart || lastBufferedScan(draft2), item = draft2.items.find((x) => x.part_id === id);
+    if (!item) return null;
+    if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) throw Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0442\u043E\u0432\u0430\u0440\u0430");
+    const history = Array.isArray(draft2.scan_history) ? [...draft2.scan_history] : [];
+    if (removePart) {
+      for (let i = history.length - 1; i >= 0; i--) if (history[i] === id) history.splice(i, 1);
+    } else history.splice(history.lastIndexOf(id), 1);
+    const next = { ...draft2, items: draft2.items.map((x) => x.part_id !== id ? { ...x } : !removePart && x.quantity > 1 ? { ...x, quantity: x.quantity - 1 } : null).filter(Boolean), scan_history: history };
+    next.last_part_id = lastBufferedScan(next) || ((_a3 = next.items[next.items.length - 1]) == null ? void 0 : _a3.part_id) || "";
+    return next;
+  }
+
   // warehouse/live-basket.js?v=20261016-scan-2
   function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh, repair: repair2, stationRepair, canOpen = () => true, manual }) {
     const $2 = (id) => document.getElementById(id), key3 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
-    let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve();
+    let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve(), stopKeys = null, emptyClosing = null;
     const product2 = (x) => parts2().find((p) => p.id === (x == null ? void 0 : x.part_id));
     const shown = /* @__PURE__ */ new Map();
     const jobStamp = (value) => String((value == null ? void 0 : value.payload.updated_at) || (value == null ? void 0 : value.created_at) || "");
@@ -2339,7 +2361,7 @@
     function checkpoint() {
       if (terminal2) return;
       cache();
-      if (current || (draft2 == null ? void 0 : draft2.items.length)) save3("live:resume:station", { kind, current: current ? JSON.parse(JSON.stringify(current)) : null, draft_id: (draft2 == null ? void 0 : draft2.id) || null });
+      if (current || (draft2 == null ? void 0 : draft2.items.length) || (draft2 == null ? void 0 : draft2.cancel_empty)) save3("live:resume:station", { kind, current: current ? JSON.parse(JSON.stringify(current)) : null, draft_id: (draft2 == null ? void 0 : draft2.id) || null });
     }
     async function restore() {
       var _a3;
@@ -2381,6 +2403,8 @@
       return x.custom_price ? Number(x.unit_price) : Number(((_a3 = product2(x)) == null ? void 0 : _a3.retail_price) || 0);
     };
     function cleanup() {
+      stopKeys == null ? void 0 : stopKeys();
+      stopKeys = null;
       active = false;
       stop == null ? void 0 : stop();
       stop = null;
@@ -2439,7 +2463,7 @@
         if (draft2 && draft2.acked < draft2.revision) return sync();
         return;
       }
-      if (!draft2 || locked || draft2.acked >= draft2.revision) return;
+      if (!draft2 || locked && !draft2.cancel_empty || draft2.acked >= draft2.revision) return;
       const local = draft2, body = JSON.parse(JSON.stringify(local));
       syncing = call2("draft_sync", { request_id: body.id, kind: body.kind, revision: body.revision, items: body.items, note: body.note || "", active: active && draft2 === local }).then((r) => {
         if (r.state === "done") {
@@ -2460,7 +2484,7 @@
         throw e;
       }).finally(() => syncing = null);
       await syncing;
-      if (draft2 === local && local.acked < local.revision && !locked) return sync();
+      if (draft2 === local && local.acked < local.revision && (!locked || local.cancel_empty)) return sync();
     }
     function draw() {
       var _a3, _b;
@@ -2488,6 +2512,10 @@
           host.append(row);
           const remove = row.querySelector("[data-live-remove]");
           if (remove) remove.onclick = () => {
+            if (value.kind === "sale") {
+              void run2(() => editBuffer(x.part_id));
+              return;
+            }
             if (locked) return;
             const item = source().items.find((i) => i.part_id === x.part_id);
             overrides[x.part_id] = { value: 0, base: item.quantity, removed: true };
@@ -2502,10 +2530,27 @@
               save3("live-edits:" + documentId(), overrides);
             };
             input2.onblur = draw;
+            input2.addEventListener("input", drawSummary);
           }
         }
+        if (value.kind === "sale" && !row.querySelector("[data-live-remove]")) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "live-remove";
+          b.dataset.liveRemove = x.part_id;
+          b.setAttribute("aria-label", "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E");
+          b.title = "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430";
+          b.textContent = "\u0423\u0434\u0430\u043B\u0438\u0442\u044C";
+          b.onclick = () => void run2(() => editBuffer(x.part_id));
+          row.append(b);
+        }
+        row.classList.toggle("is-last-scan", x.part_id === ((draft2 == null ? void 0 : draft2.last_part_id) || ""));
         const removeButton = row.querySelector("[data-live-remove]");
-        if (removeButton) removeButton.disabled = locked;
+        if (removeButton) {
+          removeButton.hidden = value.kind === "sale" && !!current;
+          removeButton.disabled = locked;
+          removeButton.dataset.unavailable = String(locked || value.kind === "sale" && !!current);
+        }
         row.querySelector("strong").textContent = ((_b = product2(x)) == null ? void 0 : _b.name) || x.part_id;
         const input = row.querySelector("input");
         if (input) {
@@ -2525,13 +2570,94 @@
       $2("live-payment").hidden = value.kind !== "sale" || !items.length;
       $2("live-submit").hidden = !items.length;
       price.draw();
+      drawSummary();
       for (const el of document.querySelectorAll('input[name="live-method"]')) el.disabled = locked;
     }
     function documentId() {
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
+    function drawSummary() {
+      if (terminal2 || !$2("live-units")) return;
+      const items = source().items.filter((x) => {
+        var _a3;
+        return !((_a3 = overrides[x.part_id]) == null ? void 0 : _a3.removed) || qty(x) > 0;
+      }), quantities = items.map(qty), valid = quantities.every((x) => Number.isSafeInteger(x) && x > 0);
+      $2("live-units").textContent = valid ? quantities.reduce((a, b) => a + b, 0) + " \u0448\u0442." : "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E";
+      $2("live-lines").textContent = items.length + " \u043F\u043E\u0437.";
+      const undo = $2("live-undo");
+      if (undo) {
+        undo.hidden = kind !== "sale" || !!current;
+        undo.disabled = locked || !!(draft2 == null ? void 0 : draft2.pickup) || !lastBufferedScan(draft2);
+        undo.dataset.unavailable = String(undo.disabled);
+      }
+      $2("live-buffer-hint").textContent = (draft2 == null ? void 0 : draft2.cancel_empty) ? "\u0417\u0430\u043A\u0440\u044B\u0432\u0430\u0435\u043C \u043F\u0443\u0441\u0442\u043E\u0439 \u0431\u0443\u0444\u0435\u0440. \u0415\u0441\u043B\u0438 \u0441\u0432\u044F\u0437\u044C \u043F\u0440\u043E\u043F\u0430\u043B\u0430, \u043E\u0442\u043C\u0435\u043D\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." : current ? "\u0421\u043A\u0430\u043D\u044B \u043F\u043E\u0441\u0442\u0443\u043F\u0438\u043B\u0438 \u0441 \u0422\u0421\u0414. \u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u0437\u0434\u0435\u0441\u044C." : kind === "receipt" ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E. \u041F\u043E\u0441\u043B\u0435 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D\u0438\u044F \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 \u043F\u043E\u043B\u0443\u0447\u0438\u0442 \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440." : items.length ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B \u0438\u043B\u0438 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 QR \xAB\u0412\u0437\u044F\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438\xBB \u0434\u043B\u044F \u0432\u044B\u0434\u0430\u0447\u0438 \u043C\u0430\u0441\u0442\u0435\u0440\u0443." : "\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0434\u043B\u044F \u043F\u0440\u043E\u0434\u0430\u0436\u0438 \u0438\u043B\u0438 QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0434\u043B\u044F \u043E\u043F\u043B\u0430\u0442\u044B \u0440\u0435\u043C\u043E\u043D\u0442\u0430.";
+    }
+    function editBuffer(partId) {
+      const next = scanChain.then(async () => {
+        if (!active || terminal2 || locked || current || (draft2 == null ? void 0 : draft2.pickup)) throw Error("\u0411\u0443\u0444\u0435\u0440 \u0443\u0436\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0435\u0442\u0441\u044F \u0438\u043B\u0438 \u043F\u043E\u043B\u0443\u0447\u0435\u043D \u0441 \u0422\u0421\u0414");
+        const before = draft2, edited = editScanBuffer(draft2, partId);
+        if (!edited) return;
+        draft2 = edited;
+        if (!draft2.items.length) {
+          draft2.cancel_empty = true;
+          locked = true;
+        }
+        try {
+          changed();
+        } catch (e) {
+          draft2 = before;
+          locked = false;
+          draw();
+          throw e;
+        }
+        lastId = draft2.last_part_id;
+        draw();
+        feedback(partId ? "\u041F\u043E\u0437\u0438\u0446\u0438\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u0430 \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430" : "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0441\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D");
+        if (draft2.cancel_empty) await clearEmpty();
+      });
+      scanChain = next.catch(() => {
+      });
+      return next;
+    }
+    async function clearEmpty() {
+      if (emptyClosing) return emptyClosing;
+      const local = draft2;
+      if (!(local == null ? void 0 : local.cancel_empty)) return;
+      locked = true;
+      draw();
+      emptyClosing = (async () => {
+        var _a3, _b;
+        try {
+          await sync();
+          if (draft2 !== local) return;
+          const result = await call2("cancel_document", { id: local.id, kind: "sale", revision: local.revision });
+          if ((result == null ? void 0 : result.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443");
+          finished(result);
+          if ((_a3 = result.result) == null ? void 0 : _a3.cancelled) message2("\u0411\u0443\u0444\u0435\u0440 \u043E\u0447\u0438\u0449\u0435\u043D. \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
+        } catch (e) {
+          const result = await call2("job", { id: local.id }).catch(() => null);
+          if ((result == null ? void 0 : result.state) === "done") {
+            finished(result);
+            if ((_b = result.result) == null ? void 0 : _b.cancelled) message2("\u0411\u0443\u0444\u0435\u0440 \u043E\u0447\u0438\u0449\u0435\u043D. \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
+            return;
+          }
+          if (draft2 === local) {
+            locked = true;
+            draw();
+            feedback("\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u0432\u044F\u0437\u044C \u0434\u043B\u044F \u043E\u0442\u043C\u0435\u043D\u044B \u043F\u0443\u0441\u0442\u043E\u0433\u043E \u0431\u0443\u0444\u0435\u0440\u0430. \u0421\u043A\u0430\u043D\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B.", true);
+          }
+          throw e;
+        } finally {
+          emptyClosing = null;
+        }
+      })();
+      return emptyClosing;
+    }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h1></div>" + (!terminal2 && k === "sale" ? '<button type="button" id="manual-service-payment">\u0412\u043D\u0435\u0441\u0442\u0438 \u043E\u043F\u043B\u0430\u0442\u0443 \u0440\u0430\u0431\u043E\u0442 \u0432\u0440\u0443\u0447\u043D\u0443\u044E</button>' : "") + '<small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + '</button><button type="button" class="live-cancel" id="live-cancel">' + (k === "receipt" ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
+      const heading = '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h1>" + (!terminal2 && k === "sale" ? '<button type="button" id="manual-service-payment">\u0412\u043D\u0435\u0441\u0442\u0438 \u043E\u043F\u043B\u0430\u0442\u0443 \u0440\u0430\u0431\u043E\u0442 \u0432\u0440\u0443\u0447\u043D\u0443\u044E</button>' : "") + '</div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form>';
+      const items = '<p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>';
+      if (terminal2) return heading + items + '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>';
+      return heading + '<div class="live-workspace"><section class="live-buffer" aria-label="\u0411\u0443\u0444\u0435\u0440 \u0442\u043E\u0432\u0430\u0440\u043E\u0432"><div class="live-buffer-heading"><h2>\u0422\u043E\u0432\u0430\u0440\u044B</h2><button type="button" id="live-undo" hidden>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0441\u043A\u0430\u043D <kbd>F6</kbd></button></div>' + items + '</section><aside class="live-checkout" aria-label="\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430"><div class="live-summary"><span>\u0412 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0435</span><strong id="live-units">0 \u0448\u0442.</strong><span id="live-lines">0 \u043F\u043E\u0437.</span></div><p id="live-buffer-hint" class="live-buffer-hint"></p><section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + '</button><button type="button" class="live-cancel" id="live-cancel">' + (k === "receipt" ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button></aside></div>";
     }
     function mount() {
       var _a3;
@@ -2575,6 +2701,15 @@
         };
       }
       if (!terminal2) {
+        $2("live-undo").onclick = () => run2(() => editBuffer());
+        const keys2 = (e) => {
+          var _a4, _b;
+          if (e.key !== "F6" || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !active || locked || current || kind !== "sale" || document.querySelector("dialog[open],.modal") || ((_b = (_a4 = e.target).closest) == null ? void 0 : _b.call(_a4, "input:not([data-payment-scan]):not(#live-code),textarea,select,[contenteditable]"))) return;
+          e.preventDefault();
+          if (!$2("live-undo").disabled) void run2(() => editBuffer());
+        };
+        window.addEventListener("keydown", keys2);
+        stopKeys = () => window.removeEventListener("keydown", keys2);
         if ($2("manual-service-payment")) $2("manual-service-payment").onclick = () => manual == null ? void 0 : manual();
         if ($2("live-cancel")) $2("live-cancel").onclick = () => run2(cancelCurrent);
         $2("live-submit").onclick = () => run2(finish);
@@ -2624,7 +2759,9 @@
       }
       active = true;
       mount();
-      if (draft2 == null ? void 0 : draft2.pickup) void run2(issuePending);
+      if (draft2 == null ? void 0 : draft2.cancel_empty) void clearEmpty().catch(() => {
+      });
+      else if (draft2 == null ? void 0 : draft2.pickup) void run2(issuePending);
       else if (draft2) void sync().catch((e) => feedback(e.message, true));
     }
     async function openMirror(value) {
@@ -2646,7 +2783,7 @@
     async function addCode2(code, usbId) {
       var _a3, _b;
       if (!code) return;
-      if (!active || locked) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438");
+      if (!active || locked || (draft2 == null ? void 0 : draft2.cancel_empty)) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438");
       if (usbId && (((_a3 = draft2 == null ? void 0 : draft2.usb_ids) == null ? void 0 : _a3.includes(usbId)) || (load2("usb:accepted") || []).includes(usbId))) {
         const p = matchBarcode(parts2(), code)[0];
         return { name: (p == null ? void 0 : p.name) || code, price: p == null ? void 0 : p.retail_price, quantity: ((_b = draft2 == null ? void 0 : draft2.items.find((x) => x.part_id === (p == null ? void 0 : p.id))) == null ? void 0 : _b.quantity) || 1 };
@@ -2666,6 +2803,7 @@
         draft2.items.push({ part_id: found[0].id, quantity: 1 });
       }
       draft2.last_part_id = found[0].id;
+      rememberScan(draft2, found[0].id);
       if (usbId) (draft2.usb_ids || (draft2.usb_ids = [])).push(usbId);
       try {
         changed();
@@ -2720,6 +2858,10 @@
       if (polling2 || !active) return;
       polling2 = true;
       try {
+        if (draft2 == null ? void 0 : draft2.cancel_empty) {
+          await clearEmpty();
+          return;
+        }
         if (draft2) {
           const local = draft2;
           void sync().catch(() => {
@@ -2853,14 +2995,14 @@
         throw e;
       }
     }
-    return { open, cleanup, suspend, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(draft2 == null ? void 0 : draft2.items.length) && !(current == null ? void 0 : current.checkout), canPaymentScan: () => !current && (!locked || !!(draft2 == null ? void 0 : draft2.pickup)), issueParts, acceptPaymentScan: async (code) => {
+    return { open, cleanup, suspend, checkpoint, restore, pollMirror, hasDraft: () => active && (!!current || locked) || !!(draft2 == null ? void 0 : draft2.items.length) || !!(draft2 == null ? void 0 : draft2.cancel_empty), active: () => active, kind: () => kind, canAutoOpen: () => !active || !locked && !(draft2 == null ? void 0 : draft2.items.length) && !(current == null ? void 0 : current.checkout), canPaymentScan: () => !(draft2 == null ? void 0 : draft2.cancel_empty) && !current && (!locked || !!(draft2 == null ? void 0 : draft2.pickup)), issueParts, acceptPaymentScan: async (code) => {
       if (terminal2 || current || locked) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442. \u0421\u043A\u0430\u043D \u043E\u0442\u043C\u0435\u043D\u0451\u043D.");
       if (!active || kind !== "sale") {
         checkpoint();
         await open("sale");
       }
       return add(code);
-    }, canUSB: (k) => !active || !current && !locked && kind === k, acceptUSB: async (item) => {
+    }, canUSB: (k) => !(draft2 == null ? void 0 : draft2.cancel_empty) && (!active || !current && !locked && kind === k), acceptUSB: async (item) => {
       if (!active) await open(item.kind);
       if (kind !== item.kind) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
       return add(item.code, item.id);
