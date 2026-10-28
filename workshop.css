@@ -35,3 +35,5 @@
 dialog{max-height:90vh;max-height:calc(var(--fastgo-viewport-height,100vh) - 24px);overflow-y:auto}
 :root[data-fastgo-visual-constrained] dialog[open]{position:fixed;top:calc(var(--fastgo-viewport-top,0px) + 12px);bottom:auto;margin-top:0;margin-bottom:0;max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
 :root[data-fastgo-visual-constrained] .compact-panel-body.is-open{top:calc(var(--fastgo-viewport-top,0px) + 12px);max-height:calc(var(--fastgo-viewport-height,100vh) - 24px)}
+
+.equipment-original{margin-top:8px}.equipment-original>[data-original-open]{font-size:13px;min-height:36px}.equipment-original>[data-original-fields]{border:1px solid #31536b;border-radius:10px;background:#10283b;padding:14px;margin-top:8px}.equipment-original label{display:grid;gap:6px;margin:12px 0}.equipment-original p{font-size:13px;line-height:1.5}.equipment-original [data-original-error]{color:#ffb2b8}.equipment-original input{width:100%;min-width:0}.equipment-original [hidden]{display:none!important}
