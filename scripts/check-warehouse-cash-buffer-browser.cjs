@@ -1,0 +1,36 @@
+const {chromium,firefox,webkit}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {serve,backend,launchOptions,scan}=require('./warehouse-browser-fixture.cjs');
+const kind=process.argv[2]||'chromium';
+(async()=>{const {server,base}=await serve(),browser=await ({chromium,firefox,webkit})[kind].launch(kind==='chromium'?launchOptions:{});fs.mkdirSync('browser-results/cash-buffer',{recursive:true});try{
+ for(const viewport of [{width:1366,height:768},{width:820,height:1050},{width:390,height:844},{width:320,height:568}]){
+  const api=backend(),context=await browser.newContext({viewport});await api.connect(context,false,{unified:viewport.width===820});
+  const page=await context.newPage(),errors=[];page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(base+'/warehouse.html'+(viewport.width===820?'?unified=1':''));await page.locator('#pay').waitFor();
+  await scan(page,'FGP-00000001');await page.locator('#live-units').filter({hasText:'1 шт.'}).waitFor();
+  await scan(page,'FGP-00000002');await page.locator('#live-units').filter({hasText:'2 шт.'}).waitFor();
+  await scan(page,'FGP-00000001');await page.locator('#live-units').filter({hasText:'3 шт.'}).waitFor();assert.equal(await page.locator('#live-lines').innerText(),'2 поз.');
+  await page.locator('h1').click();await page.keyboard.press('F6');await page.locator('#live-units').filter({hasText:'2 шт.'}).waitFor();assert.equal(await page.locator('[data-count]').first().innerText(),'1 шт.');
+  await page.locator('#live-total-edit').click();await page.locator('#live-total-input').fill('1600');await page.keyboard.press('F6');assert.equal(await page.locator('#live-units').innerText(),'2 шт.','F6 must not edit a buffer while typing a price');
+  await page.locator('#live-total-reset').click();await page.locator('[data-live-remove]').last().click();await page.locator('#live-units').filter({hasText:'1 шт.'}).waitFor();assert.equal(await page.locator('#live-lines').innerText(),'1 поз.');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+  if(viewport.width>=1200){const a=await page.locator('.live-buffer').boundingBox(),b=await page.locator('.live-checkout').boundingBox();assert.ok(a.x+a.width<=b.x+1,'summary is beside the buffer');const submit=await page.locator('#live-submit').boundingBox();assert.ok(submit.y+submit.height<=viewport.height,'payment action fits laptop screen: '+JSON.stringify(submit));}
+  await page.screenshot({path:`browser-results/cash-buffer/${kind}-${viewport.width}.png`,fullPage:true});
+  await page.reload();await page.locator('#live-units').filter({hasText:'1 шт.'}).waitFor();await page.locator('#live-undo').click();await page.locator('#pay').waitFor();
+  assert.equal(api.payments.length,0);assert.ok([...api.jobs.values()].every(j=>j.state==='done'&&j.result.cancelled),'empty buffer must not leave pending queue documents');
+  assert.deepEqual(errors,[]);await context.close();console.log('PASS '+kind+' '+viewport.width+': scan order, F6 editing guard, remove, summary, reload and empty queue cancellation');
+ }
+ // A disconnected empty-buffer cancellation stays durable across a reload and
+ // blocks update installation until its server cancellation is acknowledged.
+ const api=backend(),context=await browser.newContext({viewport:{width:1280,height:800}});await api.connect(context,false);let disconnected=true;
+ await context.route('**/functions/v1/fastgo-warehouse',route=>{const p=route.request().postDataJSON()||{};return p.action==='cancel_document'&&disconnected?route.abort():route.fallback();});
+ const page=await context.newPage();page.setDefaultTimeout(12000);await page.goto(base+'/warehouse.html');await page.locator('#pay').waitFor();await scan(page);await page.locator('#live-undo').click();await page.locator('#scan-feedback').filter({hasText:'Ожидаем связь'}).waitFor();assert.equal(await page.evaluate(()=>window.warehouseUpdateSafe(true)),false);await page.reload();await page.locator('#scan-feedback').filter({hasText:'Ожидаем связь'}).waitFor();disconnected=false;await page.locator('#pay').waitFor();assert.equal(api.payments.length,0);assert.ok([...api.jobs.values()].every(j=>j.state==='done'));await context.close();
+ // A mirror of the TSD document never gains local undo or delete actions.
+ const mirror=backend(),mc=await browser.newContext();await mirror.connect(mc,false);mirror.jobs.set('11111111-1111-4111-8111-111111111111',{id:'11111111-1111-4111-8111-111111111111',terminal_id:'22222222-2222-4222-8222-222222222222',state:'queued',created_at:new Date().toISOString(),payload:{live:true,kind:'sale',revision:2,items:[{part_id:mirror.state.parts[0].id,quantity:2}]}});const mp=await mc.newPage();mp.setDefaultTimeout(12000);await mp.goto(base+'/warehouse.html');await mp.locator('#live-units').filter({hasText:'2 шт.'}).waitFor();assert.ok(await mp.locator('#live-undo').isHidden());assert.ok(await mp.locator('[data-live-remove]').isHidden());await mp.locator('h1').click();await mp.keyboard.press('F6');assert.equal(await mp.locator('#live-units').innerText(),'2 шт.');assert.equal(mirror.payments.length,0);await mc.close();
+ // Confirming a corrected local buffer submits only its remaining quantities.
+ const paid=backend(),pc=await browser.newContext();await paid.connect(pc,false);const pp=await pc.newPage();pp.setDefaultTimeout(12000);await pp.goto(base+'/warehouse.html');await pp.locator('#pay').waitFor();await scan(pp);await pp.locator('#live-units').filter({hasText:'1 шт.'}).waitFor();await scan(pp);await pp.locator('#live-units').filter({hasText:'2 шт.'}).waitFor();await pp.locator('#live-undo').click();await pp.locator('#live-units').filter({hasText:'1 шт.'}).waitFor();await pp.locator('input[name=live-method][value=card]').check();await pp.locator('#live-submit').click();await pp.locator('#pay').waitFor();assert.equal(paid.payments.length,1);assert.equal(paid.payments[0].items[0].quantity,1);await pc.close();
+ // If another client finishes payment during cancellation, show its real result.
+ const race=backend(),rc=await browser.newContext();await race.connect(rc,false);
+ await rc.route('**/functions/v1/fastgo-warehouse',async route=>{const p=route.request().postDataJSON()||{};if(p.action!=='cancel_document')return route.fallback();const job=race.jobs.get(p.id);job.state='done';job.result={total:1200};return route.fulfill({headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},json:{data:job}});});
+ const rp=await rc.newPage();rp.setDefaultTimeout(12000);await rp.goto(base+'/warehouse.html');await rp.locator('#pay').waitFor();await scan(rp);await rp.locator('#live-units').filter({hasText:'1 шт.'}).waitFor();await rp.locator('#live-undo').click();await rp.locator('#pay').waitFor();assert.doesNotMatch(await rp.locator('#message').innerText(),/Продажа не проведена/);assert.match(await rp.locator('#message').innerText(),/Оплата принята/);await rc.close();
+ console.log('PASS '+kind+': offline cancellation resumes, TSD mirror protected, corrected payment quantity committed once');
+ }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
