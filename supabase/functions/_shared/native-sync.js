@@ -68,7 +68,7 @@ export async function nativeSyncChanges(db, p) {
     const intakes = rows.filter(r => r.sheet === 'Приёмки').map(r => r.data.intake_id);
     for (const sheet of ['Ремонты', 'Зимнее хранение']) await related(sheet, 'intake_id', intakes);
     // Payment/photo/event rows identify the card even if its status never changed.
-    const ids = rows.map(r => r.data.record_id).filter(Boolean);
+    const ids = rows.filter(r => r.data['Тип'] !== 'equipment_reference_price').map(r => r.data.record_id).filter(Boolean);
     await related('Ремонты', 'repair_id', ids);
     await related('Зимнее хранение', 'storage_id', ids);
     const records = new Map();

@@ -4,7 +4,9 @@ import {equipmentData} from '../warehouse/equipment-data.js';
 // Keep intake offline and small: no prices, stock or offer metadata are copied.
 // Unknown brands and Cyrillic foreign model names need editorial review first.
 const seen=new Set();
-const items=equipmentData.items.filter(item=>{
+const baseline=JSON.parse(fs.readFileSync(new URL('../docs/repair-intake-reference-baseline.json',import.meta.url),'utf8')).items;
+const candidates=[...baseline.map(x=>({...x,offers:[{url:x.source}]})),...equipmentData.items];
+const items=candidates.filter(item=>{
  const key=(item.brand+' '+item.model).toLowerCase();
  if(!item.brand||!item.model||item.brand==='Не указана'||/[а-яё]/i.test(item.brand+' '+item.model)||seen.has(key))return false;
  if(!item.offers?.some(offer=>/^https:\/\//.test(offer.url||'')))return false;
