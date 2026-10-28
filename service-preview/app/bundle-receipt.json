@@ -1,0 +1,13 @@
+{
+  "platform": "android",
+  "version": "1.0.6",
+  "bundle_source": "installed-apk",
+  "files": {
+    "workshop.html": "c80dbd06fb9a9a980feb2b8eb646992b7432626902402cc5f0d0ffad8fc4bede",
+    "workshop/app-phone.js": "a1d0c50d60d5dc9ca5ba72ae4cb3723aa995c660355f1003f7b62f3dc992fcfd",
+    "phone-bootstrap.js": "dfe169d9e1d97d198792c9964733d1c75ded555cd9d111a4b1f43f5ba93dff21",
+    "warehouse.html": "a03a6fc2cca0fc1457594ff337eea5f7eaf2f5ba14fdbc6783f0f4c8526a638f",
+    "warehouse/app-compat.js": "c4575fac8e94af81b1e1c13ee2c33551700d4e2f8c51678341b7c07fac418031",
+    "warehouse/style.css": "3241e8fbb3c647d8957c02115556fffbddd948efb9d220057bbfebc42c64bfb6"
+  }
+}
