@@ -132,7 +132,7 @@ app.whenReady().then(()=>{
  handle('fg-print-context',event=>{const context=printWindows.get(event.sender.id)?.context;if(!context)throw Error('Не печатное окно');return context;});
  handle('fg-print-ready',event=>{const job=printWindows.get(event.sender.id);if(!job)throw Error('Не печатное окно');job.resolve();return true;});
  Menu.setApplicationMenu(null);
- win=new BrowserWindow({show:!process.argv.includes('--background'),width:1380,height:900,minWidth:800,minHeight:600,title:'FastGo',backgroundColor:'#0b1726',autoHideMenuBar:true,titleBarStyle:'hidden',titleBarOverlay:{color:'#0c1522',symbolColor:'#dce8f5',height:47},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+ win=new BrowserWindow({show:!process.argv.includes('--background'),fullscreen:true,width:1380,height:900,minWidth:800,minHeight:600,title:'FastGo',backgroundColor:'#0b1726',autoHideMenuBar:true,titleBarStyle:'hidden',titleBarOverlay:{color:'#0c1522',symbolColor:'#dce8f5',height:47},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
  require('./warehouse-native/window-controls.cjs').registerWindowControls({ipcMain,getWindow:()=>win}).attach(win);
  const background=require('./warehouse-native/background.cjs').createBackground({app,getWindow:()=>win,Tray,Menu,nativeImage,icon:path.join(webRoot,'fastgo-logo.png'),checkUpdates:()=>updates?.now()});background.attach(win);
  win.setMenu(null);
