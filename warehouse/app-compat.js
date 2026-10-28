@@ -52,24 +52,6 @@
     }
   });
 
-  // warehouse/scan-policy.js
-  function scanError(kind, code) {
-    if (!kind) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
-    const value = String(code || "").trim(), link = /^[a-z][a-z0-9+.-]*:/i.test(value) || /^www\./i.test(value), pickup = value.startsWith("FGPARTS1.");
-    if (!value) return "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u0434";
-    if (kind === "repair") {
-      try {
-        const u = new URL(value);
-        if (u.protocol === "https:" && u.hostname === "ivankirillov414-art.github.io" && !u.username && !u.password && (u.pathname === "/fastgo-control/repair-status.html" || u.pathname === "/fastgo-control/workshop.html" && u.hash.startsWith("#order?") && u.hash.includes("kind=repair"))) return "";
-      } catch (e) {
-      }
-      return "\u0412 \u043E\u043F\u043B\u0430\u0442\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u043B\u044C\u043A\u043E QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430";
-    }
-    if (kind === "parts") return pickup || !link ? "" : "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB";
-    if (!["receipt", "sale"].includes(kind)) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
-    return pickup ? "QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0432\u044B\u0434\u0430\u0447\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439" : link ? "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430. \u0414\u043B\u044F QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB" : "";
-  }
-
   // warehouse/scan-normalize.js
   var keys = { \u0439: "q", \u0446: "w", \u0443: "e", \u043A: "r", \u0435: "t", \u043D: "y", \u0433: "u", \u0448: "i", \u0449: "o", \u0437: "p", \u0445: "[", \u044A: "]", \u0444: "a", \u044B: "s", \u0432: "d", \u0430: "f", \u043F: "g", \u0440: "h", \u043E: "j", \u043B: "k", \u0434: "l", \u0436: ";", \u044D: "'", \u044F: "z", \u0447: "x", \u0441: "c", \u043C: "v", \u0438: "b", \u0442: "n", \u044C: "m", \u0431: ",", \u044E: ".", \u0451: "`" };
   var shifted = { "[": "{", "]": "}", ";": ":", "'": '"', ",": "<", ".": ">", "`": "~" };
@@ -129,8 +111,8 @@
     return j;
   }
   function save(j) {
-    var _a2;
-    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a2 = j.user) == null ? void 0 : _a2.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
+    var _a3;
+    session = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: ((_a3 = j.user) == null ? void 0 : _a3.id) || (session == null ? void 0 : session.user_id), expires_at: j.expires_at || Math.floor(Date.now() / 1e3) + j.expires_in };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
   async function login(email, password) {
@@ -143,7 +125,7 @@
     if (token) await request("/auth/v1/logout?scope=local", {}, token).catch(() => {
     });
   }
-  var serviceActions = /* @__PURE__ */ new Set(["label_targets", "label_enqueue", "inventory_edit", "preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
+  var serviceActions = /* @__PURE__ */ new Set(["catalog_save", "label_targets", "label_enqueue", "inventory_edit", "preorders", "preorder_get", "preorder_suggestions", "preorder_save", "catalog", "me", "part_save", "stock", "part_photos", "part_photo_url", "part_photo_upload", "part_photo_primary"]);
   var serviceApi = (action, params = {}) => {
     if (!serviceActions.has(action)) throw Error("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430");
     return api("service_" + action, params);
@@ -173,6 +155,180 @@
   function matchBarcode(parts2, value) {
     const find = (code) => parts2.filter((x) => String(x.barcode || "").toUpperCase() === code || String(x.sku || "").toUpperCase() === code || x.id.toUpperCase() === code), raw = String(value).trim().toUpperCase(), exact = find(raw);
     return exact.length ? exact : find(normalizeScan(value).toUpperCase());
+  }
+
+  // warehouse/services.js
+  function mountServices({ root, call: call2, editor, message: message2 }) {
+    let services = [], pending2 = null, dirty = false;
+    root.innerHTML = '<div class="toolbar"><h1>\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B</h1>' + (editor ? '<button type="button" data-new>+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443</button>' : "") + '</div><p>\u041E\u0431\u0449\u0438\u0439 \u043F\u0440\u0430\u0439\u0441 \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0438 \u0441\u043A\u043B\u0430\u0434\u0430. \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0446\u0435\u043D\u044B \u043D\u0435 \u043C\u0435\u043D\u044F\u0435\u0442 \u0440\u0430\u043D\u0435\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u043B\u0430\u0442\u044B.</p><div data-editor></div><input type="search" data-search placeholder="\u041F\u043E\u0438\u0441\u043A \u0440\u0430\u0431\u043E\u0442\u044B"><div data-list></div>';
+    const $2 = (s) => root.querySelector(s);
+    window.fastgoServiceCatalogDirty = () => root.isConnected && dirty;
+    function draw() {
+      const q = $2("[data-search]").value.trim().toLowerCase();
+      $2("[data-list]").innerHTML = services.filter((x) => x.title.toLowerCase().includes(q)).map((x) => '<div class="row"><span>' + esc(x.title) + "</span><strong>" + money(x.labor_price) + "</strong>" + (editor ? '<button type="button" data-edit="' + esc(x.id) + '">\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C</button>' : "") + "</div>").join("") || "<p>\u0420\u0430\u0431\u043E\u0442 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.</p>";
+      root.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => edit(services.find((x) => x.id === b.dataset.edit)));
+    }
+    function edit(item) {
+      var _a3;
+      if (pending2) {
+        message2("\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435: \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043F\u0440\u043E\u0448\u043B\u043E\u0433\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u043F\u043E\u043A\u0430 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D.", true);
+        return;
+      }
+      dirty = true;
+      $2("[data-editor]").innerHTML = '<form class="panel"><h2>' + (item ? "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443" : "\u041D\u043E\u0432\u0430\u044F \u0440\u0430\u0431\u043E\u0442\u0430") + '</h2><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input name="title" maxlength="200" required value="' + esc((item == null ? void 0 : item.title) || "") + '"></label><label>\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C, \u20BD<input name="price" type="number" min="0" max="100000000" step="0.01" required value="' + ((_a3 = item == null ? void 0 : item.labor_price) != null ? _a3 : "") + '"></label><div class="actions"><button class="primary">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div><p role="status" data-error></p></form>';
+      const form = $2("form");
+      $2("[data-cancel]").onclick = () => {
+        if (pending2) return;
+        dirty = false;
+        $2("[data-editor]").innerHTML = "";
+      };
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        if (!form.reportValidity()) return;
+        let p = pending2;
+        if (!p) {
+          p = { request_id: uuid(), id: (item == null ? void 0 : item.id) || uuid(), title: form.elements.title.value.trim(), labor_price: Number(form.elements.price.value), create: !item, ...item ? { expected_title: item.title, expected_price: item.labor_price } : {} };
+          pending2 = p;
+        }
+        form.querySelectorAll("input,button").forEach((x) => x.disabled = true);
+        try {
+          await call2("work_catalog_save", p);
+          pending2 = null;
+          dirty = false;
+          services = await call2("work_catalog");
+          $2("[data-editor]").innerHTML = "";
+          draw();
+          message2("\u041F\u0440\u0430\u0439\u0441 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D");
+        } catch (error) {
+          $2("[data-error]").textContent = error.message;
+          if (error.status && error.status < 500) {
+            pending2 = null;
+          }
+          form.querySelectorAll("input").forEach((x) => x.disabled = !!pending2);
+          form.querySelectorAll("button").forEach((x) => x.disabled = false);
+        }
+      };
+    }
+    $2("[data-search]").oninput = draw;
+    if ($2("[data-new]")) $2("[data-new]").onclick = () => edit(null);
+    return { ready: call2("work_catalog").then((x) => {
+      services = x;
+      draw();
+    }), dispose() {
+      window.fastgoServiceCatalogDirty = () => false;
+    } };
+  }
+  function mountManualPayment({ root, call: call2, load: load2, save: save3, home: home2, message: message2 }) {
+    let catalog2 = [], draft2 = load2("manual-service-payment") || { id: uuid(), items: [], method: "", total: "" }, paying = false;
+    const persist2 = () => save3("manual-service-payment", draft2);
+    const $2 = (s) => root.querySelector(s);
+    root.innerHTML = '<div class="live-heading"><button type="button" data-back>\u2190 \u041A \u043E\u043F\u043B\u0430\u0442\u0435</button><h1>\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442</h1></div><p>\u0411\u0435\u0437 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430 \u0438 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u0440\u0435\u043C\u043E\u043D\u0442\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043D\u0435 \u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F.</p><form data-add class="panel"><label>\u0420\u0430\u0431\u043E\u0442\u0430<input name="work" list="service-choices" maxlength="200" autocomplete="off" required placeholder="\u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435"><datalist id="service-choices"></datalist></label><label>\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C, \u20BD<input name="price" type="number" min="0" max="100000000" step="0.01" required></label><button>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443</button></form><div data-lines></div><form data-payment><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input name="total" type="number" min="0.01" max="100000000" step="0.01" required></label><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, n]) => '<label><input type="radio" name="method" value="' + v + '" required>' + n + "</label>").join("") + '</fieldset><button class="primary" data-submit>\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p data-payment-error role="status"></p></form>';
+    function state() {
+      root.querySelectorAll("input,button").forEach((x) => x.disabled = paying || !!draft2.pending);
+      $2("[data-submit]").disabled = paying || !draft2.items.length;
+      $2("[data-back]").disabled = paying || !!draft2.pending;
+      $2("[data-cancel]").disabled = paying || !!draft2.pending;
+      root.querySelectorAll("button").forEach((x) => x.dataset.unavailable = String(x.disabled));
+    }
+    function draw() {
+      const gross = Math.round(draft2.items.reduce((s, x) => s + x.quantity * x.unit_price, 0) * 100) / 100;
+      $2("[data-lines]").innerHTML = draft2.items.map((x, i) => '<div class="row"><span>' + esc(x.title) + "</span><strong>" + money(x.unit_price) + '</strong><button type="button" data-remove="' + i + '">\u0423\u0434\u0430\u043B\u0438\u0442\u044C</button></div>').join("");
+      const form = $2("[data-payment]");
+      form.elements.total.value = draft2.total === "" ? gross : draft2.total;
+      for (const x of form.querySelectorAll("[name=method]")) x.checked = x.value === draft2.method;
+      root.querySelectorAll("[data-remove]").forEach((b) => b.onclick = () => {
+        if (draft2.pending) return;
+        draft2.items.splice(Number(b.dataset.remove), 1);
+        draft2.total = "";
+        persist2();
+        draw();
+      });
+      state();
+    }
+    const add = $2("[data-add]");
+    add.elements.work.oninput = () => {
+      const selected = catalog2.find((x) => x.title === add.elements.work.value);
+      if (selected) add.elements.price.value = selected.labor_price;
+    };
+    add.onsubmit = (e) => {
+      e.preventDefault();
+      if (draft2.pending || !add.reportValidity()) return;
+      const title = add.elements.work.value.trim(), selected = catalog2.find((x) => x.title === title), before = JSON.parse(JSON.stringify(draft2));
+      try {
+        draft2.items.push({ title, quantity: 1, unit_price: Number(add.elements.price.value), ...selected ? { service_id: selected.id } : {} });
+        draft2.total = "";
+        persist2();
+        add.reset();
+        draw();
+      } catch (error) {
+        draft2 = before;
+        message2("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A: " + error.message, true);
+      }
+    };
+    const payment = $2("[data-payment]");
+    payment.oninput = () => {
+      if (draft2.pending) return;
+      draft2.total = payment.elements.total.value;
+      draft2.method = payment.elements.method.value;
+      persist2();
+    };
+    payment.onsubmit = async (e) => {
+      e.preventDefault();
+      if (paying || !payment.reportValidity() || !draft2.items.length) return;
+      const p = draft2.pending || { request_id: draft2.id, items: draft2.items, payment_method: payment.elements.method.value, total_override: Number(payment.elements.total.value) };
+      try {
+        draft2.pending = p;
+        persist2();
+        paying = true;
+        state();
+        $2("[data-payment-error]").textContent = "\u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u043C \u043E\u043F\u043B\u0430\u0442\u0443\u2026";
+        const result = await call2("work_payment", p);
+        save3("manual-service-payment", null);
+        draft2 = { id: uuid(), items: [], method: "", total: "" };
+        home2();
+        message2("\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442 \u043F\u0440\u0438\u043D\u044F\u0442\u0430: " + money(result.total));
+      } catch (error) {
+        $2("[data-payment-error]").textContent = error.message;
+        if (error.status && error.status < 500) {
+          delete draft2.pending;
+          persist2();
+        }
+      } finally {
+        paying = false;
+        if (root.isConnected) state();
+      }
+    };
+    $2("[data-back]").onclick = () => home2();
+    $2("[data-cancel]").onclick = () => {
+      if (draft2.pending || paying) return;
+      save3("manual-service-payment", null);
+      draft2 = { id: uuid(), items: [], method: "", total: "" };
+      home2();
+      message2("\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430. \u0414\u0435\u043D\u044C\u0433\u0438 \u0438 \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u044B.");
+    };
+    draw();
+    return { ready: call2("work_catalog").then((x) => {
+      catalog2 = x;
+      $2("datalist").innerHTML = x.map((s) => '<option value="' + esc(s.title) + '">' + money(s.labor_price) + "</option>").join("");
+    }) };
+  }
+
+  // warehouse/scan-policy.js
+  function scanError(kind, code) {
+    if (!kind) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
+    const value = String(code || "").trim(), link = /^[a-z][a-z0-9+.-]*:/i.test(value) || /^www\./i.test(value), pickup = value.startsWith("FGPARTS1.");
+    if (!value) return "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043A\u043E\u0434";
+    if (kind === "repair") {
+      try {
+        const u = new URL(value);
+        if (u.protocol === "https:" && u.hostname === "ivankirillov414-art.github.io" && !u.username && !u.password && (u.pathname === "/fastgo-control/repair-status.html" || u.pathname === "/fastgo-control/workshop.html" && u.hash.startsWith("#order?") && u.hash.includes("kind=repair"))) return "";
+      } catch (e) {
+      }
+      return "\u0412 \u043E\u043F\u043B\u0430\u0442\u0435 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u043B\u044C\u043A\u043E QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430";
+    }
+    if (kind === "parts") return pickup || !link ? "" : "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB";
+    if (!["receipt", "sale"].includes(kind)) return "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0430\u0437\u0434\u0435\u043B \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F";
+    return pickup ? "QR \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0432\u044B\u0434\u0430\u0447\u0435 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439" : link ? "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0434\u0435\u043B\u0435 \u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0442\u043E\u0432\u0430\u0440\u0430. \u0414\u043B\u044F QR \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \xAB\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430\xBB" : "";
   }
 
   // warehouse/scanner.js
@@ -342,7 +498,7 @@
       await loader;
     }
     async function tick() {
-      var _a2, _b, _c, _d, _e;
+      var _a3, _b, _c, _d, _e;
       if (stopped || running) return;
       running = true;
       try {
@@ -351,7 +507,7 @@
         await barcode();
         for (const job2 of jobs) {
           if (stopped) return;
-          const items = (((_a2 = job2.result) == null ? void 0 : _a2.items) || []).map((part) => {
+          const items = (((_a3 = job2.result) == null ? void 0 : _a3.items) || []).map((part) => {
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
             return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
@@ -382,8 +538,8 @@
   var clock = (value) => value ? new Date(value).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
   var styles = ".fg-notice-bell{position:fixed;right:20px;top:76px;z-index:80;width:46px;height:46px;border:1px solid #3c6581;border-radius:50%;background:#152b40;color:#eef7ff;display:grid;place-items:center;box-shadow:0 4px 20px #0004;cursor:pointer}.fg-notice-bell svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7}.fg-notice-bell b{position:absolute;right:-5px;top:-5px;min-width:21px;height:21px;padding:2px 5px;border-radius:14px;background:#008cff;color:white;font:700 12px Arial}.fg-notice-bell b[hidden]{display:none}.fg-notice-drawer{position:fixed;right:16px;top:132px;bottom:20px;width:min(430px,calc(100vw - 32px));z-index:180;border:1px solid #456078;border-radius:16px;background:#122338;color:#edf5ff;box-shadow:0 20px 80px #0009;overflow:auto;padding:20px;font:15px/1.45 Arial,sans-serif}.fg-notice-drawer[hidden]{display:none}.fg-notice-drawer h2{font-size:23px;margin:0 0 8px}.fg-notice-drawer button{cursor:pointer;background:#173c59;color:#edf5ff;border:1px solid #456078;border-radius:9px;padding:10px 14px;font:inherit}.fg-notice-head{display:flex;justify-content:space-between;gap:12px}.fg-notice-drawer .fg-notice-item{display:block;width:100%;text-align:left;margin:10px 0;padding:14px;background:#132e46}.fg-notice-item.unread{border-color:#1c99ff;background:#123858}.fg-notice-item strong,.fg-notice-item span,.fg-notice-item small{display:block;overflow-wrap:anywhere}.fg-notice-item small,.fg-notice-help{color:#aabed0;font-size:13px}.fg-notice-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.fg-notice-drawer label{display:block;margin:12px 0}.fg-notice-drawer input,.fg-notice-drawer select{box-sizing:border-box;width:100%;margin-top:5px;padding:11px;border:1px solid #456078;border-radius:8px;background:#0c1b2d;color:white}.fg-notice-error{color:#ffb7ac;white-space:pre-wrap}.fg-chat-message{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 30px 10px 0;padding:10px 14px;border-radius:12px;background:#1b3a54}.fg-chat-message.out{margin:10px 0 10px 30px;background:#1b5265}.fg-notice-toast{position:fixed;right:20px;top:16px;z-index:300;width:min(350px,calc(100vw - 40px));padding:16px 20px;border:1px solid #168dce;border-radius:14px;background:#123449;color:#fff;box-shadow:0 10px 36px #0008;cursor:pointer;font:15px/1.4 Arial,sans-serif}.fg-notice-toast strong,.fg-notice-toast span{display:block}.fg-notice-toast span{margin-top:5px;overflow-wrap:anywhere}.fg-notice-toast small{color:#a5d7f0}@media(max-width:650px){.fg-notice-bell{right:16px;top:70px}.fg-notice-drawer{top:124px;bottom:80px}}";
   function startNotifications({ call: call2, station = async () => null, actor = "" }) {
-    var _a2, _b;
-    if (((_a2 = window.fastgoNotifications) == null ? void 0 : _a2.actor) === actor) return window.fastgoNotifications;
+    var _a3, _b;
+    if (((_a3 = window.fastgoNotifications) == null ? void 0 : _a3.actor) === actor) return window.fastgoNotifications;
     (_b = window.fastgoNotifications) == null ? void 0 : _b.stop();
     if (!document.getElementById("fg-notification-style")) {
       const style = document.createElement("style");
@@ -436,8 +592,8 @@
       bell.setAttribute("aria-label", "\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u0410\u0432\u0438\u0442\u043E: " + unread);
     }
     function toast(item) {
-      var _a3;
-      if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.notifyAvito) {
+      var _a4;
+      if ((_a4 = window.warehouseDesktop) == null ? void 0 : _a4.notifyAvito) {
         void window.warehouseDesktop.notifyAvito({ id: item.message_id, title: item.sender + " \xB7 \u0410\u0432\u0438\u0442\u043E", body: item.body, chat_id: item.chat_id }).catch(() => {
         });
         return;
@@ -486,7 +642,7 @@
       return drawer.querySelector("[data-notice-content]");
     }
     function drawList() {
-      var _a3;
+      var _a4;
       screen2 = "list";
       const host = heading("\u0410\u0432\u0438\u0442\u043E"), notifications2 = (state == null ? void 0 : state.notifications) || [];
       note((state == null ? void 0 : state.connected) ? "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E: " + state.label + (state.last_synced_at ? " \xB7 " + clock(state.last_synced_at) : "") : "\u0410\u0432\u0438\u0442\u043E \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D");
@@ -500,14 +656,14 @@
           note(e.message, true);
         }
       };
-      (_a3 = host.querySelector("[data-settings]")) == null ? void 0 : _a3.addEventListener("click", drawSettings);
+      (_a4 = host.querySelector("[data-settings]")) == null ? void 0 : _a4.addEventListener("click", drawSettings);
       host.querySelectorAll("[data-message]").forEach((button) => button.onclick = () => void openChat(notifications2[Number(button.dataset.message)]));
     }
     function drawSettings() {
-      var _a3, _b2, _c;
+      var _a4, _b2, _c;
       screen2 = "settings";
       const host = heading("\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0410\u0432\u0438\u0442\u043E");
-      host.innerHTML = '<button type="button" data-back>\u2190 \u041A \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\u043C</button><p class="fg-notice-help">\u0412\u043B\u0430\u0434\u0435\u043B\u0435\u0446 \u043E\u0434\u0438\u043D \u0440\u0430\u0437 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0435\u0442 API \u0441\u0432\u043E\u0435\u0433\u043E \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430. \u0414\u0430\u043B\u044C\u0448\u0435 FastGo \u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F \u0438 \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p><form><label>Client ID<input name="client_id" autocomplete="off" required maxlength="500"></label><label>Client Secret<input name="client_secret" type="password" autocomplete="new-password" required maxlength="4000"></label><p class="fg-notice-help">\u0414\u0430\u043D\u043D\u044B\u0435 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u0432 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0435 \u0410\u0432\u0438\u0442\u043E: \xAB\u0414\u043B\u044F \u043F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u043E\u0432\xBB \u2192 API.</p><button type="submit">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0410\u0432\u0438\u0442\u043E</button></form>' + ((state == null ? void 0 : state.connected) ? '<div class="fg-notice-actions"><button type="button" data-disconnect>\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439</button></div>' : "") + (((_a3 = state == null ? void 0 : state.stations) == null ? void 0 : _a3.length) ? "<label>\u0412\u0441\u043F\u043B\u044B\u0432\u0430\u044E\u0449\u0438\u0435 \u043E\u043A\u043D\u0430 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435<select data-station>" + state.stations.map((s, i) => '<option value="' + escape(s.station_id) + '" ' + (state.popup_station_id === s.station_id ? "selected" : "") + ">" + (s.slot === 1 ? "\u041A\u0430\u0441\u0441\u0430 / \u0441\u043A\u043B\u0430\u0434 \xB7 \u0414\u0440\u0430\u0433\u043D\u0438\u0440" : "\u0412\u0442\u043E\u0440\u043E\u0439 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0439 \u043D\u043E\u0443\u0442\u0431\u0443\u043A") + "</option>").join("") + "</select></label>" : "");
+      host.innerHTML = '<button type="button" data-back>\u2190 \u041A \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\u043C</button><p class="fg-notice-help">\u0412\u043B\u0430\u0434\u0435\u043B\u0435\u0446 \u043E\u0434\u0438\u043D \u0440\u0430\u0437 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0435\u0442 API \u0441\u0432\u043E\u0435\u0433\u043E \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430. \u0414\u0430\u043B\u044C\u0448\u0435 FastGo \u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F \u0438 \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.</p><form><label>Client ID<input name="client_id" autocomplete="off" required maxlength="500"></label><label>Client Secret<input name="client_secret" type="password" autocomplete="new-password" required maxlength="4000"></label><p class="fg-notice-help">\u0414\u0430\u043D\u043D\u044B\u0435 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u0432 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0435 \u0410\u0432\u0438\u0442\u043E: \xAB\u0414\u043B\u044F \u043F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u043E\u0432\xBB \u2192 API.</p><button type="submit">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0410\u0432\u0438\u0442\u043E</button></form>' + ((state == null ? void 0 : state.connected) ? '<div class="fg-notice-actions"><button type="button" data-disconnect>\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439</button></div>' : "") + (((_a4 = state == null ? void 0 : state.stations) == null ? void 0 : _a4.length) ? "<label>\u0412\u0441\u043F\u043B\u044B\u0432\u0430\u044E\u0449\u0438\u0435 \u043E\u043A\u043D\u0430 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435<select data-station>" + state.stations.map((s, i) => '<option value="' + escape(s.station_id) + '" ' + (state.popup_station_id === s.station_id ? "selected" : "") + ">" + (s.slot === 1 ? "\u041A\u0430\u0441\u0441\u0430 / \u0441\u043A\u043B\u0430\u0434 \xB7 \u0414\u0440\u0430\u0433\u043D\u0438\u0440" : "\u0412\u0442\u043E\u0440\u043E\u0439 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0439 \u043D\u043E\u0443\u0442\u0431\u0443\u043A") + "</option>").join("") + "</select></label>" : "");
       host.querySelector("[data-back]").onclick = drawList;
       host.querySelector("form").onsubmit = async (e) => {
         e.preventDefault();
@@ -572,10 +728,10 @@
       }
     };
     const external = (e) => {
-      var _a3;
-      const item = (_a3 = state == null ? void 0 : state.notifications) == null ? void 0 : _a3.find((n) => {
-        var _a4;
-        return n.chat_id === ((_a4 = e.detail) == null ? void 0 : _a4.chat_id);
+      var _a4;
+      const item = (_a4 = state == null ? void 0 : state.notifications) == null ? void 0 : _a4.find((n) => {
+        var _a5;
+        return n.chat_id === ((_a5 = e.detail) == null ? void 0 : _a5.chat_id);
       });
       if (item) void openChat(item);
       else {
@@ -586,12 +742,12 @@
     };
     window.addEventListener("fastgo-open-avito", external);
     const controller = { actor, refresh, stop() {
-      var _a3;
+      var _a4;
       stopped = true;
       clearInterval(timer);
       bell.remove();
       drawer.remove();
-      (_a3 = document.querySelector(".fg-notice-toast")) == null ? void 0 : _a3.remove();
+      (_a4 = document.querySelector(".fg-notice-toast")) == null ? void 0 : _a4.remove();
       window.removeEventListener("fastgo-open-avito", external);
       if (window.fastgoNotifications === controller) delete window.fastgoNotifications;
     } };
@@ -605,11 +761,11 @@
   function unknownScans({ call: call2, parts: parts2, refresh, run: run2, owner, message: message2 }) {
     let loading = false;
     const cancel = (row) => run2(async () => {
-      var _a2;
+      var _a3;
       if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u044D\u0442\u043E \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435? \u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D \u0432 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442.")) return;
       const result = await call2("unknown_cancel", { id: row.id });
       if (!(result == null ? void 0 : result.cancelled)) throw Error("\u041A\u043E\u0434 \u0443\u0436\u0435 \u0441\u0432\u044F\u0437\u0430\u043D \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0430 \u0422\u0421\u0414");
-      (_a2 = document.querySelector(".unknown-dialog")) == null ? void 0 : _a2.close();
+      (_a3 = document.querySelector(".unknown-dialog")) == null ? void 0 : _a3.close();
       await poll2();
       message2("\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E");
     });
@@ -636,11 +792,11 @@
       }
     }
     function open(row) {
-      var _a2, _b, _c, _d, _e, _f, _g;
+      var _a3, _b, _c, _d, _e, _f, _g;
       const dialog = document.createElement("dialog");
       dialog.className = "unknown-dialog";
       const creating = !!row.checkout;
-      dialog.innerHTML = "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434</h2><p>" + esc(row.payload.code) + '</p><form><label>\u041D\u0430\u0439\u0442\u0438 \u0442\u043E\u0432\u0430\u0440<input id="unknown-filter" placeholder="\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0438\u043B\u0438 \u0430\u0440\u0442\u0438\u043A\u0443\u043B"></label><label>\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F<select id="unknown-part"><option value="">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440</option></select></label><button class="primary" type="submit">\u0421\u0432\u044F\u0437\u0430\u0442\u044C \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C</button></form>' + (owner() ? "<details " + (creating ? "open" : "") + '><summary>\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u043F\u043E\u0437\u0438\u0446\u0438\u044E</summary><form id="unknown-create"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input name="name" required value="' + esc(((_b = (_a2 = row.checkout) == null ? void 0 : _a2.create) == null ? void 0 : _b.name) || "") + '"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required value="' + esc(((_d = (_c = row.checkout) == null ? void 0 : _c.create) == null ? void 0 : _d.category) || "") + '"></label><label>\u0426\u0435\u043D\u0430, \u20BD<input name="retail_price" type="number" min="0" max="100000000" step="0.01" required value="' + esc((_g = (_f = (_e = row.checkout) == null ? void 0 : _e.create) == null ? void 0 : _f.retail_price) != null ? _g : "") + '"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C</button></form></details>' : "") + "<button data-cancel-scan " + (row.state !== "queued" || creating ? 'disabled data-unavailable="true"' : "") + '>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</button><p class="error" role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
+      dialog.innerHTML = "<h2>\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434</h2><p>" + esc(row.payload.code) + '</p><form><label>\u041D\u0430\u0439\u0442\u0438 \u0442\u043E\u0432\u0430\u0440<input id="unknown-filter" placeholder="\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0438\u043B\u0438 \u0430\u0440\u0442\u0438\u043A\u0443\u043B"></label><label>\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F<select id="unknown-part"><option value="">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440</option></select></label><button class="primary" type="submit">\u0421\u0432\u044F\u0437\u0430\u0442\u044C \u0441 \u0442\u043E\u0432\u0430\u0440\u043E\u043C</button></form>' + (owner() ? "<details " + (creating ? "open" : "") + '><summary>\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u043F\u043E\u0437\u0438\u0446\u0438\u044E</summary><form id="unknown-create"><label>\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435<input name="name" required value="' + esc(((_b = (_a3 = row.checkout) == null ? void 0 : _a3.create) == null ? void 0 : _b.name) || "") + '"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required value="' + esc(((_d = (_c = row.checkout) == null ? void 0 : _c.create) == null ? void 0 : _d.category) || "") + '"></label><label>\u0426\u0435\u043D\u0430, \u20BD<input name="retail_price" type="number" min="0" max="100000000" step="0.01" required value="' + esc((_g = (_f = (_e = row.checkout) == null ? void 0 : _e.create) == null ? void 0 : _f.retail_price) != null ? _g : "") + '"></label><button class="primary">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0438 \u0441\u0432\u044F\u0437\u0430\u0442\u044C</button></form></details>' : "") + "<button data-cancel-scan " + (row.state !== "queued" || creating ? 'disabled data-unavailable="true"' : "") + '>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</button><p class="error" role="status"></p><button data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button>';
       document.body.append(dialog);
       dialog.showModal();
       dialog.querySelector("[data-close]").onclick = () => dialog.close();
@@ -696,8 +852,8 @@
   // warehouse/printer-settings.js
   var native = () => window.warehouseDesktop;
   var printerSetupAvailable = () => {
-    var _a2, _b;
-    return typeof ((_a2 = native()) == null ? void 0 : _a2.printers) === "function" && typeof ((_b = native()) == null ? void 0 : _b.savePrinter) === "function";
+    var _a3, _b;
+    return typeof ((_a3 = native()) == null ? void 0 : _a3.printers) === "function" && typeof ((_b = native()) == null ? void 0 : _b.savePrinter) === "function";
   };
   function printerFields(root, { format = "label", allowDialog = false, changed = () => {
   } } = {}) {
@@ -723,11 +879,11 @@
       return o;
     };
     function describe() {
-      var _a2, _b, _c, _d, _e, _f, _g, _h;
+      var _a3, _b, _c, _d, _e, _f, _g, _h;
       if (remember) remember.disabled = !select.value;
       const found = snapshot.printers.some((p) => p.name === select.value);
       note.textContent = select.value && !found ? "\u042D\u0442\u043E\u0442 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0435\u0433\u043E \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A." : select.value ? "\u0412\u044B\u0431\u043E\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435 \u0434\u043B\u044F \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0445 \u043F\u0435\u0447\u0430\u0442\u0435\u0439." : allowDialog ? "\u0414\u043B\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0432\u044B\u0431\u043E\u0440\u0430 \u0443\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430." : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043A \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0443, \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u0440\u0430\u0439\u0432\u0435\u0440 \u0435\u0433\u043E \u043C\u043E\u0434\u0435\u043B\u0438 \u0438 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A.";
-      if (format === "label" && ((_a2 = snapshot.setup) == null ? void 0 : _a2.message)) note.textContent = snapshot.setup.message;
+      if (format === "label" && ((_a3 = snapshot.setup) == null ? void 0 : _a3.message)) note.textContent = snapshot.setup.message;
       if (snapshot.warning) note.textContent = snapshot.warning;
       connect.hidden = format !== "label" || typeof ((_b = native()) == null ? void 0 : _b.setupPrinter) !== "function" || ((_c = snapshot.setup) == null ? void 0 : _c.status) === "ready";
       connect.disabled = ((_d = snapshot.setup) == null ? void 0 : _d.busy) === true;
@@ -738,8 +894,8 @@
       changed({ loading });
     }
     function populate(preserve = false) {
-      var _a2;
-      const saved = (_a2 = snapshot.profiles) == null ? void 0 : _a2[format], wanted = preserve ? select.value : (saved == null ? void 0 : saved.deviceName) || "";
+      var _a3;
+      const saved = (_a3 = snapshot.profiles) == null ? void 0 : _a3[format], wanted = preserve ? select.value : (saved == null ? void 0 : saved.deviceName) || "";
       select.replaceChildren(option(allowDialog ? "\u0412\u044B\u0431\u043E\u0440 \u0432 \u043E\u043A\u043D\u0435 Windows" : "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440", ""), ...snapshot.printers.map((p) => option(p.displayName + (p.isDefault ? " \xB7 \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0432 Windows" : ""), p.name)));
       if (wanted && !snapshot.printers.some((p) => p.name === wanted)) select.append(option(wanted + " \xB7 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D", wanted));
       select.value = wanted;
@@ -752,14 +908,14 @@
       describe();
     }
     async function load2(preserve = false) {
-      var _a2, _b, _c, _d, _e, _f;
+      var _a3, _b, _c, _d, _e, _f;
       if (loading) return;
       loading = true;
       refresh.disabled = select.disabled = true;
       changed({ loading });
       note.textContent = "\u041F\u043E\u043B\u0443\u0447\u0430\u0435\u043C \u0441\u043F\u0438\u0441\u043E\u043A \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432\u2026";
       try {
-        const previous = (_a2 = snapshot.setup) == null ? void 0 : _a2.status;
+        const previous = (_a3 = snapshot.setup) == null ? void 0 : _a3.status;
         snapshot = await native().printers();
         populate(previous === "installing" && ((_b = snapshot.setup) == null ? void 0 : _b.status) === "ready" ? false : preserve);
       } catch (e) {
@@ -877,7 +1033,7 @@
       formatSelect.onchange = () => printers.setFormat(formatSelect.value);
     }
     dialog.querySelector("form").onsubmit = async (event) => {
-      var _a2;
+      var _a3;
       event.preventDefault();
       const button = dialog.querySelector("[type=submit]"), quantity = Number(dialog.querySelector("[name=quantity]").value), format = formatSelect.value;
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1e3) return;
@@ -885,7 +1041,7 @@
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
         const payload = { name: part.name, barcode: String(part.barcode), price: Number(part.retail_price), svg: svg.outerHTML, quantity, format };
-        if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.printBarcode) {
+        if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.printBarcode) {
           button.disabled = true;
           const result = await window.warehouseDesktop.printBarcode({ ...payload, ...printers == null ? void 0 : printers.selection() });
           dialog.close();
@@ -1003,12 +1159,12 @@
       }
     }
     function edit(field) {
-      var _a2;
+      var _a3;
       editing = field;
       pending2 = null;
       draw();
       const min = field === "quantity" && !equipmentType(selected) ? -1e6 : 0, max = field === "quantity" ? 1e6 : 1e8, host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
-      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : field === "unit_cost" ? "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD" : "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD") + '<input type="number" min="' + min + '" max="' + max + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + ((_a2 = selected[field]) != null ? _a2 : 0) + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
+      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : field === "unit_cost" ? "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD" : "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD") + '<input type="number" min="' + min + '" max="' + max + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + ((_a3 = selected[field]) != null ? _a3 : 0) + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
       const input = host.querySelector("input");
       input.focus();
       input.select();
@@ -1018,14 +1174,14 @@
         draw();
       };
       host.querySelector("form").onsubmit = (e) => {
-        var _a3;
+        var _a4;
         e.preventDefault();
         const part = selected, value = Number(input.value), field2 = editing;
         if (input.value.trim() === "" || !Number.isFinite(value) || value < min || value > max || field2 === "quantity" && !Number.isInteger(value) || field2 !== "quantity" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
           dialog.querySelector(".product-error").textContent = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435";
           return;
         }
-        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid(), part_id: part.id, field: field2, value, expected: (_a3 = part[field2]) != null ? _a3 : 0 };
+        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid(), part_id: part.id, field: field2, value, expected: (_a4 = part[field2]) != null ? _a4 : 0 };
         const payload = { ...pending2 };
         void run2(async () => {
           input.disabled = true;
@@ -1105,19 +1261,19 @@
   var pending = /* @__PURE__ */ new Map();
   var writes = Promise.resolve();
   var keyFor = (key3) => "https://fastgo-photo-cache.invalid/" + encodeURIComponent(key3);
-  async function cachedPhoto(url, key3, { enabled = !!(((_a2) => (_a2 = globalThis.window) == null ? void 0 : _a2.fastgoDesktop)() || ((_b) => (_b = globalThis.window) == null ? void 0 : _b.warehouseDesktop)()), refresh = false } = {}) {
+  async function cachedPhoto(url, key3, { enabled = !!(((_a3) => (_a3 = globalThis.window) == null ? void 0 : _a3.fastgoDesktop)() || ((_b) => (_b = globalThis.window) == null ? void 0 : _b.warehouseDesktop)()), refresh = false } = {}) {
     if (!enabled || !key3 || !globalThis.caches) return null;
     const address = keyFor(key3), flight = address + (refresh ? ":refresh" : "");
     if (pending.has(flight)) return pending.get(flight);
     const task = (async () => {
-      var _a3;
+      var _a4;
       const cache = await caches.open(NAME);
       if (!refresh) {
         const hit = await cache.match(address);
         if (hit && Date.now() - Number(hit.headers.get("x-fastgo-stored")) < MAX_AGE) return hit.blob();
       }
       const response = await fetch(url, { credentials: "omit", signal: AbortSignal.timeout(12e3) });
-      if (!response.ok || !((_a3 = response.headers.get("content-type")) == null ? void 0 : _a3.startsWith("image/"))) throw Error("Photo unavailable");
+      if (!response.ok || !((_a4 = response.headers.get("content-type")) == null ? void 0 : _a4.startsWith("image/"))) throw Error("Photo unavailable");
       const blob = await response.blob();
       if (!blob.size || blob.size > 5 * 1024 * 1024) return blob;
       writes = writes.catch(() => {
@@ -1342,7 +1498,7 @@
         });
       }
       async function load2() {
-        var _a2;
+        var _a3;
         try {
           const photos2 = await api2("part_photos", { part_id: part.id });
           if (!current()) return;
@@ -1393,7 +1549,7 @@
               };
             }
           }
-          (_a2 = tabs[first]) == null ? void 0 : _a2.click();
+          (_a3 = tabs[first]) == null ? void 0 : _a3.click();
         } catch (error) {
           if (current()) {
             gallery.textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0444\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u0438: " + error.message;
@@ -1431,7 +1587,7 @@
     if (storage.getItem(key3) !== encoded) throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0445\u043E\u0434 \u043F\u0440\u0438\u0451\u043C\u043A\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.");
   };
   function loadProductIntake(storage, actor) {
-    var _a2, _b, _c;
+    var _a3, _b, _c;
     const raw = storage.getItem(keyFor2(actor));
     if (!raw) return null;
     let value;
@@ -1440,7 +1596,7 @@
     } catch (e) {
       throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u043D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u0443\u044E \u043F\u0440\u0438\u0451\u043C\u043A\u0443. \u041D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0435\u0451 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E; \u0441\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u043A\u043B\u0430\u0434.");
     }
-    if (value.version !== 1 || !value.product || !((_a2 = value.ids) == null ? void 0 : _a2.product) || !((_b = value.ids) == null ? void 0 : _b.stock) || !((_c = value.ids) == null ? void 0 : _c.photo)) throw new Error("\u041D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u0430\u044F \u043F\u0440\u0438\u0451\u043C\u043A\u0430 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0441\u0432\u0435\u0440\u043A\u0438 \u0441\u043A\u043B\u0430\u0434\u0430.");
+    if (value.version !== 1 || !value.product || !((_a3 = value.ids) == null ? void 0 : _a3.product) || !((_b = value.ids) == null ? void 0 : _b.stock) || !((_c = value.ids) == null ? void 0 : _c.photo)) throw new Error("\u041D\u0435\u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u0430\u044F \u043F\u0440\u0438\u0451\u043C\u043A\u0430 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0441\u0432\u0435\u0440\u043A\u0438 \u0441\u043A\u043B\u0430\u0434\u0430.");
     return value;
   }
   function startProductIntake(storage, actor, { product: product2, quantity, photo = null }) {
@@ -1496,7 +1652,7 @@
       const form = dialog.querySelector("form"), submit = dialog.querySelector("[type=submit]"), status = dialog.querySelector("[role=status]"), close = dialog.querySelector("[data-close]"), fileInput = form.elements.photo;
       let preview = "", saving = false;
       const restore = () => {
-        var _a2;
+        var _a3;
         const state = loadProductIntake(localStorage, actor());
         if (!state) return null;
         for (const [name, value] of Object.entries({ ...state.product, initial_quantity: state.quantity })) {
@@ -1506,7 +1662,7 @@
             input.disabled = true;
           }
         }
-        form.elements.category_primary.checked = !!((_a2 = state.photo) == null ? void 0 : _a2.primary);
+        form.elements.category_primary.checked = !!((_a3 = state.photo) == null ? void 0 : _a3.primary);
         form.elements.category_primary.disabled = true;
         submit.textContent = "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435";
         return state;
@@ -1588,7 +1744,7 @@
   // warehouse/label-offer.js
   var mobileLabelOffer = () => !window.warehouseDesktop && (matchMedia("(max-width: 700px)").matches || matchMedia("(pointer: coarse)").matches);
   function offerLabelPrinting(part, quantity, { call: call2, actor }) {
-    var _a2;
+    var _a3;
     if (!(part == null ? void 0 : part.barcode) || !Number.isInteger(quantity) || quantity < 1) return;
     const key3 = "fastgo_label_offer_v1:" + actor + ":" + part.id;
     let pending2 = null;
@@ -1600,7 +1756,7 @@
     const dialog = document.createElement("dialog");
     dialog.className = "barcode-print-dialog";
     dialog.setAttribute("aria-label", "\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?");
-    dialog.innerHTML = "<form><h2>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?</h2><p>" + esc(part.name) + "</p><p>\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u0435\u043C \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C <b>" + quantity + '</b> \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A. \u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043C\u043E\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C.</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" required value="' + esc((_a2 = pending2 == null ? void 0 : pending2.quantity) != null ? _a2 : quantity) + '"></label><label>\u041A\u0430\u0441\u0441\u0430 \u0438 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440<select name="station" required aria-label="\u041A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440"></select></label><div class="printer-size"><label>\u0428\u0438\u0440\u0438\u043D\u0430, \u043C\u043C<input name="width_mm" aria-label="\u0428\u0438\u0440\u0438\u043D\u0430 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438, \u043C\u043C" type="number" min="30" max="110" step="0.1" value="58" required></label><label>\u0412\u044B\u0441\u043E\u0442\u0430, \u043C\u043C<input name="height_mm" aria-label="\u0412\u044B\u0441\u043E\u0442\u0430 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438, \u043C\u043C" type="number" min="20" max="200" step="0.1" value="30" required></label></div><label class="printer-remember" data-remember-label hidden><input name="remember" type="checkbox" checked>\u0417\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u044C \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438 \u0440\u0430\u0437\u043C\u0435\u0440 \u043D\u0430 \u043A\u0430\u0441\u0441\u0435</label><p data-status role="status">\u0418\u0449\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u044B\u2026</p><p class="error" role="alert"></p><div class="actions"><button type="button" data-close>\u041D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button><button type="submit" class="primary" disabled>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button></div></form>';
+    dialog.innerHTML = "<form><h2>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438?</h2><p>" + esc(part.name) + "</p><p>\u0422\u043E\u0432\u0430\u0440 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0440\u0435\u0434\u043B\u0430\u0433\u0430\u0435\u043C \u043D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C <b>" + quantity + '</b> \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A. \u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043C\u043E\u0436\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C.</p><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A<input name="quantity" type="number" min="1" max="1000" step="1" required value="' + esc((_a3 = pending2 == null ? void 0 : pending2.quantity) != null ? _a3 : quantity) + '"></label><label>\u041A\u0430\u0441\u0441\u0430 \u0438 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440<select name="station" required aria-label="\u041A\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043F\u0440\u0438\u043D\u0442\u0435\u0440"></select></label><div class="printer-size"><label>\u0428\u0438\u0440\u0438\u043D\u0430, \u043C\u043C<input name="width_mm" aria-label="\u0428\u0438\u0440\u0438\u043D\u0430 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438, \u043C\u043C" type="number" min="30" max="110" step="0.1" value="58" required></label><label>\u0412\u044B\u0441\u043E\u0442\u0430, \u043C\u043C<input name="height_mm" aria-label="\u0412\u044B\u0441\u043E\u0442\u0430 \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0438, \u043C\u043C" type="number" min="20" max="200" step="0.1" value="30" required></label></div><label class="printer-remember" data-remember-label hidden><input name="remember" type="checkbox" checked>\u0417\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u044C \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u0438 \u0440\u0430\u0437\u043C\u0435\u0440 \u043D\u0430 \u043A\u0430\u0441\u0441\u0435</label><p data-status role="status">\u0418\u0449\u0435\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u043E\u043F\u0440\u0438\u043D\u0442\u0435\u0440\u044B\u2026</p><p class="error" role="alert"></p><div class="actions"><button type="button" data-close>\u041D\u0435 \u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button><button type="submit" class="primary" disabled>\u041D\u0430\u043F\u0435\u0447\u0430\u0442\u0430\u0442\u044C</button></div></form>';
     document.body.append(dialog);
     dialog.showModal();
     dialog.onclose = () => dialog.remove();
@@ -1621,10 +1777,10 @@
       close.textContent = "\u0417\u0430\u043A\u0440\u044B\u0442\u044C";
     }
     function showTarget() {
-      var _a3, _b, _c, _d;
+      var _a4, _b, _c, _d;
       const target = selected();
       button.disabled = !pending2 && !target;
-      width.value = (_b = (_a3 = pending2 == null ? void 0 : pending2.width_mm) != null ? _a3 : target == null ? void 0 : target.width_mm) != null ? _b : 58;
+      width.value = (_b = (_a4 = pending2 == null ? void 0 : pending2.width_mm) != null ? _a4 : target == null ? void 0 : target.width_mm) != null ? _b : 58;
       height.value = (_d = (_c = pending2 == null ? void 0 : pending2.height_mm) != null ? _c : target == null ? void 0 : target.height_mm) != null ? _d : 30;
       form.querySelector(".printer-size").hidden = !sizedTarget(target) && (pending2 == null ? void 0 : pending2.width_mm) === void 0;
       width.disabled = height.disabled = !!pending2 || !sizedTarget(target);
@@ -1649,19 +1805,19 @@
       station.onchange = showTarget;
       showTarget();
     }).catch((e) => {
-      var _a3, _b;
+      var _a4, _b;
       if (dialog.isConnected) {
         status.textContent = "\u0421\u043F\u0438\u0441\u043E\u043A \u043A\u0430\u0441\u0441\u043E\u0432\u044B\u0445 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.";
         error.textContent = e.message;
         if (pending2) {
           button.disabled = false;
-          width.value = (_a3 = pending2.width_mm) != null ? _a3 : 58;
+          width.value = (_a4 = pending2.width_mm) != null ? _a4 : 58;
           height.value = (_b = pending2.height_mm) != null ? _b : 30;
         }
       }
     });
     form.onsubmit = async (e) => {
-      var _a3;
+      var _a4;
       e.preventDefault();
       if (busy2 || !form.reportValidity()) return;
       const count = Number(input.value), widthMm = Number(width.value), heightMm = Number(height.value);
@@ -1698,7 +1854,7 @@
           pending2 = null;
           freeze(false);
           width.disabled = height.disabled = !sizedTarget(selected());
-          remember.disabled = ((_a3 = selected()) == null ? void 0 : _a3.can_remember) !== true;
+          remember.disabled = ((_a4 = selected()) == null ? void 0 : _a4.can_remember) !== true;
         } else if (pending2) status.textContent = "\u041E\u0442\u0432\u0435\u0442 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C\xBB: \u043A\u043E\u0434 \u0437\u0430\u0434\u0430\u043D\u0438\u044F \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B, \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
         button.textContent = "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C";
         button.disabled = false;
@@ -1766,8 +1922,8 @@
     } };
   }
   function startWebUpdates({ canApply }) {
-    var _a2;
-    const version = (_a2 = document.querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a2.content;
+    var _a3;
+    const version = (_a3 = document.querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a3.content;
     if (!version) return null;
     const get = async (url) => {
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15e3);
@@ -1787,11 +1943,11 @@
         return (await (await get(u)).json()).version;
       },
       fetchPage: async (next) => {
-        var _a3;
+        var _a4;
         const u = new URL(location.href);
         u.searchParams.set("ui", next);
         const html = await (await get(u)).text();
-        return (_a3 = new DOMParser().parseFromString(html, "text/html").querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a3.content;
+        return (_a4 = new DOMParser().parseFromString(html, "text/html").querySelector('meta[name="warehouse-web-version"]')) == null ? void 0 : _a4.content;
       },
       canApply,
       apply: (next) => {
@@ -1827,10 +1983,10 @@
   // warehouse/price-adjustment.js
   var money2 = (n) => Number(n || 0).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
   function adjustedTotal(base, edit) {
-    var _a2;
+    var _a3;
     const cents = Math.round(base * 100);
     if (!edit) return cents / 100;
-    const raw = String((_a2 = edit.value) != null ? _a2 : "").trim().replace(",", ".");
+    const raw = String((_a3 = edit.value) != null ? _a3 : "").trim().replace(",", ".");
     if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
     const value = Number(raw);
     if (!Number.isFinite(value) || value > 1e8) return null;
@@ -1845,14 +2001,14 @@
     const total = () => adjustedTotal(base(), read());
     const markup = () => '<div class="price-adjustment"><div class="total"><span>' + label + '</span><b id="' + prefix + '-total"></b></div><div class="price-actions"><button type="button" id="' + prefix + '-total-edit">\u270E \u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u0443\u043C\u043C\u0443</button><button type="button" id="' + prefix + '-discount-edit">% \u0421\u043A\u0438\u0434\u043A\u0430</button></div><div id="' + prefix + '-total-field" hidden><label>' + inputLabel + ', \u20BD<input id="' + prefix + '-total-input" type="text" inputmode="decimal" autocomplete="off" aria-label="' + inputLabel + '"></label></div><div id="' + prefix + '-discount-field" hidden><label>\u0420\u0430\u0437\u043C\u0435\u0440 \u0441\u043A\u0438\u0434\u043A\u0438<input id="' + prefix + '-discount-input" type="text" inputmode="decimal" autocomplete="off" aria-label="\u0420\u0430\u0437\u043C\u0435\u0440 \u0441\u043A\u0438\u0434\u043A\u0438"></label><label>\u0421\u043A\u0438\u0434\u043A\u0430 \u0432<select id="' + prefix + '-discount-unit" aria-label="\u0421\u043A\u0438\u0434\u043A\u0430 \u0432"><option value="rub">\u0420\u0443\u0431\u043B\u044F\u0445</option><option value="percent">\u041F\u0440\u043E\u0446\u0435\u043D\u0442\u0430\u0445</option></select></label></div><p id="' + prefix + '-price-note" class="muted" role="status"></p><button type="button" id="' + prefix + '-total-reset" hidden>' + resetLabel + "</button></div>";
     function draw() {
-      var _a2;
+      var _a3;
       if (!$2("total")) return;
       const edit = read(), value = total(), discount = (edit == null ? void 0 : edit.mode) === "discount";
       $2("total").textContent = value === null ? "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0443\u043C\u043C\u0443" : money2(value);
       $2("total-field").hidden = !edit || discount;
       $2("discount-field").hidden = !discount;
       $2("total-reset").hidden = !edit;
-      for (const [name, v] of [["total-input", discount ? "" : (_a2 = edit == null ? void 0 : edit.value) != null ? _a2 : ""], ["discount-input", discount ? edit.value : ""], ["discount-unit", (edit == null ? void 0 : edit.unit) || "rub"]]) if (document.activeElement !== $2(name)) $2(name).value = v;
+      for (const [name, v] of [["total-input", discount ? "" : (_a3 = edit == null ? void 0 : edit.value) != null ? _a3 : ""], ["discount-input", discount ? edit.value : ""], ["discount-unit", (edit == null ? void 0 : edit.unit) || "rub"]]) if (document.activeElement !== $2(name)) $2(name).value = v;
       $2("price-note").textContent = value === null ? "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0443\u044E \u0441\u0443\u043C\u043C\u0443. \u0421\u043A\u0438\u0434\u043A\u0430 \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u043F\u0440\u0435\u0432\u044B\u0448\u0430\u0442\u044C \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C." : edit ? "\u0414\u043E \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F: " + money2(base()) + (value < base() ? " \xB7 \u0421\u043A\u0438\u0434\u043A\u0430: " + money2(Math.round((base() - value) * 100) / 100) : "") : "";
       for (const name of ["total-edit", "discount-edit", "total-input", "discount-input", "discount-unit", "total-reset"]) {
         $2(name).disabled = locked();
@@ -1867,9 +2023,9 @@
         changed();
       };
       $2("total-edit").onclick = () => {
-        var _a2;
+        var _a3;
         if (locked()) return;
-        update({ mode: "total", value: String((_a2 = total()) != null ? _a2 : base()) });
+        update({ mode: "total", value: String((_a3 = total()) != null ? _a3 : base()) });
         $2("total-input").focus();
         $2("total-input").select();
       };
@@ -1909,7 +2065,7 @@
       $2("repair-back").onclick = home2;
       let jobId = "", polling2 = false;
       async function poll2() {
-        var _a2;
+        var _a3;
         if (polling2 || !$2("repair-status")) return;
         polling2 = true;
         try {
@@ -1922,7 +2078,7 @@
           if ((r == null ? void 0 : r.state) === "done") {
             save3("repair:terminal", null);
             home2();
-            message2(((_a2 = r.result) == null ? void 0 : _a2.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
+            message2(((_a3 = r.result) == null ? void 0 : _a3.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
             return;
           }
           $2("repair-status").textContent = "\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u043E\u043F\u043B\u0430\u0442\u0443 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435";
@@ -1943,12 +2099,12 @@
       await checkout2(await call2("job", { id: pending2.request_id }));
     }
     async function checkout2(job2) {
-      var _a2, _b;
+      var _a3, _b;
       const latest = await call2("job", { id: job2.id });
       if (!latest) throw Error("\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
       if (latest.state === "done") {
         home2();
-        message2(((_a2 = latest.result) == null ? void 0 : _a2.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
+        message2(((_a3 = latest.result) == null ? void 0 : _a3.cancelled) ? "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u043F\u043B\u0430\u0442\u044B \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
         return;
       }
       const q = latest.repair || await call2("repair_quote", { repair_id: latest.payload.repair_id }), fixed = latest.checkout;
@@ -1989,7 +2145,7 @@
       const token = ++watching;
       let polling2 = false;
       const timer = setInterval(async () => {
-        var _a3;
+        var _a4;
         if (token !== watching || !$2("repair-pay")) {
           clearInterval(timer);
           return;
@@ -2004,7 +2160,7 @@
             save3(cacheKey, null);
             save3(methodKey, null);
             home2();
-            message2(((_a3 = status.result) == null ? void 0 : _a3.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
+            message2(((_a4 = status.result) == null ? void 0 : _a4.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430");
           } else if ((status == null ? void 0 : status.checkout) && !fixed) {
             clearInterval(timer);
             await checkout2(status);
@@ -2027,13 +2183,13 @@
         submitting = true;
         drawBalance();
         const complete = (result) => {
-          var _a3, _b2;
+          var _a4, _b2;
           if ((result == null ? void 0 : result.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435");
           watching++;
           clearInterval(timer);
           save3(cacheKey, null);
           save3(methodKey, null);
-          if (((_a3 = load2("repair:terminal")) == null ? void 0 : _a3.request_id) === latest.id) save3("repair:terminal", null);
+          if (((_a4 = load2("repair:terminal")) == null ? void 0 : _a4.request_id) === latest.id) save3("repair:terminal", null);
           home2();
           message2(((_b2 = result.result) == null ? void 0 : _b2.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
         };
@@ -2053,8 +2209,8 @@
         }
       });
       $2("repair-pay").onclick = () => run2(async () => {
-        var _a3, _b2, _c;
-        const method2 = (fixed == null ? void 0 : fixed.method) || ((_a3 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a3.value);
+        var _a4, _b2, _c;
+        const method2 = (fixed == null ? void 0 : fixed.method) || ((_a4 = document.querySelector('input[name="repair-method"]:checked')) == null ? void 0 : _a4.value);
         if (!method2) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
         const total = price.total();
         if (total === null || stale) throw Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C \u0440\u0435\u043C\u043E\u043D\u0442\u0430");
@@ -2079,7 +2235,7 @@
   }
 
   // warehouse/live-basket.js?v=20261016-scan-2
-  function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh, repair: repair2, stationRepair, canOpen = () => true }) {
+  function liveBasket({ terminal: terminal2, call: call2, parts: parts2, render, home: home2, run: run2, message: message2, load: load2, save: save3, refresh, repair: repair2, stationRepair, canOpen = () => true, manual }) {
     const $2 = (id) => document.getElementById(id), key3 = (kind2) => "live:" + kind2 + ":" + (terminal2 ? "terminal" : "station");
     let draft2 = null, current = null, kind = "", active = false, locked = false, stop = null, timer = null, pollTimer = null, syncing = null, polling2 = false, overrides = {}, dismissed = "", lastId = "", scanChain = Promise.resolve();
     const product2 = (x) => parts2().find((p) => p.id === (x == null ? void 0 : x.part_id));
@@ -2092,12 +2248,12 @@
     }
     const rejected = (text) => Object.assign(Error(text), { rejected: true });
     const remaining = (local, job2) => local && local.id === job2.id && local.revision > job2.payload.revision ? local.items.map((x) => {
-      var _a2;
-      return { ...x, quantity: x.quantity - (((_a2 = job2.payload.items.find((y) => y.part_id === x.part_id)) == null ? void 0 : _a2.quantity) || 0) };
+      var _a3;
+      return { ...x, quantity: x.quantity - (((_a3 = job2.payload.items.find((y) => y.part_id === x.part_id)) == null ? void 0 : _a3.quantity) || 0) };
     }).filter((x) => x.quantity > 0) : [];
     function rememberUSB(local) {
-      var _a2;
-      if ((_a2 = local == null ? void 0 : local.usb_ids) == null ? void 0 : _a2.length) save3("usb:accepted", [...load2("usb:accepted") || [], ...local.usb_ids].slice(-1e4));
+      var _a3;
+      if ((_a3 = local == null ? void 0 : local.usb_ids) == null ? void 0 : _a3.length) save3("usb:accepted", [...load2("usb:accepted") || [], ...local.usb_ids].slice(-1e4));
     }
     const cache = () => {
       if (draft2) save3(key3(draft2.kind), draft2);
@@ -2108,7 +2264,7 @@
       if (current || (draft2 == null ? void 0 : draft2.items.length)) save3("live:resume:station", { kind, current: current ? JSON.parse(JSON.stringify(current)) : null, draft_id: (draft2 == null ? void 0 : draft2.id) || null });
     }
     async function restore() {
-      var _a2;
+      var _a3;
       if (terminal2) return false;
       const saved = load2("live:resume:station");
       if (!saved) return false;
@@ -2121,7 +2277,7 @@
         await openMirror(latest || saved.current);
         return true;
       }
-      if (((_a2 = load2(key3(saved.kind))) == null ? void 0 : _a2.id) === saved.draft_id) {
+      if (((_a3 = load2(key3(saved.kind))) == null ? void 0 : _a3.id) === saved.draft_id) {
         await open(saved.kind);
         return true;
       }
@@ -2138,13 +2294,13 @@
       return (saved == null ? void 0 : saved.signature) === signature() ? saved : null;
     }
     const price = priceAdjustment({ prefix: "live", base: baseTotal, read: () => {
-      var _a2;
-      return ((_a2 = current == null ? void 0 : current.checkout) == null ? void 0 : _a2.total_override) !== void 0 ? { value: String(current.checkout.total_override) } : totalEdit();
+      var _a3;
+      return ((_a3 = current == null ? void 0 : current.checkout) == null ? void 0 : _a3.total_override) !== void 0 ? { value: String(current.checkout.total_override) } : totalEdit();
     }, write: (edit) => save3("live-total:" + documentId(), edit ? { ...edit, signature: signature() } : null), locked: () => locked || !!(current == null ? void 0 : current.checkout) });
     const totalValue = () => price.total();
     const amount = (x) => {
-      var _a2;
-      return x.custom_price ? Number(x.unit_price) : Number(((_a2 = product2(x)) == null ? void 0 : _a2.retail_price) || 0);
+      var _a3;
+      return x.custom_price ? Number(x.unit_price) : Number(((_a3 = product2(x)) == null ? void 0 : _a3.retail_price) || 0);
     };
     function cleanup() {
       active = false;
@@ -2166,7 +2322,7 @@
       $2("scan-feedback").className = error ? "error" : "";
     }
     function finished(job2) {
-      var _a2;
+      var _a3;
       if (!active) return;
       const local = draft2 || load2(key3(job2.payload.kind)), extra = remaining(local, job2);
       if (!terminal2) {
@@ -2197,7 +2353,7 @@
       void refresh().catch(() => {
       });
       home2();
-      message2(((_a2 = job2.result) == null ? void 0 : _a2.cancelled) ? job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
+      message2(((_a3 = job2.result) == null ? void 0 : _a3.cancelled) ? job2.payload.kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0451\u043D" : kind === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u0440\u0438\u043D\u044F\u0442\u0430");
     }
     async function sync() {
       if (syncing) {
@@ -2229,15 +2385,15 @@
       if (draft2 === local && local.acked < local.revision && !locked) return sync();
     }
     function draw() {
-      var _a2, _b;
+      var _a3, _b;
       if (!active || !$2("live-items")) return;
       const value = source(), items = value.items.filter((x) => {
-        var _a3;
-        return !((_a3 = overrides[x.part_id]) == null ? void 0 : _a3.removed) || qty(x) > 0;
+        var _a4;
+        return !((_a4 = overrides[x.part_id]) == null ? void 0 : _a4.removed) || qty(x) > 0;
       });
       if (terminal2) {
         const x = items.find((x2) => x2.part_id === (draft2 == null ? void 0 : draft2.last_part_id)) || items[items.length - 1];
-        $2("live-items").innerHTML = x ? '<article class="last-scan"><small>\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043E</small><h2>' + esc(((_a2 = product2(x)) == null ? void 0 : _a2.name) || x.part_id) + "</h2><p>" + x.quantity + " \u0448\u0442.</p></article>" : "";
+        $2("live-items").innerHTML = x ? '<article class="last-scan"><small>\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043E</small><h2>' + esc(((_a3 = product2(x)) == null ? void 0 : _a3.name) || x.part_id) + "</h2><p>" + x.quantity + " \u0448\u0442.</p></article>" : "";
         $2("scan-empty").hidden = !!x;
         return;
       }
@@ -2297,10 +2453,10 @@
       return (current == null ? void 0 : current.id) || (draft2 == null ? void 0 : draft2.id) || "";
     }
     function markup(k) {
-      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + '</h1></div><small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + '</button><button type="button" class="live-cancel" id="live-cancel">' + (k === "receipt" ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
+      return '<div class="live-heading"><button id="live-back" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A">' + (terminal2 ? "\u2190" : "\u2190 \u041A \u0441\u043F\u0438\u0441\u043A\u0443") + "</button><h1>" + (k === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430") + "</h1></div>" + (!terminal2 && k === "sale" ? '<button type="button" id="manual-service-payment">\u0412\u043D\u0435\u0441\u0442\u0438 \u043E\u043F\u043B\u0430\u0442\u0443 \u0440\u0430\u0431\u043E\u0442 \u0432\u0440\u0443\u0447\u043D\u0443\u044E</button>' : "") + '<small id="live-sync"></small><form id="live-scan" class="scanner-sink" aria-hidden="true"><input id="live-code" inputmode="none" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false"></form><p id="scan-empty" class="scan-empty">\u041E\u0436\u0438\u0434\u0430\u0435\u043C \u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435</p><div id="live-items" aria-live="polite"></div><p id="scan-feedback" role="status"></p>' + (terminal2 ? '<button id="scanner-compat">\u0421\u043A\u0430\u043D\u0435\u0440 \u043D\u0435 \u0432\u0432\u043E\u0434\u0438\u0442 \u043A\u043E\u0434?</button><small id="scan-received" role="status"></small>' : "") + (terminal2 ? "" : '<section id="live-payment" hidden>' + price.markup() + '<fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, label]) => '<label><input type="radio" name="live-method" value="' + v + '">' + label + "</label>").join("") + '</fieldset></section><button class="primary" id="live-submit" hidden>' + (k === "receipt" ? "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + '</button><button type="button" class="live-cancel" id="live-cancel">' + (k === "receipt" ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u0435\u0441\u044C \u043F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443") + "</button>");
     }
     function mount() {
-      var _a2;
+      var _a3;
       render(markup(kind));
       draw();
       $2("live-back").onclick = () => {
@@ -2341,10 +2497,11 @@
         };
       }
       if (!terminal2) {
+        if ($2("manual-service-payment")) $2("manual-service-payment").onclick = () => manual == null ? void 0 : manual();
         if ($2("live-cancel")) $2("live-cancel").onclick = () => run2(cancelCurrent);
         $2("live-submit").onclick = () => run2(finish);
         price.bind();
-        const method = ((_a2 = current == null ? void 0 : current.checkout) == null ? void 0 : _a2.payment_method) || load2("live-method:" + documentId());
+        const method = ((_a3 = current == null ? void 0 : current.checkout) == null ? void 0 : _a3.payment_method) || load2("live-method:" + documentId());
         for (const el of document.querySelectorAll('input[name="live-method"]')) {
           el.checked = el.value === method;
           el.onchange = () => {
@@ -2393,7 +2550,7 @@
       else if (draft2) void sync().catch((e) => feedback(e.message, true));
     }
     async function openMirror(value) {
-      var _a2;
+      var _a3;
       cleanup();
       kind = value.payload.kind;
       draft2 = null;
@@ -2403,16 +2560,16 @@
       overrides = load2("live-edits:" + value.id) || {};
       active = true;
       mount();
-      if ((_a2 = value.checkout) == null ? void 0 : _a2.payment_method) {
+      if ((_a3 = value.checkout) == null ? void 0 : _a3.payment_method) {
         const el = document.querySelector('input[name="live-method"][value="' + value.checkout.payment_method + '"]');
         if (el) el.checked = true;
       }
     }
     async function addCode2(code, usbId) {
-      var _a2, _b;
+      var _a3, _b;
       if (!code) return;
       if (!active || locked) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438");
-      if (usbId && (((_a2 = draft2 == null ? void 0 : draft2.usb_ids) == null ? void 0 : _a2.includes(usbId)) || (load2("usb:accepted") || []).includes(usbId))) {
+      if (usbId && (((_a3 = draft2 == null ? void 0 : draft2.usb_ids) == null ? void 0 : _a3.includes(usbId)) || (load2("usb:accepted") || []).includes(usbId))) {
         const p = matchBarcode(parts2(), code)[0];
         return { name: (p == null ? void 0 : p.name) || code, price: p == null ? void 0 : p.retail_price, quantity: ((_b = draft2 == null ? void 0 : draft2.items.find((x) => x.part_id === (p == null ? void 0 : p.id))) == null ? void 0 : _b.quantity) || 1 };
       }
@@ -2517,7 +2674,7 @@
       }
     }
     async function pollMirror() {
-      var _a2, _b;
+      var _a3, _b;
       if (terminal2 || !canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
       const jobs = await call2("live_jobs");
       if (!canOpen() || active && (locked || (draft2 == null ? void 0 : draft2.items.length))) return;
@@ -2526,7 +2683,7 @@
       if (found) {
         suspend();
         await openMirror(found);
-        void ((_b = (_a2 = window.warehouseDesktop) == null ? void 0 : _a2.showIncoming) == null ? void 0 : _b.call(_a2));
+        void ((_b = (_a3 = window.warehouseDesktop) == null ? void 0 : _a3.showIncoming) == null ? void 0 : _b.call(_a3));
         return;
       }
       const target = $2("live-terminal-panel");
@@ -2577,20 +2734,20 @@
       }
     }
     async function finish() {
-      var _a2, _b, _c;
+      var _a3, _b, _c;
       if (terminal2) return;
       if (draft2 == null ? void 0 : draft2.pickup) throw Error("\u042D\u0442\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u0432\u044B\u0434\u0430\u044E\u0442\u0441\u044F \u043C\u0430\u0441\u0442\u0435\u0440\u0443. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A \u0434\u043B\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0432\u044B\u0434\u0430\u0447\u0438.");
       await scanChain;
       if (draft2) await sync();
       const value = source(), id = documentId();
       if (!value.items.length) throw Error("\u041D\u0435\u0442 \u043E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u0442\u043E\u0432\u0430\u0440\u043E\u0432");
-      const method = ((_a2 = current == null ? void 0 : current.checkout) == null ? void 0 : _a2.payment_method) || ((_b = document.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _b.value);
+      const method = ((_a3 = current == null ? void 0 : current.checkout) == null ? void 0 : _a3.payment_method) || ((_b = document.querySelector('input[name="live-method"]:checked')) == null ? void 0 : _b.value);
       if (kind === "sale" && !method) throw Error("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B");
       let chosen;
       if (kind === "receipt") {
         chosen = value.items.filter((x) => {
-          var _a3;
-          return !((_a3 = overrides[x.part_id]) == null ? void 0 : _a3.removed) || qty(x) > 0;
+          var _a4;
+          return !((_a4 = overrides[x.part_id]) == null ? void 0 : _a4.removed) || qty(x) > 0;
         }).map((x) => ({ part_id: x.part_id, quantity: qty(x) }));
         if (chosen.some((x) => !Number.isInteger(x.quantity) || x.quantity < 1 || x.quantity > 1e3) || Object.values(overrides).some((x) => !x.removed && x.value === "")) throw Error("\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0442 1 \u0434\u043E 1000");
       }
@@ -3094,7 +3251,7 @@
   // workshop/viewport-layout.js
   var key = /* @__PURE__ */ Symbol.for("fastgo.viewport-layout");
   function installViewportLayout({ header = null } = {}) {
-    var _a2, _b;
+    var _a3, _b;
     const win = window, root = document.documentElement;
     if (win[key]) {
       if (header) win[key].observeHeader(header);
@@ -3106,7 +3263,7 @@
       if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
     };
     function update() {
-      var _a3, _b2;
+      var _a4, _b2;
       if (disposed) return;
       if (frame) {
         win.cancelAnimationFrame(frame);
@@ -3122,7 +3279,7 @@
         else root.removeAttribute("data-fastgo-visual-constrained");
       }
       if (observedHeader == null ? void 0 : observedHeader.isConnected) set("--warehouse-header-height", Math.ceil(observedHeader.getBoundingClientRect().height) + "px");
-      const active = document.activeElement, panel = (_a3 = active == null ? void 0 : active.closest) == null ? void 0 : _a3.call(active, "dialog[open],.compact-panel-body.is-open,.repair-pane-body");
+      const active = document.activeElement, panel = (_a4 = active == null ? void 0 : active.closest) == null ? void 0 : _a4.call(active, "dialog[open],.compact-panel-body.is-open,.repair-pane-body");
       if (constrained && panel && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
         const bounds = panel.getBoundingClientRect(), toolbar = panel.querySelector(".product-dialog-toolbar");
         const lower = Math.min(bounds.bottom, top + height) - 20, upper = Math.max(bounds.top, top) + ((toolbar == null ? void 0 : toolbar.getBoundingClientRect().height) || 12);
@@ -3145,20 +3302,20 @@
       schedule();
     }
     function dispose() {
-      var _a3, _b2;
+      var _a4, _b2;
       if (disposed) return;
       disposed = true;
       if (frame) win.cancelAnimationFrame(frame);
       observer == null ? void 0 : observer.disconnect();
       win.removeEventListener("resize", schedule);
       win.removeEventListener("orientationchange", schedule);
-      (_a3 = win.visualViewport) == null ? void 0 : _a3.removeEventListener("resize", schedule);
+      (_a4 = win.visualViewport) == null ? void 0 : _a4.removeEventListener("resize", schedule);
       (_b2 = win.visualViewport) == null ? void 0 : _b2.removeEventListener("scroll", schedule);
       delete win[key];
     }
     win.addEventListener("resize", schedule);
     win.addEventListener("orientationchange", schedule);
-    (_a2 = win.visualViewport) == null ? void 0 : _a2.addEventListener("resize", schedule);
+    (_a3 = win.visualViewport) == null ? void 0 : _a3.addEventListener("resize", schedule);
     (_b = win.visualViewport) == null ? void 0 : _b.addEventListener("scroll", schedule);
     win[key] = { update, dispose, observeHeader };
     observeHeader(header);
@@ -3253,14 +3410,15 @@
   var stopScanner;
   var stopUSB;
   var preorderView;
+  var serviceView;
   if (!terminal && !window.warehouseDesktop && matchMedia("(max-width:760px)").matches) {
     for (const id of ["usb-scanner", "terminal-update"]) if ($(id)) $(id).hidden = true;
   }
   var serviceLink = $("warehouse-service");
   if (serviceLink) serviceLink.hidden = !(window.fastgoDesktop || new URLSearchParams(location.search).get("unified") === "1");
   serviceLink == null ? void 0 : serviceLink.addEventListener("click", (e) => {
-    var _a2;
-    if (!((_a2 = window.fastgoWarehouseCanLeave) == null ? void 0 : _a2.call(window))) {
+    var _a3;
+    if (!((_a3 = window.fastgoWarehouseCanLeave) == null ? void 0 : _a3.call(window))) {
       e.preventDefault();
       message("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u0435\u0440\u0435\u0434 \u043F\u0435\u0440\u0435\u0445\u043E\u0434\u043E\u043C \u0432 \u0441\u0435\u0440\u0432\u0438\u0441", true);
     }
@@ -3293,11 +3451,13 @@
   var live = liveBasket({ terminal, call: (a, p) => call(a, p), parts: () => parts, render: (html) => {
     screen = "live";
     shell(html);
-  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: canReceiveIncoming });
+  }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: canReceiveIncoming, manual: () => run(showManualPayment) });
   var call = (action, p = {}) => {
     if (!device && document.body.dataset.readonly === "true") {
-      if (action === "catalog") return api("service_catalog");
+      if (action === "catalog") return api("work_catalog");
       if (action === "inventory_edit") return serviceApi(action, p);
+      if (action === "work_catalog") return api("service_catalog").then((c) => c.services);
+      if (action === "work_catalog_save") return serviceApi("catalog_save", p);
       throw Error("\u041F\u0440\u0438\u0445\u043E\u0434, \u043E\u043F\u043B\u0430\u0442\u0430 \u0438 \u0422\u0421\u0414 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445. \u0417\u0434\u0435\u0441\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0441\u043A\u043B\u0430\u0434\u0430.");
     }
     return api(action, { device_id: device == null ? void 0 : device.id, device_token: device == null ? void 0 : device.token, ...p });
@@ -3334,7 +3494,7 @@
     lastDeviceStatus = 0;
     await desktopStatus();
   } });
-  if (!terminal) installPaymentScanner({ enabled: () => !!device && !busy && !nativeUpdatePending && document.body.dataset.readonly !== "true" && !["login", "connection", "connect", "setup", "basket"].includes(screen) && !document.querySelector("dialog[open]"), parts: () => parts, refresh: catalog, observed: (scan) => {
+  if (!terminal) installPaymentScanner({ enabled: () => !!device && !busy && !nativeUpdatePending && document.body.dataset.readonly !== "true" && !["login", "connection", "connect", "setup", "basket", "manual-payment", "services"].includes(screen) && !document.querySelector("dialog[open]"), parts: () => parts, refresh: catalog, observed: (scan) => {
     scannerTest = { ...scan, source: "atol" };
     lastDeviceStatus = 0;
     void desktopStatus();
@@ -3368,10 +3528,11 @@
   }
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
-    var _a2;
-    return !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    var _a3, _b, _c, _d;
+    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) && !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "services", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_d = document.activeElement) == null ? void 0 : _d.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
+    var _a3, _b, _c;
     try {
       live.checkpoint();
     } catch (error) {
@@ -3380,19 +3541,24 @@
       e.returnValue = "";
       return;
     }
-    if (busy || screen === "basket" || screen === "checkout" || screen === "repair" || screen === "live" && live.hasDraft()) {
+    if (((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) || ((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) || busy || screen === "basket" || screen === "checkout" || screen === "repair" || screen === "live" && live.hasDraft()) {
       e.preventDefault();
       e.returnValue = "";
     }
   });
   function shell(html) {
+    var _a3;
+    if (serviceView) {
+      (_a3 = serviceView.dispose) == null ? void 0 : _a3.call(serviceView);
+      serviceView = null;
+    }
     if (preorderView) {
       preorderView.dispose();
       preorderView = null;
     }
     document.body.dataset.screen = screen;
     const section = document.getElementById("warehouse-section");
-    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
+    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", services: "\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B", "manual-payment": "\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
     if (stopUSB) {
       stopUSB();
       stopUSB = null;
@@ -3409,6 +3575,24 @@
     if (!terminal) return "";
     return '<div class="subnav"><button id="back">\u2190 \u0413\u043B\u0430\u0432\u043D\u043E\u0435</button>' + (!terminal ? '<button id="inventory">\u041E\u0441\u0442\u0430\u0442\u043A\u0438</button><button id="shift">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443</button>' + (["owner", "developer"].includes(memberRole) ? '<button id="master-stock">\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445</button>' : "") : "") + "</div>";
   }
+  async function showServices() {
+    var _a3;
+    if ((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) throw Error("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0430\u0439\u0441\u0430");
+    if (live.hasDraft() || job || draft) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
+    screen = "services";
+    shell('<div id="service-root"></div>');
+    serviceView = mountServices({ root: $("service-root"), call, editor: ["owner", "developer", "admin"].includes(memberRole), message });
+    await serviceView.ready;
+  }
+  async function showManualPayment() {
+    if (terminal || document.body.dataset.readonly === "true") throw Error("\u041F\u0440\u0438\u0451\u043C \u043E\u043F\u043B\u0430\u0442\u044B \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u043A\u0430\u0441\u0441\u043E\u0432\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435");
+    if (live.hasDraft() || job || draft) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442");
+    live.suspend();
+    screen = "manual-payment";
+    shell('<div id="service-payment-root"></div>');
+    serviceView = mountManualPayment({ root: $("service-payment-root"), call, load, save: save2, home, message });
+    await serviceView.ready;
+  }
   async function showPreorders() {
     screen = "preorders";
     shell('<h1>\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B</h1><div id="preorder-root"></div>');
@@ -3416,6 +3600,10 @@
     await preorderView.ready;
   }
   function bindNav() {
+    if ($("service-catalog")) {
+      $("service-catalog").hidden = terminal;
+      $("service-catalog").onclick = () => run(showServices);
+    }
     if ($("preorders")) {
       $("preorders").hidden = !preorderAccess({ role: memberRole });
       $("preorders").onclick = () => run(showPreorders);
@@ -3423,7 +3611,7 @@
     if ($("nav-receipt")) $("nav-receipt").onclick = () => run(() => live.open("receipt"));
     if ($("nav-pay")) $("nav-pay").onclick = () => run(() => live.open("sale"));
     if ($("master-stock")) $("master-stock").hidden = !["owner", "developer"].includes(memberRole);
-    document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "preorders" ? "preorders" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
+    document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "services" ? "service-catalog" : screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "preorders" ? "preorders" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
     applyReadOnly();
     if ($("back")) $("back").onclick = home;
     if ($("inventory")) $("inventory").onclick = () => run(inventory);
@@ -3537,8 +3725,8 @@
     message(e.message, true);
   }
   function signIn() {
-    var _a2;
-    (_a2 = window.fastgoNotifications) == null ? void 0 : _a2.stop();
+    var _a3;
+    (_a3 = window.fastgoNotifications) == null ? void 0 : _a3.stop();
     screen = "login";
     $("logout").hidden = true;
     shell("<h1>" + (terminal ? "\u0422\u0435\u0440\u043C\u0438\u043D\u0430\u043B FastGo" : "FastGo \u0421\u043A\u043B\u0430\u0434") + '</h1><form id="login" class="panel" style="max-width:420px"><label>\u041F\u043E\u0447\u0442\u0430 \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430<input name="email" type="email" autocomplete="username" required></label><label>\u041F\u0430\u0440\u043E\u043B\u044C<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">\u0412\u043E\u0439\u0442\u0438</button></form>' + (terminal ? usbHelp() : ""));
@@ -3636,9 +3824,9 @@
     };
     $("send").onclick = () => run(send);
     $("discard").onclick = () => {
-      var _a2;
+      var _a3;
       if (confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u044D\u0442\u043E\u0442 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442? \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) {
-        if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
+        if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.usbRelease) void window.warehouseDesktop.usbRelease(usbKey()).catch((e) => message(e.message, true));
         draft = null;
         save2("draft:" + document.body.dataset.mode, null);
         home();
@@ -3651,9 +3839,9 @@
     return userId() + ":" + draft.id;
   }
   function addCode(code, usbId) {
-    var _a2;
+    var _a3;
     if (!code) return false;
-    if (usbId && ((_a2 = draft.usb_ids) == null ? void 0 : _a2.includes(usbId))) return true;
+    if (usbId && ((_a3 = draft.usb_ids) == null ? void 0 : _a3.includes(usbId))) return true;
     const found = matchBarcode(parts, code);
     if (found.length !== 1) {
       message(found.length ? "\u041A\u043E\u0434 \u043D\u0435\u043E\u0434\u043D\u043E\u0437\u043D\u0430\u0447\u0435\u043D. \u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u043D\u0430 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435." : "\u041A\u043E\u0434 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0432 \u043E\u0431\u0449\u0435\u0439 \u0431\u0430\u0437\u0435 FastGo.", true);
@@ -3680,8 +3868,8 @@
     return true;
   }
   async function finishUSB() {
-    var _a2;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
+    var _a3;
+    if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.usbRelease) await window.warehouseDesktop.usbRelease(usbKey());
   }
   function persist() {
     save2("draft:" + document.body.dataset.mode, draft);
@@ -3689,9 +3877,9 @@
   function drawBasket() {
     const target = $("basket");
     target.innerHTML = draft.items.length ? draft.items.map((x) => {
-      var _a2;
+      var _a3;
       const p = parts.find((p2) => p2.id === x.part_id);
-      return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a2 = p == null ? void 0 : p.quantity) != null ? _a2 : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
+      return '<div class="row"><div>' + esc((p == null ? void 0 : p.name) || "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D") + "<small>" + esc((p == null ? void 0 : p.barcode) || "") + " \xB7 \u043E\u0441\u0442\u0430\u0442\u043E\u043A " + ((_a3 = p == null ? void 0 : p.quantity) != null ? _a3 : "\u2014") + '</small></div><input type="number" min="1" max="1000" value="' + x.quantity + '" aria-label="\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E" data-qty="' + x.part_id + '"><span class="price">' + money(p == null ? void 0 : p.retail_price) + '</span><button data-remove="' + x.part_id + '" aria-label="\u0423\u0434\u0430\u043B\u0438\u0442\u044C">\xD7</button></div>';
     }).join("") : terminal ? "\u041D\u0430\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043A\u0430\u043D\u0435\u0440 \u043D\u0430 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \u0437\u0435\u043B\u0451\u043D\u0443\u044E \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0430 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0435. \u0422\u043E\u0432\u0430\u0440 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0412\u0440\u0443\u0447\u043D\u0443\u044E \u043A\u043E\u0434 \u043C\u043E\u0436\u043D\u043E \u0432\u0432\u0435\u0441\u0442\u0438 \u0432 \u043F\u043E\u043B\u0435 \u0432\u044B\u0448\u0435." : "\u0421\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u0432\u0430\u0440 \u0438\u043B\u0438 \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 / \u0430\u0440\u0442\u0438\u043A\u0443\u043B \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C\xBB.";
     target.querySelectorAll("[data-qty]").forEach((el) => el.onchange = () => {
       const n = Number(el.value);
@@ -3710,8 +3898,8 @@
     });
   }
   async function send() {
-    var _a2;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.usbTarget) {
+    var _a3;
+    if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.usbTarget) {
       await window.warehouseDesktop.usbTarget(null);
       if ((await window.warehouseDesktop.usbBatch(usbKey())).items.length) throw Error("\u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F USB-\u0441\u043A\u0430\u043D\u043E\u0432 \u0438\u043B\u0438 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u043A\u043E\u0434.");
     }
@@ -3743,12 +3931,12 @@
     } else await checkout(await call("job", { id: queuedId }));
   }
   function canReceiveIncoming() {
-    var _a2;
-    return !busy && !job && !draft && ["home", "live", "inventory", "holdings", "preorders"].includes(screen) && !document.querySelector("dialog[open]") && !((_a2 = document.activeElement) == null ? void 0 : _a2.matches("input:not(#live-code):not(#filter):not([data-payment-scan]),textarea,select"));
+    var _a3;
+    return !busy && !job && !draft && ["home", "live", "inventory", "holdings", "preorders"].includes(screen) && !document.querySelector("dialog[open]") && !((_a3 = document.activeElement) == null ? void 0 : _a3.matches("input:not(#live-code):not(#filter):not([data-payment-scan]),textarea,select"));
   }
   var autoQueueSeen = /* @__PURE__ */ new Set();
   async function poll() {
-    var _a2, _b;
+    var _a3, _b;
     if (terminal || !canReceiveIncoming() || !live.canAutoOpen() || polling || !device) return;
     polling = true;
     try {
@@ -3759,7 +3947,7 @@
         live.suspend();
         await checkout(next);
         autoQueueSeen.add(next.id);
-        void ((_b = (_a2 = window.warehouseDesktop) == null ? void 0 : _a2.showIncoming) == null ? void 0 : _b.call(_a2));
+        void ((_b = (_a3 = window.warehouseDesktop) == null ? void 0 : _a3.showIncoming) == null ? void 0 : _b.call(_a3));
         return;
       }
       await live.pollMirror();
@@ -3780,8 +3968,8 @@
     screen = "checkout";
     const state = await call("cash_state"), fixed = job.checkout;
     shell(nav() + "<h1>\u041E\u043F\u043B\u0430\u0442\u0430 \xB7 " + esc(job.id.slice(0, 8)) + '</h1><div class="twocol"><section class="panel"><h2>\u0422\u043E\u0432\u0430\u0440\u044B</h2>' + job.payload.items.map((x) => {
-      var _a2, _b, _c;
-      const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a2 = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a2.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
+      var _a3, _b, _c;
+      const p = parts.find((p2) => p2.id === x.part_id), price = (_c = (_b = (_a3 = fixed == null ? void 0 : fixed.items.find((i) => i.part_id === x.part_id)) == null ? void 0 : _a3.unit_price) != null ? _b : p == null ? void 0 : p.retail_price) != null ? _c : 0;
       return "<label>" + esc((p == null ? void 0 : p.name) || x.part_id) + " \xB7 " + x.quantity + ' \u0448\u0442.<input type="number" min="0" step="0.01" value="' + price + '" data-price="' + x.part_id + '" ' + (fixed ? "disabled" : "") + "></label>";
     }).join("") + '<div class="total"><span>\u0418\u0442\u043E\u0433\u043E</span><b id="total"></b></div></section><section class="panel"><label>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F<select id="mode" ' + (fixed ? "disabled" : "") + '><option value="sale">\u041F\u0440\u043E\u0434\u0430\u0436\u0430</option>' + ((fixed == null ? void 0 : fixed.mode) === "master" ? '<option value="master">\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044C \u043F\u0440\u0435\u0436\u043D\u044E\u044E \u0432\u044B\u0434\u0430\u0447\u0443 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \xB7 0 \u20BD</option>' : "") + '</select></label><div id="sale-fields"><label>\u0421\u043C\u0435\u043D\u0430<select id="cash-shift">' + state.shifts.filter((x) => x.status === "open").map((x) => '<option value="' + x.id + '">' + esc(x.register) + " \xB7 \u2116 " + x.number + "</option>").join("") + '</select></label><label>\u041E\u043F\u043B\u0430\u0442\u0430<select id="method"><option value="cash">\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option><option value="card">\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435</option></select></label><p class="muted">\u041F\u0440\u043E\u0432\u043E\u0434\u0438\u043C \u0443\u0447\u0451\u0442 \u043F\u0440\u043E\u0434\u0430\u0436\u0438. \u0411\u0430\u043D\u043A\u043E\u0432\u0441\u043A\u0438\u0439 \u043F\u043B\u0430\u0442\u0451\u0436 \u0438 \u0444\u0438\u0441\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0447\u0435\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0441\u0441\u0435.</p></div><label id="master-fields" hidden>\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u043C\u0430\u0441\u0442\u0435\u0440\u0430<select id="master">' + staff.map((x) => '<option value="' + x.profile_id + '">' + esc(x.name) + "</option>").join("") + '</select></label><button class="primary" id="checkout">\u041F\u0440\u043E\u0432\u0435\u0441\u0442\u0438</button><button type="button" class="live-cancel" id="checkout-cancel" ' + (fixed || job.state !== "queued" ? 'disabled data-unavailable="true"' : "") + '>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p class="muted">\u0412\u044B\u0434\u0430\u0447\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u0443\u043C\u0435\u043D\u044C\u0448\u0430\u0435\u0442 \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A \u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430, \u0431\u0435\u0437 \u0434\u0435\u043D\u0435\u0436\u043D\u043E\u0439 \u0432\u044B\u0440\u0443\u0447\u043A\u0438.</p></section></div>');
     bindNav();
@@ -3797,11 +3985,11 @@
       if (!confirm("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443? \u041F\u0440\u043E\u0434\u0430\u0436\u0430 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430, \u043E\u0441\u0442\u0430\u0442\u043A\u0438 \u0438 \u0440\u0430\u0441\u0447\u0451\u0442\u044B \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0442\u0441\u044F.")) return;
       const currentId = job.id;
       const finish = (value2) => {
-        var _a2;
+        var _a3;
         if ((value2 == null ? void 0 : value2.state) !== "done") throw Error("\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u043E\u0442\u043C\u0435\u043D\u0443. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435");
         job = null;
         home();
-        message(((_a2 = value2.result) == null ? void 0 : _a2.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
+        message(((_a3 = value2.result) == null ? void 0 : _a3.cancelled) ? "\u041E\u043F\u043B\u0430\u0442\u0430 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430" : "\u041E\u043F\u043B\u0430\u0442\u0430 \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430");
       };
       try {
         finish(await call("cancel_document", { id: currentId, kind: "sale", revision: job.payload.revision || 1 }));
@@ -3914,10 +4102,10 @@
   var lastDeviceStatus = 0;
   var nativeUpdatePending = false;
   async function desktopStatus() {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    var _a3, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     const el = $("desktop-status");
     if (!el) return;
-    if (((_a2 = window.fastgoInstalledApp) == null ? void 0 : _a2.platform) === "ios") {
+    if (((_a3 = window.fastgoInstalledApp) == null ? void 0 : _a3.platform) === "ios") {
       el.textContent = "FastGo \u0434\u043B\u044F iPhone \xB7 " + window.fastgoInstalledApp.version;
       return;
     }
@@ -3953,14 +4141,14 @@
     setInterval(desktopStatus, 2500);
   }
   if ($("usb-scanner")) $("usb-scanner").onclick = () => {
-    var _a2;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
+    var _a3;
+    if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.openUSBScanner) void window.warehouseDesktop.openUSBScanner().catch((e) => message(e.message, true));
     else message("\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E USB \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u0432 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0435 FastGo \u0421\u043A\u043B\u0430\u0434 \u0432\u0435\u0440\u0441\u0438\u0438 1.0.4 \u0438 \u043D\u043E\u0432\u0435\u0435.");
   };
   if ($("terminal-update")) $("terminal-update").onclick = async () => {
-    var _a2;
+    var _a3;
     try {
-      if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.openTerminalUpdater) await window.warehouseDesktop.openTerminalUpdater();
+      if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.openTerminalUpdater) await window.warehouseDesktop.openTerminalUpdater();
       else $("terminal-help").showModal();
     } catch (e) {
       message("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430: " + e.message, true);
@@ -3989,9 +4177,9 @@
   void start();
   var webSafe = (immediate = false) => !polling && window.warehouseUpdateSafe(immediate);
   var webUpdater = window.warehouseDesktop || window.fastgoInstalledApp ? null : startWebUpdates({ canApply: async (immediate) => {
-    var _a2, _b, _c, _d;
+    var _a3, _b, _c, _d;
     if (!webSafe(immediate)) return false;
-    if ((_a2 = window.warehouseDesktop) == null ? void 0 : _a2.desktopStatus) {
+    if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.desktopStatus) {
       const state = await window.warehouseDesktop.desktopStatus();
       if (((_b = state.usb) == null ? void 0 : _b.pending) || ((_c = state.usb) == null ? void 0 : _c.target) || ["downloading", "ready", "preparing", "installing"].includes((_d = state.update) == null ? void 0 : _d.status)) return false;
     }
@@ -3999,13 +4187,13 @@
   } });
   var updating = false;
   async function updateNow() {
-    var _a2, _b;
+    var _a3, _b;
     if (updating) return;
     updating = true;
     try {
       live.checkpoint();
       message("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u2026");
-      if ((_a2 = window.fastgoDesktop) == null ? void 0 : _a2.updateNow) {
+      if ((_a3 = window.fastgoDesktop) == null ? void 0 : _a3.updateNow) {
         await window.fastgoDesktop.updateNow();
         await desktopStatus();
         return;
@@ -4032,7 +4220,10 @@
   }
   window.warehouseRequestUpdate = () => void updateNow();
   if ($("warehouse-update-now")) $("warehouse-update-now").onclick = () => void updateNow();
-  window.fastgoWarehouseCanLeave = () => !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
+  window.fastgoWarehouseCanLeave = () => {
+    var _a3, _b, _c;
+    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) && !busy && !job && !live.hasDraft() && !draft && !document.querySelector("dialog[open]");
+  };
   window.fastgoWarehouseOpenMode = async (kind) => {
     if (!["receipt", "sale"].includes(kind) || !window.fastgoWarehouseCanLeave() && !live.canUSB(kind)) return false;
     if (!live.active() || live.kind() !== kind) await live.open(kind);
@@ -4041,12 +4232,12 @@
   if (window.fastgoDesktop) {
     window.fastgoHasUnsavedChanges = () => !window.fastgoWarehouseCanLeave();
     window.fastgoUpdateBlockReason = (immediate) => {
-      var _a2;
-      return ((_a2 = window.warehouseUpdateSafe) == null ? void 0 : _a2.call(window, immediate)) ? "" : "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0441\u043A\u043B\u0430\u0434\u0430";
+      var _a3;
+      return ((_a3 = window.warehouseUpdateSafe) == null ? void 0 : _a3.call(window, immediate)) ? "" : "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u0441\u043A\u043B\u0430\u0434\u0430";
     };
     window.fastgoLockForUpdate = (immediate) => {
-      var _a2;
-      if (!((_a2 = window.warehouseUpdateSafe) == null ? void 0 : _a2.call(window, immediate))) return false;
+      var _a3;
+      if (!((_a3 = window.warehouseUpdateSafe) == null ? void 0 : _a3.call(window, immediate))) return false;
       document.body.inert = true;
       return true;
     };
@@ -4112,4 +4303,13 @@
   setInterval(() => {
     if (!terminal && screen === "home" && !busy) void unknown.poll();
   }, 3e3);
+  var _a2;
+  (_a2 = document.querySelector(".warehouse-sidebar")) == null ? void 0 : _a2.addEventListener("click", (e) => {
+    var _a3;
+    if ((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      message("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0430\u0439\u0441\u0430", true);
+    }
+  }, { capture: true });
 })();

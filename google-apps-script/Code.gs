@@ -236,8 +236,25 @@ function cashState_(p,actor){requireCash_(actor);const all=cashShifts_(),selecte
 function shiftOpen_(p,actor){requireCash_(actor);const register=String(p.register||'Основная касса').trim().replace(/\s+/g,' ');if(!register||register.length>80)throw httpError_('Название кассы: от 1 до 80 символов',400);const shifts=cashShifts_();if(shifts.some(s=>s.status==='open'&&s.register.toLowerCase()===register.toLowerCase()))throw httpError_('На этой кассе уже открыта смена. Обновите раздел.',409);const id=uid_();addEvent_('cash',id,'shift_open',actor,{register,number:shifts.length+1,opening_cash:cashMoney_(p.opening_cash??0),cashier:actor.name||actor.email||actor.id});return {id};}
 function shiftClose_(p,actor){requireCash_(actor);const shift=cashShifts_().find(s=>s.id===p.shift_id);if(!shift||shift.status!=='open')throw httpError_('Смена уже закрыта или не найдена',409);const totals=cashTotals_(shift),counted=cashMoney_(p.counted_cash),difference=Math.round((counted-totals.expected_cash)*100)/100;addEvent_('cash',shift.id,'shift_close',actor,{...totals,counted_cash:counted,difference,note:String(p.note||'').trim().slice(0,500),cashier:actor.name||actor.email||actor.id});return {id:shift.id,...totals,counted_cash:counted,difference};}
 
+function serviceSale_(p,actor){
+ requireCash_(actor);
+ if(!Array.isArray(p.service_items)||!p.service_items.length||p.service_items.length>40||(p.items&&p.items.length))throw httpError_('Выберите ремонтные работы',400);
+ if(!['cash','card','transfer'].includes(p.payment_method))throw httpError_('Укажите способ оплаты',400);
+ const lines=p.service_items.map(x=>{const r=x.service_id?find_(SHEETS.services,'service_id',x.service_id):null;if(x.service_id&&(!r||r['Активна']===false))throw httpError_('Работа недоступна',409);const title=String(x.title||(r&&r['Работа'])||'').trim(),q=x.quantity,price=x.unit_price;if(!title||title.length>200||!Number.isSafeInteger(q)||q<1||q>1000||typeof price!=='number'||!Number.isFinite(price)||price<0||price>1e8||Math.abs(price*100-Math.round(price*100))>.00001)throw httpError_('Проверьте название, количество и стоимость работы',400);return {title,quantity:q,price,service_id:x.service_id||''};});
+ const subtotal=Math.round(lines.reduce((sum,x)=>sum+x.quantity*x.price,0)*100)/100,total=p.total_override===undefined?subtotal:p.total_override;
+ if(typeof total!=='number'||!Number.isFinite(total)||total<=0||total>1e8||Math.abs(total*100-Math.round(total*100))>.00001||subtotal>1e8)throw httpError_('Проверьте сумму оплаты',400);
+ const register=String(p.register||'Склад').trim().slice(0,80);let shift=p.shift_id?cashShifts_().find(s=>s.id===p.shift_id):cashShifts_().find(s=>s.status==='open'&&s.register===register);if(!shift&&!p.shift_id){const opened=shiftOpen_({register,opening_cash:0},actor);shift=cashShifts_().find(s=>s.id===opened.id);}if(!shift||shift.status!=='open')throw httpError_('Откройте кассовую смену',409);
+ const id=uid_(),created=now_(),no=nextSeq_('next_sale_seq'),note=['Ручная оплата ремонтных работ',String(p.note||'').slice(0,500),total!==subtotal?'Итого вручную: '+subtotal+' → '+total+' ₽':''].filter(Boolean).join(' · ');
+ append_(SHEETS.sales,{sale_id:id,'Номер':'FGS-'+pad_(no,6),'Дата':created,client_id:'','Клиент':'','Сотрудник':actor.email||actor.id||'','Способ оплаты':{cash:'Наличные',card:'Карта',transfer:'Перевод'}[p.payment_method],'Сумма':subtotal,'Скидка':Math.max(0,Math.round((subtotal-total)*100)/100),'Итого':total,'Статус':'Проведена','Комментарий':note,updated_at:created,request_id:String(p.request_id||''),'Документ URL':''});
+ lines.forEach(x=>append_(SHEETS.saleItems,{sale_item_id:uid_(),sale_id:id,product_id:'','Штрих-код':'','Товар':x.title,'Количество':x.quantity,'Цена':x.price,'Скидка':0,'Сумма строки':Math.round(x.quantity*x.price*100)/100,movement_id:''}));
+ append_(SHEETS.payments,{payment_id:uid_(),'Дата':created,'Тип':'service',record_id:id,'Сумма':total,'Способ оплаты':p.payment_method,'Сотрудник':actor.email||actor.id||'','Комментарий':note,request_id:String(p.request_id||''),updated_at:created});
+ addEvent_('cash',id,'sale',actor,{shift_id:shift.id,register:shift.register,kind:'service',items:lines});
+ return {...saleResponse_(find_(SHEETS.sales,'sale_id',id)),kind:'service'};
+}
+
 function sale_(p,actor){
   const req=String(p.request_id||''); if(req){ const old=find_(SHEETS.sales,'request_id',req); if(old) return saleResponse_(old); }
+  if(p.service_items!==undefined)return serviceSale_(p,actor);
   requireCash_(actor);const shift=cashShifts_().find(s=>s.id===p.shift_id);if(!shift||shift.status!=='open')throw httpError_('Откройте кассовую смену перед продажей',409);
   const merged={};for(const x of (Array.isArray(p.items)?p.items:[])){const id=x.part_id||x.id,q=Number(x.quantity);if(!id||!Number.isInteger(q)||q<1)throw httpError_('Неверное количество',400);const old=merged[id];if(old&&(old.price_mode!==x.price_mode||old.unit_price!==x.unit_price))throw httpError_('У товара разные цены в корзине',400);merged[id]={part_id:id,quantity:(old?.quantity||0)+q,price_mode:x.price_mode,unit_price:x.unit_price};}
   const items=Object.values(merged);if(!items.length)throw httpError_('Корзина пустая',400);
@@ -322,11 +339,18 @@ function finance_(p){
   if(from) rows=rows.filter(r=>ymd_(r['Дата'])>=from); if(to) rows=rows.filter(r=>ymd_(r['Дата'])<=to);
   rows.sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата'])));
   const mapMethod=v=>({cash:'cash',card:'card',transfer:'transfer','Наличные':'cash','Карта':'card','Банковская карта':'card','Перевод':'transfer'})[String(v)]||String(v||'cash');
-  const mapped=rows.map(r=>{ const kind=String(r['Тип']), id=String(r.record_id||''), isRepair=kind==='repair', target=isRepair?repairs[id]:storage[id], no=target?(isRepair?target['Номер ремонта']:target['Номер']):''; return {id:r.payment_id,created_at:r['Дата'],repair_id:isRepair?id:null,storage_id:isRepair?null:id,repair_number:isRepair?(Number(String(no).replace(/\D/g,''))||no):null,storage_number:isRepair?null:(Number(String(no).replace(/\D/g,''))||no),method:mapMethod(r['Способ оплаты']),amount:num_(r['Сумма']),note:r['Комментарий']||'',actor_id:r['Сотрудник']||''}; });
+  const mapped=rows.map(r=>{ const kind=String(r['Тип']), id=String(r.record_id||''), isRepair=kind==='repair',isStorage=kind==='storage', target=isRepair?repairs[id]:isStorage?storage[id]:null, no=target?(isRepair?target['Номер ремонта']:target['Номер']):''; return {id:r.payment_id,created_at:r['Дата'],repair_id:isRepair?id:null,storage_id:isStorage?id:null,...(kind==='service'?{kind:'service',service_sale_id:id}:{}),repair_number:isRepair?(Number(String(no).replace(/\D/g,''))||no):null,storage_number:!isStorage?null:(Number(String(no).replace(/\D/g,''))||no),method:mapMethod(r['Способ оплаты']),amount:num_(r['Сумма']),note:r['Комментарий']||'',actor_id:r['Сотрудник']||''}; });
   const total=mapped.reduce((s,x)=>s+x.amount,0), sum=m=>mapped.filter(x=>x.method===m).reduce((s,x)=>s+x.amount,0), offset=Math.max(0,Math.floor(num_(p.offset))), limit=100;
   return {items:mapped.slice(offset,offset+limit),count:mapped.length,offset,limit,total:total,cash:sum('cash'),card:sum('card'),transfer:sum('transfer')};
 }
-function catalogSave_(p){ const r=find_(SHEETS.services,'service_id',p.id); if(!r) throw httpError_('Услуга не найдена',404); patchRow_(SHEETS.services,r.__row,{'Работа':String(p.title||r['Работа']),'Категория':String(p.category||r['Категория']||''),'Работа, ₽':num_(p.labor_price),updated_at:now_()}); return mapService_(find_(SHEETS.services,'service_id',p.id)); }
+function catalogSave_(p){
+ const title=String(p.title||'').trim(),price=p.labor_price;
+ if(!title||title.length>200||typeof price!=='number'||!Number.isFinite(price)||price<0||price>1e8||Math.abs(price*100-Math.round(price*100))>.00001)throw httpError_('Проверьте название и стоимость работы',400);
+ let r=find_(SHEETS.services,'service_id',p.id);
+ if(p.create===true){if(r)throw httpError_('Работа уже существует',409);append_(SHEETS.services,{service_id:p.id,'Работа':title,'Категория':String(p.category||'Ремонтные работы').slice(0,100),'Работа, ₽':price,'Итого, ₽':price,'Активна':true,updated_at:now_()});}
+ else{if(!r)throw httpError_('Услуга не найдена',404);if(p.expected_price!==undefined&&(Number(p.expected_price)!==num_(r['Работа, ₽'])||String(p.expected_title)!==String(r['Работа'])))throw httpError_('Прайс изменился. Обновите список работ',409);patchRow_(SHEETS.services,r.__row,{'Работа':title,'Категория':String(p.category||r['Категория']||''),'Работа, ₽':price,'Итого, ₽':price+num_(r['Запчасти, ₽']),updated_at:now_()});}
+ return mapService_(find_(SHEETS.services,'service_id',p.id));
+}
 function legal_(){ return Object.fromEntries(rows_(SHEETS.legal).filter(r=>r['Ключ']).map(r=>[r['Ключ'],r['Значение']])); }
 function legalSave_(p){ const fields=['legal_name','full_name','inn','ogrnip','registration_address','bank_name','bik','correspondent_account','settlement_account','phone','email']; fields.forEach(k=>{ let r=find_(SHEETS.legal,'Ключ',k); if(r) patchRow_(SHEETS.legal,r.__row,{'Значение':String(p[k]||'')}); else append_(SHEETS.legal,{'Ключ':k,'Значение':String(p[k]||''),'Примечание':''}); }); return legal_(); }
 

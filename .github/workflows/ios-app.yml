@@ -22,8 +22,8 @@ jobs:
       mkdir -p ios/build/package/Payload
       cp -R ios/build/device/Build/Products/Release-iphoneos/FastGo.app ios/build/package/Payload/
       cd ios/build/package
-      zip -qry FastGo-1.0.10-unsigned.ipa Payload
-      shasum -a 256 FastGo-1.0.10-unsigned.ipa > SHA256SUMS.txt
+      zip -qry FastGo-1.0.11-unsigned.ipa Payload
+      shasum -a 256 FastGo-1.0.11-unsigned.ipa > SHA256SUMS.txt
       file Payload/FastGo.app/FastGo
    - name: Compile simulator application
      run: xcodebuild -project ios/FastGo.xcodeproj -scheme FastGo -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=NO build
@@ -39,7 +39,7 @@ jobs:
        if curl --fail --silent http://127.0.0.1:17861/bundle-receipt.json > ios/build/installed-bundle.json; then break; fi
        sleep 1
       done
-      python3 -c 'import json; x=json.load(open("ios/build/installed-bundle.json")); assert x["bundle_source"]=="installed-ipa" and x["version"]=="1.0.10"'
+      python3 -c 'import json; x=json.load(open("ios/build/installed-bundle.json")); assert x["bundle_source"]=="installed-ipa" and x["version"]=="1.0.11"'
       container=$(xcrun simctl get_app_container "$device" ru.fastgo.ios data)
       for attempt in $(seq 1 45); do
        if test -f "$container/Library/Caches/fastgo-ui-smoke.json" && python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); sys.exit(0 if x.get("ready") else 1)' "$container/Library/Caches/fastgo-ui-smoke.json"; then break; fi
@@ -68,11 +68,11 @@ jobs:
      with: {name: FastGo-iPhone-unsigned, path: release}
    - env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
      run: |
-      test -s release/package/FastGo-1.0.10-unsigned.ipa
+      test -s release/package/FastGo-1.0.11-unsigned.ipa
       cd release/package
       sha256sum -c SHA256SUMS.txt
-      if gh release view fastgo-ios-v1.0.10 >/dev/null 2>&1; then
+      if gh release view fastgo-ios-v1.0.11 >/dev/null 2>&1; then
        echo 'This version is already published; never replace an installed IPA.'
        exit 0
       fi
-      gh release create fastgo-ios-v1.0.10 --target "$GITHUB_SHA" --latest=false --title 'FastGo для iPhone 1.0.10' --notes 'Скомпилированное приложение iPhone с интерфейсом внутри IPA. Нужна подпись через Sideloadly или Apple Developer. Проверены установленный пакет и видимая форма входа в симуляторе; установка и камера на физическом iPhone требуют проверки.' FastGo-1.0.10-unsigned.ipa SHA256SUMS.txt
+      gh release create fastgo-ios-v1.0.11 --target "$GITHUB_SHA" --latest=false --title 'FastGo для iPhone 1.0.11' --notes 'Скомпилированное приложение iPhone с интерфейсом внутри IPA. Нужна подпись через Sideloadly или Apple Developer. Проверены установленный пакет и видимая форма входа в симуляторе; установка и камера на физическом iPhone требуют проверки.' FastGo-1.0.11-unsigned.ipa SHA256SUMS.txt
