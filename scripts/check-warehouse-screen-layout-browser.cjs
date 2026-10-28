@@ -21,6 +21,14 @@ const {serve,backend,launchOptions}=require('./warehouse-browser-fixture.cjs');
   await page.locator('#back').click();await page.locator('#receipt').waitFor();await page.locator('#shift').click();await page.locator('#shift-form').waitFor();await fits('#shift-form');
   await page.locator('#master-stock').click();await page.getByRole('heading',{name:'Запчасти на мастерах'}).waitFor();await fits('.tablewrap');
   fs.mkdirSync('browser-results',{recursive:true});await page.screenshot({path:'browser-results/screen-layout-'+target+'-'+width+'.png'});
-  await context.close();console.log('PASS: '+target+' '+width+'x'+height+' notices, gutters, navigation and no overflow');
+  await context.close();
+  const signedOut=await browser.newContext({viewport:{width,height}});
+  await signedOut.addInitScript(()=>{window.warehouseDesktop={desktopStatus:async()=>({version:'1.0.41',usb:{status:'USB-сканер выключен',pending:0},update:{status:'current'}})};});
+  const login=await signedOut.newPage();await login.goto(base+'/warehouse.html');await login.locator('#login').waitFor();
+  assert.equal(await login.locator('.warehouse-sidebar').isVisible(),false,'login has no sidebar');
+  await login.locator('#message').evaluate(el=>{el.textContent='Проверьте почту и пароль';});
+  for(const selector of ['#desktop-status','#message']){const box=await login.locator(selector).boundingBox();assert(box&&Math.abs(box.x)<1&&box.x+box.width<=width+1,selector+' must use full width without a sidebar');}
+  if(width===850)await login.screenshot({path:'browser-results/'+kind+'-login-gutter-850.png'});
+  await signedOut.close();console.log('PASS: '+target+' '+width+'x'+height+' signed-in and signed-out gutters, notices, navigation and no overflow');
  }
  }finally{await browser?.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

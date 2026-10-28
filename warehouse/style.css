@@ -179,3 +179,10 @@ body[data-mode=station] .fg-notice-drawer{top:calc(var(--warehouse-header-height
 .service-workspace [data-add],.service-workspace [data-payment]{max-width:760px}
 .service-workspace .toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 @media(max-width:480px){.service-workspace .row{grid-template-columns:minmax(0,1fr) auto}.service-workspace .row>button{grid-column:1/-1;justify-self:end}.service-workspace h1{font-size:24px}.service-workspace [data-payment]>button{width:100%;margin-top:10px}}
+
+/* Signed-out screens have no sidebar: status and errors use the full window. */
+body[data-mode=station]{--warehouse-sidebar-gutter:238px}
+@media(max-width:1000px){body[data-mode=station]{--warehouse-sidebar-gutter:200px}}
+@media(max-width:700px){body[data-mode=station]{--warehouse-sidebar-gutter:0px}}
+body[data-mode=station][data-screen=login],body[data-mode=station][data-screen=setup],body[data-mode=station]:not([data-screen]){--warehouse-sidebar-gutter:0px}
+body[data-mode=station] .desktop-status,body[data-mode=station] #message,body[data-mode=station] #receipt-label-notice{margin-left:var(--warehouse-sidebar-gutter)}
