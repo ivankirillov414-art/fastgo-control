@@ -29,6 +29,8 @@ module.exports=async function fullscreenSmoke({app,page}){
  // Exercise that hook with native input on this isolated, focused fixture window.
  const nativeF11=async()=>{await focusFixture();await app.evaluate(({BrowserWindow})=>{const win=BrowserWindow.getAllWindows().find(w=>/^fastgo:\/\/app\/(workshop|warehouse)\.html/.test(w.webContents.getURL()));win.webContents.sendInputEvent({type:'keyDown',keyCode:'F11'});win.webContents.sendInputEvent({type:'keyUp',keyCode:'F11'});});};
  stage='fixture-visible-focused';await focusFixture();
+ stage='startup-fullscreen';await wait(true);assert.equal((await state()).fullscreen,true);
+ stage='startup-Escape-exit';await page.keyboard.press('Escape');await wait(false);
  assert.equal((await state()).fullscreen,false);
  stage='button-enter';
  await page.getByRole('button',{name:'Полный экран (F11)',exact:true}).click();await wait(true);assert.equal((await state()).fullscreen,true);

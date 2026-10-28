@@ -17,8 +17,9 @@ async function running(folder){
  const {stdout}=await run('powershell.exe',['-NoProfile','-NonInteractive','-Command',"@(Get-CimInstance Win32_Process -Filter \"Name like 'FastGo%'\" | ForEach-Object {$_.ExecutablePath}) | ConvertTo-Json -Compress"],{windowsHide:true,timeout:20000,maxBuffer:1024*1024});
  const list=stdout.trim()?JSON.parse(stdout):[];return (Array.isArray(list)?list:[list]).some(x=>typeof x==='string'&&path.dirname(x).toLowerCase()===folder.toLowerCase());
 }
+function runWarehouseInstaller(file,execute=run){return execute(file,['/S','--updated','--force-run'],{windowsHide:true,timeout:180000});}
 class WarehouseUpdater{
- constructor({dir,fetcher=fetch,find=discover,isRunning=running,read=installed,install=(file)=>run(file,['/S'],{windowsHide:true,timeout:180000}),canInstall=()=>true,report=async()=>{}}){Object.assign(this,{dir,fetcher,find,isRunning,read,install,canInstall,report});this.state={status:'waiting'};this.busy=false;}
+ constructor({dir,fetcher=fetch,find=discover,isRunning=running,read=installed,install=runWarehouseInstaller,canInstall=()=>true,report=async()=>{}}){Object.assign(this,{dir,fetcher,find,isRunning,read,install,canInstall,report});this.state={status:'waiting'};this.busy=false;}
  async tick(){
   if(this.busy)return;this.busy=true;let app;
   try{
@@ -43,4 +44,4 @@ class WarehouseUpdater{
   finally{this.busy=false;if(app)await this.report(this.state).catch(()=>{});}
  }
 }
-module.exports={WarehouseUpdater,metadata,newer,discover,installed,running};
+module.exports={WarehouseUpdater,metadata,newer,discover,installed,running,runWarehouseInstaller};
