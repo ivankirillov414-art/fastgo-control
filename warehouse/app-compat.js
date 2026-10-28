@@ -396,6 +396,14 @@
     return { ready: call2("work_catalog").then((x) => {
       catalog2 = x;
       $2("datalist").innerHTML = x.map((s) => '<option value="' + esc(s.title) + '">' + money(s.labor_price) + "</option>").join("");
+      if (root.isConnected && !paying && !draft2.pending && add.elements.price.value === "") {
+        const selected = catalog2.find((s) => s.title === add.elements.work.value.trim());
+        if (selected) {
+          add.elements.price.value = selected.labor_price;
+          draft2.price = add.elements.price.value;
+          persist2();
+        }
+      }
     }) };
   }
 
