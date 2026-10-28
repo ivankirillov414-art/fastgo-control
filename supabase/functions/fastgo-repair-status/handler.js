@@ -5,7 +5,7 @@ const encoder=new TextEncoder();
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
 export function clientStage(value){
- const stages={'Принят':'accepted','Диагностика':'diagnostics','Ждём запчасти':'waiting','Ждем запчасти':'waiting','В ремонте':'repair','Готов':'ready','Выдан':'issued','Отменён':'cancelled','Отменен':'cancelled',accepted:'accepted',diagnostics:'diagnostics',waiting_parts:'waiting',repair:'repair',ready:'ready',issued:'issued',cancelled:'cancelled'};
+ const stages={'Принят':'accepted','Диагностика':'diagnostics','Ждём запчасти':'waiting','Ждем запчасти':'waiting','В работе':'repair','В ремонте':'repair','Готов':'ready','Выдан':'issued','Отменён':'cancelled','Отменен':'cancelled',accepted:'accepted',diagnostics:'diagnostics',waiting_parts:'waiting',repair:'repair',ready:'ready',issued:'issued',cancelled:'cancelled'};
  return stages[value]||'accepted';
 }
 export function createStatusHandler({base,key,fetcher=fetch}){

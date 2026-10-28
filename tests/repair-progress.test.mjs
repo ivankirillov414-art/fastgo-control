@@ -74,7 +74,7 @@ test('ready guide keeps unpaid handover blocked and respects actual issue permis
  const record={status:'ready',approved_amount:600,parts:[{part_id:'issued',quantity:1,price:600}],paid_amount:100},values={works:[],parts:record.parts,diagnostics_notes:'Проверено',quality_checked:true};
  const owner={role:'owner',status_permissions:{can_issue:true}};
  let guide=repairGuide(record,values,owner);assert.equal(guide.target,'issued');assert.equal(guide.due,500);assert.equal(guide.disabled,true);
- guide=repairGuide({...record,paid_amount:600},values,owner);assert.equal(guide.disabled,false);assert.deepEqual(guide.missing,['handover']);
+ guide=repairGuide({...record,paid_amount:600},values,owner);assert.equal(guide.disabled,false);assert.deepEqual(guide.missing,[]);
  const master=repairGuide(record,values,{role:'mechanic',status_permissions:{can_issue:false}});assert.equal(master.target,null);assert.match(master.detail,/касс/);
 });
 

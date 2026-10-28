@@ -45,14 +45,14 @@ const server=createServer((req,res)=>{
   });
   const pane=async id=>{if(viewport.width<=760)await page.locator('[data-repair-pane="'+id+'"]').click();};
   let navigation=0;const open=async()=>{
-   await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?kind=repair&id=progress-fixture');
+   await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?legacy=1&kind=repair&id=progress-fixture');
    await page.locator('#work-search').waitFor({state:'attached'});await pane('work');
   };
   const transition=async name=>{await page.locator('.repair-status-menu > summary').click();await page.getByRole('button',{name,exact:true}).click();};
   const saved=async action=>{
    const form=await page.locator('#order-form').elementHandle(),count=updates.length;
    await action();await page.waitForFunction(form=>!form.isConnected,form);
-   assert.equal(updates.length,count+1);await pane('work');await page.locator('#repair-save').waitFor();
+   assert.equal(updates.length,count+1);await page.locator('#dialog[open]').waitFor({state:'hidden'});await pane('work');await page.locator('#repair-save').waitFor();
   };
   try{
    await open();
@@ -106,7 +106,7 @@ const server=createServer((req,res)=>{
    // Revoking an existing choice stays explicit and blocks the next issue transition.
    await pane('parts');assert.equal(await page.locator('#no-parts').isChecked(),true);await page.locator('#no-parts').uncheck();
    await saved(()=>page.locator('#repair-save').click());assert.equal(updates.at(-1).no_parts,false);assert.equal(record.parts_status.mode,'pending');
-   await transition('Выдать клиенту');await page.locator('#f-flow_handover').fill('Комплектно');const issueWrites=updates.length;
+   await transition('Выдать клиенту');assert.equal(await page.locator('#f-flow_handover').count(),0);const issueWrites=updates.length;
    await page.locator('#modal-form button[type="submit"]').click();assert.equal(updates.length,issueWrites);assert.equal(record.status,'ready');assert.equal(await page.locator('[name="flow_no_parts"]').isChecked(),false);
    await page.locator('#dialog [aria-label="Закрыть"]').click();
    // Price edits at an advanced stage offer approval here, not in a hidden panel.
