@@ -286,3 +286,26 @@ test('cashier cancels one unknown scan idempotently without resolving or moving 
  assert.equal((await h.request('unknown_cancel',{id:second.request_id})).status,409);
  assert.equal((await h.request('unknown_cancel',{id:randomUUID()})).status,404);
 });
+import {createNativeEngine as serviceEngine} from '../supabase/functions/_shared/native-engine.js';
+
+test('manual work payment accepts 1600 without a client or repair, preserves stock and shares the cash shift',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),items:[{title:'Замена камеры',quantity:1,unit_price:1800}],total_override:1600,payment_method:'cash'};
+ const before=JSON.stringify(h.snap.sheets['Товары']);const first=await h.request('work_payment',p);assert.equal(first.status,200,first.error);assert.equal(first.data.total,1600);assert.equal(first.data.kind,'service');
+ assert.deepEqual((await h.request('work_payment',p)).data,first.data);assert.equal((await h.request('work_payment',{...p,total_override:1500})).status,409);
+ assert.equal(h.snap.sheets['Продажи'].rows.length,1);assert.equal(h.snap.sheets['Оплаты'].rows.length,1);assert.equal(h.snap.sheets['Оплаты'].rows[0]['Тип'],'service');assert.equal(h.snap.sheets['Клиенты'].rows.length,0);assert.equal(h.snap.sheets['Приёмки'].rows.length,0);assert.equal(h.snap.sheets['Ремонты'].rows.length,0);assert.equal(h.snap.sheets['Движения склада'].rows.length,0);assert.equal(JSON.stringify(h.snap.sheets['Товары']),before);const cash=await h.request('cash_state');assert.equal(cash.data.totals.total,1600);assert.equal(cash.data.totals.cash,1600);const finance=serviceEngine(h.snap.sheets).run('finance',{}, {id:actor,role:'owner'});assert.equal(finance.total,1600);assert.equal(finance.items[0].storage_id,null);assert.equal(finance.items[0].repair_id,null);assert.equal(finance.items[0].service_sale_id,first.data.id);
+});
+
+test('shared work catalog creates and edits title and price once, detects stale editors and keeps old paid prices',async()=>{
+ const h=await harness(),id=randomUUID(),p={request_id:randomUUID(),id,create:true,title:'Замена камеры',labor_price:1200};assert.equal((await h.request('work_catalog_save',p)).status,200);assert.equal((await h.request('work_catalog_save',p)).status,200);let list=(await h.request('work_catalog')).data;assert.equal(list.length,1);assert.equal(list[0].labor_price,1200);
+ const pay=await h.request('work_payment',{request_id:randomUUID(),items:[{service_id:id,title:list[0].title,quantity:1,unit_price:1200}],payment_method:'card'});assert.equal(pay.status,200,pay.error);
+ const edit={request_id:randomUUID(),id,title:'Замена камеры 10 дюймов',labor_price:1600,expected_title:'Замена камеры',expected_price:1200};assert.equal((await h.request('work_catalog_save',edit)).status,200);assert.equal((await h.request('work_catalog_save',{...edit,request_id:randomUUID(),labor_price:1700})).status,409);list=(await h.request('work_catalog')).data;assert.equal(list[0].title,edit.title);assert.equal(list[0].labor_price,1600);assert.equal(list[0].total_price,1600);assert.equal(h.snap.sheets['Продажи'].rows[0]['Итого'],1200);assert.equal(h.snap.sheets['Строки продаж'].rows[0]['Цена'],1200);
+});
+
+test('manual work payment rejects malformed money before creating a shift, and preserves device and role restrictions',async()=>{
+ for(const unit_price of [-1,'1600',null,NaN,.001]){const h=await harness(),r=await h.request('work_payment',{request_id:randomUUID(),items:[{title:'Работа',quantity:1,unit_price}],payment_method:'cash'});assert.equal(r.status,400,r.error);assert.equal(h.snap.sheets['События'].rows.length,0);assert.equal(h.snap.sheets['Продажи'].rows.length,0);}
+ const h=await harness(),p={request_id:randomUUID(),items:[{title:'Работа',quantity:1,unit_price:1600}],payment_method:'cash'};assert.equal((await h.request('work_payment',p,'terminal')).status,403);h.member.role='mechanic';assert.equal((await h.request('work_payment',p)).status,403);h.member.role='seller';assert.equal((await h.request('work_catalog_save',{request_id:randomUUID(),id:randomUUID(),create:true,title:'Работа',labor_price:1600})).status,403);assert.equal((await h.request('work_payment',p)).status,200);
+});
+
+test('explicit no-parts confirmation remains necessary for real repairs after standalone work payments',async()=>{
+ const h=await harness();await h.request('work_payment',{request_id:randomUUID(),items:[{title:'Работа без карточки',quantity:1,unit_price:1600}],payment_method:'transfer'});const repair=seedRepair(h);Object.assign(h.snap.sheets['Ремонты'].rows[0],{master_id:master,'Диагностика':'Проверено','Итого':0,'Работы':'[]','Строки запчастей':'[]'});assert.throws(()=>serviceEngine(h.snap.sheets).run('update',{kind:'repair',id:repair,revision:2,status:'ready',quality_checked:true},{id:master,role:'mechanic'}),/Ремонт без запчастей/);
+});

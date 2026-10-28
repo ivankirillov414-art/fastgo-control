@@ -163,6 +163,7 @@ function requireRepairTransition_(from,to){if(!REPAIR_TRANSITIONS_[from]?.has(to
 
 function sale_(p,actor){
   const req=String(p.request_id||''); if(req){ const old=find_(SHEETS.sales,'request_id',req); if(old) return saleResponse_(old); }
+  if(p.service_items!==undefined)return serviceSale_(p,actor);
   requireCash_(actor);const shift=cashShifts_().find(s=>s.id===p.shift_id);if(!shift||shift.status!=='open')throw httpError_('Откройте кассовую смену перед продажей',409);
   const merged={};for(const x of (Array.isArray(p.items)?p.items:[])){const id=x.part_id||x.id,q=Number(x.quantity);if(!id||!Number.isInteger(q)||q<1)throw httpError_('Неверное количество',400);const old=merged[id];if(old&&(old.price_mode!==x.price_mode||old.unit_price!==x.unit_price))throw httpError_('У товара разные цены в корзине',400);merged[id]={part_id:id,quantity:(old?.quantity||0)+q,price_mode:x.price_mode,unit_price:x.unit_price};}
   const items=Object.values(merged);if(!items.length)throw httpError_('Корзина пустая',400);
