@@ -19,6 +19,7 @@ public class PhoneSmokeTest {
  @Test public void installedOfflineScreensTypingAndSavedState()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    ready(scenario);assertEquals("true",js(scenario,"document.documentElement.scrollWidth<=innerWidth+1"));
+   android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();assertEquals(JSONObject.quote(context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName),js(scenario,"window.fastgoInstalledApp.version"));
    assertEquals("true",js(scenario,"location.href.startsWith('https://appassets.androidplatform.net/assets/fastgo/')"));
    assertEquals("true",js(scenario,"typeof window.fastgoRequestAppUpdate==='function' && typeof FastGoPhone.checkUpdate==='function'"));
    js(scenario,"document.querySelector('#login input').focus();localStorage.setItem('fastgo-phone-smoke','kept');true");
