@@ -9,7 +9,11 @@ function create(root){
   if(pattern==='package.json'){files[pattern]=digest(JSON.stringify(runtimePackage(pkg)));continue;}
   const folder=pattern.endsWith('/**/*')?pattern.slice(0,-5):null;
   if(!folder&&/[*!?]/.test(pattern))throw Error('Unsupported release input pattern: '+pattern);
-  for(const name of folder?walk(path.join(root,folder)).map(n=>folder+'/'+n):[pattern])files[name]=digest(fs.readFileSync(path.join(root,name)));
+  for(const name of folder?walk(path.join(root,folder)).map(n=>folder+'/'+n):[pattern]){
+   // Repository transport metadata is not a runtime asset; electron-builder always removes it.
+   if(path.basename(name)==='.gitattributes')continue;
+   files[name]=digest(fs.readFileSync(path.join(root,name)));
+  }
  }
  for(const resource of pkg.build.extraResources||[]){
   if(typeof resource!=='object'||!resource.from||!resource.to||resource.filter)throw Error('Unsupported extra resource definition');
@@ -26,7 +30,10 @@ function verify(root,archive,resources,asar){
  const receipt=JSON.parse(asar.extractFile(archive,'release-content.json').toString()),expected=create(root);
  if(JSON.stringify(receipt)!==JSON.stringify(expected))throw Error('Packaged release identity differs from tested source');
  for(const [name,hash] of Object.entries(receipt.files)){
-  const bytes=asar.extractFile(archive,name),actual=name==='package.json'?digest(JSON.stringify(runtimePackage(JSON.parse(bytes)))):digest(bytes);
+  let bytes;try{bytes=asar.extractFile(archive,name);}catch(error){
+   console.error('Archive entries near missing file:',asar.listPackage?.(archive).filter(n=>n.toLowerCase().includes(path.basename(name).toLowerCase())||n.replaceAll('\\','/').includes('/'+path.posix.dirname(name)+'/')).slice(0,30));throw error;
+  }
+  const actual=name==='package.json'?digest(JSON.stringify(runtimePackage(JSON.parse(bytes)))):digest(bytes);
   if(actual!==hash)throw Error('Stale packaged file: '+name);
  }
  for(const [name,hash] of Object.entries(receipt.resources))if(digest(fs.readFileSync(path.join(resources,name)))!==hash)throw Error('Stale packaged resource: '+name);
