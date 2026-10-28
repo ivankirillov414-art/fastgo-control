@@ -19,10 +19,11 @@ jobs:
    - run: node --test tests/preorders.test.mjs tests/warehouse*.mjs tests/device-updates.test.mjs tests/parts-pickup.test.mjs tests/customer-repair-status.test.mjs tests/native-store.test.mjs tests/master-stock.test.mjs tests/operations.test.mjs tests/avito.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs desktop/tests/barcode-print.test.cjs desktop/tests/avito-toast.test.cjs
    - run: node --test warehouse-desktop/tests/*.test.cjs desktop/tests/printer-profiles.test.cjs
    - run: npm install --prefix /tmp/warehouse-browser playwright@1.62.1
-   - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
+   - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium webkit
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-compact-report-browser.cjs
-   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs chromium
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs webkit
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-services-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-manual-update-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-mobile-login.cjs

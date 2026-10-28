@@ -26,3 +26,4 @@ test('new metadata endpoints enforce JWT, active membership and seller restricti
   assert.equal(response.status,scenario==='owner'?200:['anonymous','invalid'].includes(scenario)?401:403,scenario);assert.equal(syncCalls,scenario==='owner'?1:0,scenario);
  }
 });
+test('reference estimate events do not resolve non-UUID model identifiers as repairs',async()=>{const f=fixture();f.journal[0].changes=[{sheet:'События',row:2,values:{}}];f.rows.push({sheet:'События',row_no:2,data:{Тип:'equipment_reference_price',record_id:'eq-1234567890abcdef1234'}});const r=await nativeSyncChanges(f.db,f.params);assert.equal(r.reset,false);assert.deepEqual(r.records,[]);});

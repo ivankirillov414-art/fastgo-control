@@ -54,6 +54,10 @@ async function request(event,{path:pathname,body={}}){
  const action=body.action,p=body.params||{},account=actor;
  // A preorder is confirmed only after the primary database commits it. A cached
  // prior response must never turn a failed save into an apparent success.
+ if(action==='equipment_market_price_save'){
+  try{const data=await remote(action,p,account);store.db.prepare("DELETE FROM cache WHERE actor=? AND key LIKE 'equipment_market_prices:%'").run(account);lastError='';notify({dataChanged:true});return {data};}
+  catch(error){if(transient(error)){online=false;lastError=error.message;notify();}throw error;}
+ }
  if(action==='preorder_save'){
   try{const data=await remote(action,p,account);store.db.prepare("DELETE FROM cache WHERE actor=? AND (key LIKE 'preorders:%' OR key LIKE 'preorder_get:%')").run(account);lastError='';notify({dataChanged:true});return {data};}
   catch(error){if(transient(error)){online=false;lastError=error.message;notify();}throw error;}

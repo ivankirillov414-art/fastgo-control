@@ -7,7 +7,7 @@ import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'workshop-master-scope-2026-10-26';
+const RELEASE = 'equipment-reference-2026-10-28';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -120,10 +120,10 @@ async function rolePermission(role){
 const statusPermissionKey=status=>status==='ready'?'can_mark_ready':status==='issued'?'can_issue':status==='cancelled'?'can_cancel':'';
 const repairTransitions={accepted:new Set(['accepted','diagnostics','cancelled']),diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),ready:new Set(['ready','repair','issued','cancelled']),issued:new Set(['issued']),cancelled:new Set(['cancelled'])};
 function requireRepairTransition(from,to){if(!repairTransitions[from]?.has(to))fail('Сначала пройдите предыдущий этап ремонта',409);}
-const readActions=new Set(['preorders','preorder_get','preorder_suggestions','parts_pickup','stock_receipts','catalog','part_by_barcode','stock_history','cash_state','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
-const writeActions=new Set(['preorder_save','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const readActions=new Set(['equipment_market_prices','preorders','preorder_get','preorder_suggestions','parts_pickup','stock_receipts','catalog','part_by_barcode','stock_history','cash_state','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
+const writeActions=new Set(['equipment_market_price_save','preorder_save','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','stock','payment','extend','contact','legacy']);
-const administrationActions=new Set(['part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
+const administrationActions=new Set(['equipment_market_price_save','part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
 const terminal=new Set(['issued','returned','cancelled']);
 async function legacyPhotos(kind,id){
   if(!uuid(id))return [];const t=kind==='storage'?'storage_intakes':'service_repairs';
@@ -154,11 +154,11 @@ async function main(req){
       return out({data:{active:member?.active===true,state,requested_at:member?.created_at||null}});
     }
     const a=await db('workshop_members','profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=*');const me=a?.[0];if(!me||!['developer','owner','admin','receiver','manager','mechanic','seller'].includes(me.role))fail('Доступ к мастерской не выдан',403);
-    if(me.role==='mechanic'&&['payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action))fail('Касса, склад и оплаты недоступны мастеру',403);
+    if(me.role==='mechanic'&&['equipment_market_prices','equipment_market_price_save','payment','finance','stock','stock_history','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action))fail('Касса, склад и оплаты недоступны мастеру',403);
     p.kind=p.kind||(/storage-api/.test(new URL(req.url).pathname)?'storage':'repair');if(!['repair','storage'].includes(p.kind))fail('Неверный вид заказа');
     if(['stock_receive','stock_receipts'].includes(action)&&!['developer','owner','seller'].includes(me.role))fail('Нет права принимать товар на склад',403);
     if(['cash_state','shift_open','shift_close','sale','sales'].includes(action)&&!canSell(me))fail('Касса доступна продажнику, владельцу и разработчику',403);
-    if(me.role==='seller'&&!['me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
+    if(me.role==='seller'&&!['equipment_market_prices','me','stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales','catalog','part_by_barcode','part_photos','part_photo_url','stock_history','operation_status','health','account_credentials_update'].includes(action))fail('Нет доступа',403);
     if(action==='me'){const [c,status_permissions]=await Promise.all([config(),rolePermission(me.role)]);return out({data:{...me,email:user.email,status_permissions,backend:c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE',release:RELEASE}});}
     if(['label_targets','label_enqueue'].includes(action)){
       if(action==='label_enqueue'&&(await config()).storage_mode!=='postgres')fail('Переносим рабочую базу. Повторите печать после завершения переноса.',503);
@@ -277,6 +277,7 @@ async function main(req){
     const c=await config(),status_permissions=action==='update'&&p.kind==='repair'?await rolePermission(me.role):undefined,actor={id:user.id,email:user.email||'',name:me.name||'',role:me.role,can_sell:canSell(me),can_edit_catalog:canEditCatalog(me),...(status_permissions?{status_permissions}:{})};
     if(c.storage_mode==='paused'&&writeActions.has(action))fail('Переносим рабочую базу. Повторите эту же операцию через минуту.',503);
     if(['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action)&&c.storage_mode!=='postgres')fail('Касса требует рабочую базу FastGo. Обратитесь к разработчику.',503);
+    if(action.startsWith('equipment_market_')&&c.storage_mode!=='postgres')fail('Для редактирования справочника нужна рабочая база FastGo',503);
     if(action.startsWith('preorder')&&c.storage_mode!=='postgres')fail('Предзаказы требуют рабочую базу FastGo',503);
     const remote=googleClient(c,actor),g=c.storage_mode==='postgres'?nativeClient({db,actor,google:remote,storage:{
       async put(path,bytes,mime){const r=await fetch(BASE+'/storage/v1/object/fastgo-workshop-private/'+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':mime},body:bytes,signal:AbortSignal.timeout(30000)});if(!r.ok&&r.status!==409)fail('Не удалось сохранить файл',503);},

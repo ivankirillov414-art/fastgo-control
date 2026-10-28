@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-28",
+  "models": 839,
+  "categories": [
+    "Гироскутеры",
+    "Грузовые электротрициклы",
+    "Моноколёса",
+    "Пассажирские электротрициклы",
+    "Сигвеи",
+    "Электровелосипеды",
+    "Электроквадроциклы",
+    "Электромобили",
+    "Электромопеды",
+    "Электромотоциклы",
+    "Электросамокаты",
+    "Электроскейты",
+    "Электроскутеры"
+  ],
+  "with_photos": 617,
+  "with_specifications": 571,
+  "missing_data": "Explicit unavailable indication; never substitute another model photo or invented specifications",
+  "repair_intake": "1906 sourced reference names retained independently; full intake catalogue remains over 3000 names",
+  "market_price": "Shared journal, role checks, revisions and idempotent operation receipts; no stock or sale-price changes",
+  "versions": {
+    "windows": "1.0.61",
+    "warehouse": "1.0.53",
+    "android": "1.0.10"
+  },
+  "physical_installation_confirmed": false
+}
