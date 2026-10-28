@@ -30,7 +30,7 @@ function verify(root,archive,resources,asar){
  const receipt=JSON.parse(asar.extractFile(archive,'release-content.json').toString()),expected=create(root);
  if(JSON.stringify(receipt)!==JSON.stringify(expected))throw Error('Packaged release identity differs from tested source');
  for(const [name,hash] of Object.entries(receipt.files)){
-  let bytes;try{bytes=asar.extractFile(archive,name);}catch(error){
+  let bytes;try{bytes=asar.extractFile(archive,path.normalize(name));}catch(error){
    console.error('Archive entries near missing file:',asar.listPackage?.(archive).filter(n=>n.toLowerCase().includes(path.basename(name).toLowerCase())||n.replaceAll('\\','/').includes('/'+path.posix.dirname(name)+'/')).slice(0,30));throw error;
   }
   const actual=name==='package.json'?digest(JSON.stringify(runtimePackage(JSON.parse(bytes)))):digest(bytes);
