@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
 const {prepareOutput,writeManifest}=require('./bundle-assets.cjs');
 const root=path.resolve(__dirname,'../..'),out=prepareOutput(__dirname);
-for(const folder of ['workshop','vendor','warehouse'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true,filter:p=>!p.endsWith('.apk')&&!p.includes(path.sep+'native'+path.sep)});
+for(const folder of ['workshop','vendor','warehouse'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true,filter:p=>!p.endsWith('.apk')&&(folder!=='warehouse'||!['native','update'].includes(path.relative(path.join(root,folder),p).split(path.sep)[0]))});
 for(const file of ['workshop.html','workshop.css','fastgo-logo.png','warehouse.html','repair-status.html'])fs.copyFileSync(path.join(root,file),path.join(out,file));
 for(const file of ['documents.js','customer-link.js','repair-print.js']){const p=path.join(out,'workshop',file);let s=fs.readFileSync(p,'utf8');s=s.replaceAll("new URL('workshop.html',location.href)","new URL('https://ivankirillov414-art.github.io/fastgo-control/workshop.html')").replaceAll("new URL('repair-status.html',location.href)","new URL('https://ivankirillov414-art.github.io/fastgo-control/repair-status.html')");fs.writeFileSync(p,s);}
 fs.copyFileSync(path.join(__dirname,'phone-bootstrap.js'),path.join(out,'phone-bootstrap.js'));

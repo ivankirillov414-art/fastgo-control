@@ -1,10 +1,10 @@
 name: FastGo Android Phone
 on:
  pull_request:
-  paths: ['warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
+  paths: ['warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  push:
   branches: [main]
-  paths: ['warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
+  paths: ['warehouse-android/phone/**','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
