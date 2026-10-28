@@ -36,7 +36,7 @@ require(${JSON.stringify(path.join(root,'main.cjs'))});`);
  for(let attempt=0;attempt<150&&!(await app.evaluate(()=>updateInstalls.length));attempt++)await new Promise(resolve=>setTimeout(resolve,100));
  const final=await page.evaluate(()=>window.fastgoDesktop.state());
  assert.deepEqual(await app.evaluate(()=>updateInstalls),[[true,true]],JSON.stringify(final.update));assert.equal(final.update.status,'installing');assert.equal(await page.evaluate(()=>window.fastgoHasUnsavedChanges()),false);
- assert.ok(final.pending>=2);assert.ok(fs.readdirSync(path.join(data,'backups')).some(name=>name.includes('before-update')));
+ assert.equal(final.pending,1);assert.ok(fs.readdirSync(path.join(data,'backups')).some(name=>name.includes('before-update')));
  assert.deepEqual(errors,[]);console.log('PASS: immediate update dialog, real progress, retry/current states, dirty form protection, clean-card install and durable pending receipt');
  }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{
  await page.evaluate(()=>{window.confirm=()=>true;location.hash='home';}).catch(()=>{});
