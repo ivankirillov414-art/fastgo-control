@@ -157,6 +157,68 @@
     return exact.length ? exact : find(normalizeScan(value).toUpperCase());
   }
 
+  // warehouse/final-report.js
+  var names = { cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434", card: "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435" };
+  function mountFinalReport({ root, call: call2 }) {
+    let disposed = false, revision = 0;
+    root.classList.add("final-report");
+    root.innerHTML = '<div class="toolbar"><h1>\u0418\u0442\u043E\u0433\u043E\u0432\u044B\u0439 \u043E\u0442\u0447\u0451\u0442</h1><button type="button" data-refresh>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C</button></div><form data-period><label>\u0421 \u0434\u0430\u0442\u044B<input type="date" name="from"></label><label>\u041F\u043E \u0434\u0430\u0442\u0443<input type="date" name="to"></label><button>\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C</button><button type="button" data-all>\u0417\u0430 \u0432\u0441\u0451 \u0432\u0440\u0435\u043C\u044F</button></form><p data-report-status role="status"></p><div class="report-total">\u0412\u0441\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 <strong data-grand-total>\u2014</strong><span data-count></span></div><div data-groups></div>';
+    const $2 = (s) => root.querySelector(s), form = $2("[data-period]");
+    const parameters = () => {
+      const from = form.elements.from.value, to = form.elements.to.value;
+      const date2 = (v) => /* @__PURE__ */ new Date(v + "T00:00:00");
+      const end = to ? date2(to) : null;
+      if (end) end.setDate(end.getDate() + 1);
+      return { ...from ? { from: date2(from).toISOString() } : {}, ...end ? { to: end.toISOString() } : {} };
+    };
+    const row = (x) => '<article class="report-operation"><time>' + esc(new Date(x.created_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })) + "</time><div><b>" + esc(x.title) + "</b>" + (x.note ? "<small>" + esc(x.note) + "</small>" : "") + "<small>" + esc(x.actor) + "</small></div><strong>" + money(x.amount) + "</strong></article>";
+    async function refresh() {
+      const current = ++revision, opened = new Set([...root.querySelectorAll("details[open]")].map((x) => x.dataset.method));
+      $2("[data-report-status]").textContent = "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u043F\u0440\u043E\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438\u2026";
+      $2("[data-refresh]").disabled = true;
+      try {
+        const data = await call2("final_report", parameters());
+        if (disposed || current !== revision) return;
+        $2("[data-grand-total]").textContent = money(data.total);
+        $2("[data-count]").textContent = "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0439: " + data.count;
+        $2("[data-groups]").innerHTML = data.groups.map((g) => '<details data-method="' + g.method + '"' + (opened.has(g.method) ? " open" : "") + "><summary><span>" + names[g.method] + "<small>" + g.count + " \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439</small></span><strong>" + money(g.total) + '</strong><span class="report-chevron" aria-hidden="true">\u25B6</span></summary><div class="report-operations">' + (g.items.map(row).join("") || "<p>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u043D\u0435\u0442.</p>") + "</div>" + (g.items.length < g.count ? '<button type="button" data-more="' + g.method + '" data-offset="' + g.items.length + '">\u0415\u0449\u0451 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438</button>' : "") + "</details>").join("");
+        $2("[data-report-status]").textContent = "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0434\u0430\u0436\u0438 \u0438 \u043E\u043F\u043B\u0430\u0442\u044B \u0440\u0430\u0431\u043E\u0442, \u0440\u0435\u043C\u043E\u043D\u0442\u043E\u0432 \u0438 \u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F. \u0412\u044B\u0434\u0430\u0447\u0430 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043E\u043F\u043B\u0430\u0442\u043E\u0439.";
+        root.querySelectorAll("[data-more]").forEach((button) => button.onclick = async () => {
+          button.disabled = true;
+          try {
+            const data2 = await call2("final_report", { ...parameters(), method: button.dataset.more, offset: Number(button.dataset.offset) });
+            if (disposed || current !== revision) return;
+            const group = data2.groups.find((g) => g.method === button.dataset.more);
+            button.previousElementSibling.insertAdjacentHTML("beforeend", group.items.map(row).join(""));
+            button.dataset.offset = String(Number(button.dataset.offset) + group.items.length);
+            button.hidden = Number(button.dataset.offset) >= group.count;
+          } catch (e) {
+            $2("[data-report-status]").textContent = e.message;
+          } finally {
+            button.disabled = false;
+          }
+        });
+      } catch (e) {
+        if (!disposed && current === revision) $2("[data-report-status]").textContent = "\u041E\u0442\u0447\u0451\u0442 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D: " + e.message;
+      } finally {
+        if (!disposed && current === revision) $2("[data-refresh]").disabled = false;
+      }
+    }
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      void refresh();
+    };
+    $2("[data-refresh]").onclick = refresh;
+    $2("[data-all]").onclick = () => {
+      form.reset();
+      void refresh();
+    };
+    return { ready: refresh(), dispose() {
+      disposed = true;
+      revision++;
+    } };
+  }
+
   // warehouse/services.js
   function mountServices({ root, call: call2, editor, message: message2 }) {
     root.classList.add("service-workspace");
@@ -220,17 +282,19 @@
     } };
   }
   function mountManualPayment({ root, call: call2, load: load2, save: save3, home: home2, message: message2 }) {
-    root.classList.add("service-workspace");
+    root.classList.add("service-workspace", "manual-payment-workspace");
     let catalog2 = [], draft2 = load2("manual-service-payment") || { id: uuid(), items: [], method: "", total: "" }, paying = false;
     const persist2 = () => save3("manual-service-payment", draft2);
     const $2 = (s) => root.querySelector(s);
-    root.innerHTML = '<div class="live-heading"><button type="button" data-back>\u2190 \u041A \u043E\u043F\u043B\u0430\u0442\u0435</button><h1>\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442</h1></div><p>\u0411\u0435\u0437 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430 \u0438 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u0440\u0435\u043C\u043E\u043D\u0442\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043D\u0435 \u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F.</p><form data-add class="panel"><label>\u0420\u0430\u0431\u043E\u0442\u0430<input name="work" list="service-choices" maxlength="200" autocomplete="off" required placeholder="\u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435"><datalist id="service-choices"></datalist></label><label>\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C, \u20BD<input name="price" type="number" min="0" max="100000000" step="0.01" required></label><button>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443</button></form><div data-lines></div><form data-payment><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input name="total" type="number" min="0.01" max="100000000" step="0.01" required></label><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, n]) => '<label><input type="radio" name="method" value="' + v + '" required>' + n + "</label>").join("") + '</fieldset><button class="primary" data-submit>\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p data-payment-error role="status"></p></form>';
+    root.innerHTML = '<div class="live-heading"><button type="button" data-back>\u2190 \u041A \u043E\u043F\u043B\u0430\u0442\u0435</button><h1>\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430 \u0440\u0430\u0431\u043E\u0442</h1></div><p>\u0411\u0435\u0437 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430 \u0438 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u0440\u0435\u043C\u043E\u043D\u0442\u0430. \u041E\u0441\u0442\u0430\u0442\u043A\u0438 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043D\u0435 \u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F.</p><div class="manual-payment-grid"><section><form data-add class="panel"><label>\u0420\u0430\u0431\u043E\u0442\u0430<input name="work" list="service-choices" maxlength="200" autocomplete="off" required placeholder="\u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435"><datalist id="service-choices"></datalist></label><label>\u0421\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C, \u20BD<input name="price" type="number" min="0" max="100000000" step="0.01" required></label><button>\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443</button></form><div data-lines></div></section><form data-payment class="panel"><label>\u0421\u0443\u043C\u043C\u0430 \u043A \u043E\u043F\u043B\u0430\u0442\u0435, \u20BD<input name="total" type="number" min="0.01" max="100000000" step="0.01" required></label><fieldset class="payment-options"><legend>\u0421\u043F\u043E\u0441\u043E\u0431 \u043E\u043F\u043B\u0430\u0442\u044B</legend>' + [["cash", "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435"], ["card", "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0439 \u0440\u0430\u0441\u0447\u0451\u0442"], ["transfer", "\u041F\u0435\u0440\u0435\u0432\u043E\u0434"]].map(([v, n]) => '<label><input type="radio" name="method" value="' + v + '" required>' + n + "</label>").join("") + '</fieldset><button class="primary" data-submit>\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443</button><p data-payment-error role="status"></p></form></div>';
     function state() {
       root.querySelectorAll("input,button").forEach((x) => x.disabled = paying || !!draft2.pending);
       $2("[data-submit]").disabled = paying || !draft2.items.length;
       $2("[data-back]").disabled = paying || !!draft2.pending;
       $2("[data-cancel]").disabled = paying || !!draft2.pending;
       root.querySelectorAll("button").forEach((x) => x.dataset.unavailable = String(x.disabled));
+      $2("[data-submit]").textContent = draft2.pending ? "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B" : "\u041F\u0440\u0438\u043D\u044F\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443";
+      if (draft2.pending && !paying && !$2("[data-payment-error]").textContent) $2("[data-payment-error]").textContent = "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D. \u041F\u043E\u043B\u044F \u0437\u0430\u0449\u0438\u0449\u0435\u043D\u044B \u043E\u0442 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u043B\u0430\u0442\u044B\xBB \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E\u0433\u043E \u0441\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043D\u0435 \u0431\u0443\u0434\u0435\u0442.";
     }
     function draw() {
       const gross = Math.round(draft2.items.reduce((s, x) => s + x.quantity * x.unit_price, 0) * 100) / 100;
@@ -248,9 +312,18 @@
       state();
     }
     const add = $2("[data-add]");
+    add.elements.work.value = draft2.work || "";
+    add.elements.price.value = draft2.price || "";
+    add.elements.price.oninput = () => {
+      draft2.price = add.elements.price.value;
+      persist2();
+    };
     add.elements.work.oninput = () => {
+      draft2.work = add.elements.work.value;
       const selected = catalog2.find((x) => x.title === add.elements.work.value);
       if (selected) add.elements.price.value = selected.labor_price;
+      draft2.price = add.elements.price.value;
+      persist2();
     };
     add.onsubmit = (e) => {
       e.preventDefault();
@@ -259,9 +332,12 @@
       try {
         draft2.items.push({ title, quantity: 1, unit_price: Number(add.elements.price.value), ...selected ? { service_id: selected.id } : {} });
         draft2.total = "";
+        delete draft2.work;
+        delete draft2.price;
         persist2();
         add.reset();
         draw();
+        add.elements.work.focus();
       } catch (error) {
         draft2 = before;
         message2("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A: " + error.message, true);
@@ -3252,10 +3328,10 @@
         }, 180));
       }
       const chooseCustomer = (match) => {
-        const names = match.full_name.split(/\s+/);
-        form.elements.last_name.value = names[0] || "";
-        form.elements.first_name.value = names[1] || "";
-        form.elements.middle_name.value = names.slice(2).join(" ");
+        const names2 = match.full_name.split(/\s+/);
+        form.elements.last_name.value = names2[0] || "";
+        form.elements.first_name.value = names2[1] || "";
+        form.elements.middle_name.value = names2.slice(2).join(" ");
         form.elements.phone.value = match.phone || "";
       };
       for (const name of ["last_name", "first_name", "phone"]) suggest(form.elements[name], { kind: "customer", select: chooseCustomer });
@@ -3681,7 +3757,7 @@
   for (const e of ["keydown", "pointerdown", "input", "change"]) window.addEventListener(e, () => lastActivity = Date.now(), true);
   window.warehouseUpdateSafe = (immediate = false) => {
     var _a3, _b, _c, _d;
-    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) && !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "services", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_d = document.activeElement) == null ? void 0 : _d.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
+    return !((_a3 = window.fastgoServiceCatalogDirty) == null ? void 0 : _a3.call(window)) && !((_c = (_b = load("manual-service-payment")) == null ? void 0 : _b.items) == null ? void 0 : _c.length) && !busy && !usbPolling && (["home", "inventory", "holdings", "preorders", "services", "report", "login", "connection"].includes(screen) || !terminal && screen === "live") && !job && (terminal || !draft && !live.hasDraft()) && !document.querySelector("#mirror-submit,dialog[open],.modal") && !(((_d = document.activeElement) == null ? void 0 : _d.matches("input:not([type=search]):not([data-payment-scan]),textarea,select,[contenteditable]")) && !document.activeElement.closest(".preorder-filters")) && ![...document.querySelectorAll("#login input")].some((input) => input.value) && (immediate || Date.now() - lastActivity > 15e3);
   };
   window.addEventListener("beforeunload", (e) => {
     var _a3, _b, _c;
@@ -3711,7 +3787,7 @@
     }
     document.body.dataset.screen = screen;
     const section = document.getElementById("warehouse-section");
-    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", services: "\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B", "manual-payment": "\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", holdings: "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445", shift: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: live.kind() === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
+    if (section) section.textContent = { home: "\u0413\u043B\u0430\u0432\u043D\u0430\u044F", services: "\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B", "manual-payment": "\u0420\u0443\u0447\u043D\u0430\u044F \u043E\u043F\u043B\u0430\u0442\u0430", report: "\u0418\u0442\u043E\u0433\u043E\u0432\u044B\u0439 \u043E\u0442\u0447\u0451\u0442", preorders: "\u041F\u0440\u0435\u0434\u0437\u0430\u043A\u0430\u0437\u044B", inventory: "\u041E\u0441\u0442\u0430\u0442\u043A\u0438", holdings: "\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u043D\u0430 \u043C\u0430\u0441\u0442\u0435\u0440\u0430\u0445", shift: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u043C\u0435\u043D\u0443", receipt: "\u041F\u0440\u0438\u0445\u043E\u0434", live: live.kind() === "receipt" ? "\u041F\u0440\u0438\u0445\u043E\u0434" : "\u041E\u043F\u043B\u0430\u0442\u0430", repair: "\u041E\u043F\u043B\u0430\u0442\u0430 \u0440\u0435\u043C\u043E\u043D\u0442\u0430" }[screen] || "";
     if (stopUSB) {
       stopUSB();
       stopUSB = null;
@@ -3752,7 +3828,21 @@
     preorderView = mountPreorders({ root: $("preorder-root"), call: serviceApi, actor: userId() });
     await preorderView.ready;
   }
+  async function showFinalReport() {
+    var _a3, _b;
+    if (terminal || document.body.dataset.readonly === "true") throw Error("\u041E\u0442\u0447\u0451\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u043A\u0430\u0441\u0441\u043E\u0432\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435");
+    if (live.hasDraft() || job || draft || ((_b = (_a3 = load("manual-service-payment")) == null ? void 0 : _a3.items) == null ? void 0 : _b.length)) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442 \u043F\u0435\u0440\u0435\u0434 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0435\u043C \u043E\u0442\u0447\u0451\u0442\u0430");
+    live.suspend();
+    screen = "report";
+    shell('<div id="final-report-root"></div>');
+    serviceView = mountFinalReport({ root: $("final-report-root"), call });
+    await serviceView.ready;
+  }
   function bindNav() {
+    if ($("final-report")) {
+      $("final-report").hidden = terminal || document.body.dataset.readonly === "true";
+      $("final-report").onclick = () => run(showFinalReport);
+    }
     if ($("service-catalog")) {
       $("service-catalog").hidden = terminal;
       $("service-catalog").onclick = () => run(showServices);
@@ -3764,7 +3854,7 @@
     if ($("nav-receipt")) $("nav-receipt").onclick = () => run(() => live.open("receipt"));
     if ($("nav-pay")) $("nav-pay").onclick = () => run(() => live.open("sale"));
     if ($("master-stock")) $("master-stock").hidden = !["owner", "developer"].includes(memberRole);
-    document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "services" ? "service-catalog" : screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "preorders" ? "preorders" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
+    document.querySelectorAll(".warehouse-sidebar button").forEach((b) => b.classList.toggle("active", b.id === (screen === "report" ? "final-report" : screen === "services" ? "service-catalog" : screen === "inventory" ? "inventory" : screen === "holdings" ? "master-stock" : screen === "preorders" ? "preorders" : screen === "shift" ? "shift" : screen === "live" ? live.kind() === "receipt" ? "nav-receipt" : "nav-pay" : "back")));
     applyReadOnly();
     if ($("back")) $("back").onclick = home;
     if ($("inventory")) $("inventory").onclick = () => run(inventory);
@@ -4258,7 +4348,7 @@
   var lastDeviceStatus = 0;
   var nativeUpdatePending = false;
   async function desktopStatus() {
-    var _a3, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    var _a3, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     const el = $("desktop-status");
     if (!el) return;
     if (((_a3 = window.fastgoInstalledApp) == null ? void 0 : _a3.platform) === "ios") {
@@ -4275,17 +4365,17 @@
       if (device && userId() && Date.now() - lastDeviceStatus > 6e4) {
         lastDeviceStatus = Date.now();
         const printing = await ((_d = (_c = window.warehouseDesktop).printers) == null ? void 0 : _d.call(_c).catch(() => null)), scanner = await ((_f = (_e = window.warehouseDesktop).scannerStatus) == null ? void 0 : _f.call(_e).catch(() => null));
-        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing, scanner, scan_test: scannerTest }).catch(() => {
+        void call("device_status", { app: window.fastgoDesktop ? "desktop" : "warehouse", version: s.version, host: s.host, background: s.background, update_status: update.status, latest_version: update.version, blocking_reason: update.waitReason, network: s.network, printing, scanner, input_health: { screen, busy, focused: document.hasFocus(), tag: ((_g = document.activeElement) == null ? void 0 : _g.tagName) || "", disabled: ((_h = document.activeElement) == null ? void 0 : _h.disabled) === true, readonly: ((_i = document.activeElement) == null ? void 0 : _i.readOnly) === true, payment_pending: !!((_j = load("manual-service-payment")) == null ? void 0 : _j.pending) }, scan_test: scannerTest }).catch(() => {
         });
       }
       let note = "";
       if (update.status === "downloading") note = " \xB7 \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F " + update.version + ": " + update.progress + "%";
       if (update.status === "ready") note = " \xB7 \u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 " + update.version + " \u0433\u043E\u0442\u043E\u0432\u043E \u2014 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430";
       if (update.status === "error") note = " \xB7 \u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: " + update.error;
-      if ((_g = s.terminalUpdate) == null ? void 0 : _g.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
-      if (((_h = s.recovery) == null ? void 0 : _h.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_i = s.recovery) == null ? void 0 : _i.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
-      else if (((_j = s.recovery) == null ? void 0 : _j.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
+      if ((_k = s.terminalUpdate) == null ? void 0 : _k.message) note += " \xB7 \u0422\u0421\u0414: " + s.terminalUpdate.message;
+      if (((_l = s.recovery) == null ? void 0 : _l.status) === "current") note += " \xB7 \u041A\u043E\u043F\u0438\u044F \u0431\u0430\u0437\u044B: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_m = s.recovery) == null ? void 0 : _m.status) === "copying") note += " \xB7 \u041A\u043E\u043F\u0438\u0440\u0443\u0435\u043C \u0431\u0430\u0437\u0443: " + s.recovery.media_present + "/" + s.recovery.media_expected + " \u0444\u0430\u0439\u043B\u043E\u0432";
+      else if (((_n = s.recovery) == null ? void 0 : _n.status) === "error") note += " \xB7 \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F: " + s.recovery.error;
       const value = "Windows " + s.version + " \xB7 " + s.usb.status + (s.usb.pending ? " \xB7 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F: " + s.usb.pending : "") + note;
       if (el.textContent !== value) el.textContent = value;
     } catch (e) {

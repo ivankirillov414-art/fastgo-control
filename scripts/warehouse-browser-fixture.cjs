@@ -29,6 +29,7 @@ function backend(){const jobs=new Map(),payments=[],quote={id:'66666666-6666-466
  case 'queue':data=[...jobs.values()].filter(j=>['repair','sale'].includes(j.payload.kind)&&!j.payload.live&&j.state!=='done');break;
  case 'receipt_label_jobs':data=[...jobs.values()].filter(j=>j.state==='done'&&j.result?.label_print_status==='pending');break;
  case 'receipt_label_ack':jobs.get(p.id).result.label_print_status='printed';data={printed:true};break;
+ case 'final_report':data={total:750.3,count:4,groups:[{method:'cash',total:250.3,count:2,items:[{id:'1',created_at:'2026-10-28T09:00:00Z',title:'Продажа FGS-1',amount:250.3,actor:'Кассир',note:'Амортизатор'}]},{method:'transfer',total:200,count:1,items:[{id:'2',created_at:'2026-10-28T09:00:00Z',title:'Ремонт № 26',amount:200}]},{method:'card',total:300,count:1,items:[]}]};break;
  case 'cash_state':data={shifts:[]};break;
  case 'unknown_scans':data=[...jobs.values()].filter(j=>j.payload.kind==='unknown'&&j.state!=='done');break;
  case 'unknown_cancel':{const j=jobs.get(p.id);if(j.state!=='done'){if(j.state!=='queued'||j.checkout){status=409;error='Позиция создаётся';break;}j.state='done';j.result={cancelled:true};}data=j.result;if(state.failCancelResponse){state.failCancelResponse=false;return route.abort();}break;}
