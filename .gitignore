@@ -21,3 +21,7 @@ ios/build/
 desktop/inspect-nsis-build.cjs
 
 browser-results/
+warehouse-android/.gradle/
+warehouse-android/**/build/
+warehouse-android/phone/src/main/assets/
+warehouse-android/local.properties

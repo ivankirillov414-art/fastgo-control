@@ -1,0 +1,12 @@
+{
+  "file": "FastGo-Android-1.0.0.apk",
+  "package": "ru.fastgo.mobile",
+  "version": "1.0.0",
+  "source_commit": "f515dc546d85b1cf02503d8c4ebcabdffb369f16",
+  "unsigned_sha256": "e135b9061535a56f353a202cbc40bba6f44bdab9e2888f187206077c153fa9eb",
+  "sha256": "e2290ca29bb6591c705bfbbc11a63d940a7f1ef52df9197a920a0a1de6afa8e0",
+  "signing": "local private key, never uploaded",
+  "signature_verified": true,
+  "built_and_debug_emulator_tested": true,
+  "release_device_tests": "pending"
+}
