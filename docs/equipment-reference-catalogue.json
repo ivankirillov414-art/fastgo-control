@@ -1,0 +1,28 @@
+{
+  "checked_at": "2026-10-28",
+  "models": 2440,
+  "currency": "RUB",
+  "categories": {
+    "Беговелы": 9,
+    "Велосипеды": 1783,
+    "Гироскутеры": 11,
+    "Другая техника": 18,
+    "Моноколёса": 162,
+    "Самокаты": 63,
+    "Сигвеи": 19,
+    "Электровелосипеды": 197,
+    "Электромопеды": 4,
+    "Электромотоциклы": 4,
+    "Электросамокаты": 169,
+    "Электроскейты": 1
+  },
+  "source_offer_counts": {
+    "ВелоСтрана": 1018,
+    "Stels-RF — фирменный магазин": 396,
+    "ВелоСклад": 483,
+    "STARK — официальный магазин": 257,
+    "Ecodrift": 432,
+    "Kugoo — официальный магазин": 29
+  },
+  "source_policy": "Public model names and current quoted prices only; exact product URLs and check dates are bundled per offer. No stock import. Unknown purchase costs remain unset. Purchase save creates a zero-stock card or updates only unit_cost with optimistic concurrency and a reusable request ID."
+}

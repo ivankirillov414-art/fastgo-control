@@ -2,9 +2,9 @@ name: FastGo Warehouse Apps
 on:
  push:
   branches: [main]
-  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','scripts/check-warehouse*.cjs','scripts/check-unified-warehouse-browser.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-unified-warehouse-browser.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-warehouse*.cjs','scripts/check-unified-warehouse-browser.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-unified-warehouse-browser.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -22,6 +22,7 @@ jobs:
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-compact-report-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-services-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-manual-update-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-mobile-login.cjs

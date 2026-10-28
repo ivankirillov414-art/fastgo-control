@@ -1,4 +1,4 @@
-export const equipmentTypes=['Электросамокаты','Электровелосипеды','Велосипеды','Электромопеды','Электроскутеры','Другая техника'];
+export const equipmentTypes=['Электросамокаты','Электровелосипеды','Велосипеды','Электромопеды','Электроскутеры','Самокаты','Беговелы','Моноколёса','Гироскутеры','Сигвеи','Электромотоциклы','Электроскейты','Другая техника'];
 export function equipmentType(product){
  const category=String(product.category||'').trim();
  if(category.startsWith('Техника · '))return category.slice(10);

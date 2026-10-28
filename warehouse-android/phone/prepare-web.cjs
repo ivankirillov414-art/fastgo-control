@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
-const {prepareOutput,writeManifest}=require('./bundle-assets.cjs');
+const {prepareOutput,writeManifest,nativeInputs}=require('./bundle-assets.cjs');
 const root=path.resolve(__dirname,'../..'),out=prepareOutput(__dirname);
 for(const folder of ['workshop','vendor','warehouse'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true,filter:p=>!p.endsWith('.apk')&&(folder!=='warehouse'||!['native','update'].includes(path.relative(path.join(root,folder),p).split(path.sep)[0]))});
 for(const file of ['workshop.html','workshop.css','fastgo-logo.png','warehouse.html','repair-status.html'])fs.copyFileSync(path.join(root,file),path.join(out,file));
@@ -11,4 +11,4 @@ if(process.env.FASTGO_ESBUILD)execFileSync(process.env.FASTGO_ESBUILD,args,{stdi
 fs.unlinkSync(entry);
 let html=fs.readFileSync(path.join(out,'workshop.html'),'utf8');html=html.replace(/<script type="importmap">[\s\S]*?<\/script>/g,'').replace(/<script type="module"[^>]*><\/script>/g,'');html=html.replace('</head>','<script defer src="phone-bootstrap.js"></script><script defer src="workshop/app-phone.js"></script></head>');fs.writeFileSync(path.join(out,'workshop.html'),html);
 html=fs.readFileSync(path.join(out,'warehouse.html'),'utf8').replace('<script defer src="vendor/','<script defer src="phone-bootstrap.js"></script><script defer src="vendor/');fs.writeFileSync(path.join(out,'warehouse.html'),html);
-const manifest=writeManifest(out,{platform:'android',version:'1.0.5',bundle_source:'installed-apk'});console.log('Prepared Android phone bundle',manifest.version,Object.keys(manifest.files).length,'verified assets');
+const manifest=writeManifest(out,{platform:'android',version:'1.0.7',bundle_source:'installed-apk',native_inputs:nativeInputs(__dirname)});console.log('Prepared Android phone bundle',manifest.version,Object.keys(manifest.files).length,'verified assets');
