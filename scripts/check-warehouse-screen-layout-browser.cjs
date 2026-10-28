@@ -1,7 +1,7 @@
-const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
+const playwright=require('playwright'),kind=process.argv[2]||'chromium',assert=require('node:assert/strict'),fs=require('node:fs');
 const {serve,backend,launchOptions}=require('./warehouse-browser-fixture.cjs');
 (async()=>{const {server,base}=await serve();let browser;try{
- browser=await chromium.launch(launchOptions);
+ browser=await playwright[kind].launch(kind==='chromium'?launchOptions:{headless:true});
  for(const target of ['web','standalone','unified'])for(const [width,height] of [[1366,768],[850,600],[390,844]]){
   const unified=target==='unified',native=target!=='web',api=backend(),context=await browser.newContext({viewport:{width,height}});await api.connect(context,false,{unified});let ack=false;
   await context.addInitScript(native=>{if(native)document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('warehouse-native-window'));window.warehouseDesktop={printReceiptLabels:async()=>({printed:true}),desktopStatus:async()=>({version:'1.0.39',usb:{status:'Подключите выбранный iData кабелем',pending:6},update:{status:'error',error:'Не удалось скачать обновление: проверяем восстановление соединения с сервером'},recovery:{status:'current',media_present:82,media_expected:82}})};},native);
