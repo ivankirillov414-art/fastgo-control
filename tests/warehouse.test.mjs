@@ -194,6 +194,14 @@ test('price pencil changes only retail price and records an audit event',async()
  assert.equal(h.snap.sheets['События'].rows[0]['Действие'],'price_update');assert.equal((await h.request('inventory_edit',p)).status,200);assert.equal(h.snap.sheets['События'].rows.length,1);
  assert.equal((await h.request('inventory_edit',{...p,value:1300})).status,409);
 });
+test('purchase price edits preserve stock and sale price, audit once and reject stale or reused requests',async()=>{
+ const h=await harness(),p={request_id:randomUUID(),part_id:part,field:'unit_cost',expected:100,value:245.75};
+ const saved=await h.request('inventory_edit',p);assert.equal(saved.status,200,saved.error);assert.equal(saved.data.unit_cost,245.75);
+ const row=h.snap.sheets['Товары'].rows[0];assert.equal(row['Остаток, шт.'],5);assert.equal(row['Цена продажи, ₽'],300);assert.equal(h.snap.sheets['Движения склада'].rows.length,0);
+ assert.equal(h.snap.sheets['События'].rows[0]['Действие'],'purchase_price_update');assert.equal((await h.request('inventory_edit',p)).status,200);assert.equal(h.snap.sheets['События'].rows.length,1);
+ assert.equal((await h.request('inventory_edit',{...p,value:1300})).status,409);assert.equal((await h.request('inventory_edit',{...p,request_id:randomUUID(),value:1300})).status,409);
+});
+
 test('inventory edits preserve permissions and reject malformed or stale values before writes',async()=>{
  const h=await harness(),p={request_id:randomUUID(),part_id:part,field:'quantity',expected:5,value:2};
  assert.equal((await h.request('inventory_edit',p,'terminal')).status,403);h.member.role='seller';assert.equal((await h.request('inventory_edit',p)).status,403);h.member.role='owner';

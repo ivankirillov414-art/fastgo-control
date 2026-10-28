@@ -128,7 +128,14 @@ jobs:
   permissions: {contents: write}
   steps:
    - uses: actions/checkout@v4
+   - name: Require a signed package for this phone version
+     id: package
+     run: |
+      node - <<'JS'
+      const fs=require('fs'),r=JSON.parse(fs.readFileSync('warehouse-android/phone/release/receipt.json')),source=fs.readFileSync('warehouse-android/phone/build.gradle','utf8'),version=/versionName '([^']+)'/.exec(source)[1];if(r.version===version&&fs.existsSync('warehouse-android/phone/release/'+r.file))fs.appendFileSync(process.env.GITHUB_OUTPUT,'ready=true\n');else console.log('Phone source verified; a new signed phone release is not prepared. Keep the published APK.');
+      JS
    - name: Publish only the installed and tested signed phone APK
+     if: steps.package.outputs.ready == 'true'
      env: {GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}'}
      run: |
       node - <<'JS'
