@@ -80,7 +80,7 @@ test('repair intake follows diagnostics, approval, repair, quality, ready and is
  const issued=(await h.call('get',{kind:'repair',id:r.id})).record;
  assert.equal(issued.status,'issued');assert.equal(issued.handover_notes,'Техника и комплектность проверены, выдано клиенту');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);assert.equal(h.outbox.length,7);assert.equal(h.googleCalls(),0);
 });
-test('repair issue requires handover note',async()=>{
+test('paid repair issue needs no completeness field',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
  const diagnosed=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика выполнена',works:[],parts:[],discount:0});
  const details={kind:'repair',id:r.id,revision:diagnosed.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика выполнена',works:[{name:'Диагностика',price:100,quantity:1}],parts:[],discount:0};
@@ -88,7 +88,7 @@ test('repair issue requires handover note',async()=>{
  await h.call('update',{...details,revision:fixed.revision,status:'ready',no_parts:details.parts.length===0,quality_checked:true});
  await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'});
  const paid=(await h.call('get',{kind:'repair',id:r.id})).record;
- await assert.rejects(h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true}),/комплектности/);
+ const issued=await h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true});assert.equal(issued.status,'issued');
 });
 test('repair cannot skip directly from accepted to repair',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
@@ -322,6 +322,8 @@ test('step workflow derives statuses from actions, preserves editable work price
  r=await h.issue(r.id);assert.equal(r.status,'repair');assert.equal(r.parts.length,1);
  r=await step('complete',{quality_checked:true,master_comment:'Тормоза настроены, проведён тестовый проезд.'});assert.equal(r.status,'ready');assert.equal(r.step_state.master_comment,'Тормоза настроены, проведён тестовый проезд.');assert.ok(r.step_state.completion_request_id);assert.ok(r.step_state.completion_master_name);assert.equal(r.step_state.completion_master_name.split(/\s+/).length,1);
  await assert.rejects(step('handover',{handover_notes:'Получено'}),/кассе/);
+ await assert.rejects(step('handover',{},owner),/полная оплата/);
+ await h.call('payment',{kind:'repair',id:r.id,amount:r.total_amount,method:'cash'});r=(await h.call('get',{kind:'repair',id:r.id})).record;r=await step('handover',{},owner);assert.equal(r.status,'issued');
 });
 
 test('step workflow rejects invented works, malformed waiting dates and spoofed legacy flags',async()=>{

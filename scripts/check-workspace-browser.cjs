@@ -134,7 +134,7 @@ const server=createServer((req,res)=>{
   for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);if(width<=760)await page.locator('[data-intake-next]').click();
   await page.locator('#f-equipment_name').fill('старк хантер');await page.getByRole('option',{name:'Stark Hunter',exact:true}).click();if(width<=760)await page.locator('[data-intake-next]').click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==','base64')});
   failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
-  await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor({state:'attached'});
+  await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('.repair-steps').waitFor({state:'attached'});
   assert.equal(creates.length,before+2);assert.equal(creates[before].request_id,creates[before+1].request_id);assert.equal(creates[before+1].phone,'+79991234567');assert.equal(creates[before+1].promised_date,'');assert.equal(creates[before+1].brand,'Stark');assert.equal(creates[before+1].model,'Hunter');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.goto(origin+'/workshop.html#new?kind=storage');await page.locator('#intake-form').waitFor();

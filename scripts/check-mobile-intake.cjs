@@ -45,7 +45,7 @@ const server=createServer((req,res)=>{
   });
   const pane=async id=>{if(viewport.width<=760)await page.locator('[data-repair-pane="'+id+'"]').click();};
   let navigation=0;const open=async()=>{
-   await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?kind=repair&id=progress-fixture');
+   await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?legacy=1&kind=repair&id=progress-fixture');
    await page.locator('#work-search').waitFor({state:'attached'});await pane('work');
   };
   const transition=async name=>{await page.locator('.repair-status-menu > summary').click();await page.getByRole('button',{name,exact:true}).click();};

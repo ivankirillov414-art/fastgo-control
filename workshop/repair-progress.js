@@ -47,7 +47,6 @@ export function repairRequirements(record, values) {
   || (values.approve && !String(values.approval_note || '').trim())) required.push('approval');
  if (['ready', 'issued'].includes(status) && status!==record.status && repairPartsCondition(record,values).mode==='pending') required.push('parts');
  if (['ready', 'issued'].includes(status) && !values.quality_checked) required.push('quality');
- if (status === 'issued' && !String(values.handover_notes || '').trim()) required.push('handover');
  if (status === 'cancelled' && !String(values.note || '').trim()) required.push('cancel');
  return required;
 }
@@ -62,7 +61,7 @@ export function repairGuide(record, values, actor = {}) {
  const allowed=target&&repairActions(status,permissions).includes(target);
  const missing=allowed?repairRequirements(record,{...values,status:target}):[];
  const title={accepted:'Начните диагностику',diagnostics:'Зафиксируйте диагностику и работы',waiting_parts:'Ожидаем запчасти',repair:'Завершите работы и проверку',ready:'Ремонт готов к выдаче',issued:'Техника выдана клиенту',cancelled:'Ремонт отменён'}[status]||'Карточка ремонта';
- const hints={diagnostics:'Запишите результат диагностики',approval:'Согласуйте текущую стоимость',parts:'Получите детали по QR или подтвердите ремонт без запчастей',quality:'Выполните контроль качества',handover:'Зафиксируйте комплектность при выдаче'};
+ const hints={diagnostics:'Запишите результат диагностики',approval:'Согласуйте текущую стоимость',parts:'Получите детали по QR или подтвердите ремонт без запчастей',quality:'Выполните контроль качества'};
  let detail=missing.map(key=>hints[key]).filter(Boolean).join(' · ');
  if(status==='waiting_parts')detail='Получите детали на кассе по QR «Взять запчасти». Когда можно продолжить, вернитесь к ремонту.';
  if(status==='ready'&&!allowed)detail='Передайте технику на кассу. Оплату и выдачу клиенту оформляет сотрудник с доступом к кассе.';

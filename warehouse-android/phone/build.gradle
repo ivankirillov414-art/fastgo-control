@@ -2,8 +2,8 @@ plugins { id 'com.android.application' }
 android {
  namespace 'ru.fastgo.mobile'
  compileSdk 36
- defaultConfig { applicationId 'ru.fastgo.mobile'; minSdk 23; targetSdk 36; versionCode 9; versionName '1.0.8'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
- if(project.hasProperty('fastgoPhoneFixture')){defaultConfig {versionCode 10;versionName '1.0.8-self-update-test'}}
+ defaultConfig { applicationId 'ru.fastgo.mobile'; minSdk 23; targetSdk 36; versionCode 10; versionName '1.0.9'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
+ if(project.hasProperty('fastgoPhoneFixture')){defaultConfig {versionCode 11;versionName '1.0.9-self-update-test'}}
  buildTypes { release { minifyEnabled false }; debug { applicationIdSuffix '.test' } }
 }
 dependencies {

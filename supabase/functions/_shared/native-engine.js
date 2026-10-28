@@ -753,7 +753,7 @@ function validateOrderUpdate_(p,actor){
   const sameTotal=Math.abs(num_(r['Итого'])-amount)<.005,approved=p.approve?amount:(sameTotal?r['Согласовано, ₽']:null),quality=p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked);
   if(p.step_flow!==true&&['repair','ready','issued'].includes(status)&&amount>0&&(approved===''||approved===null||Math.abs(num_(approved)-amount)>=.005))throw httpError_('Сначала согласуйте текущую стоимость с клиентом',409);
   if(['ready','issued'].includes(status)&&!quality)throw httpError_('Перед статусом «Готов» выполните контроль качества',409);
-  if(status==='issued'&&(before!=='ready'||num_(r['Оплачено'])<amount||!String(p.handover_notes||'').trim()))throw httpError_('Для выдачи нужны готовность, полная оплата и отметка о комплектности',409);
+  if(status==='issued'&&(before!=='ready'||num_(r['Оплачено'])<amount))throw httpError_('Для выдачи нужны готовность и полная оплата',409);
   if(status==='cancelled'&&status!==before&&(num_(r['Оплачено'])!==0||parts.length>0||!String(p.note||'').trim()))throw httpError_('Перед отменой верните оплату, снимите установленные запчасти и укажите причину',409);
 }
 

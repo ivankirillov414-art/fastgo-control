@@ -106,7 +106,7 @@ const server=createServer((req,res)=>{
    // Revoking an existing choice stays explicit and blocks the next issue transition.
    await pane('parts');assert.equal(await page.locator('#no-parts').isChecked(),true);await page.locator('#no-parts').uncheck();
    await saved(()=>page.locator('#repair-save').click());assert.equal(updates.at(-1).no_parts,false);assert.equal(record.parts_status.mode,'pending');
-   await transition('Выдать клиенту');await page.locator('#f-flow_handover').fill('Комплектно');const issueWrites=updates.length;
+   await transition('Выдать клиенту');assert.equal(await page.locator('#f-flow_handover').count(),0);const issueWrites=updates.length;
    await page.locator('#modal-form button[type="submit"]').click();assert.equal(updates.length,issueWrites);assert.equal(record.status,'ready');assert.equal(await page.locator('[name="flow_no_parts"]').isChecked(),false);
    await page.locator('#dialog [aria-label="Закрыть"]').click();
    // Price edits at an advanced stage offer approval here, not in a hidden panel.

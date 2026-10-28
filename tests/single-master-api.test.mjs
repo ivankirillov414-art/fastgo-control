@@ -37,7 +37,7 @@ test('master can create intake but cannot manage employee accounts',async()=>{
 
 test('individual sales and catalogue rights are enforced without granting administrator access',async()=>{
  const granted=setup('mechanic',{can_sell:true,can_edit_catalog:true});
- assert.equal((await granted.invoke('cash_state')).status,200);
+ assert.equal((await granted.invoke('cash_state')).status,403);
  assert.equal((await granted.invoke('catalog_save',{id,title:'Работа',category:'Механика',labor_price:500})).status,200);
  for(const action of ['part_save','staff_create','stock_receive','legal_save'])assert.equal((await granted.invoke(action)).status,403,action);
  const denied=setup();assert.equal((await denied.invoke('cash_state')).status,403);assert.equal((await denied.invoke('catalog_save',{id,title:'Работа',labor_price:500})).status,403);

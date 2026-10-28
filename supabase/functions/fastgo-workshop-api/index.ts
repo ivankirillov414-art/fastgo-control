@@ -432,7 +432,7 @@ async function main(req){
           const approved=p.approve?amount:(Math.abs(Number(r.total_amount||0)-amount)<.005?Number(r.approved_amount):NaN);
           if(p.step_flow!==true&&['repair','ready','issued'].includes(targetStatus)&&amount>0&&Math.abs(approved-amount)>.005)fail('Сначала согласуйте текущую стоимость с клиентом',409);
           if(['ready','issued'].includes(targetStatus)&&!(p.quality_checked??r.quality_checked))fail('Перед статусом «Готов» выполните контроль качества',409);
-          if(targetStatus==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount||!text(p.handover_notes)))fail('Для выдачи нужны статус «Готов», полная оплата и отметка о комплектности',409);
+          if(targetStatus==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount))fail('Для выдачи нужны готовность и полная оплата',409);
           if(targetStatus==='cancelled'&&targetStatus!==r.status){if(!text(p.note))fail('Укажите причину отмены');if(Number(r.paid_amount)!==0||(p.parts||r.parts||[]).length)fail('Перед отменой верните оплату и снимите установленные запчасти',409);}
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');

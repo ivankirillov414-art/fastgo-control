@@ -3,7 +3,7 @@ const {_electron}=require(path.join(process.env.FASTGO_PLAYWRIGHT,'node_modules'
 const {Store}=require('../store.cjs');
 const root=path.resolve(__dirname,'..'),data=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-desktop-smoke-')),actor='11111111-1111-4111-8111-111111111111';
 const store=new Store(path.join(data,'FastGo.sqlite'));
-for(const [key,value] of Object.entries({request_access:{active:true},me:{profile_id:actor,role:'owner',name:'Тест',can_sell:true,can_edit_catalog:true,status_permissions:{can_mark_ready:true,can_issue:true,can_cancel:true}},catalog:{services:[],works:[],parts:[],staff:[],categories:[]},legal:{legal_name:'FastGo'}}))store.cache(actor,key,value);
+for(const [key,value] of Object.entries({request_access:{active:true},me:{profile_id:actor,role:'owner',name:'Тест',can_sell:true,can_edit_catalog:true,status_permissions:{can_mark_ready:true,can_issue:true,can_cancel:true}},catalog:{services:[{id:'33333333-3333-4333-8333-333333333333',title:'Замена камеры',labor_price:500,active:true}],works:[],parts:[],staff:[{id:'22222222-2222-4222-8222-222222222222',name:'Алексей Иванов',role:'mechanic',active:true}],categories:[]},legal:{legal_name:'FastGo'}}))store.cache(actor,key,value);
 store.close();
 const wrapper=path.join(data,'launch.cjs');fs.writeFileSync(wrapper,`const {app,net,safeStorage}=require('electron');const fs=require('node:fs'),path=require('node:path');app.setPath('userData',${JSON.stringify(data)});net.isOnline=()=>false;app.whenReady().then(()=>fs.writeFileSync(path.join(app.getPath('userData'),'credentials.bin'),safeStorage.encryptString(JSON.stringify({access_token:'offline-smoke-token',refresh_token:'offline-smoke-refresh',user_id:${JSON.stringify(actor)},expires_at:4102444800}))));require(${JSON.stringify(path.join(root,'main.cjs'))});`);
 async function launch(){const app=await _electron.launch({executablePath:require('electron'),args:[wrapper],timeout:45000});const page=await app.firstWindow();page.on('pageerror',e=>console.error('Renderer:',e.message));await page.locator('#desktop-state-text').waitFor({state:'attached'});return {app,page};}
@@ -25,7 +25,7 @@ async function launch(){const app=await _electron.launch({executablePath:require
  await opened.page.evaluate(()=>location.hash='#new?kind=repair');
  await opened.page.locator('#f-last_name').fill('Клиент');await opened.page.locator('#f-first_name').fill('Тест');await opened.page.locator('#f-phone').fill('79999999999');await opened.page.locator('#f-equipment_name').fill('Kugoo Max Speed');
  await opened.page.locator('#intake-save').click();await opened.page.waitForFunction(()=>location.hash.startsWith('#order?'),{},{timeout:45000});
- await opened.page.locator('h1').waitFor();assert.match(await opened.page.locator('h1').innerText(),/Ремонт/);await opened.page.waitForFunction(async()=> (await window.fastgoDesktop.state()).pending===1);
+ await opened.page.locator('h1').waitFor();assert.match(await opened.page.locator('h1').innerText(),/Kugoo/);await opened.page.waitForFunction(async()=> (await window.fastgoDesktop.state()).pending===1);
  assert(Array.isArray(await opened.page.evaluate(()=>window.fastgoDesktop.printers())));
  await opened.app.evaluate(({app,BrowserWindow})=>{globalThis.smokePrints=[];const install=contents=>{contents.getPrintersAsync=async()=>[{name:'FASTGO_SMOKE_PRINTER',displayName:'Smoke'}];contents.print=(options,callback)=>{globalThis.smokePrints.push(options);callback(true);};};for(const window of BrowserWindow.getAllWindows())install(window.webContents);app.on('web-contents-created',(_event,contents)=>install(contents));});
  await opened.page.evaluate(()=>window.fastgoDesktop.configure({printer:'FASTGO_SMOKE_PRINTER',remotePrint:false}));
@@ -35,21 +35,15 @@ async function launch(){const app=await _electron.launch({executablePath:require
  await opened.app.close();opened=await launch();await opened.page.evaluate(()=>location.hash='#repairs');await opened.page.getByText('Клиент Тест',{exact:false}).first().waitFor();
  const state=await opened.page.evaluate(()=>window.fastgoDesktop.state());assert.equal(state.records,1);assert.equal(state.pending,1);
  // The bundled Windows interface can save and advance an offline repair without stock parts.
- await opened.page.locator('.order-no').first().click();
- await opened.page.locator('#repair-progress-panel').waitFor();
- assert.equal(await opened.page.locator('#f-status,#f-promised_date,#catalog-picker').count(),0);
- const transition=async name=>{await opened.page.locator('.repair-status-menu > summary').click();await opened.page.getByRole('button',{name,exact:true}).click();};
- const save=async action=>{const form=await opened.page.locator('#order-form').elementHandle();await action();await opened.page.waitForFunction(form=>!form.isConnected,form);await opened.page.locator('#repair-save').waitFor();};
- await save(()=>opened.page.locator('#repair-save').click());
- await save(()=>transition('Начать диагностику'));
- await opened.page.locator('#add-work').click();await opened.page.locator('#work-rows [data-prop=name]').fill('Замена камеры');await opened.page.locator('#work-rows [data-prop=price]').fill('500');await save(()=>opened.page.locator('#repair-save').click());
- await transition('Начать ремонт');
- await opened.page.locator('#f-flow_diagnostics').fill('Прокол камеры, деталь клиента');
- await opened.page.locator('[name="flow_approved"]').check();await opened.page.locator('#f-flow_approval_note').fill('Согласовано');
- await save(()=>opened.page.locator('#modal-form button[type="submit"]').click());
- await transition('Ремонт готов');await opened.page.locator('[name="flow_quality"]').check();await opened.page.locator('[name="flow_no_parts"]').check();
- await save(()=>opened.page.locator('#modal-form button[type="submit"]').click());
- assert.equal(await opened.page.locator('#part-rows .cost-row').count(),0);
- assert.match(await opened.page.locator('.order-detail-status').innerText(),/Готов/);
+ await opened.page.locator('[data-open-repair]').first().click();
+ await opened.page.locator('#rs-start').waitFor();
+ await opened.page.locator('#rs-master').selectOption('22222222-2222-4222-8222-222222222222');
+ await opened.page.locator('#rs-start').click();await opened.page.locator('[data-service]').click();
+ await opened.page.waitForFunction(()=>!document.querySelector('[data-price]')?.disabled);
+ await opened.page.locator('[data-step=finish]').click();await opened.page.locator('#rs-comment').fill('Ремонт без складских деталей. Проверено.');
+ await opened.page.locator('#rs-quality').check();await opened.page.locator('#rs-complete').click();
+ await opened.page.waitForFunction(()=>document.querySelector('.rs-status')?.textContent==='Готово к выдаче');
+ assert.equal(await opened.page.locator('#rs-quality,#rs-complete').count(),0);
+ assert.equal((await opened.page.evaluate(()=>window.fastgoDesktop.state())).pending,4);
  console.log('PASS: Windows sandbox bridge, offline intake without photos, durable restart, document rendering and silent printer dispatch');
  }catch(e){console.error(await opened.page.locator('body').innerText());throw e;}finally{await opened.app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
