@@ -14,6 +14,7 @@ import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public class PhoneSmokeTest {
  private String js(ActivityScenario<MainActivity> scenario,String code)throws Exception{CountDownLatch latch=new CountDownLatch(1);AtomicReference<String> value=new AtomicReference<>();scenario.onActivity(a->((WebView)a.findViewById(14001)).evaluateJavascript(code,r->{value.set(r);latch.countDown();}));assertTrue("JavaScript callback",latch.await(10,TimeUnit.SECONDS));return value.get();}
+ private void renderedValue(ActivityScenario<MainActivity> scenario,String expression,String expected)throws Exception{String actual="";for(int i=0;i<60;i++){actual=js(scenario,expression);if(expected.equals(actual))return;Thread.sleep(50);}assertEquals(expected,actual);}
  private void ready(ActivityScenario<MainActivity> scenario)throws Exception{ready(scenario,"workshop.html");}
  private void ready(ActivityScenario<MainActivity> scenario,String page)throws Exception{for(int i=0;i<100;i++){if("true".equals(js(scenario,"location.pathname.endsWith('"+page+"') && document.readyState==='complete' && !!document.querySelector('#login input')"))){Thread.sleep(200);return;}Thread.sleep(150);}fail("Bundled login did not render: "+page);}
  @Test public void installedOfflineScreensTypingAndSavedState()throws Exception{
@@ -24,7 +25,7 @@ public class PhoneSmokeTest {
    js(scenario,"document.querySelector('#login input').focus();localStorage.setItem('fastgo-phone-smoke','kept');true");
    scenario.onActivity(a->{WebView w=a.findViewById(14001);w.requestFocus();});
    InstrumentationRegistry.getInstrumentation().sendStringSync("typing123");
-   assertEquals("\"typing123\"",js(scenario,"document.querySelector('#login input').value"));
+   renderedValue(scenario,"document.querySelector('#login input').value","\"typing123\"");
    assertEquals("true",js(scenario,"document.documentElement.scrollWidth<=innerWidth+1"));
    scenario.recreate();ready(scenario);assertEquals("\"kept\"",js(scenario,"localStorage.getItem('fastgo-phone-smoke')"));
    scenario.onActivity(a->((WebView)a.findViewById(14001)).loadUrl(MainActivity.ORIGIN+MainActivity.PREFIX+"warehouse.html?unified=1"));ready(scenario,"warehouse.html");assertEquals("true",js(scenario,"document.documentElement.scrollWidth<=innerWidth+1"));assertEquals("true",js(scenario,"!!document.querySelector('#login input[type=password]')"));
