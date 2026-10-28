@@ -85,7 +85,7 @@
   var uuid = () => crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
   function mountEquipmentReference({ root, call: call2, editor = false, actor = "", stockLink = "", setDirty = () => {
   } }) {
-    let parts2 = [], page = 0, disposed = false, pending2 = null, saving = false;
+    let parts2 = [], loaded = false, page = 0, disposed = false, pending2 = null, saving = false;
     const storageKey = "fastgo-equipment-purchase-v1:" + actor;
     try {
       pending2 = JSON.parse(localStorage.getItem(storageKey) || "null");
@@ -111,7 +111,7 @@
       const rows = items.slice(page * 20, page * 20 + 20);
       $2("[data-list]").innerHTML = rows.length ? '<div class="eq-table-scroll"><table class="eq-table"><thead><tr><th>\u041C\u043E\u0434\u0435\u043B\u044C</th><th>\u0420\u044B\u043D\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430</th><th>\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430</th></tr></thead><tbody>'.concat(rows.map((x) => {
         const p = linkedEquipment(x, parts2);
-        return "<tr><td><strong>".concat(esc(x.name), "</strong><small>").concat(esc(x.category)).concat(p ? " \xB7 \u041D\u0430 \u0441\u043A\u043B\u0430\u0434\u0435: " + Number(p.quantity || 0) + " \u0448\u0442." : "", "</small></td><td><b>").concat(x.offers.some((o) => o.from_price) ? "\u043E\u0442 " : "").concat(money(x.price_min), "</b>").concat(x.price_max > x.price_min ? "<small>\u0434\u043E ".concat(money(x.price_max), "</small>") : "", "<details><summary>\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 (").concat(x.offers.length, ")</summary>").concat(x.offers.map((o) => '<a href="'.concat(esc(o.url), '" target="_blank" rel="noopener noreferrer">').concat(esc(o.source), " \xB7 ").concat(o.from_price ? "\u043E\u0442 " : "").concat(money(o.price), "</a>")).join(""), "</details></td><td>").concat(p ? money(p.unit_cost || 0) : '<span class="eq-note">\u041D\u0435 \u0437\u0430\u0434\u0430\u043D\u0430</span>').concat(editor ? '<button class="eq-edit" type="button" data-cost="'.concat(x.id, '" ').concat(pending2 ? "disabled" : "", ">").concat(p ? "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C" : "\u0417\u0430\u0434\u0430\u0442\u044C", "</button>") : "", "</td></tr>");
+        return "<tr><td><strong>".concat(esc(x.name), "</strong><small>").concat(esc(x.category)).concat(p ? " \xB7 \u041D\u0430 \u0441\u043A\u043B\u0430\u0434\u0435: " + Number(p.quantity || 0) + " \u0448\u0442." : "", "</small></td><td><b>").concat(x.offers.some((o) => o.from_price) ? "\u043E\u0442 " : "").concat(money(x.price_min), "</b>").concat(x.price_max > x.price_min ? "<small>\u0434\u043E ".concat(money(x.price_max), "</small>") : "", "<details><summary>\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 (").concat(x.offers.length, ")</summary>").concat(x.offers.map((o) => '<a href="'.concat(esc(o.url), '" target="_blank" rel="noopener noreferrer">').concat(esc(o.source), " \xB7 ").concat(o.from_price ? "\u043E\u0442 " : "").concat(money(o.price), "</a>")).join(""), "</details></td><td>").concat(p ? money(p.unit_cost || 0) : '<span class="eq-note">\u041D\u0435 \u0437\u0430\u0434\u0430\u043D\u0430</span>').concat(editor && loaded ? '<button class="eq-edit" type="button" data-cost="'.concat(x.id, '" ').concat(pending2 ? "disabled" : "", ">").concat(p ? "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C" : "\u0417\u0430\u0434\u0430\u0442\u044C", "</button>") : "", "</td></tr>");
       }).join(""), "</tbody></table></div>") : "<p>\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E. \u0418\u0437\u043C\u0435\u043D\u0438\u0442\u0435 \u043F\u043E\u0438\u0441\u043A \u0438\u043B\u0438 \u0444\u0438\u043B\u044C\u0442\u0440\u044B.</p>";
       $2("[data-count]").textContent = items.length ? "".concat(page * 20 + 1, "\u2013").concat(Math.min((page + 1) * 20, items.length), " \u0438\u0437 ").concat(items.length) : "0 \u043C\u043E\u0434\u0435\u043B\u0435\u0439";
       $2("[data-prev]").disabled = page === 0;
@@ -121,6 +121,7 @@
     async function refresh() {
       const c = await call2("catalog", {}, { fresh: true });
       parts2 = c.parts || [];
+      loaded = true;
       draw();
     }
     function persist2() {
@@ -129,7 +130,7 @@
       else localStorage.removeItem(storageKey);
     }
     function edit(item) {
-      if (pending2 || saving) return;
+      if (!loaded || pending2 || saving) return;
       setDirty(true);
       const part = linkedEquipment(item, parts2);
       $2("[data-editor]").innerHTML = '<form class="eq-cost-form"><strong>'.concat(esc(item.name), '</strong><label>\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD<input name="cost" inputmode="decimal" required maxlength="12" value="').concat(part ? esc(part.unit_cost || 0) : "", '" autocomplete="off"></label><p class="eq-note">').concat(part ? "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430." : "\u0411\u0443\u0434\u0435\u0442 \u0441\u043E\u0437\u0434\u0430\u043D\u0430 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0430 \u0442\u0435\u0445\u043D\u0438\u043A\u0438 \u0441 \u043D\u0443\u043B\u0435\u0432\u044B\u043C \u043E\u0441\u0442\u0430\u0442\u043A\u043E\u043C. \u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0435\u0437\u0430\u0434\u0430\u043D\u043D\u043E\u0439.", ' \u0420\u044B\u043D\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430 \u0441\u043B\u0443\u0436\u0438\u0442 \u043E\u0440\u0438\u0435\u043D\u0442\u0438\u0440\u043E\u043C.</p><div><button type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button> <button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>');
