@@ -80,7 +80,7 @@ test('repair intake follows diagnostics, approval, repair, quality, ready and is
  const issued=(await h.call('get',{kind:'repair',id:r.id})).record;
  assert.equal(issued.status,'issued');assert.equal(issued.handover_notes,'Техника и комплектность проверены, выдано клиенту');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],0);assert.equal(h.outbox.length,7);assert.equal(h.googleCalls(),0);
 });
-test('repair issue requires handover note',async()=>{
+test('paid repair issue needs no completeness field',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
  const diagnosed=await h.call('update',{kind:'repair',id:r.id,revision:r.revision,status:'diagnostics',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика выполнена',works:[],parts:[],discount:0});
  const details={kind:'repair',id:r.id,revision:diagnosed.revision,status:'repair',assigned_master_id:mechanicId,diagnostics_notes:'Диагностика выполнена',works:[{name:'Диагностика',price:100,quantity:1}],parts:[],discount:0};
@@ -88,7 +88,7 @@ test('repair issue requires handover note',async()=>{
  await h.call('update',{...details,revision:fixed.revision,status:'ready',no_parts:details.parts.length===0,quality_checked:true});
  await h.call('payment',{kind:'repair',id:r.id,amount:100,method:'cash'});
  const paid=(await h.call('get',{kind:'repair',id:r.id})).record;
- await assert.rejects(h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true}),/комплектности/);
+ const issued=await h.call('update',{...details,revision:paid.revision,status:'issued',quality_checked:true});assert.equal(issued.status,'issued');
 });
 test('repair cannot skip directly from accepted to repair',async()=>{
  const h=harness(),r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
@@ -308,4 +308,32 @@ test('repair with no stock parts or a customer-supplied tube reaches ready witho
   assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],1);
   assert.equal(h.outbox.flat().some(change=>change.sheet==='Товары'),false);
  }
+});
+
+test('step workflow derives statuses from actions, preserves editable work prices and resumes on real parts issue',async()=>{
+ const h=harness(),service=randomUUID(),mechanic={id:mechanicId,role:'mechanic',email:'mechanic@example.invalid'};
+ h.seed('Прайс работ',{service_id:service,'Работа':'Настройка тормозов','Работа, ₽':1000,'Активна':true});
+ let r=await h.call('create',{...intake(),assigned_master_id:mechanicId});
+ const step=(action,extra={},actor=mechanic)=>h.call('update',{id:r.id,revision:r.revision,step_flow:true,flow_action:action,...extra},actor);
+ r=await step('diagnose');assert.equal(r.status,'diagnostics');
+ r=await step('save_works',{works:[{catalog_id:service,name:'Настройка тормозов',quantity:1,price:1250.50}]});assert.equal(r.status,'repair');assert.equal(r.total_amount,1250.5);assert.equal(h.sheets['Прайс работ'].rows[0]['Работа, ₽'],1000);
+ r=await step('wait_parts',{waiting_part:'Тормозной трос',waiting_due:'2026-11-10'});assert.equal(r.status,'waiting_parts');assert.equal(r.step_state.waiting_part,'Тормозной трос');
+ await assert.rejects(step('complete',{quality_checked:true}),/ожидание/);
+ r=await h.issue(r.id);assert.equal(r.status,'repair');assert.equal(r.parts.length,1);
+ r=await step('complete',{quality_checked:true,master_comment:'Тормоза настроены, проведён тестовый проезд.'});assert.equal(r.status,'ready');assert.equal(r.step_state.master_comment,'Тормоза настроены, проведён тестовый проезд.');assert.ok(r.step_state.completion_request_id);assert.ok(r.step_state.completion_master_name);assert.equal(r.step_state.completion_master_name.split(/\s+/).length,1);
+ await assert.rejects(step('handover',{handover_notes:'Получено'}),/кассе/);
+ await assert.rejects(step('handover',{},owner),/полная оплата/);
+ await h.call('payment',{kind:'repair',id:r.id,amount:r.total_amount,method:'cash'});r=(await h.call('get',{kind:'repair',id:r.id})).record;r=await step('handover',{},owner);assert.equal(r.status,'issued');
+});
+
+test('step workflow rejects invented works, malformed waiting dates and spoofed legacy flags',async()=>{
+ const h=harness();let r=await h.call('create',intake());r=await h.call('update',{id:r.id,revision:r.revision,step_flow:true,flow_action:'diagnose'});
+ await assert.rejects(h.call('update',{id:r.id,revision:r.revision,step_flow:true,flow_action:'save_works',works:[{name:'Придуманная работа',quantity:1,price:100}]}),/списка/);
+ await assert.rejects(h.call('update',{id:r.id,revision:r.revision,step_flow:true,flow_action:'wait_parts',waiting_part:'Трос',waiting_due:'2026-02-31'}),/дату/);
+ await assert.rejects(h.call('update',{id:r.id,revision:r.revision,step_flow:'true',status:'repair'}),/диагностики/);
+});
+
+
+test('master act name follows first-last registration and legacy last-first-patronymic formats',async()=>{
+ for(const name of ['Алексей Иванов','Иванов Алексей Иванович']){const h=harness();h.sheets['Сотрудники'].rows.find(x=>x.employee_id===mechanicId)['ФИО']=name;const r=await h.call('create',{...intake(),assigned_master_id:mechanicId});h.sheets['Сотрудники'].rows.find(x=>x.employee_id===mechanicId)['ФИО']=name;h.sheets['Ремонты'].rows.find(x=>x.repair_id===r.id)['Мастер']=name;const {createNativeEngine}=await import('../supabase/functions/_shared/native-engine.js');assert.equal(createNativeEngine(h.sheets).run('get',{kind:'repair',id:r.id},owner).record.master_first_name,'Алексей');}
 });

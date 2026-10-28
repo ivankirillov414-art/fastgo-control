@@ -1,6 +1,6 @@
 const {stable}=require('./store.cjs');
 const transient=e=>!e.status||e.status>=500||[408,429].includes(e.status);
-function conflictFields(op,remote){if(!['update','contact'].includes(op.action))return [];return Object.keys(op.patch).filter(k=>!['approve','approval_note'].includes(k)&&stable(op.base?.[k])!==stable(remote[k])&&stable(op.patch[k])!==stable(remote[k]));}
+function conflictFields(op,remote){if(!['update','contact'].includes(op.action))return [];const fields=Object.keys(op.patch).filter(k=>!['approve','approval_note'].includes(k)&&stable(op.base?.[k])!==stable(remote[k])&&stable(op.patch[k])!==stable(remote[k]));if(op.params?.step_flow===true)for(const k of ['master_comment','waiting_part','waiting_due'])if(Object.hasOwn(op.params,k)&&String(op.base?.step_state?.[k]??'')!==String(remote.step_state?.[k]??'')&&String(op.params[k]??'')!==String(remote.step_state?.[k]??''))fields.push('step_state.'+k);return fields;}
 class Synchronizer{
  constructor(store,remote,changed=()=>{}){this.store=store;this.remote=remote;this.changed=changed;this.busy=false;this.online=false;this.lastError='';}
  async run(actor){if(this.busy||!actor)return;this.busy=true;try{
@@ -13,7 +13,7 @@ class Synchronizer{
      else{
       const {record:remote}=await this.remote('get',{kind:op.kind,id:op.record_id},actor);this.online=true;
       const fields=conflictFields(op,remote);if(fields.length){this.store.mark(op.seq,'conflict',{error:JSON.stringify({message:'Одни поля изменены на телефоне и ноутбуке',fields,remote})});this.changed({dataChanged:true});continue;}
-      payload=['update','contact'].includes(op.action)?{...op.patch,kind:op.kind,id:op.record_id,revision:remote.revision,request_id:op.request_id}:{...op.params,revision:remote.revision};
+      payload=['update','contact'].includes(op.action)?{...op.patch,...(op.params.step_flow===true?Object.fromEntries(['step_flow','flow_action','master_comment','waiting_part','waiting_due'].filter(k=>Object.hasOwn(op.params,k)).map(k=>[k,op.params[k]])):{}),kind:op.kind,id:op.record_id,revision:remote.revision,request_id:op.request_id}:{...op.params,revision:remote.revision};
       this.store.remember(actor,op.kind,remote);
      }
      this.store.saveSent(op.seq,payload);

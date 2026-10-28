@@ -51,7 +51,7 @@ module.exports=async function checkRepairScanner({browser,origin,kind}){
  };
  const feedback=pattern=>page.locator('#repair-part-feedback').filter({hasText:pattern}).waitFor();
  try{
-  await page.goto(origin+'/workshop.html#order?kind=repair&id=scanner-order');await page.locator('#order-form').waitFor();
+  await page.goto(origin+'/workshop.html#order?legacy=1&kind=repair&id=scanner-order');await page.locator('#order-form').waitFor();
   await page.locator('#f-diagnostics_notes').fill('Не потерять комментарий мастера');
   await page.locator('#work-rows [data-prop="price"]').fill('450');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
@@ -107,7 +107,7 @@ module.exports=async function checkRepairScanner({browser,origin,kind}){
   await page.waitForFunction(()=>window.repairCameraStarts>window.repairCameraStops);
   await page.evaluate(()=>location.hash='#repairs');await page.locator('#repair-part-scanner').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>window.repairCameraStarts===window.repairCameraStops),true);
-  record.status='issued';await page.goto(origin+'/workshop.html?scanner-closed#order?kind=repair&id=scanner-order');await page.locator('#order-form').waitFor();
+  record.status='issued';await page.goto(origin+'/workshop.html?scanner-closed#order?legacy=1&kind=repair&id=scanner-order');await page.locator('#order-form').waitFor();
   assert.equal(await page.locator('#scan-part').isDisabled(),true);
   record.status='stored';await page.goto(origin+'/workshop.html?scanner-storage#order?kind=storage&id=scanner-order');await page.locator('#order-form').waitFor();
   assert.equal(await page.locator('#scan-part').count(),0);assert.deepEqual(errors,[]);

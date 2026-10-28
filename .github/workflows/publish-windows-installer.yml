@@ -66,7 +66,7 @@ jobs:
           make_latest=$(node scripts/windows-release-order.cjs "$VERSION" "$current")
           echo "Candidate $VERSION; current channel $current; promote=$make_latest"
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          FastGo Windows: зашифрованные полные резервные копии базы и файлов на ноутбуках с проверкой восстановления, локальные снимки очереди каждые 15 минут и контроль установленной версии склада. Общий FastGo обновляет закрытое складское приложение и сообщает причину ожидания открытой программы.
+          FastGo Windows: пошаговый ремонт, автоматические статусы диагностики, работ и ожидания запчасти, редактируемые цены работ и отдельный акт выполненных работ с именем мастера. Комплектность удалена из форм и актов. Оплату и выдачу оформляет касса; проверки однократного списания и полной оплаты сохранены.
           NOTES
           gh release create "$tag" --draft --latest=false --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/dist/release-content.json release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest="$make_latest"

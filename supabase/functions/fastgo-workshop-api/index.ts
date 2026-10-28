@@ -400,6 +400,11 @@ async function main(req){
       }
       if(action==='update'){
         if(p.kind==='repair'){
+          if(p.step_flow===true){
+            if(c.storage_mode!=='postgres')fail('Пошаговый ремонт требует актуальную базу FastGo',503);
+            const actions={diagnose:'diagnostics',save_works:(p.works??r.works??[]).length&&r.status!=='waiting_parts'?'repair':r.status,wait_parts:'waiting_parts',save_comment:r.status,complete:'ready',handover:'issued'};
+            if(!Object.prototype.hasOwnProperty.call(actions,p.flow_action))fail('Неизвестное действие ремонта');p.status=actions[p.flow_action];
+          }
           const targetStatus=p.status||r.status,permissionKey=targetStatus!==r.status?statusPermissionKey(targetStatus):'';
           if(!repairTransitions[targetStatus])fail('Неверный статус');
           if(!authorizedReopen)requireRepairTransition(r.status,targetStatus);
@@ -417,7 +422,7 @@ async function main(req){
           if(p.no_parts===true&&(attached||user.id!==assignedMaster&&!(me.role==='mechanic'&&!assignedMaster)&&!['owner','developer'].includes(me.role)))fail('Отметку «Без замены запчастей» ставит мастер ремонта',403);
           if(targetStatus!==r.status&&['ready','issued'].includes(targetStatus)&&!attached&&p.no_parts!==true&&!noPartsSaved)fail('Выдайте запчасти в этот ремонт на кассе или отметьте „Ремонт без запчастей“',409);
           const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
-          if(['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
+          if(p.step_flow!==true&&['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);
           if(['diagnostics','waiting_parts','repair'].includes(targetStatus))p.quality_checked=false;
           const manual=p.total_override===undefined?r.total_override??null:p.total_override;
           if(p.total_override!==undefined&&!manager(me))fail('Нет права изменять стоимость ремонта',403);
@@ -426,9 +431,9 @@ async function main(req){
           if(amount<Number(r.paid_amount||0))fail('Стоимость меньше уже внесённой оплаты. Сначала оформите возврат',409);
           if(p.approve&&!text(p.approval_note))fail('Укажите как согласована стоимость');
           const approved=p.approve?amount:(Math.abs(Number(r.total_amount||0)-amount)<.005?Number(r.approved_amount):NaN);
-          if(['repair','ready','issued'].includes(targetStatus)&&amount>0&&Math.abs(approved-amount)>.005)fail('Сначала согласуйте текущую стоимость с клиентом',409);
+          if(p.step_flow!==true&&['repair','ready','issued'].includes(targetStatus)&&amount>0&&Math.abs(approved-amount)>.005)fail('Сначала согласуйте текущую стоимость с клиентом',409);
           if(['ready','issued'].includes(targetStatus)&&!(p.quality_checked??r.quality_checked))fail('Перед статусом «Готов» выполните контроль качества',409);
-          if(targetStatus==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount||!text(p.handover_notes)))fail('Для выдачи нужны статус «Готов», полная оплата и отметка о комплектности',409);
+          if(targetStatus==='issued'&&(r.status!=='ready'||Number(r.paid_amount)<amount))fail('Для выдачи нужны готовность и полная оплата',409);
           if(targetStatus==='cancelled'&&targetStatus!==r.status){if(!text(p.note))fail('Укажите причину отмены');if(Number(r.paid_amount)!==0||(p.parts||r.parts||[]).length)fail('Перед отменой верните оплату и снимите установленные запчасти',409);}
         }else{
           if(!['accepted','stored','ready_return','returned','cancelled'].includes(p.status||r.status))fail('Неверный статус');

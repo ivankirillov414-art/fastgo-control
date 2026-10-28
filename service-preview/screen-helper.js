@@ -1,1 +1,15 @@
-addEventListener('DOMContentLoaded',()=>{const id=new URLSearchParams(location.search).get('screen')||'';let tries=0;const wait=setInterval(()=>{const form=document.querySelector('#order-form'),intake=document.querySelector('#intake-form');if(!form&&!intake){if(++tries>150)clearInterval(wait);return;}clearInterval(wait);const pane=p=>document.querySelector('[data-repair-pane="'+p+'"]')?.click();if(intake){for(const [k,v]of Object.entries({phone:'89990000000',last_name:'Иванов',first_name:'Алексей'})){const e=document.querySelector('#f-'+k);if(e){e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));}}if(id==='03-vehicle'||id==='04-intake-photo'){document.querySelector('[data-intake-next]')?.click();const e=document.querySelector('#f-equipment_name');if(e){e.value='Kugoo M4 Pro';e.dispatchEvent(new Event('input',{bubbles:true}));}if(id==='04-intake-photo')document.querySelector('[data-intake-next]')?.click();}return;}if(['06-diagnostics','07-approval','08-repair','10-quality','13-handover'].includes(id))pane('work');if(id==='09-photos')pane('photos');if(id==='11-ready'||id==='12-payment')pane('payment');if(id==='15-history')pane('history');setTimeout(()=>{if(id==='07-approval'||id==='10-quality')document.querySelector('[data-guide-advance]')?.click();if(id==='12-payment')document.querySelector('#payment')?.click();if(id==='13-handover'){document.querySelector('.repair-status-menu>summary')?.click();document.querySelector('[data-repair-status=issued]')?.click();}},150);},100);});
+addEventListener('DOMContentLoaded',()=>{
+ const id=new URLSearchParams(location.search).get('screen');let tries=0;
+ const timer=setInterval(()=>{
+  const intake=document.querySelector('#intake-form'),repair=document.querySelector('.repair-steps');
+  if(!intake&&!repair){if(++tries>150)clearInterval(timer);return;}
+  clearInterval(timer);
+  const fill=(selector,value)=>{const el=document.querySelector(selector);if(el){el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));}};
+  if(intake){for(const [k,v]of Object.entries({phone:'89990000000',last_name:'Иванов',first_name:'Алексей'}))fill('#f-'+k,v);
+   if(['03-vehicle','04-intake-photo'].includes(id)){document.querySelector('[data-intake-next]')?.click();fill('#f-equipment_name','Kugoo M4 Pro');fill('#f-issue_description','Люфт рулевой стойки. Требуется настройка тормозов.');if(id==='04-intake-photo')document.querySelector('[data-intake-next]')?.click();}return;}
+  if(id==='09-pickup')document.querySelector('#rs-take')?.click();
+  if(id==='10-order'){document.querySelector('#rs-order-part')?.click();fill('#dialog [name=waiting_part]','Тормозной трос');fill('#dialog [name=waiting_due]','2026-11-02');}
+  if(id==='15-payment')document.querySelector('#rs-pay')?.click();
+  if(id==='16-handover')document.querySelector('#rs-handover')?.click();
+ },50);
+});

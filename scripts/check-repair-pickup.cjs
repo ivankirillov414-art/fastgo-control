@@ -20,7 +20,7 @@ module.exports=async function({browser,origin}){
   return route.fulfill({headers,json:{data}});
  });
  const pane=id=>page.locator('[data-repair-pane="'+id+'"]').click();
- let navigation=0;const open=async()=>{await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?kind=repair&id=pickup-fixture');await page.locator('.repair-pane-tabs').waitFor();};
+ let navigation=0;const open=async()=>{await page.goto(origin+'/workshop.html?fixture='+(++navigation)+'#order?legacy=1&kind=repair&id=pickup-fixture');await page.locator('.repair-pane-tabs').waitFor();};
  try{
   await open();assert.equal(await page.locator('#payment,#refund,[data-return-part]').count(),0);
   assert.equal(await page.locator('[data-repair-pane=payment],[data-repair-pane=history]').count(),0);
