@@ -30,6 +30,12 @@ public class PhoneSmokeTest {
    scenario.onActivity(a->((WebView)a.findViewById(14001)).loadUrl(MainActivity.ORIGIN+MainActivity.PREFIX+"warehouse.html?unified=1"));ready(scenario,"warehouse.html");assertEquals("true",js(scenario,"document.documentElement.scrollWidth<=innerWidth+1"));assertEquals("true",js(scenario,"!!document.querySelector('#login input[type=password]')"));
   }
  }
+ @Test public void installedEquipmentCatalogueHasDatedSourcePrices()throws Exception{
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();String text;
+  try(java.io.InputStream in=context.getAssets().open("fastgo/warehouse/equipment-data.js");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);text=out.toString("UTF-8");}
+  String marker="export const equipmentData=";String json=text.substring(text.indexOf(marker)+marker.length()).trim();JSONObject data=new JSONObject(json.substring(0,json.length()-1));assertEquals("RUB",data.getString("currency"));assertEquals(2440,data.getJSONArray("items").length());assertEquals("2026-10-28",data.getString("checked_at"));
+  JSONObject item=data.getJSONArray("items").getJSONObject(0),offer=item.getJSONArray("offers").getJSONObject(0);assertTrue(offer.getDouble("price")>=500);assertTrue(offer.getString("url").startsWith("https://"));assertFalse(item.has("quantity"));assertFalse(item.has("unit_cost"));
+ }
  @Test public void navigationKeepsUntrustedPagesOutsideApp(){assertTrue(MainActivity.internal(Uri.parse(MainActivity.HOME)));assertFalse(MainActivity.internal(Uri.parse("https://example.com/assets/fastgo/workshop.html")));assertFalse(MainActivity.internal(Uri.parse("http://appassets.androidplatform.net/assets/fastgo/workshop.html")));assertFalse(MainActivity.internal(Uri.parse("file:///sdcard/workshop.html")));}
  @Test public void updaterRejectsTamperedAndNonIncreasingApk()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){

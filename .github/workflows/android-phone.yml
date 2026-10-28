@@ -34,7 +34,7 @@ jobs:
       p='warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk'
       with zipfile.ZipFile(p) as z:
        m=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
-       assert m['platform']=='android' and m['version']=='1.0.5'
+       assert m['platform']=='android' and m['version']=='1.0.6'
        for name,expected in m['files'].items(): assert hashlib.sha256(z.read('assets/fastgo/'+name)).hexdigest()==expected
       print('PASS: installed APK contains verified service and warehouse assets')
       PY
@@ -77,7 +77,7 @@ jobs:
    - id: signed
      run: |
       node - <<'JS'
-      const fs=require('fs'),r=JSON.parse(fs.readFileSync('warehouse-android/phone/release/receipt.json'));if(r.version==='1.0.5'&&fs.existsSync('warehouse-android/phone/release/'+r.file))fs.appendFileSync(process.env.GITHUB_OUTPUT,'ready=true\n');
+      const fs=require('fs'),r=JSON.parse(fs.readFileSync('warehouse-android/phone/release/receipt.json'));if(r.version==='1.0.6'&&fs.existsSync('warehouse-android/phone/release/'+r.file))fs.appendFileSync(process.env.GITHUB_OUTPUT,'ready=true\n');
       JS
    - uses: actions/download-artifact@v4
      if: steps.signed.outputs.ready == 'true'
@@ -88,7 +88,7 @@ jobs:
       python3 - <<'PY'
       import json,zipfile
       expected=json.load(open('verify-package/src/main/assets/fastgo/bundle-receipt.json'))
-      with zipfile.ZipFile('warehouse-android/phone/release/FastGo-Android-1.0.5.apk') as z:
+      with zipfile.ZipFile('warehouse-android/phone/release/FastGo-Android-1.0.6.apk') as z:
        installed=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
        assert installed['files']==expected['files'], 'Signed APK is older than verified source; sign the fresh package before publishing'
       PY
@@ -144,7 +144,7 @@ jobs:
       fs.writeFileSync(dir+'SHA256SUMS.txt',r.sha256+'  '+r.file+'\n');
       r.release_device_tests='passed: exact signed APK on Android 10 and 15 emulators';fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
       JS
-      tag=fastgo-android-v1.0.5
+      tag=fastgo-android-v1.0.6
       if gh release view "$tag" >/dev/null 2>&1; then
         mkdir existing-phone-release
         gh release download "$tag" --pattern verified-receipt.json --dir existing-phone-release
@@ -153,8 +153,9 @@ jobs:
       JS
         exit 0
       fi
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.5' --notes 'Приложение для обычного телефона: сервис и просмотр склада. Подписанный APK проверен установкой и запуском, вводом текста, поворотом и перезапуском на Android 10 и 15 в эмуляторах. Вход через вашу учётную запись FastGo. Приход и кассовые операции сохраняют привязку к двум рабочим ноутбукам.' warehouse-android/phone/release/FastGo-Android-1.0.5.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.6' --notes 'Приложение для обычного телефона: сервис и просмотр склада. Подписанный APK проверен установкой и запуском, вводом текста, поворотом и перезапуском на Android 10 и 15 в эмуляторах. Вход через вашу учётную запись FastGo. Приход и кассовые операции сохраняют привязку к двум рабочим ноутбукам.' warehouse-android/phone/release/FastGo-Android-1.0.6.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
 
    - name: Publish automatic phone update channel after installed APK checks
+     if: steps.package.outputs.ready == 'true'
      env: {GH_TOKEN: '${{ github.token }}'}
      run: node scripts/publish-phone-update.cjs
