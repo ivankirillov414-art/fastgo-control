@@ -22,6 +22,12 @@ jobs:
    - uses: gradle/actions/setup-gradle@v4
      with: {gradle-version: '8.11.1'}
    - run: node warehouse-android/phone/prepare-web.cjs
+   - name: Build next-version debug self-update fixture
+     run: |
+      gradle :phone:assembleDebug -PfastgoPhoneFixture=true --no-daemon
+      mkdir -p phone/src/debug/assets
+      cp phone/build/outputs/apk/debug/phone-debug.apk phone/src/debug/assets/update-fixture.apk
+     working-directory: warehouse-android
    - name: Build final phone package
      run: gradle :phone:assembleRelease :phone:assembleDebug --no-daemon
      working-directory: warehouse-android
@@ -118,7 +124,9 @@ jobs:
       arch: x86_64
       profile: Nexus 5
       disable-animations: true
-      script: node scripts/check-phone-release.cjs
+      script: |
+       node scripts/check-phone-release.cjs
+       FASTGO_SELFUPDATE_APK=verify-package/build/outputs/apk/debug/phone-debug.apk node scripts/check-phone-self-update.cjs
    - uses: actions/upload-artifact@v4
      if: always() && steps.signed.outputs.ready == 'true'
      with:

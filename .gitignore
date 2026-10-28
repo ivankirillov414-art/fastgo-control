@@ -25,3 +25,5 @@ warehouse-android/.gradle/
 warehouse-android/**/build/
 warehouse-android/phone/src/main/assets/
 warehouse-android/local.properties
+
+warehouse-android/phone/src/debug/assets/update-fixture.apk
