@@ -159,6 +159,7 @@
 
   // warehouse/services.js
   function mountServices({ root, call: call2, editor, message: message2 }) {
+    root.classList.add("service-workspace");
     let services = [], pending2 = null, dirty = false;
     root.innerHTML = '<div class="toolbar"><h1>\u0420\u0435\u043C\u043E\u043D\u0442\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0442\u044B</h1>' + (editor ? '<button type="button" data-new>+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443</button>' : "") + '</div><p>\u041E\u0431\u0449\u0438\u0439 \u043F\u0440\u0430\u0439\u0441 \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0438 \u0441\u043A\u043B\u0430\u0434\u0430. \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0446\u0435\u043D\u044B \u043D\u0435 \u043C\u0435\u043D\u044F\u0435\u0442 \u0440\u0430\u043D\u0435\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u043B\u0430\u0442\u044B.</p><div data-editor></div><input type="search" data-search placeholder="\u041F\u043E\u0438\u0441\u043A \u0440\u0430\u0431\u043E\u0442\u044B"><div data-list></div>';
     const $2 = (s) => root.querySelector(s);
@@ -219,6 +220,7 @@
     } };
   }
   function mountManualPayment({ root, call: call2, load: load2, save: save3, home: home2, message: message2 }) {
+    root.classList.add("service-workspace");
     let catalog2 = [], draft2 = load2("manual-service-payment") || { id: uuid(), items: [], method: "", total: "" }, paying = false;
     const persist2 = () => save3("manual-service-payment", draft2);
     const $2 = (s) => root.querySelector(s);

@@ -171,3 +171,11 @@ body[data-mode=station] .desktop-status{white-space:normal;overflow-wrap:anywher
 @media(max-width:700px){body[data-mode=station] #receipt-label-notice{margin-left:0;padding-inline:12px}}
 body[data-mode=station] header .fg-notice-bell{position:relative;inset:auto;flex:0 0 36px;width:36px;height:36px;min-height:36px;padding:6px;box-shadow:none;-webkit-app-region:no-drag}
 body[data-mode=station] .fg-notice-drawer{top:calc(var(--warehouse-header-height,64px) + 12px);max-height:calc(100vh - var(--warehouse-header-height,64px) - 32px)}
+
+/* Shared repair-work catalogue and manual cash entry. */
+.service-workspace .row{grid-template-columns:minmax(0,1fr) auto auto;gap:12px}
+.service-workspace .row>span{min-width:0;overflow-wrap:anywhere}
+.service-workspace .row>strong{white-space:nowrap}
+.service-workspace [data-add],.service-workspace [data-payment]{max-width:760px}
+.service-workspace .toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+@media(max-width:480px){.service-workspace .row{grid-template-columns:minmax(0,1fr) auto}.service-workspace .row>button{grid-column:1/-1;justify-self:end}.service-workspace h1{font-size:24px}.service-workspace [data-payment]>button{width:100%;margin-top:10px}}

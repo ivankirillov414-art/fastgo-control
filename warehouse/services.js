@@ -1,5 +1,6 @@
 import {esc,money,uuid} from './client.js';
 export function mountServices({root,call,editor,message}){
+ root.classList.add('service-workspace');
  let services=[],pending=null,dirty=false;
  root.innerHTML='<div class="toolbar"><h1>Ремонтные работы</h1>'+(editor?'<button type="button" data-new>+ Добавить работу</button>':'')+'</div><p>Общий прайс сервиса и склада. Изменение цены не меняет ранее проведённые оплаты.</p><div data-editor></div><input type="search" data-search placeholder="Поиск работы"><div data-list></div>';
  const $=s=>root.querySelector(s);window.fastgoServiceCatalogDirty=()=>root.isConnected&&dirty;
@@ -9,6 +10,7 @@ export function mountServices({root,call,editor,message}){
  return {ready:call('work_catalog').then(x=>{services=x;draw();}),dispose(){window.fastgoServiceCatalogDirty=()=>false;}};
 }
 export function mountManualPayment({root,call,load,save,home,message}){
+ root.classList.add('service-workspace');
  let catalog=[],draft=load('manual-service-payment')||{id:uuid(),items:[],method:'',total:''},paying=false;
  const persist=()=>save('manual-service-payment',draft);
  const $=s=>root.querySelector(s);
