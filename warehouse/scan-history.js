@@ -13,7 +13,7 @@ export function editScanBuffer(draft,removePart){
  const history=Array.isArray(draft.scan_history)?[...draft.scan_history]:[];
  if(removePart){for(let i=history.length-1;i>=0;i--)if(history[i]===id)history.splice(i,1);}
  else history.splice(history.lastIndexOf(id),1);
- const next={...draft,items:draft.items.flatMap(x=>x.part_id!==id?[{...x}]:!removePart&&x.quantity>1?[{...x,quantity:x.quantity-1}]:[]),scan_history:history};
- next.last_part_id=lastBufferedScan(next)||next.items.at(-1)?.part_id||'';
+ const next={...draft,items:draft.items.map(x=>x.part_id!==id?{...x}:!removePart&&x.quantity>1?{...x,quantity:x.quantity-1}:null).filter(Boolean),scan_history:history};
+ next.last_part_id=lastBufferedScan(next)||next.items[next.items.length-1]?.part_id||'';
  return next;
 }

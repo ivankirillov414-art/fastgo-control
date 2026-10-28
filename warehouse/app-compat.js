@@ -2329,8 +2329,8 @@
     if (removePart) {
       for (let i = history.length - 1; i >= 0; i--) if (history[i] === id) history.splice(i, 1);
     } else history.splice(history.lastIndexOf(id), 1);
-    const next = { ...draft2, items: draft2.items.flatMap((x) => x.part_id !== id ? [{ ...x }] : !removePart && x.quantity > 1 ? [{ ...x, quantity: x.quantity - 1 }] : []), scan_history: history };
-    next.last_part_id = lastBufferedScan(next) || ((_a3 = next.items.at(-1)) == null ? void 0 : _a3.part_id) || "";
+    const next = { ...draft2, items: draft2.items.map((x) => x.part_id !== id ? { ...x } : !removePart && x.quantity > 1 ? { ...x, quantity: x.quantity - 1 } : null).filter(Boolean), scan_history: history };
+    next.last_part_id = lastBufferedScan(next) || ((_a3 = next.items[next.items.length - 1]) == null ? void 0 : _a3.part_id) || "";
     return next;
   }
 
@@ -2704,7 +2704,7 @@
         $2("live-undo").onclick = () => run2(() => editBuffer());
         const keys2 = (e) => {
           var _a4, _b;
-          if (e.key !== "F6" || e.repeat || e.ctrlKey || e.altKey || e.metaKey || !active || locked || current || kind !== "sale" || document.querySelector("dialog[open],.modal") || ((_b = (_a4 = e.target).closest) == null ? void 0 : _b.call(_a4, "input:not([data-payment-scan]):not(#live-code),textarea,select,[contenteditable]"))) return;
+          if (e.key !== "F6" || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !active || locked || current || kind !== "sale" || document.querySelector("dialog[open],.modal") || ((_b = (_a4 = e.target).closest) == null ? void 0 : _b.call(_a4, "input:not([data-payment-scan]):not(#live-code),textarea,select,[contenteditable]"))) return;
           e.preventDefault();
           if (!$2("live-undo").disabled) void run2(() => editBuffer());
         };
