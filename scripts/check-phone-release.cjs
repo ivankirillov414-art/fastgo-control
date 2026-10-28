@@ -1,9 +1,10 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+const {waitForScreen}=require('./phone-emulator-readiness.cjs');
 const dir=path.resolve('warehouse-android/phone/release'),receipt=JSON.parse(fs.readFileSync(path.join(dir,'receipt.json'),'utf8')),apk=path.join(dir,receipt.file),out=path.resolve('browser-results/android-phone-'+process.env.FASTGO_ANDROID_API);
 fs.mkdirSync(out,{recursive:true});const sha=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');assert.equal(sha(apk),receipt.sha256);
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:45000}),pause=ms=>new Promise(r=>setTimeout(r,ms));
-async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-phone.xml');return adb('shell','cat','/sdcard/fastgo-phone.xml');}
-async function loginReady(){let xml='';for(let i=0;i<30;i++){xml=await dump();if(xml.includes('Вход для сотрудников'))return xml;await pause(500);}throw Error('Installed APK login did not finish rendering');}
+async function dump(){execFileSync('adb',['shell','uiautomator','dump','/sdcard/fastgo-phone.xml'],{encoding:'utf8',timeout:12000});return execFileSync('adb',['shell','cat','/sdcard/fastgo-phone.xml'],{encoding:'utf8',timeout:12000});}
+async function loginReady(){return waitForScreen(dump,xml=>xml.includes('Вход для сотрудников'));}
 (async()=>{
  const previous=path.join(dir,'FastGo-Android-1.0.1.apk');
  const packageInfo=()=>{const raw=adb('shell','dumpsys','package','ru.fastgo.mobile');const identity={uid:raw.match(/\b(?:userId|appId)=(\d+)/)?.[1],first:raw.match(/firstInstallTime=([^\r\n]+)/)?.[1]?.trim(),version:raw.match(/versionName=([^\r\n]+)/)?.[1]?.trim()};console.log('Android package identity: '+JSON.stringify(identity));return identity;};

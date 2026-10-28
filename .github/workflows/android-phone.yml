@@ -21,7 +21,7 @@ jobs:
      with: {packages: platform-tools}
    - uses: gradle/actions/setup-gradle@v4
      with: {gradle-version: '8.11.1'}
-   - run: node --test warehouse-android/phone/tests/*.test.cjs
+   - run: node --test warehouse-android/phone/tests/*.test.cjs tests/phone-emulator-readiness.test.cjs
    - run: node warehouse-android/phone/prepare-web.cjs
    - name: Build next-version debug self-update fixture
      run: |

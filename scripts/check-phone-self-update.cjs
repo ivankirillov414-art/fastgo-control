@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+const {waitForScreen}=require('./phone-emulator-readiness.cjs');
 const pkg='ru.fastgo.mobile.test',out=path.resolve('browser-results/android-phone-'+process.env.FASTGO_ANDROID_API+'/self-update');
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:45000}),pause=ms=>new Promise(r=>setTimeout(r,ms));
 const version=()=>Number(adb('shell','dumpsys','package',pkg).match(/versionCode=(\d+)/)?.[1]);
@@ -28,7 +29,7 @@ async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-self-upda
  }
  assert(callback,'Android installation result did not reach the app callback');assert(['package_replaced','installer_result'].includes(completionSource),'No authoritative system completion source recorded');
  adb('shell','am','start','-W','-n',pkg+'/ru.fastgo.mobile.MainActivity');
- for(let i=0;i<30;i++){xml=await dump();if(xml.includes('Вход для сотрудников'))break;await pause(300);}
+ xml=await waitForScreen(dump,screen=>screen.includes('Вход для сотрудников'));
  assert(xml.includes('Вход для сотрудников'),'Self-updated app did not reopen');
  fs.writeFileSync(path.join(out,'installed.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));
  fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({api:process.env.FASTGO_ANDROID_API,package:pkg,from:before,to:before+1,installedByOwnPackageInstaller:true,dataRetained:true,callbackReceived:true,completionSource,reopened:true,systemConfirmationRequired:confirmation,scope:'Emulator self-update. This does not prove a Play Protect or OEM verdict on a user device.'},null,2));
