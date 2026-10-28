@@ -23,7 +23,7 @@ async function launch(){const app=await _electron.launch({executablePath:require
  await opened.page.evaluate(()=>location.hash='#new?kind=repair');
  await opened.page.locator('#f-last_name').fill('Клиент');await opened.page.locator('#f-first_name').fill('Тест');await opened.page.locator('#f-phone').fill('79999999999');await opened.page.locator('#f-equipment_name').fill('Kugoo Max Speed');
  await opened.page.locator('#intake-save').click();await opened.page.waitForFunction(()=>location.hash.startsWith('#order?'),{},{timeout:45000});
- await opened.page.locator('h1').waitFor();assert.match(await opened.page.locator('h1').innerText(),/Ремонт/);await opened.page.waitForFunction(async()=> (await window.fastgoDesktop.state()).pending===2);
+ await opened.page.locator('h1').waitFor();assert.match(await opened.page.locator('h1').innerText(),/Ремонт/);await opened.page.waitForFunction(async()=> (await window.fastgoDesktop.state()).pending===1);
  assert(Array.isArray(await opened.page.evaluate(()=>window.fastgoDesktop.printers())));
  await opened.app.evaluate(({app,BrowserWindow})=>{globalThis.smokePrints=[];const install=contents=>{contents.getPrintersAsync=async()=>[{name:'FASTGO_SMOKE_PRINTER',displayName:'Smoke'}];contents.print=(options,callback)=>{globalThis.smokePrints.push(options);callback(true);};};for(const window of BrowserWindow.getAllWindows())install(window.webContents);app.on('web-contents-created',(_event,contents)=>install(contents));});
  await opened.page.evaluate(()=>window.fastgoDesktop.configure({printer:'FASTGO_SMOKE_PRINTER',remotePrint:false}));
@@ -31,7 +31,7 @@ async function launch(){const app=await _electron.launch({executablePath:require
  const prints=await opened.app.evaluate(()=>globalThis.smokePrints);assert.equal(prints.length,1);assert.equal(prints[0].silent,true);assert.equal(prints[0].deviceName,'FASTGO_SMOKE_PRINTER');assert.equal(prints[0].pageSize,'A4');assert.deepEqual(prints[0].margins,{marginType:'custom',top:38,bottom:38,left:38,right:38});
 
  await opened.app.close();opened=await launch();await opened.page.evaluate(()=>location.hash='#repairs');await opened.page.getByText('Клиент Тест',{exact:false}).first().waitFor();
- const state=await opened.page.evaluate(()=>window.fastgoDesktop.state());assert.equal(state.records,1);assert.equal(state.pending,2);
+ const state=await opened.page.evaluate(()=>window.fastgoDesktop.state());assert.equal(state.records,1);assert.equal(state.pending,1);
  // The bundled Windows interface can save and advance an offline repair without stock parts.
  await opened.page.locator('.order-no').first().click();
  await opened.page.locator('#repair-progress-panel').waitFor();

@@ -83,6 +83,10 @@ export async function printPartLabel(part,quantity=1){
 }
 
 export async function chooseLabels(parts,received=false){
+  if(parts.some(p=>!p.sku||!p.model)){
+    const catalog=await getCatalog(true);
+    parts=parts.map(p=>{const saved=catalog.parts?.find(x=>x.id===(p.id||p.part_id)||x.barcode===p.barcode);return {...p,model:p.model||saved?.model,sku:p.sku||saved?.sku};});
+  }
   const rows=labelRows(parts,received);
   if(!rows.length)return notice('Нет товаров со штрихкодом для печати','bad');
   const d=showDialog('Печать этикеток',`<p class="muted">Выберите товары и количество этикеток. Это не меняет остатки на складе.</p><label>Поиск товара<input type="search" id="label-search" placeholder="Название, модель, артикул или штрихкод"></label><div class="inv-inline"><button type="button" class="btn ghost" id="label-select">Выбрать найденные</button><button type="button" class="btn ghost" id="label-clear">Снять весь выбор</button></div><div style="max-height:45vh;overflow:auto"><table class="records" style="width:100%"><thead><tr><th>Печатать</th><th>Товар</th><th>Этикеток, шт.</th></tr></thead><tbody id="label-rows"></tbody></table></div><label>Формат печати<select id="label-format"><option value="a4">Лист A4 — 24 этикетки 58 × 30 мм на листе</option><option value="roll">Принтер этикеток — 58 × 30 мм</option></select></label><p class="muted">В окне принтера установите масштаб 100% и отключите колонтитулы. Для листов с наклейками нужна соответствующая раскладка.</p><p id="label-total" role="status"></p><p id="label-error" class="error" role="alert"></p>`,`<button type="button" class="btn ghost" data-inv-close>Отмена</button><button type="button" class="btn" id="label-print">Напечатать выбранные</button>`);
@@ -114,7 +118,7 @@ export async function chooseLabels(parts,received=false){
       for(const x of jobs){
         const part=x.part,svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
         JsBarcode(svg,part.barcode,{format:'CODE128',width:2,height:55,displayValue:true,fontSize:15,margin:10});
-        const label=`<div class="label"><div class="name">${esc(part.name)}${part.model?` · ${esc(part.model)}`:''}</div><div class="meta"><span class="meta-category">${esc(part.category||'Без категории')}</span><b class="label-price">${money(part.retail_price)}</b></div><div class="label-details">${esc([part.model?'Размер: '+part.model:'',part.sku?'Арт. '+part.sku:''].filter(Boolean).join(' · '))}</div>${svg.outerHTML}</div>`;
+        const label=`<div class="label"><div class="name">${esc(part.name)}</div><div class="meta"><span class="meta-category">${esc(part.category||'Без категории')}</span><b class="label-price">${money(part.retail_price)}</b></div><div class="label-details">${esc([part.model?'Размер: '+part.model:'',part.sku?'Арт. '+part.sku:''].filter(Boolean).join(' · '))}</div>${svg.outerHTML}</div>`;
         for(let i=0;i<x.quantity;i++)labels.push(label);
       }
       w.document.open();w.document.write(labelDocument(labels,selectedFormat));w.document.close();
