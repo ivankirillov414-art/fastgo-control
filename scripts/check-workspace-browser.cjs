@@ -128,12 +128,12 @@ const server=createServer((req,res)=>{
  });
  for(const width of [360,1366]){
   await page.setViewportSize({width,height:900});await page.goto(origin+'/workshop.html#new?kind=repair');await page.locator('#intake-form').waitFor();
-  assert.equal(await page.locator('#intake-form input[required]').count(),5);
+  assert.equal(await page.locator('#intake-form input[required]').count(),4);assert.equal(await page.locator('#f-intake_amount').count(),0);
   assert.equal(await page.locator('#f-promised_date').isVisible(),false);
   const before=creates.length;if(width<=760){await page.locator('[data-intake-next]').click();assert.equal(await page.locator('#intake-form').getAttribute('data-intake-current'),'0');assert.equal(await page.locator('#f-phone').evaluate(x=>x.validity.valid),false);}else{await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Телефон'}).waitFor();}assert.equal(creates.length,before);
   for(const [name,value] of Object.entries({phone:'89991234567',last_name:'Иванов',first_name:'Иван'}))await page.locator('#f-'+name).fill(value);if(width<=760)await page.locator('[data-intake-next]').click();
   await page.locator('#f-equipment_name').fill('старк хантер');await page.getByRole('option',{name:'Stark Hunter',exact:true}).click();if(width<=760)await page.locator('[data-intake-next]').click();await page.locator('#intake-photos').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==','base64')});
-  await page.locator('#f-intake_amount').fill('400');failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
+  failNext=true;await page.locator('#intake-save').click();await page.locator('#intake-error').filter({hasText:'Временно'}).waitFor();assert.equal(await page.locator('#intake-save').isEnabled(),true);
   await page.evaluate(()=>document.querySelector('#intake-form').requestSubmit());await page.locator('#order-form').waitFor({state:'attached'});
   assert.equal(creates.length,before+2);assert.equal(creates[before].request_id,creates[before+1].request_id);assert.equal(creates[before+1].phone,'+79991234567');assert.equal(creates[before+1].promised_date,'');assert.equal(creates[before+1].brand,'Stark');assert.equal(creates[before+1].model,'Hunter');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
@@ -175,7 +175,7 @@ const server=createServer((req,res)=>{
  await page.locator('#receipt-add').click();
  const row=page.locator('#receipt-lines section').nth(1);
  await row.locator('select').selectOption('');
- await row.getByLabel('Название',{exact:true}).fill('Камера');
+ await row.getByLabel('Наименование по модели',{exact:true}).fill('Камера');
  await row.getByLabel('Категория',{exact:true}).fill('Колёса');
  await row.getByLabel('Количество',{exact:true}).fill('2');
  await page.getByRole('button',{name:'Сохранить весь приход'}).click();
@@ -184,7 +184,7 @@ const server=createServer((req,res)=>{
  await page.reload();
  await page.getByRole('button',{name:'Проверить и повторить сохранение'}).click();
  await page.getByRole('heading',{name:'Приход сохранён'}).waitFor();
- assert.equal(attempts,2);assert.deepEqual(requests[0],requests[1]);assert.equal(requests[1].items[0].quantity,15);assert.equal(requests[1].items[1].name,'Камера');
+ assert.equal(attempts,2);assert.deepEqual(requests[0],requests[1]);assert.equal(requests[1].items[0].quantity,15);assert.equal(requests[1].items[1].name,'Камера');assert.match(requests[1].items[1].sku,/^FG-[A-F0-9]{12}$/);
  assert.equal(await page.getByRole('button',{name:'Этикетка',exact:true}).count(),2);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  assert.deepEqual(errors,[]);await page.screenshot({path:`browser-results/${kind}-receipt.png`,fullPage:true});await context.close();

@@ -64,6 +64,8 @@ jobs:
        warehouse-android/phone/build/reports/androidTests/
        warehouse-android/phone/src/main/assets/fastgo/bundle-receipt.json
  release-check:
+  outputs:
+   ready: ${{ steps.signed.outputs.ready }}
   needs: verify
   runs-on: ubuntu-latest
   timeout-minutes: 20
@@ -120,7 +122,7 @@ jobs:
       name: fastgo-android-installed-${{ matrix.api }}
       path: browser-results/android-phone-${{ matrix.api }}/
  publish:
-  if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+  if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.release-check.outputs.ready == 'true'
   needs: [verify, release-check]
   runs-on: ubuntu-latest
   permissions: {contents: write}

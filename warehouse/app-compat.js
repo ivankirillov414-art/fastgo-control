@@ -591,12 +591,16 @@
         const jobs = await call2("receipt_label_jobs", { label_pipeline: 3 });
         if (!Array.isArray(jobs) || !jobs.length) return;
         await barcode();
+        let currentParts;
         for (const job2 of jobs) {
           if (stopped) return;
-          const items = (((_a3 = job2.result) == null ? void 0 : _a3.items) || []).map((part) => {
+          const rows = ((_a3 = job2.result) == null ? void 0 : _a3.items) || [];
+          if (rows.some((p) => (p.id || p.part_id) && (!p.sku || !p.model)) && !currentParts) currentParts = (await call2("catalog")).parts || [];
+          const items = rows.map((original) => {
+            const saved = currentParts == null ? void 0 : currentParts.find((x) => x.id === (original.id || original.part_id)), part = { ...original, model: original.model || (saved == null ? void 0 : saved.model), sku: original.sku || (saved == null ? void 0 : saved.sku) };
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
-            return { name: part.name, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
+            return { name: part.name, model: part.model, sku: part.sku, barcode: String(part.barcode), quantity: part.quantity, price: part.retail_price, svg: svg.outerHTML };
           });
           await bridge.printReceiptLabels({ id: job2.id, items, ...((_b = job2.result) == null ? void 0 : _b.printer_name) ? { printer_name: job2.result.printer_name, remember_printer: job2.result.remember_printer === true } : {}, ...((_c = job2.result) == null ? void 0 : _c.width_mm) !== void 0 || ((_d = job2.result) == null ? void 0 : _d.height_mm) !== void 0 ? { widthMm: job2.result.width_mm, heightMm: job2.result.height_mm } : {} });
           await call2("receipt_label_ack", { id: job2.id });
@@ -1126,7 +1130,7 @@
       try {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         window.JsBarcode(svg, String(part.barcode), { format: "CODE128", displayValue: false, width: 2, height: 72, margin: 0, marginLeft: 20, marginRight: 20, background: "#ffffff", lineColor: "#000000" });
-        const payload = { name: part.name, barcode: String(part.barcode), price: Number(part.retail_price), svg: svg.outerHTML, quantity, format };
+        const payload = { name: part.name, model: part.model, sku: part.sku, barcode: String(part.barcode), price: Number(part.retail_price), svg: svg.outerHTML, quantity, format };
         if ((_a3 = window.warehouseDesktop) == null ? void 0 : _a3.printBarcode) {
           button.disabled = true;
           const result = await window.warehouseDesktop.printBarcode({ ...payload, ...printers == null ? void 0 : printers.selection() });
@@ -1137,7 +1141,7 @@
           }
           return;
         }
-        const label = '<section class="label"><div class="label-heading"><strong>' + esc(part.name) + '</strong><b class="price">' + esc(Number(part.retail_price).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " \u20BD") + "</b></div>" + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
+        const label = '<section class="label"><div class="label-heading"><strong>' + esc(part.name) + '</strong><b class="price">' + esc(Number(part.retail_price).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " \u20BD") + "</b></div>" + (part.model || part.sku ? '<div class="label-details">' + esc([part.model ? "\u0420\u0430\u0437\u043C\u0435\u0440: " + part.model : "", part.sku ? "\u0410\u0440\u0442. " + part.sku : ""].filter(Boolean).join(" \xB7 ")) + "</div>" : "") + svg.outerHTML + "<small>" + esc(part.barcode) + "</small></section>", frame = document.createElement("iframe");
         frame.title = "\u041F\u0435\u0447\u0430\u0442\u044C \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A";
         frame.style.cssText = "position:fixed;width:1px;height:1px;left:-10000px;border:0";
         frame.srcdoc = barcodeDocument(label, quantity, format);
@@ -1156,7 +1160,7 @@
     };
   }
   function barcodeDocument(label, quantity, format) {
-    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}.label-heading{display:flex;align-items:center;justify-content:space-between;gap:1mm;width:100%}.label-heading strong{min-width:0;flex:1;text-align:left}.price{font-size:8pt;font-weight:bold;white-space:nowrap}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
+    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>\u042D\u0442\u0438\u043A\u0435\u0442\u043A\u0438 FastGo</title><style>@page{size:' + (format === "a4" ? "A4;margin:10mm" : "58mm 30mm;margin:0") + "}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:black;background:white;" + (format === "a4" ? "display:grid;grid-template-columns:repeat(3,58mm);grid-auto-rows:30mm;gap:2mm;" : "") + "}.label{width:58mm;height:30mm;padding:2mm;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;break-inside:avoid;" + (format === "a4" ? "" : "break-after:page;") + "}.label:last-child{break-after:auto}.label-heading{display:flex;align-items:center;justify-content:space-between;gap:1mm;width:100%}.label-heading strong{min-width:0;flex:1;text-align:left}.price{font-size:8pt;font-weight:bold;white-space:nowrap}strong{font-size:9pt;line-height:1.1;max-height:8mm;overflow:hidden;text-align:center}small{font-size:7pt}.label-details{font-size:7pt;line-height:1.1;width:100%;text-align:center;overflow-wrap:anywhere}svg{width:54mm;height:15mm;flex-shrink:0}" + (format === "a4" ? "" : ".label{justify-content:flex-start;gap:.5mm}.label strong{height:3.3mm;flex:0 0 3.3mm;max-height:none;font-size:8pt;line-height:3.3mm;white-space:nowrap;text-overflow:ellipsis;width:100%}.label svg{height:9mm;shape-rendering:crispEdges}.label small{height:3mm;flex:0 0 3mm;line-height:3mm;white-space:nowrap}") + "</style></head><body>" + label.repeat(quantity) + "</body></html>";
   }
 
   // workshop/equipment-core.js
@@ -1665,8 +1669,122 @@
     return { thumbnail, bindThumbnails, mount, upload };
   }
 
+  // workshop/product-steps.js
+  function mountProductSteps(form, save3, { warehouse = false } = {}) {
+    if (!form || !save3) return;
+    if (!document.getElementById("product-steps-style")) {
+      const link = document.createElement("link");
+      link.id = "product-steps-style";
+      link.rel = "stylesheet";
+      link.href = "workshop/product-steps.css?v=20261028";
+      document.head.append(link);
+    }
+    form.classList.add("product-step-form");
+    save3.dataset.productSave = "true";
+    const nav2 = document.createElement("nav");
+    nav2.className = "product-step-nav";
+    nav2.setAttribute("aria-label", "\u041F\u0440\u0438\u0451\u043C\u043A\u0430 \u0442\u043E\u0432\u0430\u0440\u0430");
+    nav2.innerHTML = '<ol><li>\u0422\u043E\u0432\u0430\u0440</li><li>\u0420\u0430\u0437\u043C\u0435\u0440 \u0438 \u0446\u0435\u043D\u044B</li><li>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0438 \u0444\u043E\u0442\u043E</li></ol><p role="status"></p>';
+    const titles = ["\u0422\u043E\u0432\u0430\u0440", "\u0420\u0430\u0437\u043C\u0435\u0440 \u0438 \u0446\u0435\u043D\u044B", "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0438 \u0444\u043E\u0442\u043E"], groups = titles.map((title, i) => {
+      const section = document.createElement("section");
+      section.dataset.productStep = i;
+      const heading2 = document.createElement("h3");
+      heading2.textContent = title;
+      section.append(heading2);
+      return section;
+    });
+    for (const [i, names2] of [[0, ["name", "category"]], [1, ["model", "unit_cost", "retail_price"]], [2, ["initial_quantity", "photo", "category_primary"]]]) for (const name of names2) {
+      const input = form.elements.namedItem(name), label = input == null ? void 0 : input.closest("label");
+      if (label) groups[i].append(label);
+    }
+    for (const img of form.querySelectorAll("img")) groups[2].append(img);
+    for (const p of form.querySelectorAll("p.muted")) groups[2].append(p);
+    const controls = document.createElement("div");
+    controls.className = "product-step-controls";
+    controls.innerHTML = '<button type="button" data-product-back>\u041D\u0430\u0437\u0430\u0434</button><button type="button" data-product-next>\u0414\u0430\u043B\u0435\u0435</button>';
+    const back = controls.firstElementChild, next = controls.lastElementChild;
+    back.className = warehouse ? "" : "btn secondary";
+    next.className = warehouse ? "primary" : "btn";
+    const heading = form.querySelector(":scope>h2");
+    form.prepend(...heading ? [heading] : [], nav2, ...groups);
+    form.append(controls);
+    let current = 0;
+    const busy2 = () => save3.disabled;
+    function draw(focus = false) {
+      form.dataset.productCurrent = current;
+      groups.forEach((g, i) => g.hidden = i !== current);
+      nav2.querySelector("p").textContent = "\u0428\u0430\u0433 ".concat(current + 1, " \u0438\u0437 3");
+      [...nav2.querySelectorAll("li")].forEach((li, i) => {
+        if (i === current) li.setAttribute("aria-current", "step");
+        else li.removeAttribute("aria-current");
+      });
+      save3.hidden = current !== 2;
+      next.hidden = current === 2;
+      back.disabled = current === 0 || busy2();
+      next.disabled = busy2();
+      if (focus) {
+        const h = groups[current].querySelector("h3");
+        h.tabIndex = -1;
+        h.focus({ preventScroll: true });
+        h.scrollIntoView({ block: "nearest" });
+      }
+    }
+    function reveal(input) {
+      const section = input.closest("[data-product-step]");
+      if (section) {
+        current = Number(section.dataset.productStep);
+        draw();
+      }
+    }
+    function advance() {
+      if (busy2()) return;
+      for (const input of groups[current].querySelectorAll("input[required]")) if (!["file", "number"].includes(input.type)) input.value = input.value.trim();
+      const invalid = [...groups[current].querySelectorAll("input,select,textarea")].find((x) => x.willValidate && !x.validity.valid);
+      if (invalid) {
+        reveal(invalid);
+        invalid.reportValidity();
+        invalid.focus();
+        return;
+      }
+      current = Math.min(2, current + 1);
+      draw(true);
+    }
+    next.onclick = advance;
+    back.onclick = () => {
+      if (!busy2()) {
+        current = Math.max(0, current - 1);
+        draw(true);
+      }
+    };
+    form.addEventListener("invalid", (e) => reveal(e.target), true);
+    form.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.tagName === "INPUT" && current < 2 && !e.defaultPrevented) {
+        e.preventDefault();
+        advance();
+      }
+    });
+    form.addEventListener("submit", (e) => {
+      if (current < 2) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        advance();
+      }
+    }, true);
+    const observer = new MutationObserver(() => {
+      if (!form.isConnected) {
+        observer.disconnect();
+        return;
+      }
+      back.disabled = current === 0 || busy2();
+      next.disabled = busy2();
+    });
+    observer.observe(save3, { attributes: true, attributeFilter: ["disabled"] });
+    draw();
+  }
+
   // workshop/product-intake.js
   var keyFor2 = (actor) => "fastgo_product_intake_v1:" + actor;
+  var automaticProductSKU = (id) => "FG-" + String(id).replace(/-/g, "").slice(0, 12).toUpperCase();
   var write = (storage, key3, value) => {
     const encoded = JSON.stringify(value);
     storage.setItem(key3, encoded);
@@ -1691,6 +1809,7 @@
     if (!String(product2.name || "").trim() || !String(product2.category || "").trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 1e5) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435, \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044E \u0438 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E (\u043E\u0442 0 \u0434\u043E 100000).");
     for (const name of ["unit_cost", "retail_price"]) if (!Number.isFinite(product2[name]) || product2[name] < 0 || product2[name] > 1e9) throw new Error("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0446\u0435\u043D\u0443 \u0442\u043E\u0432\u0430\u0440\u0430.");
     const state = { version: 1, product: product2, quantity, photo, ids: { product: crypto.randomUUID(), stock: crypto.randomUUID(), photo: crypto.randomUUID() }, part: null, received: false, photoSaved: false };
+    state.product = { ...product2, sku: String(product2.sku || "").trim() || automaticProductSKU(state.ids.product) };
     write(storage, keyFor2(actor), state);
     return state;
   }
@@ -1732,7 +1851,7 @@
       dialog.className = "new-part-dialog";
       dialog.setAttribute("aria-label", "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C");
       const categories = [...new Set(parts2().map((p) => p.category).filter(Boolean))].sort();
-      dialog.innerHTML = '<form><h2>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</h2><div class="new-part-fields"><label>\u041D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435<input name="name" required maxlength="200"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required maxlength="100" list="new-part-categories"><datalist id="new-part-categories">' + categories.map((c) => '<option value="' + esc(c) + '">').join("") + '</datalist></label><label>\u041C\u043E\u0434\u0435\u043B\u044C / \u0440\u0430\u0437\u043C\u0435\u0440<input name="model" maxlength="120"></label><label>\u0410\u0440\u0442\u0438\u043A\u0443\u043B / SKU<input name="sku" maxlength="100"></label><label>\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD<input name="unit_cost" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041F\u0440\u043E\u0434\u0430\u0436\u0430, \u20BD<input name="retail_price" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u0440\u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438<input name="initial_quantity" type="number" min="0" max="100000" step="1" value="0" ' + (canReceive() ? "" : "disabled") + '></label><label>\u0415\u0434\u0438\u043D\u0438\u0446\u0430 \u0438\u0437\u043C\u0435\u0440\u0435\u043D\u0438\u044F<input name="unit" value="\u0448\u0442" maxlength="20" required></label></div><p class="muted">\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 FastGo \u043F\u0440\u0438\u0441\u0432\u043E\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.' + (canReceive() ? " \u041D\u0430\u0447\u0430\u043B\u044C\u043D\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u043E\u043C." : " \u041F\u0440\u0438\u0445\u043E\u0434 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.") + '</p><label>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><img class="new-part-preview" alt="\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" hidden><label class="new-part-category-photo"><input name="category_primary" type="checkbox"> \u0421\u0434\u0435\u043B\u0430\u0442\u044C \u0444\u043E\u0442\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C \u0434\u043B\u044F \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0438</label><p class="new-part-status" role="status" aria-live="polite"></p><div class="actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button class="primary" type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button></div></form>';
+      dialog.innerHTML = '<form><h2>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</h2><div class="new-part-fields"><label>\u041D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E \u043C\u043E\u0434\u0435\u043B\u0438<input name="name" required maxlength="200" placeholder="\u041A\u0430\u043C\u0435\u0440\u0430 \u041C\u0430\u043A\u0441 \u0421\u043F\u0438\u0434"></label><label>\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044F<input name="category" required maxlength="100" list="new-part-categories"><datalist id="new-part-categories">' + categories.map((c) => '<option value="' + esc(c) + '">').join("") + '</datalist></label><label>\u0420\u0430\u0437\u043C\u0435\u0440<input name="model" maxlength="120" placeholder="\u041D\u0430\u043F\u0440\u0438\u043C\u0435\u0440, 10 \xD7 2,5"></label><label>\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD<input name="unit_cost" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041F\u0440\u043E\u0434\u0430\u0436\u0430, \u20BD<input name="retail_price" type="number" min="0" max="1000000000" step="0.01" value="0" required></label><label>\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u0440\u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438<input name="initial_quantity" type="number" min="0" max="100000" step="1" value="0" ' + (canReceive() ? "" : "disabled") + '></label></div><p class="muted">\u0410\u0440\u0442\u0438\u043A\u0443\u043B \u0438 \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434 \u043F\u0440\u0438\u0441\u0432\u043E\u044F\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.' + (canReceive() ? " \u041D\u0430\u0447\u0430\u043B\u044C\u043D\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u0444\u043E\u0440\u043C\u0438\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043F\u0440\u0438\u0445\u043E\u0434\u043E\u043C." : " \u041F\u0440\u0438\u0445\u043E\u0434 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u043D\u0430 \u0434\u0432\u0443\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0430\u0445.") + '</p><label>\u0424\u043E\u0442\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0438<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><img class="new-part-preview" alt="\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0435 \u0444\u043E\u0442\u043E" hidden><label class="new-part-category-photo"><input name="category_primary" type="checkbox"> \u0421\u0434\u0435\u043B\u0430\u0442\u044C \u0444\u043E\u0442\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u043C \u0434\u043B\u044F \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0438</label><p class="new-part-status" role="status" aria-live="polite"></p><div class="actions"><button type="button" data-close>\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button class="primary" type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u044C</button></div></form>';
       document.body.append(dialog);
       dialog.showModal();
       const form = dialog.querySelector("form"), submit = dialog.querySelector("[type=submit]"), status = dialog.querySelector("[role=status]"), close = dialog.querySelector("[data-close]"), fileInput = form.elements.photo;
@@ -1794,7 +1913,7 @@
               photo = { sha256: [...hash].map((v) => v.toString(16).padStart(2, "0")).join(""), type: file.type, primary: form.elements.category_primary.checked };
             }
             let state = loadProductIntake(localStorage, actor());
-            if (!state) state = startProductIntake(localStorage, actor(), { product: { name: String(fields.get("name") || "").trim(), category: String(fields.get("category") || "").trim(), model: String(fields.get("model") || "").trim(), sku: String(fields.get("sku") || "").trim(), unit_cost: Number(fields.get("unit_cost") || 0), retail_price: Number(fields.get("retail_price") || 0), unit: String(fields.get("unit") || "\u0448\u0442") }, quantity: Number(fields.get("initial_quantity") || 0), photo });
+            if (!state) state = startProductIntake(localStorage, actor(), { product: { name: String(fields.get("name") || "").trim(), category: String(fields.get("category") || "").trim(), model: String(fields.get("model") || "").trim(), unit_cost: Number(fields.get("unit_cost") || 0), retail_price: Number(fields.get("retail_price") || 0), unit: String(fields.get("unit") || "\u0448\u0442") }, quantity: Number(fields.get("initial_quantity") || 0), photo });
             restore();
             if (state.quantity > 0 && !canReceive()) throw Error("\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u043F\u0440\u0438\u0445\u043E\u0434 \u043D\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u043E\u043C \u0441\u043A\u043B\u0430\u0434\u0441\u043A\u043E\u043C \u043D\u043E\u0443\u0442\u0431\u0443\u043A\u0435.");
             if (state.photo && !state.photoSaved && (!photo || photo.sha256 !== state.photo.sha256 || photo.type !== state.photo.type)) throw Error("\u0414\u043B\u044F \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u044F \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u043E \u0436\u0435 \u0444\u043E\u0442\u043E. \u0422\u043E\u0432\u0430\u0440 \u0438 \u043F\u0440\u0438\u0445\u043E\u0434 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B.");
@@ -1823,6 +1942,7 @@
           }
         });
       };
+      mountProductSteps(form, submit, { warehouse: true });
       form.elements.name.focus();
     };
   }
