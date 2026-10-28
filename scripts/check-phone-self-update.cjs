@@ -15,7 +15,7 @@ async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-self-upda
   if(version()===before+1)break;
   xml=await dump();fs.writeFileSync(path.join(out,'last-screen.xml'),xml);
   assert(!/SELF UPDATE FAILED|harmful app|blocked by|Play Protect|install anyway/i.test(xml),'Native updater or security verification reported an error: '+xml);
-  const button=(xml.match(/<node\b[^>]*>/g)||[]).find(x=>/text="(?:Install|Update|Установить|Обновить)"/.test(x)&&/clickable="true"/.test(x));
+  const button=(xml.match(/<node\b[^>]*>/g)||[]).find(x=>/text="(?:Install|Update|Установить|Обновить)"/i.test(x)&&/clickable="true"/.test(x));
   if(button){const b=button.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);assert(b,'Installer button has no bounds');adb('shell','input','tap',String(Math.round((Number(b[1])+Number(b[3]))/2)),String(Math.round((Number(b[2])+Number(b[4]))/2)));confirmation=true;}
   await pause(500);
  }
