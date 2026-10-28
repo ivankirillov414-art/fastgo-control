@@ -1,7 +1,7 @@
 name: FastGo Windows
 on:
   push:
-    paths: ['desktop/**', 'warehouse/**', 'warehouse-desktop/**', 'warehouse.html', 'workshop/**', 'workshop.html', 'workshop.css', 'scripts/fullscreen-smoke.cjs', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
+    paths: ['scripts/release-content.cjs', 'tests/release-content.test.cjs', 'desktop/**', 'warehouse/**', 'warehouse-desktop/**', 'warehouse.html', 'workshop/**', 'workshop.html', 'workshop.css', 'scripts/fullscreen-smoke.cjs', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,7 +25,7 @@ jobs:
       - run: npm test
         working-directory: desktop
       - name: Verify incremental sync metadata and access checks
-        run: node --test tests/preorders.test.mjs tests/native-sync.test.mjs tests/update-safety.test.mjs tests/owner-overview.test.mjs tests/repair-progress.test.mjs tests/native-store.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs
+        run: node --test tests/release-content.test.cjs tests/preorders.test.mjs tests/native-sync.test.mjs tests/update-safety.test.mjs tests/owner-overview.test.mjs tests/repair-progress.test.mjs tests/native-store.test.mjs tests/backup-replica.test.mjs tests/backup-server.test.mjs
       - run: npm run prepare-web
         working-directory: desktop
       - name: Install desktop smoke test driver
@@ -83,6 +83,7 @@ jobs:
             desktop/dist/FastGo-Setup-*-Windows-x64.exe
             desktop/dist/FastGo-Setup-*-Windows-x64.exe.blockmap
             desktop/dist/latest.yml
+            desktop/dist/release-content.json
             desktop/README.md
           if-no-files-found: error
           retention-days: 90

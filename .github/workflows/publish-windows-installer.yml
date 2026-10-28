@@ -49,16 +49,18 @@ jobs:
         run: |
           tag="fastgo-windows-v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
-            existing=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)
-            if test "$existing" != "$BUILD_SHA"; then
-              echo "Version $VERSION is occupied by $existing. Choose a new version instead of publishing a stale package."
-              exit 1
-            fi
+            gh release download "$tag" --pattern release-content.json --dir existing-release
+            python3 - <<'PY'
+          import json
+          old=json.load(open('existing-release/release-content.json'))
+          new=json.load(open('release/dist/release-content.json'))
+          assert old['schema']==new['schema']==1 and all(old[k]==new[k] for k in ['app','version','fingerprint']), 'Version already contains different or unverified files. Increase the version.'
+          PY
             echo 'This exact tested version is already published.'
             exit 0
           fi
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
           FastGo Windows: зашифрованные полные резервные копии базы и файлов на ноутбуках с проверкой восстановления, локальные снимки очереди каждые 15 минут и контроль установленной версии склада. Общий FastGo обновляет закрытое складское приложение и сообщает причину ожидания открытой программы.
           NOTES
-          gh release create "$tag" --draft --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
+          gh release create "$tag" --draft --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/dist/release-content.json release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest
