@@ -5,6 +5,7 @@ const watchdog=setTimeout(()=>{console.error('Warehouse package verification tim
 console.log('Warehouse package check: '+stage);
 const asar=require('@electron/asar'),yaml=require('js-yaml'),{_electron}=require(path.join(process.env.FASTGO_PLAYWRIGHT,'node_modules/playwright'));
 const pkg=require('./package.json'),dist=path.join(__dirname,'dist'),unpacked=path.join(dist,'win-unpacked'),exe=path.join(unpacked,fs.readdirSync(unpacked).find(n=>n.endsWith('.exe'))),archive=path.join(unpacked,'resources/app.asar');
+require('../scripts/release-content.cjs').verify(__dirname,archive,path.join(unpacked,'resources'),asar);
 assert.equal(pkg.build.productName,'FastGo Склад');assert.equal(pkg.build.nsis.shortcutName,'FastGo Склад');assert.equal(pkg.build.appId,'ru.fastgo.warehouse');
 const manifest=yaml.load(fs.readFileSync(path.join(dist,'latest.yml'),'utf8')),entry=manifest.files.find(x=>x.url===`FastGo-Warehouse-Setup-${pkg.version}-Windows-x64.exe`);
 assert(entry);assert.equal(manifest.version,pkg.version);assert.equal(crypto.createHash('sha512').update(fs.readFileSync(path.join(dist,entry.url))).digest('base64'),entry.sha512);assert(fs.existsSync(path.join(dist,entry.url+'.blockmap')));
