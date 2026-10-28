@@ -33,7 +33,7 @@ New-Item -ItemType Directory -Path $appData -Force | Out-Null
 $marker = Join-Path $appData 'ci-keep-documents.txt'
 [IO.File]::WriteAllText($marker,'Keep drafts, settings and login')
 # Let NSIS discover the installed folder, exactly as an automatic update does.
-Install-TestPackage $newInstaller @('/S','/currentuser','--updated')
+Install-TestPackage $newInstaller @('/S','/currentuser','--updated','--force-run')
 $after = @(Find-TestInstallation | Sort-Object -Property PSPath -Unique)
 if ($after.Count -ne 1 -or $after[0].PSPath -ne $before[0].PSPath) { throw 'Upgrade created a second application instead of updating the existing entry' }
 $expectedDisplayName = "FastGo Склад $($pkg.version)"
@@ -50,6 +50,16 @@ $shortcutTarget = $wsh.CreateShortcut($shortcut).TargetPath
 Write-Output "Shortcut target: $shortcutTarget; expected installed executable: $exe"
 # Verify actual Windows shell activation, including links WScript cannot resolve.
 try {
+ $deadline = (Get-Date).AddSeconds(30)
+ $restarted = $false
+ while ((Get-Date) -lt $deadline) {
+  $started = @(Get-CimInstance Win32_Process -Filter "Name like 'FastGo%'" | Where-Object { $_.ExecutablePath -eq $exe })
+  if ($started.Count) { $restarted = $true; break }
+  Start-Sleep -Milliseconds 300
+ }
+ if (!$restarted) { throw 'Warehouse did not reopen automatically after the silent update' }
+ # A fresh shortcut activation must work too, rather than finding the process above.
+ Get-CimInstance Win32_Process -Filter "Name like 'FastGo%'" | Where-Object { $_.ExecutablePath -eq $exe } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
  Start-Process -FilePath $shortcut -WindowStyle Hidden
  $deadline = (Get-Date).AddSeconds(20)
  $launched = $false
@@ -63,5 +73,5 @@ try {
  # The installation directory was checked against RUNNER_TEMP above.
  Get-CimInstance Win32_Process -Filter "Name like 'FastGo%'" | Where-Object { $_.ExecutablePath -eq $exe } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
-@{version=$pkg.version;display_name=$after[0].DisplayName;existing_installation_updated=$true;executable_path_preserved=$true;app_data_preserved=$true;shortcut_verified=$true;background_discovery_verified=$true} | ConvertTo-Json | Set-Content -Encoding utf8 "$PSScriptRoot/../dist/warehouse-upgrade-verification.json"
-Write-Output 'PASS: real legacy warehouse installer upgrades in place; corrected Russian name and shortcut, one installation entry, preserved executable path and app data'
+@{version=$pkg.version;display_name=$after[0].DisplayName;existing_installation_updated=$true;executable_path_preserved=$true;app_data_preserved=$true;automatic_relaunch_verified=$true;shortcut_verified=$true;background_discovery_verified=$true} | ConvertTo-Json | Set-Content -Encoding utf8 "$PSScriptRoot/../dist/warehouse-upgrade-verification.json"
+Write-Output 'PASS: real legacy warehouse installer upgrades in place, relaunches automatically, preserves executable path and app data, and the shortcut opens it again'
