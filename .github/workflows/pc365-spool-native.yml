@@ -31,4 +31,6 @@ jobs:
         if: always()
         with:
           name: pc365-spool-native
-          path: browser-results/pc365-spool/
+          path: |
+            browser-results/pc365-spool/
+            browser-results/pc365-native/
