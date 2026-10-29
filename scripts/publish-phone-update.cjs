@@ -1,7 +1,8 @@
 const fs=require('node:fs'),crypto=require('node:crypto');
 function nextFeed(current,receipt,gradle,bytes){
  const code=Number(gradle.match(/versionCode\s+(\d+)/)?.[1]),version=gradle.match(/versionName\s+'([^']+)'/)?.[1];
- if(!code||version!==receipt.version||receipt.package!=='ru.fastgo.mobile'||receipt.release_device_tests!=='passed: exact signed APK on Android 10 and 15 emulators'||!receipt.signature_verified)throw Error('Phone release is not verified');
+ const checks=receipt.release_device_test_details;
+ if(!code||version!==receipt.version||receipt.package!=='ru.fastgo.mobile'||receipt.release_device_tests!=='passed: exact signed APK on Android 10, 15 and 16 emulators'||!receipt.signature_verified||![29,35,36].every(api=>checks?.android_api?.includes(api))||checks.installed_bytes_match!==true)throw Error('Phone release is not verified');
  if(receipt.file!==`FastGo-Android-${version}.apk`||crypto.createHash('sha256').update(bytes).digest('hex')!==receipt.sha256)throw Error('Phone release bytes do not match');
  if(current.versionCode>code)return null;
  if(current.versionCode===code&&current.sha256!==receipt.sha256)throw Error('Published Android version already has different bytes');

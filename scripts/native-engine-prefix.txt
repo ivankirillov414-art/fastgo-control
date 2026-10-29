@@ -1,3 +1,4 @@
+import {staffPriceOperation} from './staff-prices.js';
 import {preorderOperation} from './preorders.js';
 import {equipmentReferencePrices} from './equipment-reference-prices.js';
 export function createNativeEngine(snapshot,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
