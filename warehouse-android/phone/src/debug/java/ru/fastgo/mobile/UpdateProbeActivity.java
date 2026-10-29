@@ -17,6 +17,8 @@ public final class UpdateProbeActivity extends Activity {
   super.onCreate(state);
   if((getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)==0){finish();return;}
   TextView status=new TextView(this);status.setText("FastGo native self-update test");setContentView(status);
+  int existing=PhoneInstaller.state(this).getInt("session",-1);
+  if(existing!=-1&&getPackageManager().getPackageInstaller().getSessionInfo(existing)!=null){status.setText("Native PackageInstaller session awaiting completion");return;}
   WebView view=new WebView(this);PhoneUpdates verifier=new PhoneUpdates(this,view);
   new Thread(()->{try{
    File apk=new File(getCacheDir(),"probe-update.apk");MessageDigest digest=MessageDigest.getInstance("SHA-256");

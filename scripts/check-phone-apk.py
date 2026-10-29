@@ -54,7 +54,7 @@ def audit(apk):
     sdk = next(attrs for tag, attrs in nodes if tag == 'uses-sdk')
     package = root['package']
     permissions = sorted(attrs['name'] for tag, attrs in nodes if tag.startswith('uses-permission'))
-    allowed = {'android.permission.INTERNET', 'android.permission.CAMERA', 'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION', package+'.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
+    allowed = {'android.permission.POST_NOTIFICATIONS', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.RECEIVE_BOOT_COMPLETED', 'android.permission.INTERNET', 'android.permission.CAMERA', 'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION', package+'.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
     failures = []
     if package not in ('ru.fastgo.mobile', 'ru.fastgo.mobile.test'): failures.append('Unexpected application package')
     if set(permissions)-allowed: failures.append('Unexpected permissions: '+str(set(permissions)-allowed))
@@ -65,6 +65,7 @@ def audit(apk):
     exported = [attrs for tag, attrs in nodes if tag in ('activity', 'service', 'receiver', 'provider') and attrs.get('exported', False)]
     for component in exported:
         if component['name'] in ('ru.fastgo.mobile.MainActivity', '.MainActivity'): continue
+        if component['name'] in ('ru.fastgo.mobile.TaskNoticeJob', '.TaskNoticeJob') and component.get('permission') == 'android.permission.BIND_JOB_SERVICE': continue
         if component['name'] == 'androidx.profileinstaller.ProfileInstallReceiver' and component.get('permission') == 'android.permission.DUMP': continue
         failures.append('Unexpected exported Android component: '+component['name'])
     report = {'file':Path(apk).name,'sha256':hashlib.sha256(Path(apk).read_bytes()).hexdigest(),'package':package,'version':root['versionName'],'versionCode':root['versionCode'],'sdk':sdk,'permissions':permissions,'exported_components':exported,'manifest_checks_passed':not failures,'failures':failures,'scope':'APK structure and merged manifest; this is not a Play Protect verdict'}

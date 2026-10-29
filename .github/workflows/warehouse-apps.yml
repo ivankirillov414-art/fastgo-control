@@ -172,5 +172,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'PC-365: автоматическое определение зазоров перед каждой серией и нативный TSPL-вывод копий по аппаратному шагу ленты. Многостраничная печать Windows для PC-365 заменена одним растровым кадром 203 dpi и количеством копий. Доступна диагностика размера и типа бумаги драйвера. Сохранены безопасные отступы 58×27 и ежедневный отчёт.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Задачи сотрудникам и цены запчастей, техники и работ. Сохранено автоматическое аппаратное выравнивание каждой этикетки PC365 в длинной серии и итоговый отчёт по местным дням. Редактирование цен не меняет остатки или оплаты.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py

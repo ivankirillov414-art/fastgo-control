@@ -183,7 +183,11 @@ const server=createServer((req,res)=>{
  assert.equal(await page.locator('[data-field="quantity"]').first().isDisabled(),true);
  await page.reload();
  await page.getByRole('button',{name:'Проверить и повторить сохранение'}).click();
- await page.getByRole('heading',{name:'Приход сохранён'}).waitFor();
+ try{await page.getByRole('heading',{name:'Приход сохранён'}).waitFor();}
+ catch(error){
+  console.error('Receipt retry diagnostics',JSON.stringify({attempts,requests,errors,state:await page.evaluate(()=>({text:document.body.innerText,controls:[...document.querySelectorAll('#receipt-form input,#receipt-form select,#receipt-form button')].map(el=>({tag:el.tagName,name:el.name,field:el.dataset.field,value:el.value,disabled:el.matches(':disabled'),valid:el.validity?.valid,message:el.validationMessage}))}))}));
+  await page.screenshot({path:`browser-results/${kind}-receipt-failure.png`,fullPage:true});throw error;
+ }
  assert.equal(attempts,2);assert.deepEqual(requests[0],requests[1]);assert.equal(requests[1].items[0].quantity,15);assert.equal(requests[1].items[1].name,'Камера');assert.match(requests[1].items[1].sku,/^FG-[A-F0-9]{12}$/);
  assert.equal(await page.getByRole('button',{name:'Этикетка',exact:true}).count(),2);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
