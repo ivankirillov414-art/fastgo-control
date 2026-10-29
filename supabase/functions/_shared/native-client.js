@@ -38,7 +38,7 @@ export function nativeClient({db,actor,google,storage}){
    // The step engine assigns an unassigned repair to the signed-in mechanic.
    // Resolve that same identity before hydrating staff from authoritative auth membership.
    const implicitMasterId=repair&&p.step_flow===true&&actor.role==='mechanic'&&!repair.master_id?actor.id:'';
-   const lookupMasterId=p.assigned_master_id===undefined?(repair?.master_id||implicitMasterId):(p.assigned_master_id||implicitMasterId);
+   const lookupMasterId=p.assigned_master_id===undefined?(p.step_flow===true?implicitMasterId:repair?.master_id||''):(p.assigned_master_id||implicitMasterId);
    if(['create','update'].includes(action)&&lookupMasterId){
     const members=await db('workshop_members','profile_id=eq.'+encodeURIComponent(lookupMasterId)+'&active=eq.true&role=eq.mechanic&select=profile_id,name,role,active');
     if(!members?.length)fail('Назначить можно только активного мастера',400);

@@ -37,13 +37,13 @@ async function launch(){const app=await _electron.launch({executablePath:require
  // The bundled Windows interface can save and advance an offline repair without stock parts.
  await opened.page.locator('[data-open-repair]').first().click();
  await opened.page.locator('#rs-start').waitFor();
- await opened.page.locator('#rs-master').selectOption('22222222-2222-4222-8222-222222222222');
+ assert.equal(await opened.page.locator('#rs-master').count(),0);
  await opened.page.locator('#rs-start').click();await opened.page.locator('[data-service]').click();
  await opened.page.waitForFunction(()=>!document.querySelector('[data-price]')?.disabled);
- await opened.page.locator('[data-step=finish]').click();await opened.page.locator('#rs-comment').fill('Ремонт без складских деталей. Проверено.');
- await opened.page.locator('#rs-quality').check();await opened.page.locator('#rs-complete').click();
+ await opened.page.locator('[data-step=finish]').click();assert.equal(await opened.page.locator('#rs-comment,#rs-complete').count(),0);
+ await opened.page.locator('#rs-quality').check();
  await opened.page.waitForFunction(()=>document.querySelector('.rs-status')?.textContent==='Готово к выдаче');
- assert.equal(await opened.page.locator('#rs-quality,#rs-complete').count(),0);
+ assert.equal(await opened.page.locator('#rs-quality').isDisabled(),true);assert.equal(await opened.page.locator('#rs-payment-qr').count(),0,'offline preparation must sync before exposing cash QR');await opened.page.getByText('Сохраняем данные для кассы…',{exact:true}).waitFor();
  assert.equal((await opened.page.evaluate(()=>window.fastgoDesktop.state())).pending,4);
  console.log('PASS: Windows sandbox bridge, offline intake without photos, durable restart, document rendering and silent printer dispatch');
  }catch(e){console.error(await opened.page.locator('body').innerText());throw e;}finally{await opened.app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

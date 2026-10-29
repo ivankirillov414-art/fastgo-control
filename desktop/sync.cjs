@@ -13,7 +13,7 @@ class Synchronizer{
      else{
       const {record:remote}=await this.remote('get',{kind:op.kind,id:op.record_id},actor);this.online=true;
       const fields=conflictFields(op,remote);if(fields.length){this.store.mark(op.seq,'conflict',{error:JSON.stringify({message:'Одни поля изменены на телефоне и ноутбуке',fields,remote})});this.changed({dataChanged:true});continue;}
-      payload=['update','contact'].includes(op.action)?{...op.patch,...(op.params.step_flow===true?Object.fromEntries(['step_flow','flow_action','master_comment','waiting_part','waiting_due'].filter(k=>Object.hasOwn(op.params,k)).map(k=>[k,op.params[k]])):{}),kind:op.kind,id:op.record_id,revision:remote.revision,request_id:op.request_id}:{...op.params,revision:remote.revision};
+      payload=['update','contact'].includes(op.action)?{...op.patch,...(op.params.step_flow===true?Object.fromEntries(['step_flow','flow_action','master_comment','waiting_part','waiting_due','payment_qr'].filter(k=>Object.hasOwn(op.params,k)).map(k=>[k,op.params[k]])):{}),kind:op.kind,id:op.record_id,revision:remote.revision,request_id:op.request_id}:{...op.params,revision:remote.revision};
       this.store.remember(actor,op.kind,remote);
      }
      this.store.saveSent(op.seq,payload);

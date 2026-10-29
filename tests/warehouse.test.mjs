@@ -319,3 +319,14 @@ test('explicit no-parts confirmation remains necessary for real repairs after st
 });
 
 test('cash final report is read-only, deduplicates manual sales and refuses terminal and mechanic access',async()=>{const h=await harness();await h.request('work_payment',{request_id:randomUUID(),items:[{title:'Работа',quantity:1,unit_price:1600}],payment_method:'transfer'});const before=JSON.stringify(h.snap),r=await h.request('final_report');assert.equal(r.status,200,r.error);assert.equal(r.data.total,1600);assert.equal(r.data.count,1);assert.equal(JSON.stringify(h.snap),before);assert.equal((await h.request('final_report',{},'terminal')).status,403);h.member.role='mechanic';assert.equal((await h.request('final_report')).status,403);});
+
+test('QR-prepared repair payment issues once across a lost reply and preserves all stock',async()=>{
+ const h=await harness(),repair=seedRepair(h),raw=h.snap.sheets['Ремонты'].rows[0],request_id=randomUUID();
+ raw['Статус']='Готов';raw['Контроль качества']=true;
+ h.snap.sheets['События'].rows.push({__row:2,event_id:randomUUID(),'Тип':'repair',record_id:repair,'Действие':'repair_steps','Детали':JSON.stringify({mode:'steps',action:'complete',payment_qr:true,completion_request_id:randomUUID()})});
+ const stock=JSON.stringify(h.snap.sheets['Товары'].rows);await h.request('enqueue_repair',{request_id,repair_id:repair},'terminal');h.loseCompletion();
+ const params={id:request_id,payment_method:'cash',amount:1000,expected_revision:2};
+ assert.equal((await h.request('checkout',params)).status,503);assert.equal(raw['Статус'],'Выдан');
+ const retry=await h.request('checkout',params);assert.equal(retry.status,200,retry.error);assert.equal(retry.data.repair_completed,true);assert.equal((await h.request('checkout',params)).status,200);
+ assert.equal(h.snap.sheets['Оплаты'].rows.length,1);assert.equal(raw['Оплачено'],1500);assert.equal(JSON.stringify(h.snap.sheets['Товары'].rows),stock);
+});

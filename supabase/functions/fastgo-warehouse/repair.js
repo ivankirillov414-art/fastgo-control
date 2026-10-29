@@ -31,7 +31,7 @@ export function repairQuote(snapshot,repairId,actor){
  const total=Math.round(r.total_amount*100)/100,paid=Math.round(r.paid_amount*100)/100,due=Math.max(0,Math.round((total-paid)*100)/100);
  if(![total,paid,due].every(Number.isFinite)||total<0||paid<0)fail('Проверьте стоимость ремонта',409);
  const closed=['issued','cancelled','returned'].includes(r.status);
- return{id:r.id,number:String(r.repair_number).padStart(4,'0'),vehicle:[r.brand,r.model].filter(Boolean).join(' '),total,paid,due,status:r.status,revision:r.revision,payable:!closed&&due>0,price_editable:!closed};
+ return{id:r.id,number:String(r.repair_number).padStart(4,'0'),vehicle:[r.brand,r.model].filter(Boolean).join(' '),total,paid,due,status:r.status,revision:r.revision,payment_completion:r.status==='ready'&&r.quality_checked===true&&r.step_state?.payment_qr===true,payable:!closed&&due>0,price_editable:!closed};
 }
 export function prepareRepairPayment(snapshot,p,actor){
  cashActor(actor);if(!id(p.request_id)||!['cash','card','transfer'].includes(p.method))fail('Выберите способ оплаты');
@@ -47,9 +47,9 @@ export function prepareRepairPayment(snapshot,p,actor){
  // rounding causing an overpayment or leaving a fractional debt.
  const now=new Date().toISOString(),paymentId=crypto.randomUUID(),note='Оплата по QR · склад · '+p.request_id+(manual!==undefined?' · Итого вручную: '+quote.total+' → '+total+' ₽':'');
  const row={payment_id:paymentId,'Дата':now,'Тип':'repair',record_id:quote.id,'Сумма':amount,'Способ оплаты':p.method,'Сотрудник':actor.email||actor.id,'Комментарий':note,request_id:p.request_id,updated_at:now};
- const event={event_id:crypto.randomUUID(),'Дата':now,'Тип':'repair',record_id:quote.id,'Действие':'payment',actor_id:actor.id,'Детали':JSON.stringify({amount,note,...(manual!==undefined?{previous_total:quote.total,total_override:total}:{} )}),updated_at:now};
+ const event={event_id:crypto.randomUUID(),'Дата':now,'Тип':'repair',record_id:quote.id,'Действие':'payment',actor_id:actor.id,'Детали':JSON.stringify({amount,note,...(quote.payment_completion?{from_status:'ready',to_status:'issued',payment_qr:true}:{}),...(manual!==undefined?{previous_total:quote.total,total_override:total}:{} )}),updated_at:now};
  const append=(sheet,values)=>({sheet,row:Math.max(1,...snapshot.sheets[sheet].rows.map(r=>r.__row))+1,values});
  const raw=snapshot.sheets['Ремонты'].rows.find(r=>r.repair_id===quote.id);
  const priceChange=manual===undefined?{}:{'Итого':total,'Скидка':Math.max(0,Math.round(((Number(raw['Стоимость работ'])||0)+(Number(raw['Запчасти'])||0)-total)*100)/100),'Согласовано, ₽':total,'Примечание согласования':'Стоимость подтверждена при оплате на ноутбуке · '+(actor.email||actor.id)+' · '+now};
- return{changes:[append('Оплаты',row),{sheet:'Ремонты',row:raw.__row,values:{...priceChange,'Оплачено':total,revision:quote.revision+1,updated_at:now}},append('События',event)],result:{id:paymentId,repair_id:quote.id,number:quote.number,amount,total,method:p.method,remaining:0,created_at:now}};
+ return{changes:[append('Оплаты',row),{sheet:'Ремонты',row:raw.__row,values:{...priceChange,'Оплачено':total,...(quote.payment_completion?{'Статус':'Выдан','Выдано':now}:{}),revision:quote.revision+1,updated_at:now}},append('События',event)],result:{id:paymentId,repair_id:quote.id,number:quote.number,amount,total,method:p.method,remaining:0,repair_completed:quote.payment_completion,created_at:now}};
 }

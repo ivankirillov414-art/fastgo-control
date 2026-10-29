@@ -19,7 +19,7 @@ const {serve,backend,launchOptions}=require('./warehouse-browser-fixture.cjs');
   assert.equal(await page.locator('#receipt-label-notice').count(),0,'print notice must clear on navigation');
   await page.locator('#nav-pay').click();await page.waitForFunction(()=>document.getElementById('warehouse-section').textContent==='Оплата');assert.equal(await page.locator('#nav-pay').getAttribute('class'),'active');await fits('.live-heading');if(width===850)await page.screenshot({path:'browser-results/'+target+'-payment-850.png'});
   await page.locator('#back').click();await page.locator('#receipt').waitFor();await page.locator('#shift').click();await page.locator('#shift-form').waitFor();await fits('#shift-form');
-  await page.locator('#master-stock').click();await page.getByRole('heading',{name:'Запчасти на мастерах'}).waitFor();await fits('.tablewrap');
+  await page.locator('#master-stock').click();await page.getByRole('heading',{name:'Выданные запчасти'}).waitFor();await fits('.tablewrap');
   fs.mkdirSync('browser-results',{recursive:true});await page.screenshot({path:'browser-results/screen-layout-'+target+'-'+width+'.png'});
   await context.close();
   const signedOut=await browser.newContext({viewport:{width,height}});
