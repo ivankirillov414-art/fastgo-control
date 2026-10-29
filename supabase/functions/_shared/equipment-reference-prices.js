@@ -15,12 +15,14 @@ function records(sheets){
  }
  return latest;
 }
+export const equipmentPriceRecords=sheets=>[...records(sheets).values()].sort((a,b)=>a.id.localeCompare(b.id));
 export function equipmentReferencePrices(sheets,action,p={},actor,{uuid:makeId,now}={}){
- if(!readers.has(actor?.role))fail('Справочник техники недоступен этой роли',403);
+ const task=actor?.price_task,delegated=task?.status==='open'&&task.scopes?.includes('equipment')&&(task.assignee_id===actor.id||editors.has(actor.role));
+ if(!readers.has(actor?.role)&&!delegated)fail('Справочник техники недоступен этой роли',403);
  const latest=records(sheets);
  if(action==='equipment_market_prices')return {result:{items:[...latest.values()].sort((a,b)=>a.id.localeCompare(b.id)),schema:1}};
  if(action!=='equipment_market_price_save')fail('Неизвестная операция справочника');
- if(!editors.has(actor?.role))fail('Нет права изменять рыночную цену',403);
+ if(!editors.has(actor?.role)&&!delegated)fail('Нет права изменять рыночную цену',403);
  if(!referenceId(p.id)||!uuid(p.request_id))fail('Неверный код модели или операции');
  if(!Number.isSafeInteger(p.revision)||p.revision<0)fail('Откройте актуальную карточку модели');
  const old=latest.get(p.id);
