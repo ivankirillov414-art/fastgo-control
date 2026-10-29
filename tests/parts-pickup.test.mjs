@@ -159,10 +159,10 @@ test('cash scanner issues into the repair once, without a sale or payment',async
 });
 
 test('shared-queue pickup QR is signed for the current mechanic and exact repair without reassignment',async()=>{
- const h=fixture(),requester=randomUUID(),signed=await pickupCode({id:repair,assigned_master_id:requester,pickup_scope:'repair_requester'},secret),ticket=await readPickupCode(signed.code,secret);
- assert.equal(ticket.scope,'repair_requester');assert.equal(ticket.master_id,requester);
+ const h=fixture(),requester=randomUUID(),signed=await pickupCode({id:repair,requested_by:requester,pickup_scope:'repair_requester'},secret),ticket=await readPickupCode(signed.code,secret);
+ assert.equal(ticket.scope,'repair_requester');assert.equal(ticket.requested_by,requester);assert.equal(ticket.master_id,undefined);
  const p={request_id:randomUUID(),items:[{part_id:part,quantity:1}]},issued=preparePartsIssue(h.snapshot(),p,ticket,owner);
- assert.equal(issued.result.repair_id,repair);assert.equal(issued.result.master_id,requester);assert.equal(h.raw.master_id,master);
+ assert.equal(issued.result.repair_id,repair);assert.equal(issued.result.requested_by,requester);assert.equal(issued.result.master_id,undefined);assert.equal(h.raw.master_id,master);
  assert.equal(issued.changes.find(x=>x.sheet==='Ремонты').values.master_id,undefined);
  await assert.rejects(partsIssue('parts_pickup_quote',{code:signed.code},{...h.context,db:async(table,...args)=>table==='workshop_members'?[]:h.context.db(table,...args)}),/отключён/);
  const forged=signed.code.replace('FGPARTS1.','FGPARTS2.');await assert.rejects(readPickupCode(forged,secret));

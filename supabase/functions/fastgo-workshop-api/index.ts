@@ -294,7 +294,7 @@ async function main(req){
       if(c.storage_mode!=='postgres'||p.kind!=='repair'||!uuid(p.id))fail('Откройте рабочий ремонт',400);
       let repair=(await g('get',{kind:'repair',id:p.id})).record;
       if(['ready','issued','cancelled'].includes(repair.status))fail('Ремонт уже готов или закрыт',409);
-      if(me.role==='mechanic')return out({data:await pickupCode({...repair,assigned_master_id:user.id,pickup_scope:'repair_requester'},KEY)});
+      if(me.role==='mechanic')return out({data:await pickupCode({...repair,requested_by:user.id,pickup_scope:'repair_requester'},KEY)});
       if(!repair.assigned_master_id)fail('Сначала назначьте мастера ремонта',409);
       if(repair.assigned_master_id!==user.id&&!admin(me))fail('QR может открыть назначенный мастер',403);
       await requireActiveMechanic(repair.assigned_master_id);

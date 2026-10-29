@@ -9,7 +9,7 @@ export function pickupRepair(snapshot,ticket){
  if(ticket.scope!=='repair_requester'&&r.master_id!==ticket.master_id)fail('Мастер ремонта изменился. Откройте новый QR ремонта.',409);
  if(snapshot.sheets['События'].rows.some(e=>e['Действие']==='parts_issued'&&eventDetails(e).ticket_id===ticket.id))fail('По этому QR детали уже выданы. Для следующей выдачи откройте новый QR.',409);
  const intake=snapshot.sheets['Приёмки'].rows.find(x=>x.intake_id===r.intake_id)||{};
- return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',master_id:ticket.master_id,master_name:''};
+ return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',...(ticket.scope==='repair_requester'?{requested_by:ticket.requested_by||ticket.master_id}:{master_id:ticket.master_id}),master_name:''};
 }
 export function preparePartsIssue(snapshot,p,ticket,actor,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
  const repair=pickupRepair(snapshot,ticket),normalized=items(p.items),engine=createNativeEngine(snapshot.sheets,{uuid,now}),rows=JSON.parse(repair.raw['Строки запчастей']||'[]'),issued=[];
@@ -25,7 +25,7 @@ export function preparePartsIssue(snapshot,p,ticket,actor,{uuid=()=>crypto.rando
  const record=engine.run('get',{kind:'repair',id:repair.id},{...actor,role:'owner'}).record;
  const total=record.total_override??Math.round((Number(old['Стоимость работ']||0)+partsTotal-Number(old['Скидка']||0))*100)/100;
  const changes=[...engine.changes(),{sheet:'Ремонты',row:old.__row,values:{'Статус':'В работе','Строки запчастей':JSON.stringify(rows),'Запчасти':partsTotal,'Итого':total,'Контроль качества':false,'Согласовано, ₽':Math.abs(Number(old['Итого'])-total)<.005?old['Согласовано, ₽']:'','Примечание согласования':Math.abs(Number(old['Итого'])-total)<.005?old['Примечание согласования']:'',updated_at:now(),revision:Math.max(1,Number(old.revision)||1)+1}}];
- const result={id:p.request_id,repair_id:repair.id,number:repair.number,vehicle:repair.vehicle,serial:repair.serial,master_id:repair.master_id,master_name:repair.master_name,items:issued,total};
+ const result={id:p.request_id,repair_id:repair.id,number:repair.number,vehicle:repair.vehicle,serial:repair.serial,...(repair.requested_by?{requested_by:repair.requested_by}:{master_id:repair.master_id}),master_name:repair.master_name,items:issued,total};
  changes.push({sheet:'События',row:Math.max(1,...engine.sheets['События'].rows.map(x=>x.__row))+1,values:{event_id:uuid(),'Дата':now(),'Тип':'repair',record_id:repair.id,'Действие':'parts_issued',actor_id:actor.id,'Детали':JSON.stringify({...result,ticket_id:ticket.id,terminal_id:p.terminal_id,station_id:p.station_id,scanner_source:p.scanner_source}),updated_at:now()}});
  return {changes,result};
 }
@@ -40,7 +40,7 @@ export async function partsIssue(action,p,{db,actor,device,stationId,key,digest}
   code=(await pickupCode({id:repairId,assigned_master_id:repair.master_id},key)).code;
  }
  ticket=await readPickupCode(code,key,{allowExpired:action==='parts_issue'});
- const active=async()=>{if(!(await db('workshop_members','profile_id=eq.'+ticket.master_id+'&active=eq.true&role=eq.mechanic&select=profile_id')).length)fail('Мастер отключён',409);};
+ const active=async()=>{if(!(await db('workshop_members','profile_id=eq.'+(ticket.requested_by||ticket.master_id)+'&active=eq.true&role=eq.mechanic&select=profile_id')).length)fail('Мастер отключён',409);};
  if(action==='parts_pickup_quote'){await active();const q=pickupRepair(snapshot||await db('rpc/workshop_native_snapshot','','POST',{}),ticket);delete q.raw;return {...q,code};}
  if(!id(p.request_id))fail('Неверный код выдачи');const normalized=items(p.items),fingerprint=await digest(JSON.stringify({code:p.code,items:normalized,terminal_id:device.id,station_id:stationId}));
  // Receipt lookup precedes expiry/assignment checks on retries: a committed issue is final.

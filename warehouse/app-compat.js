@@ -3379,7 +3379,7 @@
         const result = await call2("parts_issue", { request_id: local.pickup.request_id, code: local.pickup.code, items: local.items });
         await call2("cancel_document", { id: local.id, kind: "sale", revision: local.revision });
         finished({ id: local.id, payload: local, result: {} });
-        message2("\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u0432\u044B\u0434\u0430\u043D\u044B \u0432 \u0440\u0435\u043C\u043E\u043D\u0442 \u2116 " + result.number + " \xB7 " + result.master_name);
+        message2("\u0417\u0430\u043F\u0447\u0430\u0441\u0442\u0438 \u0432\u044B\u0434\u0430\u043D\u044B \u0432 \u0440\u0435\u043C\u043E\u043D\u0442 \u2116 " + result.number);
       } catch (e) {
         locked = true;
         draw();
