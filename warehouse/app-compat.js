@@ -481,41 +481,71 @@
 
   // warehouse/final-report.js
   var names = { cash: "\u041D\u0430\u043B\u0438\u0447\u043D\u044B\u0435", transfer: "\u041F\u0435\u0440\u0435\u0432\u043E\u0434", card: "\u0411\u0435\u0437\u043D\u0430\u043B\u0438\u0447\u043D\u044B\u0435" };
+  var localDay = (date2 = /* @__PURE__ */ new Date()) => [date2.getFullYear(), String(date2.getMonth() + 1).padStart(2, "0"), String(date2.getDate()).padStart(2, "0")].join("-");
+  var displayDay = (value) => value.split("-").reverse().join(".");
   function mountFinalReport({ root, call: call2 }) {
-    let disposed = false, revision = 0;
+    let disposed = false, revision = 0, mode = "today", day = "", timer;
     root.classList.add("final-report");
-    root.innerHTML = '<div class="toolbar"><h1>\u0418\u0442\u043E\u0433\u043E\u0432\u044B\u0439 \u043E\u0442\u0447\u0451\u0442</h1><button type="button" data-refresh>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C</button></div><form data-period><label>\u0421 \u0434\u0430\u0442\u044B<input type="date" name="from"></label><label>\u041F\u043E \u0434\u0430\u0442\u0443<input type="date" name="to"></label><button>\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C</button><button type="button" data-all>\u0417\u0430 \u0432\u0441\u0451 \u0432\u0440\u0435\u043C\u044F</button></form><p data-report-status role="status"></p><div class="report-total">\u0412\u0441\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 <strong data-grand-total>\u2014</strong><span data-count></span></div><div data-groups></div>';
+    root.innerHTML = '<div class="toolbar"><h1>\u0418\u0442\u043E\u0433\u043E\u0432\u044B\u0439 \u043E\u0442\u0447\u0451\u0442</h1><button type="button" data-refresh>\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C</button></div><form data-period><label>\u0421 \u0434\u0430\u0442\u044B<input type="date" name="from"></label><label>\u041F\u043E \u0434\u0430\u0442\u0443<input type="date" name="to"></label><button>\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C</button><button type="button" data-today>\u0421\u0435\u0433\u043E\u0434\u043D\u044F</button><button type="button" data-yesterday>\u0412\u0447\u0435\u0440\u0430</button><button type="button" data-all>\u0417\u0430 \u0432\u0441\u0451 \u0432\u0440\u0435\u043C\u044F</button></form><p data-report-period></p><p data-report-status role="status"></p><div class="report-total">\u0412\u0441\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 <strong data-grand-total>\u2014</strong><span data-count></span></div><div data-groups></div>';
     const $2 = (s) => root.querySelector(s), form = $2("[data-period]");
+    const setDay = (value) => {
+      form.elements.from.value = value;
+      form.elements.to.value = value;
+    };
     const parameters = () => {
       const from = form.elements.from.value, to = form.elements.to.value;
-      const date2 = (v) => /* @__PURE__ */ new Date(v + "T00:00:00");
-      const end = to ? date2(to) : null;
+      const date2 = (value) => /* @__PURE__ */ new Date(value + "T00:00:00"), end = to ? date2(to) : null;
       if (end) end.setDate(end.getDate() + 1);
       return { ...from ? { from: date2(from).toISOString() } : {}, ...end ? { to: end.toISOString() } : {} };
     };
+    const markMode = () => {
+      $2("[data-today]").setAttribute("aria-pressed", String(mode === "today"));
+      $2("[data-all]").setAttribute("aria-pressed", String(mode === "all"));
+    };
+    const describePeriod = () => {
+      const from = form.elements.from.value, to = form.elements.to.value;
+      if (!from && !to) return "\u0417\u0430 \u0432\u0441\u0451 \u0432\u0440\u0435\u043C\u044F";
+      if (from === to) return (mode === "today" ? "\u0421\u0435\u0433\u043E\u0434\u043D\u044F \xB7 " : "\u0414\u0430\u0442\u0430 \xB7 ") + displayDay(from);
+      return "\u041F\u0435\u0440\u0438\u043E\u0434: " + (from ? displayDay(from) : "\u0441 \u043D\u0430\u0447\u0430\u043B\u0430 \u0443\u0447\u0451\u0442\u0430") + " \u2014 " + (to ? displayDay(to) : "\u043F\u043E \u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435 \u0432\u0440\u0435\u043C\u044F");
+    };
     const row = (x) => '<article class="report-operation"><time>' + esc2(new Date(x.created_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })) + "</time><div><b>" + esc2(x.title) + "</b>" + (x.note ? "<small>" + esc2(x.note) + "</small>" : "") + "<small>" + esc2(x.actor) + "</small></div><strong>" + money2(x.amount) + "</strong></article>";
     async function refresh() {
+      if (disposed) return;
+      if (mode === "today") {
+        day = localDay();
+        setDay(day);
+      }
+      markMode();
       const current = ++revision, opened = new Set([...root.querySelectorAll("details[open]")].map((x) => x.dataset.method));
+      $2("[data-report-period]").textContent = describePeriod();
       $2("[data-report-status]").textContent = "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u043F\u0440\u043E\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438\u2026";
       $2("[data-refresh]").disabled = true;
+      $2("[data-grand-total]").textContent = "\u2014";
+      $2("[data-count]").textContent = "";
+      $2("[data-groups]").innerHTML = "";
       try {
-        const data = await call2("final_report", parameters());
+        const period = parameters(), data = await call2("final_report", period);
         if (disposed || current !== revision) return;
         $2("[data-grand-total]").textContent = money2(data.total);
         $2("[data-count]").textContent = "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0439: " + data.count;
         $2("[data-groups]").innerHTML = data.groups.map((g) => '<details data-method="' + g.method + '"' + (opened.has(g.method) ? " open" : "") + "><summary><span>" + names[g.method] + "<small>" + g.count + " \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439</small></span><strong>" + money2(g.total) + '</strong><span class="report-chevron" aria-hidden="true">\u25B6</span></summary><div class="report-operations">' + (g.items.map(row).join("") || "<p>\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u043D\u0435\u0442.</p>") + "</div>" + (g.items.length < g.count ? '<button type="button" data-more="' + g.method + '" data-offset="' + g.items.length + '">\u0415\u0449\u0451 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438</button>' : "") + "</details>").join("");
         $2("[data-report-status]").textContent = "\u041F\u0440\u043E\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0434\u0430\u0436\u0438 \u0438 \u043E\u043F\u043B\u0430\u0442\u044B \u0440\u0430\u0431\u043E\u0442, \u0440\u0435\u043C\u043E\u043D\u0442\u043E\u0432 \u0438 \u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F. \u0412\u044B\u0434\u0430\u0447\u0430 \u0437\u0430\u043F\u0447\u0430\u0441\u0442\u0435\u0439 \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043E\u043F\u043B\u0430\u0442\u043E\u0439.";
         root.querySelectorAll("[data-more]").forEach((button) => button.onclick = async () => {
+          if (disposed || current !== revision) return;
+          if (mode === "today" && day !== localDay()) {
+            void refresh();
+            return;
+          }
           button.disabled = true;
           try {
-            const data2 = await call2("final_report", { ...parameters(), method: button.dataset.more, offset: Number(button.dataset.offset) });
+            const data2 = await call2("final_report", { ...period, method: button.dataset.more, offset: Number(button.dataset.offset) });
             if (disposed || current !== revision) return;
             const group = data2.groups.find((g) => g.method === button.dataset.more);
             button.previousElementSibling.insertAdjacentHTML("beforeend", group.items.map(row).join(""));
             button.dataset.offset = String(Number(button.dataset.offset) + group.items.length);
             button.hidden = Number(button.dataset.offset) >= group.count;
           } catch (e) {
-            $2("[data-report-status]").textContent = e.message;
+            if (!disposed && current === revision) $2("[data-report-status]").textContent = e.message;
           } finally {
             button.disabled = false;
           }
@@ -526,18 +556,58 @@
         if (!disposed && current === revision) $2("[data-refresh]").disabled = false;
       }
     }
+    function checkDay() {
+      if (disposed) return;
+      if (mode === "today" && day !== localDay()) void refresh();
+      clearTimeout(timer);
+      const now = /* @__PURE__ */ new Date(), midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      timer = setTimeout(checkDay, Math.min(6e4, Math.max(50, midnight - now + 20)));
+    }
+    const visible = () => {
+      if (document.visibilityState === "visible") checkDay();
+    };
+    form.oninput = () => {
+      mode = "custom";
+      markMode();
+    };
     form.onsubmit = (e) => {
       e.preventDefault();
+      const from = form.elements.from.value, to = form.elements.to.value;
+      mode = from === localDay() && to === from ? "today" : !from && !to ? "all" : "custom";
       void refresh();
     };
-    $2("[data-refresh]").onclick = refresh;
+    $2("[data-refresh]").onclick = () => void refresh();
+    $2("[data-today]").onclick = () => {
+      mode = "today";
+      void refresh();
+    };
+    $2("[data-yesterday]").onclick = () => {
+      const yesterday = /* @__PURE__ */ new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      mode = "custom";
+      setDay(localDay(yesterday));
+      void refresh();
+    };
     $2("[data-all]").onclick = () => {
+      mode = "all";
       form.reset();
       void refresh();
     };
-    return { ready: refresh(), dispose() {
+    const ready = refresh();
+    window.addEventListener("focus", checkDay);
+    window.addEventListener("pageshow", checkDay);
+    window.addEventListener("online", checkDay);
+    document.addEventListener("visibilitychange", visible);
+    checkDay();
+    return { ready, dispose() {
       disposed = true;
       revision++;
+      clearTimeout(timer);
+      window.removeEventListener("focus", checkDay);
+      window.removeEventListener("pageshow", checkDay);
+      window.removeEventListener("online", checkDay);
+      document.removeEventListener("visibilitychange", visible);
     } };
   }
 

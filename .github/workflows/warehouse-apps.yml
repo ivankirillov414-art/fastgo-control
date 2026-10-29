@@ -22,6 +22,8 @@ jobs:
    - run: /tmp/warehouse-browser/node_modules/.bin/playwright install --with-deps chromium webkit
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-unified-warehouse-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-compact-report-browser.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-daily-report-browser.cjs chromium
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-daily-report-browser.cjs webkit
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs chromium
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-equipment-reference-browser.cjs webkit
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-services-browser.cjs
@@ -159,5 +161,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Выдача запчастей через кассу и ТСД возвращает ремонт в работу. Сохранены защита от повторного списания, привязка кассовых сканов к разделам и автоматические обновления.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Итоговый отчёт открывает сегодняшний день и автоматически переключается в местную полночь, в том числе после сна компьютера. Быстрый выбор «Сегодня» и «Вчера», ручной диапазон и история за всё время. Операции в полночь учитываются ровно в одном дне.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py
