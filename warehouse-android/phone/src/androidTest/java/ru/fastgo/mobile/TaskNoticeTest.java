@@ -26,7 +26,7 @@ public class TaskNoticeTest {
    assertTrue(TaskNotices.prefs(c).getString("credential","").indexOf("fixture-device-key")==-1);
    nm.getActiveNotifications()[0].getNotification().contentIntent.send();
    AtomicReference<String> hash=new AtomicReference<>();for(int i=0;i<50;i++){CountDownLatch latch=new CountDownLatch(1);scenario.onActivity(a->((WebView)a.findViewById(14001)).evaluateJavascript("location.hash",v->{hash.set(v);latch.countDown();}));assertTrue(latch.await(5,TimeUnit.SECONDS));if(JSONObject.quote("#task?id="+id).equals(hash.get()))break;Thread.sleep(100);}assertEquals("Notification opens assigned task route",JSONObject.quote("#task?id="+id),hash.get());
-   TaskNotices.clear(c);assertEquals(0,nm.getActiveNotifications().length);assertFalse("Logged-out credential cannot post",TaskNotices.post(c,credential,task));
+   TaskNotices.clear(c);for(int i=0;i<40&&nm.getActiveNotifications().length!=0;i++)Thread.sleep(50);assertEquals("Logout cancels the OS notification",0,nm.getActiveNotifications().length);assertFalse("Logged-out credential cannot post",TaskNotices.post(c,credential,task));
   }finally{TaskNotices.clear(c);}
  }
 }
