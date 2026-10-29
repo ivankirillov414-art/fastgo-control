@@ -81,7 +81,9 @@ jobs:
         if: always()
         with:
           name: FastGo-update-progress-screenshots
-          path: desktop/test-results/
+          path: |
+            desktop/test-results/
+            browser-results/pc365-native/**
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

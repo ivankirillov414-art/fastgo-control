@@ -16,18 +16,32 @@ function packet({widthMm,heightMm,quantity,pixels,width,height}){
  return Buffer.concat([Buffer.from('SIZE '+size.widthMm.toFixed(1)+' mm,'+size.heightMm.toFixed(1)+' mm\r\nGAPDETECT\r\nREFERENCE 0,0\r\nOFFSET 0 mm\r\nHOME\r\nCLS\r\nBITMAP 0,0,'+rowBytes+','+height+',0,','ascii'),data,Buffer.from('\r\nPRINT 1,'+quantity+'\r\n','ascii')]);
 }
 async function render({BrowserWindow,parent,html,widthMm,heightMm}){
- const scale=203/96,width=Math.ceil(widthMm*203/25.4),height=Math.ceil(heightMm*203/25.4),child=new BrowserWindow({show:false,parent,webPreferences:{backgroundThrottling:false,sandbox:true,contextIsolation:true,nodeIntegration:false,javascript:false}});
+ const {screen,nativeImage}=require('electron'),width=Math.ceil(widthMm*203/25.4),height=Math.ceil(heightMm*203/25.4),child=new BrowserWindow({show:false,parent,frame:false,useContentSize:true,webPreferences:{backgroundThrottling:false,sandbox:true,contextIsolation:true,nodeIntegration:false}});
+ let timer;
  try{
-  child.webContents.setWindowOpenHandler(()=>({action:'deny'}));child.webContents.on('will-navigate',e=>e.preventDefault());
-  child.webContents.debugger.attach('1.3');
-  await child.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:Math.ceil(width/scale),height:Math.ceil(height/scale),deviceScaleFactor:scale,mobile:false});
-  await child.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html));
-  const capture=await child.webContents.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:width/scale,height:height/scale,scale:1}});
-  const png=Buffer.from(capture.data,'base64'),image=require('electron').nativeImage.createFromBuffer(png),actual=image.getSize(1);
-  if(actual.width!==width||actual.height!==height)throw Error('Масштаб растра PC-365 отличается от 203 dpi; печать остановлена');
-  const pixels=image.toBitmap({scaleFactor:1});monochrome(pixels,width,height);
-  return {pixels,width,height,png};
- }finally{if(!child.isDestroyed())child.destroy();}
+  return await Promise.race([(async()=>{
+   child.webContents.setWindowOpenHandler(()=>({action:'deny'}));child.webContents.on('will-navigate',e=>e.preventDefault());
+   const scale=screen.getDisplayMatching(child.getBounds()).scaleFactor;
+   child.setContentSize(Math.ceil((width+2)/scale),Math.ceil((height+2)/scale));
+   await child.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html));
+   child.webContents.setZoomMode('isolated');child.webContents.setZoomFactor(203/96/scale);
+   // Capture text through Chromium, but draw the validated SVG rectangles on
+   // the final dot grid ourselves. Windows display zoom can otherwise filter
+   // narrow bars through a fractional compositor scale, even with crispEdges.
+   const bars=await child.webContents.executeJavaScript(`(()=>{const svg=document.querySelector('.label svg');if(!svg)throw Error('Missing barcode');const d=devicePixelRatio,result=[];for(const rect of svg.querySelectorAll('rect')){const style=getComputedStyle(rect),color=style.fill.match(/[\\d.]+/g)?.map(Number),matrix=rect.getScreenCTM();if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)<.5||Number(style.fillOpacity)<.5)continue;if(!color||color.length<3)throw Error('Invalid barcode ink');if((color[0]+color[1]+color[2])/3>=160)continue;if(!matrix||Math.abs(matrix.b)>.001||Math.abs(matrix.c)>.001)throw Error('Rotated barcode');const r=rect.getBoundingClientRect();result.push([r.left*d,r.top*d,r.right*d,r.bottom*d].map(Math.round));}svg.style.visibility='hidden';return result;})()`);
+   await child.webContents.executeJavaScript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+   const shot=await child.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});
+   // Drop display-density metadata, then crop white edge padding. Never resize
+   // or resample barcode modules to obtain the printer's exact dot dimensions.
+   const image=nativeImage.createFromBuffer(shot.toPNG({scaleFactor:1})),actual=image.getSize(1);
+   if(actual.width<width||actual.height<height)throw Error('Неполный растр PC-365; печать остановлена');
+   const cropped=image.crop({x:0,y:0,width,height}),pixels=cropped.toBitmap({scaleFactor:1});
+   if(!Array.isArray(bars)||bars.length<10)throw Error('Неполный штрихкод PC-365');
+   for(const [left,top,right,bottom]of bars){if(left<0||top<0||right>width||bottom>height||right<=left||bottom<=top)throw Error('Штрихкод вышел за край этикетки');for(let y=top;y<bottom;y++)for(let x=left;x<right;x++){const i=(y*width+x)*4;pixels[i]=pixels[i+1]=pixels[i+2]=0;pixels[i+3]=255;}}
+   monochrome(pixels,width,height);
+   return {pixels,width,height,png:nativeImage.createFromBitmap(pixels,{width,height,scaleFactor:1}).toPNG()};
+  })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Не удалось подготовить растр PC-365 за 15 секунд')),15000);})]);
+ }finally{clearTimeout(timer);if(!child.isDestroyed())child.destroy();}
 }
 class PC365Raster{
  constructor({dir,BrowserWindow,enabled=true,platform=process.platform,run=promisify(execFile),renderRaster=render}){Object.assign(this,{dir,BrowserWindow,run,renderRaster});this.enabled=enabled&&platform==='win32';}

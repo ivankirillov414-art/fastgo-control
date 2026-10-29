@@ -123,6 +123,7 @@ jobs:
        warehouse-desktop/dist/warehouse-printer-window.png
        warehouse-desktop/dist/network-window.png
        warehouse-desktop/dist/warehouse-upgrade-verification.json
+       browser-results/pc365-native/**
  android:
   if: github.event_name != 'pull_request'
   needs: test
