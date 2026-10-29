@@ -66,7 +66,7 @@ jobs:
           make_latest=$(node scripts/windows-release-order.cjs "$VERSION" "$current")
           echo "Candidate $VERSION; current channel $current; promote=$make_latest"
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          Срочный фикс PC-365: восстановление подачи по зазорам рулона перед первой печатью и отдельная кнопка выравнивания. В этикетках 58×27 с размером и артикулом увеличены безопасные отступы; код проверен оптическим распознаванием. Ежедневный итоговый отчёт сохранён.
+          PC-365: автоматическое выравнивание каждой серии и нативный TSPL-вывод копий по аппаратным зазорам ленты. Устранена зависимость серии от длины страниц Windows. Один растровый кадр 203 dpi, точное количество копий, диагностика бумаги драйвера; сохранены остальные функции склада.
           NOTES
           gh release create "$tag" --draft --latest=false --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/dist/release-content.json release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest="$make_latest"

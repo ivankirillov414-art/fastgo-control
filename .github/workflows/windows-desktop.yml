@@ -1,7 +1,7 @@
 name: FastGo Windows
 on:
   push:
-    paths: ['scripts/windows-release-order.cjs', 'tests/windows-release-order.test.cjs', '.github/workflows/publish-windows-installer.yml', 'scripts/release-content.cjs', 'tests/release-content.test.cjs', 'desktop/**', 'warehouse/**', 'warehouse-desktop/**', 'warehouse.html', 'workshop/**', 'workshop.html', 'workshop.css', 'scripts/fullscreen-smoke.cjs', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
+    paths: ['scripts/windows-release-order.cjs', 'tests/windows-release-order.test.cjs', '.github/workflows/publish-windows-installer.yml', 'scripts/release-content.cjs', 'tests/release-content.test.cjs', 'desktop/**', 'warehouse/**', 'warehouse-desktop/**', 'warehouse.html', 'workshop/**', 'workshop.html', 'workshop.css', 'scripts/fullscreen-smoke.cjs', 'scripts/check-pc365-raster-native.cjs', 'tests/native-sync.test.mjs', 'supabase/functions/_shared/native-sync.js', '.github/workflows/windows-desktop.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,6 +33,11 @@ jobs:
       - name: Install desktop smoke test driver
         shell: pwsh
         run: npm install --prefix "$env:RUNNER_TEMP/fastgo-playwright" playwright@1.62.1 pdf-lib@1.17.1
+      - name: Verify PC365 native raster and 30-copy gap series
+        shell: pwsh
+        run: |
+          $env:FASTGO_ELECTRON = Join-Path $pwd 'desktop/node_modules/electron/dist/electron.exe'
+          node scripts/check-pc365-raster-native.cjs
       - name: Exercise offline desktop UI and restart
         shell: pwsh
         run: |

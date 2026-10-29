@@ -77,3 +77,10 @@ test('PC365 restores media before a label is submitted and refuses printing when
  await f.handlers['warehouse:printerSetup'](f.event,{model:'pc365',calibrate:true});assert.equal(calls,3);assert.equal(f.prints.length,1,'manual media recovery never duplicates a product label');
  await assert.rejects(()=>f.handlers['warehouse:printerSetup']({...f.event,senderFrame:{url:f.event.senderFrame.url}},{model:'pc365',calibrate:true}),/Недоступно/);
 });
+
+test('packaged PC365 sends one raster and thirty hardware copies without Windows pagination',async t=>{
+ const calls=[];const f=fixture(t,{media:{restore:async()=>assert.fail('native batch calibrates in its own command stream')},rasterPrinter:{enabled:true,print:async p=>{calls.push(p);p.beforeSubmit();return {printed:true,deviceName:p.deviceName,transport:'tspl-gap'};}}});
+ f.queues([{name:'4BARCODE 3B-365B'}]);f.preferences.save({format:'label',deviceName:'4BARCODE 3B-365B',widthMm:58,heightMm:27});
+ const payload={...f.payload,quantity:30,sku:'FGP-037',svg:'<svg viewBox="0 0 300 72"><rect x="20" y="0" width="2" height="72"/></svg>'};
+ const result=await f.handlers['warehouse:printBarcode'](f.event,payload);assert.equal(result.transport,'tspl-gap');assert.equal(calls.length,1);assert.equal(calls[0].quantity,30);assert.equal((calls[0].html.match(/<section class="label">/g)||[]).length,1);assert.equal(f.prints.length,0);assert.equal(f.windows.length,0);assert.equal(f.control.busy(),false);
+});
