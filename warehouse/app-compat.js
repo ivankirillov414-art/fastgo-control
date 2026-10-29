@@ -1360,7 +1360,7 @@
       connectPC.hidden = format !== "label" || typeof ((_e = native()) == null ? void 0 : _e.setupPrinter) !== "function" || ((_f = snapshot.pc365) == null ? void 0 : _f.status) === "ready";
       connectPC.disabled = ((_g = snapshot.pc365) == null ? void 0 : _g.busy) === true;
       if (format === "label" && ((_h = snapshot.pc365) == null ? void 0 : _h.message) && snapshot.pc365.status !== "not_connected") note.textContent += (note.textContent ? " \xB7 " : "") + snapshot.pc365.message;
-      changed({ loading });
+      changed({ loading, deviceName: select.value });
     }
     function populate(preserve = false) {
       var _a3;
@@ -1381,7 +1381,7 @@
       if (loading) return;
       loading = true;
       refresh.disabled = select.disabled = true;
-      changed({ loading });
+      changed({ loading, deviceName: select.value });
       note.textContent = "\u041F\u043E\u043B\u0443\u0447\u0430\u0435\u043C \u0441\u043F\u0438\u0441\u043E\u043A \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u043E\u0432\u2026";
       try {
         const previous = (_a3 = snapshot.setup) == null ? void 0 : _a3.status;
@@ -1392,7 +1392,7 @@
       } finally {
         loading = false;
         refresh.disabled = select.disabled = false;
-        changed({ loading });
+        changed({ loading, deviceName: select.value });
         clearTimeout(pollTimer);
         if (((_c = snapshot.setup) == null ? void 0 : _c.busy) || ((_d = snapshot.setup) == null ? void 0 : _d.status) === "installing" || ((_e = snapshot.pc365) == null ? void 0 : _e.busy) || ((_f = snapshot.pc365) == null ? void 0 : _f.status) === "installing") pollTimer = setTimeout(() => {
           if (root.isConnected) void load2(true);
@@ -1444,9 +1444,17 @@
     dialog.onclose = () => dialog.remove();
     dialog.querySelector("[data-close]").onclick = () => dialog.close();
     const form = dialog.querySelector("form"), save3 = dialog.querySelector("[type=submit]"), test = dialog.querySelector("[data-test]"), error = dialog.querySelector("[role=alert]"), result = dialog.querySelector("[data-result]");
+    const align = document.createElement("button");
+    align.type = "button";
+    align.dataset.calibratePc365 = "";
+    align.textContent = "\u0412\u044B\u0440\u043E\u0432\u043D\u044F\u0442\u044C \u043F\u043E\u0434\u0430\u0447\u0443 PC-365";
+    align.hidden = true;
+    test.before(align);
     let busy2 = false;
-    const controls = printerFields(dialog.querySelector("[data-printer-fields]"), { changed: ({ loading }) => {
-      save3.disabled = test.disabled = loading || busy2;
+    const controls = printerFields(dialog.querySelector("[data-printer-fields]"), { changed: ({ loading, deviceName }) => {
+      var _a3;
+      save3.disabled = test.disabled = align.disabled = loading || busy2;
+      align.hidden = !/^(?:POScenter PC[- ]?365|4BARCODE 3B-365B)$/i.test(deviceName || "") || typeof ((_a3 = native()) == null ? void 0 : _a3.setupPrinter) !== "function";
     } });
     async function run2(testLabel) {
       if (busy2 || !form.reportValidity()) return;
@@ -1472,6 +1480,23 @@
         save3.disabled = test.disabled = false;
       }
     }
+    align.onclick = async () => {
+      if (busy2 || !form.reportValidity()) return;
+      busy2 = true;
+      save3.disabled = test.disabled = align.disabled = true;
+      error.textContent = "";
+      result.textContent = "\u0412\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u0435\u043C \u043F\u043E\u0434\u0430\u0447\u0443: \u043F\u0440\u0438\u043D\u0442\u0435\u0440 \u043F\u0440\u043E\u0442\u044F\u043D\u0435\u0442 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u044D\u0442\u0438\u043A\u0435\u0442\u043E\u043A\u2026";
+      try {
+        const selection = controls.selection(), r = await native().setupPrinter({ model: "pc365", calibrate: true, ...selection });
+        result.textContent = r.message || "\u041A\u043E\u043C\u0430\u043D\u0434\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0430. \u041F\u043E\u0441\u043B\u0435 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438 \u043F\u0440\u0438\u043D\u0442\u0435\u0440\u0430 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0431\u043D\u0430\u044F \u044D\u0442\u0438\u043A\u0435\u0442\u043A\u0430\xBB.";
+      } catch (e) {
+        result.textContent = "";
+        error.textContent = e.message;
+      } finally {
+        busy2 = false;
+        save3.disabled = test.disabled = align.disabled = false;
+      }
+    };
     form.onsubmit = (e) => {
       e.preventDefault();
       void run2(false);
