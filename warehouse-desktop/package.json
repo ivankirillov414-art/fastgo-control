@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.56",
+  "version": "1.0.57",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -66,6 +66,7 @@
       "pc365-setup.ps1",
       "pc365-media.cjs",
       "pc365-media.ps1",
+      "pc365-raster.cjs",
       "release-content.json"
     ],
     "win": {
