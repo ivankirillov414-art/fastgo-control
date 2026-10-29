@@ -224,7 +224,7 @@ jobs:
       const fs=require('fs'),crypto=require('crypto'),dir='warehouse-android/phone/release/',r=JSON.parse(fs.readFileSync(dir+'receipt.json','utf8'));
       if(crypto.createHash('sha256').update(fs.readFileSync(dir+r.file)).digest('hex')!==r.sha256)throw Error('Final APK hash mismatch');
       fs.writeFileSync(dir+'SHA256SUMS.txt',r.sha256+'  '+r.file+'\n');
-      r.release_device_tests='passed: exact signed APK on Android 10 and 15 emulators';r.release_device_test_details={android_api:[29,35,36],in_place_upgrade_from:'1.0.1',production_channel_upgrade:true,latest_previous_apk_upgrade:true,installed_bytes_match:true};fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
+      r.release_device_tests='passed: exact signed APK on Android 10, 15 and 16 emulators';r.release_device_test_details={android_api:[29,35,36],in_place_upgrade_from:'1.0.1',production_channel_upgrade:true,latest_previous_apk_upgrade:true,installed_bytes_match:true,task_notices:{api:[29,35,36],runtime_permission:true,one_notification:true,task_deep_link:true,logout_cancels:true}};fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
       JS
       tag=fastgo-android-v1.0.11
       if gh release view "$tag" >/dev/null 2>&1; then
@@ -235,7 +235,7 @@ jobs:
       JS
         exit 0
       fi
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.11' --notes 'Пошаговый ремонт: техника, работы из прайса с редактируемыми ценами, запчасти и завершение с отдельным актом. Комплектность удалена. Подписанный APK проверен установкой и запуском, вводом текста, поворотом и перезапуском на Android 10 и 15 в эмуляторах. Вход через вашу учётную запись FastGo. Приход и кассовые операции сохраняют привязку к двум рабочим ноутбукам.' warehouse-android/phone/release/FastGo-Android-1.0.11.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.11' --notes 'Задачи сотрудникам: запчасти, техника и стоимость работ. По назначенной задаче можно менять цены без движения остатков или оплат. Системное уведомление показывается один раз и открывает задачу; разрешение запрашивается при открытии приложения с ожидающей задачей. Фоновые проверки зависят от ограничений Android. Сохранены пошаговый ремонт, фотографии техники и обновление поверх установленного приложения. Подписанный APK и уведомления проверены в эмуляторах Android 10, 15 и 16.' warehouse-android/phone/release/FastGo-Android-1.0.11.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
 
    - name: Publish automatic phone update channel after installed APK checks
      if: steps.package.outputs.ready == 'true'

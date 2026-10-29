@@ -10,7 +10,7 @@ export function staffPriceOperation(action,p,actor,{rows,patch,partSave,catalogS
  const products=rows('Товары'),services=rows('Прайс работ');
  const product=r=>({id:r.product_id,name:r['Модель / название'],sku:r['Артикул / SKU'],model:r['Модель'],category:r['Категория'],active:r['Активен']!==false,unit_cost:Number(r['Цена закупки, ₽'])||0,retail_price:Number(r['Цена продажи, ₽'])||0});
  const referenceRecords=()=>equipmentPriceRecords(sheets);
- if(action==='staff_price_catalog')return {parts:task.scopes.some(s=>['parts','equipment'].includes(s))?products.filter(r=>r['Активен']!==false).map(product):[],services:task.scopes.includes('works')?services.filter(r=>r['Активна']!==false).map(r=>({id:r.service_id,title:r['Работа'],category:r['Категория'],labor_price:Number(r['Работа, ₽'])||0})):[],equipment_prices:task.scopes.includes('equipment')?referenceRecords():[]};
+ if(action==='staff_price_catalog')return {parts:products.filter(r=>r['Активен']!==false&&task.scopes.includes(String(r['Категория']||'').startsWith('Техника')?'equipment':'parts')).map(product),services:task.scopes.includes('works')?services.filter(r=>r['Активна']!==false).map(r=>({id:r.service_id,title:r['Работа'],category:r['Категория'],labor_price:Number(r['Работа, ₽'])||0})):[],equipment_prices:task.scopes.includes('equipment')?referenceRecords():[]};
  if(action!=='staff_price_save'||!task.scopes.includes(p.scope))fail('Этот справочник не включён в задачу',403);
  if(!p.values||!p.expected||Array.isArray(p.values)||Object.keys(p.values).length===0)fail('Нет новых цен');
  const changes={};let result;

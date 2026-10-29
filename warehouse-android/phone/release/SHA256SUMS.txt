@@ -1,1 +1,1 @@
-f077a11d84ff5606a3997e214492fedc25566c5ec95be1c583b969bb5ccbe8be  FastGo-Android-1.0.10.apk
+1ba0d856c3c1702d3dce5daf063e81623c849bd245ee2a93ef3c3d302a3b7ec1  FastGo-Android-1.0.11.apk
