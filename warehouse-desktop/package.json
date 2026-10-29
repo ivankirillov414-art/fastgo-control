@@ -66,6 +66,7 @@
       "pc365-setup.ps1",
       "pc365-media.cjs",
       "pc365-media.ps1",
+      "pc365-raster.cjs",
       "release-content.json"
     ],
     "win": {

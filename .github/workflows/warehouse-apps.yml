@@ -2,9 +2,9 @@ name: FastGo Warehouse Apps
 on:
  push:
   branches: [main]
-  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-pc365-label-details.cjs','scripts/check-unified-warehouse-browser.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-pc365-label-details.cjs','scripts/check-pc365-raster-native.cjs','scripts/check-unified-warehouse-browser.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-pc365-label-details.cjs','scripts/check-unified-warehouse-browser.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-pc365-label-details.cjs','scripts/check-pc365-raster-native.cjs','scripts/check-unified-warehouse-browser.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -90,6 +90,8 @@ jobs:
      run: |
       npm install --prefix "$env:RUNNER_TEMP/warehouse-playwright" playwright@1.62.1
       "FASTGO_PLAYWRIGHT=$env:RUNNER_TEMP/warehouse-playwright" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+   - name: Verify PC365 native raster and 30-copy gap series
+     run: node scripts/check-pc365-raster-native.cjs
    - name: Verify bundled warehouse UI without internet
      timeout-minutes: 2
      run: node scripts/check-warehouse-bundled-desktop.cjs
@@ -121,6 +123,7 @@ jobs:
        warehouse-desktop/dist/warehouse-printer-window.png
        warehouse-desktop/dist/network-window.png
        warehouse-desktop/dist/warehouse-upgrade-verification.json
+       browser-results/pc365-native/**
  android:
   if: github.event_name != 'pull_request'
   needs: test
@@ -164,5 +167,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Общие справочники цен и задачи сотрудникам в сервисном разделе. Включены актуальные исправления PC365 и итогового отчёта по местным дням. Цены по задачам меняются без движения остатков или оплат.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Задачи сотрудникам и цены запчастей, техники и работ. Сохранено автоматическое аппаратное выравнивание каждой этикетки PC365 в длинной серии и итоговый отчёт по местным дням. Редактирование цен не меняет остатки или оплаты.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py
