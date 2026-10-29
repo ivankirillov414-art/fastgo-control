@@ -34,6 +34,11 @@ jobs:
      working-directory: warehouse-android
    - name: Verify APK identity guard
      run: python3 -m unittest discover -s tests -p phone_apk_identity_test.py
+   - name: Check compatibility with the declared minimum Android API
+     run: gradle :phone:lintRelease -PfastgoPhoneApiAudit=true --no-daemon
+     working-directory: warehouse-android
+   - name: Verify APK identity guard after API audit
+     run: python3 -m unittest discover -s tests -p phone_apk_identity_test.py
    - name: Audit final release APK manifest
      run: python3 scripts/check-phone-apk.py warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk --output warehouse-android/phone/build/security-audit.json
    - name: Save public Android signing utility for local signing
