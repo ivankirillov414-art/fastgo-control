@@ -1,0 +1,13 @@
+import {createNativeEngine} from '../supabase/functions/_shared/native-engine.js';
+import {repairPaymentLink} from '../workshop/repair-payment-code.js';
+import {repairIdFromCode,prepareRepairPayment} from '../supabase/functions/fastgo-warehouse/repair.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {randomUUID} from 'node:crypto';
+const service=randomUUID();
+const owner={id:randomUUID(),role:'owner',name:'Петров Алексей Иванович'};
+function fixture(){const schema=JSON.parse(fs.readFileSync(new URL('./google-schema.json',import.meta.url))),sheets=Object.fromEntries(Object.entries(schema).map(([k,headers])=>[k,{headers,rows:[]}])),engine=createNativeEngine(sheets);engine.sheets['Прайс работ'].rows.push({__row:2,service_id:service,'Работа':'Настройка','Работа, ₽':1600,'Активна':true});const r=engine.run('create',{kind:'repair',phone:'+79990000000',last_name:'Тест',first_name:'Клиент',brand:'Kugoo',model:'M4',request_id:randomUUID()},owner);let current=engine.run('update',{kind:'repair',id:r.id,revision:r.revision,request_id:randomUUID(),step_flow:true,flow_action:'diagnose',works:[]},owner);current=engine.run('update',{kind:'repair',id:r.id,revision:current.revision,request_id:randomUUID(),step_flow:true,flow_action:'save_works',works:[{catalog_id:service,name:'Настройка',price:1600,quantity:1}]},owner);return {engine,r:current};}
+test('payment QR targets exactly the repair supported by both scanner routes',async()=>{const id=randomUUID(),url=repairPaymentLink({id});assert.equal(await repairIdFromCode(url,'test-key'),id);assert.throws(()=>repairPaymentLink({id:'bad'}));});
+test('verified QR repair closes atomically with cash payment, ordinary prepayment does not',()=>{for(const qr of [true,false]){const {engine,r}=fixture();const ready=engine.run('update',{id:r.id,kind:'repair',revision:r.revision,request_id:randomUUID(),step_flow:true,flow_action:'complete',quality_checked:true,no_parts:true,payment_qr:qr,works:[{catalog_id:service,name:'Настройка',price:1600,quantity:1}]},owner);assert.equal(ready.step_state.completion_master_name,'Алексей');assert.equal(ready.step_state.payment_qr,qr);const snap={sheets:engine.sheets},p={request_id:randomUUID(),repair_id:r.id,expected_revision:ready.revision,amount:1600,method:'cash'},paid=prepareRepairPayment(snap,p,owner);const change=paid.changes.find(x=>x.sheet==='Ремонты');assert.equal(paid.result.repair_completed,qr);assert.equal(change.values['Статус'],qr?'Выдан':undefined);assert.equal(change.values['Оплачено'],1600);assert.equal(engine.sheets['Оплаты'].rows.length,0);assert.equal(engine.sheets['Движения склада'].rows.length,0);}});
+

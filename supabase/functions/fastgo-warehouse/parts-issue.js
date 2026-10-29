@@ -9,7 +9,7 @@ export function pickupRepair(snapshot,ticket){
  if(r.master_id!==ticket.master_id)fail('Мастер ремонта изменился. Откройте новый QR ремонта.',409);
  if(snapshot.sheets['События'].rows.some(e=>e['Действие']==='parts_issued'&&eventDetails(e).ticket_id===ticket.id))fail('По этому QR детали уже выданы. Для следующей выдачи откройте новый QR.',409);
  const intake=snapshot.sheets['Приёмки'].rows.find(x=>x.intake_id===r.intake_id)||{};
- return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',master_id:r.master_id,master_name:r['Мастер']||''};
+ return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',master_id:r.master_id,master_name:''};
 }
 export function preparePartsIssue(snapshot,p,ticket,actor,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
  const repair=pickupRepair(snapshot,ticket),normalized=items(p.items),engine=createNativeEngine(snapshot.sheets,{uuid,now}),rows=JSON.parse(repair.raw['Строки запчастей']||'[]'),issued=[];

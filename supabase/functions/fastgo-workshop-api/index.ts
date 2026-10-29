@@ -413,7 +413,7 @@ async function main(req){
           p.discount=numeric(p.discount??r.discount??0,'скидку');p.warranty_days=integer(p.warranty_days??r.warranty_days??0,'гарантию',0,3650);
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
           const assignedMaster=p.assigned_master_id===undefined?r.assigned_master_id:p.assigned_master_id;
-          if(assignedMaster)await requireActiveMechanic(assignedMaster);
+          if(assignedMaster&&!(p.step_flow===true&&p.assigned_master_id===undefined))await requireActiveMechanic(assignedMaster);
           if(p.no_parts!==undefined&&typeof p.no_parts!=='boolean')fail('Подтвердите отметку «Ремонт без запчастей»');
           const partRef=line=>line?.part_id||line?.id;
           const positive=line=>line&&typeof partRef(line)==='string'&&partRef(line).trim()&&typeof line.quantity!=='boolean'&&Number.isSafeInteger(Number(line.quantity))&&Number(line.quantity)>0;

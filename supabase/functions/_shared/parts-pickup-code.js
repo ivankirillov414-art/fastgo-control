@@ -8,7 +8,7 @@ export async function pickupCode(repair,secret,{now=Date.now(),uuid=()=>crypto.r
  const ticket={id:uuid(),repair_id:repair.id,master_id:repair.assigned_master_id,expires:Math.floor(now/1000)+86400};
  if(!id(ticket.repair_id)||!id(ticket.master_id))invalid();
  const body=encode(bytes(JSON.stringify(ticket))),signature=await crypto.subtle.sign('HMAC',await key(secret),bytes(body));
- return {code:'FGPARTS1.'+body+'.'+encode(new Uint8Array(signature)),expires_at:new Date(ticket.expires*1000).toISOString(),repair_id:repair.id,number:repair.repair_number,vehicle:[repair.brand,repair.model].filter(Boolean).join(' '),serial:repair.serial_number||'',master_id:repair.assigned_master_id,master_name:repair.assigned_master||''};
+ return {code:'FGPARTS1.'+body+'.'+encode(new Uint8Array(signature)),expires_at:new Date(ticket.expires*1000).toISOString(),repair_id:repair.id,number:repair.repair_number,vehicle:[repair.brand,repair.model].filter(Boolean).join(' '),serial:repair.serial_number||'',master_id:repair.assigned_master_id,master_name:''};
 }
 export async function readPickupCode(value,secret,{now=Date.now(),allowExpired=false}={}){
  try{
