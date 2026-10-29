@@ -288,14 +288,14 @@ async function main(req){
     if(action==='parts_pickup'){
       if(c.storage_mode!=='postgres'||p.kind!=='repair'||!uuid(p.id))fail('Откройте рабочий ремонт',400);
       let repair=(await g('get',{kind:'repair',id:p.id})).record;
+      if(['ready','issued','cancelled'].includes(repair.status))fail('Ремонт уже готов или закрыт',409);
       if(!repair.assigned_master_id&&me.role==='mechanic'){
-        const request_id=crypto.randomUUID(),params={kind:'repair',id:p.id,revision:repair.revision,status:repair.status,assigned_master_id:user.id,request_id};
+        const request_id=crypto.randomUUID(),params={kind:'repair',id:p.id,revision:repair.revision,step_flow:true,flow_action:'save_comment',assigned_master_id:user.id,request_id};
         const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(params)));
         repair=await g('update',{...params,__request_fingerprint:[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('')});
       }
       if(!repair.assigned_master_id)fail('Сначала назначьте мастера ремонта',409);
       if(repair.assigned_master_id!==user.id&&!admin(me))fail('QR может открыть назначенный мастер',403);
-      if(['ready','issued','cancelled'].includes(repair.status))fail('Ремонт уже готов или закрыт',409);
       await requireActiveMechanic(repair.assigned_master_id);
       return out({data:await pickupCode(repair,KEY)});
     }

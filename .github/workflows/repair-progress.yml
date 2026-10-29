@@ -2,9 +2,9 @@ name: Repair progress checks
 on:
   push:
     branches: [main]
-    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'scripts/check-mobile-intake.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
+    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'scripts/check-repair-full-flow.cjs', 'scripts/check-repair-step-flow.cjs', 'tests/repair-full-flow.test.mjs', 'tests/helpers/**', 'scripts/check-mobile-intake.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
   pull_request:
-    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'scripts/check-mobile-intake.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
+    paths: ['workshop/**', 'workshop.html', 'scripts/check-repair-progress.cjs', 'scripts/check-repair-full-flow.cjs', 'scripts/check-repair-step-flow.cjs', 'tests/repair-full-flow.test.mjs', 'tests/helpers/**', 'scripts/check-mobile-intake.cjs', 'tests/repair-progress.test.mjs', '.github/workflows/repair-progress.yml']
 permissions:
   contents: read
 jobs:
@@ -19,11 +19,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/repair-progress.test.mjs tests/native-store.test.mjs tests/repair-parts.test.mjs
+      - run: node --test tests/repair-progress.test.mjs tests/native-store.test.mjs tests/repair-parts.test.mjs tests/repair-full-flow.test.mjs tests/native-master-assignment.test.mjs
       - run: npm install --prefix /tmp/fastgo-progress playwright@1.62.1
       - run: /tmp/fastgo-progress/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
       - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-progress.cjs
       - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-step-flow.cjs
+      - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-repair-full-flow.cjs
       - run: FASTGO_REPAIR_BROWSER=${{ matrix.browser }} NODE_PATH=/tmp/fastgo-progress/node_modules node scripts/check-mobile-intake.cjs
       - uses: actions/upload-artifact@v4
         if: always()

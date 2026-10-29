@@ -1,6 +1,13 @@
 import {api,esc} from './core.js';
-export async function showPartsPickup(record,{dirty,refresh}){
+import {ensureRepairMaster} from './repair-master.js';
+export async function showPartsPickup(record,{dirty,refresh,ctx,onRecord}){
  if(dirty())throw Error('Сначала сохраните изменения ремонта');
+ if(ctx){
+  const latest=(await api('get',{kind:'repair',id:record.id},{fresh:true})).record;
+  record=await ensureRepairMaster(ctx,latest);
+  if(!record)return;
+  await onRecord?.(record);
+ }
  const ticket=await api('parts_pickup',{kind:'repair',id:record.id});
  const dialog=document.createElement('dialog');dialog.setAttribute('aria-label','Взять запчасти');
  dialog.style.cssText='max-width:440px;width:calc(100% - 32px);border:1px solid #456078;border-radius:16px;padding:24px;background:#152638;color:#eef6ff';
