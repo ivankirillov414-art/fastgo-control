@@ -2,9 +2,9 @@ name: FastGo Warehouse Apps
 on:
  push:
   branches: [main]
-  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-unified-warehouse-browser.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
+  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse-android/**','warehouse/**','warehouse.html','warehouse-terminal.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-pc365-label-details.cjs','scripts/check-unified-warehouse-browser.cjs','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','.github/workflows/warehouse-apps.yml','!warehouse/update/**']
  pull_request:
-  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-unified-warehouse-browser.cjs','.github/workflows/warehouse-apps.yml']
+  paths: ['scripts/release-content.cjs','tests/release-content.test.cjs','warehouse-desktop/**','warehouse/**','warehouse*.html','supabase/functions/fastgo-warehouse/**','supabase/functions/_shared/**','supabase/functions/fastgo-operations/**','tests/preorders.test.mjs','tests/master-stock.test.mjs','tests/operations.test.mjs','tests/warehouse*.mjs','scripts/fullscreen-smoke.cjs','scripts/build-warehouse-web.cjs','scripts/publish-warehouse-feed.py','workshop/photo-upload.js','workshop/private-photo.js','workshop/product-intake.js','workshop/inventory-ui.js','scripts/check-equipment-reference-browser.cjs','scripts/check-warehouse*.cjs','scripts/check-pc365-label-details.cjs','scripts/check-unified-warehouse-browser.cjs','.github/workflows/warehouse-apps.yml']
  workflow_dispatch:
 permissions:
  contents: write
@@ -53,6 +53,7 @@ jobs:
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-scanner-diagnostics-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-screen-layout-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-barcode-print.cjs
+   - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-pc365-label-details.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-warehouse-printer-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-preorders-browser.cjs
    - run: NODE_PATH=/tmp/warehouse-browser/node_modules node scripts/check-customer-qr-routing.cjs
@@ -65,6 +66,8 @@ jobs:
    - uses: actions/setup-node@v4
      with: {node-version: '24'}
    - run: node --test tests/release-content.test.cjs
+   - name: Verify PC365 media recovery with Windows PowerShell 5.1
+     run: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File warehouse-desktop/tests/pc365-media-windows.ps1
    - run: npm ci
      working-directory: warehouse-desktop
    - name: Bundle official Android USB tools
@@ -161,5 +164,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Итоговый отчёт открывает сегодняшний день и автоматически переключается в местную полночь, в том числе после сна компьютера. Быстрый выбор «Сегодня» и «Вчера», ручной диапазон и история за всё время. Операции в полночь учитываются ровно в одном дне.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Срочное исправление PC-365: восстановление привязки подачи к зазорам рулона перед первой печатью и кнопка повторного выравнивания. Этикетка 58×27 с размером и артикулом получила безопасные отступы. Штрихкод, цена и количество сохраняются. Исправление ежедневного отчёта включено.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py
