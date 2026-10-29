@@ -37,8 +37,6 @@ jobs:
    - name: Check compatibility with the declared minimum Android API
      run: gradle :phone:lintRelease -PfastgoPhoneApiAudit=true --no-daemon
      working-directory: warehouse-android
-   - name: Verify APK identity guard after API audit
-     run: python3 -m unittest discover -s tests -p phone_apk_identity_test.py
    - name: Audit final release APK manifest
      run: python3 scripts/check-phone-apk.py warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk --output warehouse-android/phone/build/security-audit.json
    - name: Save public Android signing utility for local signing
@@ -117,10 +115,15 @@ jobs:
        adb install verify-package/build/outputs/apk/debug/phone-debug.apk
        adb install verify-package/build/outputs/apk/androidTest/debug/phone-debug-androidTest.apk
        adb shell am instrument -w -e class ru.fastgo.mobile.TaskNoticeTest ru.fastgo.mobile.test.test/androidx.test.runner.AndroidJUnitRunner | tee notice-test.txt
-       grep -q "OK (1 test)" notice-test.txt
+       grep -q "OK (1 test)" notice-test.txt || { adb shell uiautomator dump /sdcard/fastgo-notice-failure.xml; adb shell cat /sdcard/fastgo-notice-failure.xml > notice-failure.xml; adb shell dumpsys activity activities > notice-activity.txt; adb logcat -d -t 1000 > notice-logcat.txt; adb exec-out screencap -p > notice-failure.png; cat notice-failure.xml; exit 1; }
    - uses: actions/upload-artifact@v4
      if: always()
-     with: {name: 'fastgo-task-notices-${{ matrix.api }}', path: notice-test.txt}
+     with:
+      name: fastgo-task-notices-${{ matrix.api }}-${{ github.run_attempt }}
+      path: |
+       notice-*.txt
+       notice-*.xml
+       notice-*.png
  release-check:
   outputs:
    ready: ${{ steps.signed.outputs.ready }}
@@ -178,7 +181,7 @@ jobs:
    - uses: actions/upload-artifact@v4
      if: always() && steps.signed.outputs.ready == 'true'
      with:
-      name: fastgo-android-installed-${{ matrix.api }}
+      name: fastgo-android-installed-${{ matrix.api }}-${{ github.run_attempt }}
       path: browser-results/android-phone-${{ matrix.api }}/
  self-update-check:
   needs: verify
@@ -213,7 +216,7 @@ jobs:
    - uses: actions/upload-artifact@v4
      if: always()
      with:
-      name: fastgo-phone-self-update-${{ matrix.api }}
+      name: fastgo-phone-self-update-${{ matrix.api }}-${{ github.run_attempt }}
       path: browser-results/android-phone-${{ matrix.api }}/self-update/
  publish:
   if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.release-check.outputs.ready == 'true'

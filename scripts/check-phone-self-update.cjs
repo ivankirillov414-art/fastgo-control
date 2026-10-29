@@ -33,4 +33,10 @@ async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-self-upda
  fs.writeFileSync(path.join(out,'installed.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));
  fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({api:process.env.FASTGO_ANDROID_API,package:pkg,from:before,to:before+1,installedByOwnPackageInstaller:true,dataRetained:true,callbackReceived:true,completionSource,reopened:true,systemConfirmationRequired:confirmation,scope:'Emulator self-update. This does not prove a Play Protect or OEM verdict on a user device.'},null,2));
  console.log('PASS: native self-update, retained data, installation callback and restart; system confirmation='+confirmation);
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(async e=>{
+ console.error(e);
+ try{fs.writeFileSync(path.join(out,'failure-screen.xml'),await dump());}catch{}
+ try{fs.writeFileSync(path.join(out,'failure-screen.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));}catch{}
+ for(const [file,args]of [['failure-logcat.txt',['logcat','-d','-t','1000']],['failure-activity.txt',['shell','dumpsys','activity','top']]]){try{fs.writeFileSync(path.join(out,file),execFileSync('adb',args,{timeout:30000}));}catch{}}
+ process.exitCode=1;
+});
