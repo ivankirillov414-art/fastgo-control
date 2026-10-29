@@ -46,7 +46,7 @@ const engines=require('playwright'),{serve,launchOptions}=require('./warehouse-b
     const issueId=randomUUID();await h.issue(ticket.code,issueId);await h.issue(ticket.code,issueId);
     await page.locator('[data-pickup-qr]').waitFor({state:'detached',timeout:12000});assert.equal((await current()).status,'repair');
    }
-   await page.locator('#rs-to-finish').click();await page.locator('#rs-comment').fill('Проверено на стенде. Тормоза работают.');await page.locator('#rs-quality').check();await page.locator('#rs-complete').click();
+   await page.locator('#rs-to-finish').click();await page.locator('#rs-comment').fill('Проверено на стенде. Тормоза работают.');await page.locator('#rs-quality').check();const lostReply=role==='mechanic'&&withParts?page.waitForEvent('requestfailed',{predicate:req=>req.url().includes('fastgo-workshop-api')&&req.postDataJSON()?.params?.flow_action==='complete'}):null;await page.locator('#rs-complete').click();if(lostReply)await lostReply;
    if(role==='owner'&&!withParts)await chooseMaster();
    if(role==='mechanic'&&withParts){await page.locator('#rs-retry').waitFor();await page.reload();await page.locator('#rs-retry').click();await page.locator('#rs-retry').waitFor({state:'detached'});await page.locator('[data-step=finish]').click();}
    await page.getByRole('link',{name:'Акт выполненных работ',exact:true}).waitFor();assert.equal((await current()).status,'ready');assert.equal(jobs.size,1);

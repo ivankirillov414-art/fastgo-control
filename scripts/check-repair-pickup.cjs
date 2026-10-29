@@ -34,7 +34,7 @@ module.exports=async function({browser,origin}){
   assert.equal(await page.locator('[data-pickup-qr] svg').count(),1);
   record={...record,revision:record.revision+1,parts:[{part_id:'cash-part',name:'Амортизатор',quantity:2,price:1500,tsd_issue_id:'cash-issued'}],parts_status:{mode:'issued'}};
   await page.getByRole('dialog',{name:'Взять запчасти'}).waitFor({state:'detached',timeout:9000});await pane('parts');
-  await page.locator('#part-rows').filter({hasText:'2 шт.'}).waitFor();assert.equal(writes.length,1);assert.deepEqual(writes[0].parts,[]);
+  await page.locator('#part-rows').filter({hasText:'2 шт.'}).waitFor();assert.equal(writes.length,2);assert.deepEqual(writes[0].parts,[]);assert.equal(writes[1].assigned_master_id,'fixture');assert.equal(writes[1].flow_action,'save_comment');assert.equal(writes[1].parts,undefined,'assignment does not manually attach issued parts');
   assert.equal(await page.locator('[data-return-part],#part-picker,#scan-part,#add-part').count(),0);
   const bounds=await page.locator('.repair-card').boundingBox();assert.ok(bounds.y+bounds.height<844-60);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
