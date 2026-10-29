@@ -61,7 +61,9 @@ public static class FastGoPC365Media {
     $e.Graphics.TranslateTransform(-$e.PageSettings.HardMarginX*$e.Graphics.DpiX/100,-$e.PageSettings.HardMarginY*$e.Graphics.DpiY/100)
     $e.Graphics.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
     $e.Graphics.SmoothingMode=[Drawing.Drawing2D.SmoothingMode]::None
-    $e.Graphics.DrawImageUnscaled($image,0,0)
+    $e.Graphics.PixelOffsetMode=[Drawing.Drawing2D.PixelOffsetMode]::Half
+    $target=[Drawing.Rectangle]::new(0,0,$image.Width,$image.Height)
+    $e.Graphics.DrawImage($image,$target,0,0,$image.Width,$image.Height,[Drawing.GraphicsUnit]::Pixel)
     $e.HasMorePages=$false
    })
    # The signed driver supplies label-gap mode and output controls. One image
