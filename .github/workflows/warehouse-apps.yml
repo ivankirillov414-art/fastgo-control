@@ -123,7 +123,12 @@ jobs:
        warehouse-desktop/dist/warehouse-printer-window.png
        warehouse-desktop/dist/network-window.png
        warehouse-desktop/dist/warehouse-upgrade-verification.json
-       browser-results/pc365-native/**
+   - uses: actions/upload-artifact@v4
+     if: always()
+     with:
+      name: pc365-native-verification
+      path: browser-results/pc365-native/**
+      if-no-files-found: ignore
  android:
   if: github.event_name != 'pull_request'
   needs: test
