@@ -294,11 +294,7 @@ async function main(req){
       if(c.storage_mode!=='postgres'||p.kind!=='repair'||!uuid(p.id))fail('Откройте рабочий ремонт',400);
       let repair=(await g('get',{kind:'repair',id:p.id})).record;
       if(['ready','issued','cancelled'].includes(repair.status))fail('Ремонт уже готов или закрыт',409);
-      if(!repair.assigned_master_id&&me.role==='mechanic'){
-        const request_id=crypto.randomUUID(),params={kind:'repair',id:p.id,revision:repair.revision,step_flow:true,flow_action:'save_comment',assigned_master_id:user.id,request_id};
-        const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(params)));
-        repair=await g('update',{...params,__request_fingerprint:[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('')});
-      }
+      if(me.role==='mechanic')return out({data:await pickupCode({...repair,assigned_master_id:user.id,pickup_scope:'repair_requester'},KEY)});
       if(!repair.assigned_master_id)fail('Сначала назначьте мастера ремонта',409);
       if(repair.assigned_master_id!==user.id&&!admin(me))fail('QR может открыть назначенный мастер',403);
       await requireActiveMechanic(repair.assigned_master_id);
@@ -425,7 +421,7 @@ async function main(req){
           const positive=line=>line&&typeof partRef(line)==='string'&&partRef(line).trim()&&typeof line.quantity!=='boolean'&&Number.isSafeInteger(Number(line.quantity))&&Number(line.quantity)>0;
           const attached=(r.parts||[]).some(saved=>positive(saved)&&(p.parts===undefined||p.parts.some(line=>positive(line)&&partRef(line)===partRef(saved)&&Number(line.quantity)===Number(saved.quantity))));
           const noPartsSaved=p.no_parts===undefined&&String(assignedMaster||'')===String(r.assigned_master_id||'')&&r.parts_status?.mode==='none';
-          if(p.no_parts===true&&(attached||user.id!==assignedMaster&&!(me.role==='mechanic'&&!assignedMaster)&&!['owner','developer'].includes(me.role)))fail('Отметку «Без замены запчастей» ставит мастер ремонта',403);
+          if(p.no_parts===true&&(attached||user.id!==assignedMaster&&me.role!=='mechanic'&&!['owner','developer'].includes(me.role)))fail('Отметку «Без замены запчастей» ставит мастер ремонта',403);
           if(targetStatus!==r.status&&['ready','issued'].includes(targetStatus)&&!attached&&p.no_parts!==true&&!noPartsSaved)fail('Выдайте запчасти в этот ремонт на кассе или отметьте „Ремонт без запчастей“',409);
           const diagnostics=text(p.diagnostics_notes===undefined?r.diagnostics_notes:p.diagnostics_notes,5000);
           if(p.step_flow!==true&&['waiting_parts','repair','ready','issued'].includes(targetStatus)&&!diagnostics)fail('Сначала заполните результат диагностики',409);

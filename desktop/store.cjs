@@ -68,7 +68,7 @@ class Store{
     if(this.cache(actor,'me')?.role==='mechanic'&&p.parts!==undefined&&contentKey(p.parts)!==contentKey(before.parts||[]))throw invalid('Запчасти выдаются только через ТСД; выданные детали изменяются на кассе');
     if(p.parts!==undefined){const available=(before.parts||[]).map(contentKey);if(!Array.isArray(p.parts)||!p.parts.every(line=>{const at=available.indexOf(contentKey(line));if(at<0)return false;available.splice(at,1);return true;}))throw invalid('Запчасти в ремонт выдаются только через ТСД на кассе');}
     const master=String(p.assigned_master_id??before.assigned_master_id??''),member=this.cache(actor,'me'),linked=linkedRepairParts(p.parts??before.parts);
-    if(p.no_parts===true&&(linked.length||actor!==master&&!(member?.role==='mechanic'&&!master)&&!['owner','developer'].includes(member?.role)))throw invalid('Отметку «Ремонт без запчастей» ставит мастер ремонта');
+    if(p.no_parts===true&&(linked.length||actor!==master&&member?.role!=='mechanic'&&!['owner','developer'].includes(member?.role)))throw invalid('Отметку «Ремонт без запчастей» ставит мастер ремонта');
     const noParts=p.no_parts===true||!Object.hasOwn(p,'no_parts')&&!p.reopen_reason&&before.parts_status?.mode==='none'&&master===String(before.assigned_master_id||'');
     if(['ready','issued'].includes(p.status||before.status)&&(p.status||before.status)!==before.status&&!linked.length&&!noParts)throw invalid('Выдайте запчасти в этот ремонт на кассе или отметьте «Ремонт без запчастей»');
    }

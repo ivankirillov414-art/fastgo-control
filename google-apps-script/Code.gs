@@ -198,7 +198,7 @@ function requireRepairParts_(repair,p,actor){
  const saved=parseJson_(repair['Строки запчастей'],[]),parts=p.parts===undefined?saved:p.parts;
  if(p.parts!==undefined&&!repairPartsSubset_(parts,saved))throw httpError_('Запчасти в ремонт выдаются только через ТСД на кассе',403);
  const attached=positiveRepairParts_(parts),masterId=p.assigned_master_id===undefined?String(repair.master_id||''):String(p.assigned_master_id||'');
- if(p.no_parts===true&&(attached.length||actor.id!==masterId&&!(role_(actor)==='mechanic'&&!masterId)&&!['owner','developer'].includes(role_(actor))))throw httpError_('Отметку «Без замены запчастей» ставит мастер ремонта',403);
+ if(p.no_parts===true&&(attached.length||actor.id!==masterId&&role_(actor)!=='mechanic'&&!['owner','developer'].includes(role_(actor))))throw httpError_('Отметку «Без замены запчастей» ставит мастер ремонта',403);
  const status=p.status||normStatus_(repair['Статус'],'repair'),savedNone=p.no_parts===undefined&&repairPartsStatus_(repair,parts,masterId).mode==='none';
  if(status!==normStatus_(repair['Статус'],'repair')&&['ready','issued'].includes(status)&&!attached.length&&p.no_parts!==true&&!savedNone)throw httpError_('Выдайте запчасти в этот ремонт на кассе или отметьте „Ремонт без запчастей“',409);
 }
@@ -368,7 +368,7 @@ function assertRevision_(row,p){
 }
 function canEditOrder_(actor,kind,row){
   if(isManager_(actor)) return true;
-  return role_(actor)==='mechanic' && kind==='repair' && String(row.master_id||'')===String(actor.id||'');
+  return role_(actor)==='mechanic' && kind==='repair';
 }
 function requireOrderAccess_(actor,kind,row){ if(row['Статус']==='deleted')throw httpError_('Приёмка удалена',409); if(!canEditOrder_(actor,kind,row)) throw httpError_('Нет доступа к этой карточке',403); }
 function normStatus_(v,kind){

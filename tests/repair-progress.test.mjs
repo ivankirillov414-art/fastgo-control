@@ -47,10 +47,10 @@ test('only a new completion transition requires parts; historical notes and canc
  assert.deepEqual(repairRequirements({...base,status:'repair'},{...base,status:'cancelled',note:'Клиент отказался'}),[]);
 });
 
-test('the assigned mechanic and owners may confirm; another employee cannot',()=>{
+test('shared-queue mechanics and owners may confirm; cash employees cannot',()=>{
  const record={assigned_master_id:'master'};
  assert.equal(repairNoPartsAllowed(record,{profile_id:'master',role:'mechanic'}),true);
- assert.equal(repairNoPartsAllowed(record,{profile_id:'other',role:'mechanic'}),false);
+ assert.equal(repairNoPartsAllowed(record,{profile_id:'other',role:'mechanic'}),true);
  assert.equal(repairNoPartsAllowed(record,{profile_id:'cashier',role:'receiver'}),false);
  assert.equal(repairNoPartsAllowed(record,{profile_id:'owner',role:'owner'}),true);
  assert.equal(repairNoPartsAllowed({}, {profile_id:'master',role:'mechanic'}),true);

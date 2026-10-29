@@ -6,10 +6,10 @@ function eventDetails(e){try{return JSON.parse(e['Детали']||'{}');}catch{r
 export function pickupRepair(snapshot,ticket){
  const r=snapshot.sheets['Ремонты'].rows.find(x=>x.repair_id===ticket.repair_id);if(!r)fail('Ремонт не найден',404);
  if(!['Принят','Принято','Новая','Диагностика','На диагностике','Ждём запчасти','Ожидает запчасть','В ремонте','В работе'].includes(r['Статус']))fail('Выдача деталей доступна для незавершённого ремонта',409);
- if(r.master_id!==ticket.master_id)fail('Мастер ремонта изменился. Откройте новый QR ремонта.',409);
+ if(ticket.scope!=='repair_requester'&&r.master_id!==ticket.master_id)fail('Мастер ремонта изменился. Откройте новый QR ремонта.',409);
  if(snapshot.sheets['События'].rows.some(e=>e['Действие']==='parts_issued'&&eventDetails(e).ticket_id===ticket.id))fail('По этому QR детали уже выданы. Для следующей выдачи откройте новый QR.',409);
  const intake=snapshot.sheets['Приёмки'].rows.find(x=>x.intake_id===r.intake_id)||{};
- return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',master_id:r.master_id,master_name:''};
+ return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',master_id:ticket.master_id,master_name:''};
 }
 export function preparePartsIssue(snapshot,p,ticket,actor,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
  const repair=pickupRepair(snapshot,ticket),normalized=items(p.items),engine=createNativeEngine(snapshot.sheets,{uuid,now}),rows=JSON.parse(repair.raw['Строки запчастей']||'[]'),issued=[];
