@@ -1,0 +1,36 @@
+name: PC365 native spool transport
+on:
+  push:
+    branches: ['codex/pc365-silent-spool-investigation-20261029']
+    paths: ['warehouse-desktop/tests/pc365-spool-native.ps1', '.github/workflows/pc365-spool-native.yml', 'warehouse-desktop/pc365-media.ps1']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  spool:
+    runs-on: windows-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Stage the exact signed PC365 driver
+        run: ./warehouse-desktop/tests/pc365-driver-install.ps1
+      - run: npm ci
+        working-directory: warehouse-desktop
+      - name: Prepare the production raster at Windows display scales 100% and 125%
+        run: node scripts/check-pc365-raster-native.cjs
+      - name: Capture real Windows RAW and driver output through local file ports
+        run: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File warehouse-desktop/tests/pc365-spool-native.ps1
+      - name: Decode the actual signed driver's final bitmap
+        shell: pwsh
+        run: |
+          $env:PC365_CAPTURE_FILE = Join-Path $pwd 'browser-results/pc365-spool/gdi-captured.bin'
+          node scripts/check-pc365-raster-native.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pc365-spool-native
+          path: |
+            browser-results/pc365-spool/
+            browser-results/pc365-native/

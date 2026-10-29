@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory=$true)][string]$PrinterName,[double]$WidthMm,[double]$HeightMm,[ValidateSet('Calibrate','Print')][string]$Mode='Calibrate',[string]$DataFile)
+﻿param([Parameter(Mandatory=$true)][string]$PrinterName,[double]$WidthMm,[double]$HeightMm,[ValidateSet('Calibrate','Print','Driver')][string]$Mode='Calibrate',[string]$DataFile,[int]$Copies=1)
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $mayHaveSubmitted=$false
@@ -37,6 +37,49 @@ public static class FastGoPC365Media {
 }
 '@
  $w=$WidthMm.ToString('0.0',[Globalization.CultureInfo]::InvariantCulture);$h=$HeightMm.ToString('0.0',[Globalization.CultureInfo]::InvariantCulture)
+ if($Mode -eq 'Driver'){
+  if($Copies -lt 1 -or $Copies -gt 1000){throw 'Invalid label count'}
+  if(![IO.Path]::IsPathRooted($DataFile) -or [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($DataFile)) -ne [IO.Path]::GetFullPath($PSScriptRoot) -or [IO.Path]::GetFileName($DataFile) -notmatch '^label-[a-f0-9-]{36}\.png$'){throw 'Invalid PC365 image path'}
+  if((Get-Item -LiteralPath $DataFile).Length -gt 1048576){throw 'Invalid PC365 image length'}
+  Add-Type -AssemblyName System.Drawing
+  $image=[Drawing.Image]::FromFile($DataFile)
+  $doc=[Drawing.Printing.PrintDocument]::new()
+  try{
+   if($image.Width -ne [Math]::Ceiling($WidthMm*203/25.4) -or $image.Height -ne [Math]::Ceiling($HeightMm*203/25.4)){throw 'Invalid PC365 image dimensions'}
+   $doc.PrinterSettings.PrinterName=$PrinterName
+   $doc.PrinterSettings.Copies=$Copies
+   $doc.PrinterSettings.Collate=$false
+   $doc.DocumentName='FastGo PC365 label '+[guid]::NewGuid().ToString()
+   $doc.PrintController=[Drawing.Printing.StandardPrintController]::new()
+   $doc.DefaultPageSettings.PaperSize=[Drawing.Printing.PaperSize]::new('FastGo label',[int][Math]::Round($WidthMm*100/25.4),[int][Math]::Round($HeightMm*100/25.4))
+   $doc.DefaultPageSettings.Margins=[Drawing.Printing.Margins]::new(0,0,0,0)
+   $resolution=[Drawing.Printing.PrinterResolution]::new();$resolution.X=203;$resolution.Y=203
+   $doc.DefaultPageSettings.PrinterResolution=$resolution
+   $doc.add_PrintPage({param($sender,$e)
+    if([Math]::Abs($e.Graphics.DpiX-203) -gt 1 -or [Math]::Abs($e.Graphics.DpiY-203) -gt 1){throw 'PC365 did not select 203 dpi'}
+    $e.Graphics.PageUnit=[Drawing.GraphicsUnit]::Pixel
+    $e.Graphics.TranslateTransform(-$e.PageSettings.HardMarginX*$e.Graphics.DpiX/100,-$e.PageSettings.HardMarginY*$e.Graphics.DpiY/100)
+    $e.Graphics.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+    $e.Graphics.SmoothingMode=[Drawing.Drawing2D.SmoothingMode]::None
+    $e.Graphics.PixelOffsetMode=[Drawing.Drawing2D.PixelOffsetMode]::Half
+    $target=[Drawing.Rectangle]::new(0,0,$image.Width,$image.Height)
+    $e.Graphics.DrawImage($image,$target,0,0,$image.Width,$image.Height,[Drawing.GraphicsUnit]::Pixel)
+    $e.HasMorePages=$false
+   })
+   # The signed driver supplies label-gap mode and output controls. One image
+   # with DEVMODE copies becomes one hardware PRINT 1,N, not N Windows pages.
+   # Do not precede the driver with GAPDETECT/HOME: the station stopped even
+   # responding to FEED after that experimental sequence. Let its signed driver
+   # supply the supported GAP/PEEL/TEAR commands for every hardware copy series.
+   $mayHaveSubmitted=$true
+   $doc.Print()
+   $after=Get-Printer -Name $PrinterName -ErrorAction Stop
+   $jobs=@(Get-PrintJob -PrinterName $PrinterName -ErrorAction SilentlyContinue | Where-Object {$_.DocumentName -ceq $doc.DocumentName})
+   $queueState=@{port=[string]$after.PortName;status=[string]$after.PrinterStatus;jobs=@($jobs | ForEach-Object {@{id=$_.ID;status=[string]$_.JobStatus;bytes=$_.Size}})}
+   @{status='submitted';document_name=$doc.DocumentName;copies=$Copies;queue=$queueState;windows_media=$media;physical_result_verified=$false} | ConvertTo-Json -Compress -Depth 6
+   return
+  }finally{$doc.Dispose();$image.Dispose()}
+ }
  # Detect the actual gap instead of guessing its length or using continuous feed.
  # Do not initialize firmware, erase memory, reprint a product or clear other jobs.
  $commands="SIZE $w mm,$h mm`r`nGAPDETECT`r`nREFERENCE 0,0`r`nOFFSET 0 mm`r`n"

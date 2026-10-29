@@ -92,6 +92,13 @@ jobs:
       "FASTGO_PLAYWRIGHT=$env:RUNNER_TEMP/warehouse-playwright" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
    - name: Verify PC365 native raster and 30-copy gap series
      run: node scripts/check-pc365-raster-native.cjs
+   - name: Verify actual PC365 driver image and hardware copies
+     shell: pwsh
+     run: |
+      powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File warehouse-desktop/tests/pc365-spool-native.ps1
+      if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+      $env:PC365_CAPTURE_FILE = Join-Path $pwd 'browser-results/pc365-spool/gdi-captured.bin'
+      node scripts/check-pc365-raster-native.cjs
    - name: Verify bundled warehouse UI without internet
      timeout-minutes: 2
      run: node scripts/check-warehouse-bundled-desktop.cjs
@@ -172,5 +179,5 @@ jobs:
         exit 0
       fi
       (cd warehouse-release && zip -9 "FastGo-Warehouse-Setup-${version}-Windows-x64.zip" "FastGo-Warehouse-Setup-${version}-Windows-x64.exe")
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'Задачи сотрудникам и цены запчастей, техники и работ. Сохранено автоматическое аппаратное выравнивание каждой этикетки PC365 в длинной серии и итоговый отчёт по местным дням. Редактирование цен не меняет остатки или оплаты.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "FastGo Склад и Терминал $version" --notes 'PC-365: восстановлена печать через штатный подписанный драйвер, один точный растр 203 dpi и аппаратные копии с отслеживанием зазоров. Исключены экспериментальные команды перед печатью, добавлена диагностика очереди. Сохранены актуальный ремонт, оплата по QR и права сотрудников.' warehouse-release/*.exe warehouse-release/*.zip warehouse-release/*.exe.blockmap warehouse-release/latest.yml warehouse-release/release-content.json warehouse-release/*.apk
       python3 scripts/publish-warehouse-feed.py

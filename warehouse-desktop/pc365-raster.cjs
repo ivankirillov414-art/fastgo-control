@@ -47,17 +47,18 @@ class PC365Raster{
  constructor({dir,BrowserWindow,enabled=true,platform=process.platform,run=promisify(execFile),renderRaster=render}){Object.assign(this,{dir,BrowserWindow,run,renderRaster});this.enabled=enabled&&platform==='win32';}
  async print({parent,html,deviceName,widthMm,heightMm,quantity,prepare=async()=>{},beforeSubmit=()=>{}}){
   if(!this.enabled||!isPC365({name:deviceName}))throw Error('Нативная печать доступна только для PC-365 в Windows');
-  const bitmap=await this.renderRaster({BrowserWindow:this.BrowserWindow,parent,html,widthMm,heightMm}),bytes=packet({...bitmap,widthMm,heightMm,quantity});
-  fs.mkdirSync(this.dir,{recursive:true});const file=path.join(this.dir,'label-'+crypto.randomUUID()+'.bin'),helper=path.join(this.dir,'pc365-media.ps1');
-  atomicWrite(file,bytes);atomicWrite(helper,fs.readFileSync(path.join(__dirname,'pc365-media.ps1')));
+  const bitmap=await this.renderRaster({BrowserWindow:this.BrowserWindow,parent,html,widthMm,heightMm});
+  if(!Number.isInteger(quantity)||quantity<1||quantity>1000||bitmap.width!==Math.ceil(widthMm*203/25.4)||bitmap.height!==Math.ceil(heightMm*203/25.4)||!Buffer.isBuffer(bitmap.png))throw Error('Неверный растр или количество этикеток');
+  fs.mkdirSync(this.dir,{recursive:true});const file=path.join(this.dir,'label-'+crypto.randomUUID()+'.png'),helper=path.join(this.dir,'pc365-media.ps1');
+  atomicWrite(file,bitmap.png);atomicWrite(helper,fs.readFileSync(path.join(__dirname,'pc365-media.ps1')));
   try{
    await prepare();
    beforeSubmit();let response;
-   try{const {stdout}=await this.run(path.join(process.env.SystemRoot||'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-PrinterName',deviceName,'-WidthMm',String(widthMm),'-HeightMm',String(heightMm),'-Mode','Print','-DataFile',file],{windowsHide:true,timeout:45000,maxBuffer:32768,encoding:'utf8'});response=JSON.parse(stdout.replace(/^\uFEFF/,'').trim());}
+   try{const {stdout}=await this.run(path.join(process.env.SystemRoot||'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-PrinterName',deviceName,'-WidthMm',String(widthMm),'-HeightMm',String(heightMm),'-Mode','Driver','-Copies',String(quantity),'-DataFile',file],{windowsHide:true,timeout:45000,maxBuffer:32768,encoding:'utf8'});response=JSON.parse(stdout.replace(/^\uFEFF/,'').trim());}
    catch(e){let result;try{result=JSON.parse(String(e.stdout||'').replace(/^\uFEFF/,'').trim());}catch{}throw Object.assign(Error(result?.message||'Передача PC-365 прервалась. Проверьте принтер перед повторной печатью.'),{notSubmitted:result?.may_have_submitted===false});}
-   if(response.status!=='submitted'||!Number.isSafeInteger(response.job_id)||response.job_id<1)throw Error('PC-365 не подтвердил передачу. Проверьте печать перед повтором.');
-   try{atomicWrite(path.join(this.dir,'media.json'),Buffer.from(JSON.stringify({mode:'tspl-gap',widthMm,heightMm,quantity,deviceName,job_id:response.job_id,windows_media:response.windows_media||null,submitted_at:new Date().toISOString(),physical_result_verified:false})));}catch{}
-   return {printed:true,deviceName,transport:'tspl-gap',job_id:response.job_id};
+   if(response.status!=='submitted'||response.copies!==quantity||!/^FastGo PC365 label [a-f0-9-]{36}$/.test(response.document_name||''))throw Error('PC-365 не подтвердил передачу. Проверьте печать перед повтором.');
+   try{atomicWrite(path.join(this.dir,'media.json'),Buffer.from(JSON.stringify({mode:'driver-gap',widthMm,heightMm,quantity,deviceName,document_name:response.document_name,queue:response.queue||null,windows_media:response.windows_media||null,submitted_at:new Date().toISOString(),physical_result_verified:false})));}catch{}
+   return {printed:true,deviceName,transport:'windows-driver-gap',document_name:response.document_name};
   }finally{try{fs.unlinkSync(file);}catch{}}
  }
 }
