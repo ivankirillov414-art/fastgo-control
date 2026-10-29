@@ -28,6 +28,7 @@ public final class MainActivity extends Activity {
  private PhoneUpdates updates;
  private TaskNotices notices;
  private boolean resumed;
+ private boolean noticePermissionPending;
  private ValueCallback<Uri[]> picker;
  private PermissionRequest cameraRequest;
  private WebChromeClient.FileChooserParams pendingChooser;
@@ -46,7 +47,7 @@ public final class MainActivity extends Activity {
   CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);
   WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)!=0);
   updates=new PhoneUpdates(this,web);
-  notices=new TaskNotices(this,()->runOnUiThread(()->{if(resumed&&!isFinishing()&&Build.VERSION.SDK_INT>=33&&!TaskNotices.allowed(this)&&!TaskNotices.prefs(this).getBoolean("permission_asked",false)){TaskNotices.prefs(this).edit().putBoolean("permission_asked",true).commit();requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},TaskNotices.PERMISSION);}}));
+  notices=new TaskNotices(this,()->runOnUiThread(this::requestNoticePermission));
   web.addJavascriptInterface(new Object(){@JavascriptInterface public void configureNotices(String data){runOnUiThread(()->{if(internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))notices.configure(data);});}@JavascriptInterface public void clearNotices(){runOnUiThread(()->{if(internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))TaskNotices.clear(MainActivity.this);});}@JavascriptInterface public void noticeSettings(){runOnUiThread(()->{if(!internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))return;startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()));});}@JavascriptInterface public void checkUpdate(){runOnUiThread(()->{if(internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))updates.check(true);});}@JavascriptInterface public void print(){runOnUiThread(()->{if(!internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))return;PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);manager.print("FastGo",web.createPrintDocumentAdapter("FastGo"),new PrintAttributes.Builder().build());});}},"FastGoPhone");
   web.setWebViewClient(new WebViewClient(){
    @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){return asset(request.getUrl());}
@@ -92,7 +93,9 @@ public final class MainActivity extends Activity {
  @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request!=FILE_PICKER||picker==null)return;Uri[] values=result==RESULT_OK?WebChromeClient.FileChooserParams.parseResult(result,data):null;if(result==RESULT_OK&&values==null&&cameraUri!=null&&cameraFile!=null&&cameraFile.length()>0)values=new Uri[]{cameraUri};picker.onReceiveValue(values);picker=null;cameraUri=null;web.requestFocus();}
  @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);web.saveState(state);}
  @Override public void onBackPressed(){web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}if(document.getElementById('app-menu')?.classList.contains('open')){document.getElementById('menu-toggle')?.click();return true;}return false})()",handled->{if("true".equals(handled))return;if(web.canGoBack())web.goBack();else new AlertDialog.Builder(this).setMessage("Закрыть FastGo?").setPositiveButton("Закрыть",(d,w)->finish()).setNegativeButton("Отмена",null).show();});}
- @Override protected void onResume(){super.onResume();resumed=true;if(notices!=null)notices.check();if(updates!=null)updates.resume();}
+ private void requestNoticePermission(){noticePermissionPending=true;if(!resumed||!hasWindowFocus()||isFinishing())return;noticePermissionPending=false;if(Build.VERSION.SDK_INT>=33&&!TaskNotices.allowed(this)&&!TaskNotices.prefs(this).getBoolean("permission_asked",false)){TaskNotices.prefs(this).edit().putBoolean("permission_asked",true).commit();requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},TaskNotices.PERMISSION);}}
+ @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&noticePermissionPending)requestNoticePermission();}
+ @Override protected void onResume(){super.onResume();resumed=true;if(noticePermissionPending)requestNoticePermission();if(notices!=null)notices.check();if(updates!=null)updates.resume();}
  @Override protected void onPause(){resumed=false;if(updates!=null)updates.pause();super.onPause();}
  @Override protected void onDestroy(){if(notices!=null)notices.close();if(updates!=null)updates.close();if(picker!=null){picker.onReceiveValue(null);picker=null;}if(cameraRequest!=null){cameraRequest.deny();cameraRequest=null;}if(web!=null){web.removeJavascriptInterface("FastGoPhone");web.destroy();}super.onDestroy();}
 }

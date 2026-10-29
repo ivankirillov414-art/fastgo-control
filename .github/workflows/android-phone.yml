@@ -67,6 +67,13 @@ jobs:
        adb shell svc data disable
        cd warehouse-android && gradle :phone:connectedDebugAndroidTest --no-daemon || { adb logcat -d -t 1000; adb shell dumpsys activity activities; exit 1; }
    - uses: actions/upload-artifact@v4
+     with:
+      name: fastgo-android-phone-signing
+      path: |
+       warehouse-android/phone/build/security-audit.json
+       warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk
+       warehouse-android/phone/src/main/assets/fastgo/bundle-receipt.json
+   - uses: actions/upload-artifact@v4
      if: always()
      with:
       name: fastgo-android-phone-verified
