@@ -66,7 +66,7 @@ jobs:
           make_latest=$(node scripts/windows-release-order.cjs "$VERSION" "$current")
           echo "Candidate $VERSION; current channel $current; promote=$make_latest"
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          FastGo Windows: итоговый отчёт склада открывает сегодняшний день и автоматически переключается в местную полночь, в том числе после сна компьютера. Доступны «Сегодня», «Вчера», ручной диапазон и отчёт за всё время. Выбранная история сохраняется; границы дней исключают повторный учёт операций в полночь.
+          FastGo Windows: задачи сотрудникам по проверке цен запчастей, техники и работ. Редактирование цен по назначенной задаче не меняет остатки или оплаты. Сохранены пошаговый ремонт и отчёт по местным дням.
           NOTES
           gh release create "$tag" --draft --latest=false --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/dist/release-content.json release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest="$make_latest"
