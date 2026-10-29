@@ -66,7 +66,7 @@ jobs:
           make_latest=$(node scripts/windows-release-order.cjs "$VERSION" "$current")
           echo "Candidate $VERSION; current channel $current; promote=$make_latest"
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          PC-365: восстановлена печать через штатный драйвер Windows. Один точный растр 203 dpi, аппаратные копии с отслеживанием зазоров, калибровка перед серией и диагностика очереди. Проверено оптическое чтение итогового растра настоящего драйвера.
+          PC-365: восстановлена печать через штатный драйвер Windows. Один точный растр 203 dpi, аппаратные копии с отслеживанием зазоров, режим этикеток штатного драйвера и диагностика очереди. Проверено оптическое чтение итогового растра настоящего драйвера.
           NOTES
           gh release create "$tag" --draft --latest=false --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/dist/release-content.json release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest="$make_latest"

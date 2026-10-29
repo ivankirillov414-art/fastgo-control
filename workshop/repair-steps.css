@@ -6,3 +6,5 @@
  :root[data-fastgo-visual-constrained] .repair-steps .rs-bottom{position:fixed;left:16px;right:16px;top:calc(var(--fastgo-viewport-top,0px) + var(--fastgo-viewport-height,100dvh) - 8px);bottom:auto;transform:translateY(-100%);z-index:60}
  :root[data-fastgo-visual-constrained] .repair-steps .rs-body{padding-bottom:100px}
 }
+
+.rs-payment-qr{width:min(100%,340px);margin:20px auto 12px;padding:14px;background:#fff;border-radius:12px}.rs-payment-qr svg{display:block;width:100%;height:auto}

@@ -31,7 +31,7 @@ public final class UpdateProbeActivity extends Activity {
    JSONObject meta=new JSONObject().put("sha256",hash.toString()).put("versionCode",next.versionCode).put("versionName",next.versionName);
    verifier.verify(apk,meta);
    try(FileOutputStream proof=new FileOutputStream(new File(getFilesDir(),"phone-upgrade-proof.txt"))){proof.write("retained-before-self-update".getBytes("UTF-8"));proof.getFD().sync();}
-   runOnUiThread(()->{try{PhoneInstaller.install(this,apk,next.versionName);status.setText("Native PackageInstaller session committed");}catch(Exception e){status.setText("SELF UPDATE FAILED: "+e.getMessage());}finally{verifier.close();view.destroy();}});
+   runOnUiThread(()->{try{PhoneInstaller.install(this,apk,next.versionName);status.setText("Native PackageInstaller session committed");}catch(Exception e){int pending=PhoneInstaller.state(this).getInt("session",-1);if(pending!=-1&&getPackageManager().getPackageInstaller().getSessionInfo(pending)!=null)status.setText("Native PackageInstaller session awaiting completion");else status.setText("SELF UPDATE FAILED: "+e.getMessage());}finally{verifier.close();view.destroy();}});
   }catch(Exception e){runOnUiThread(()->{status.setText("SELF UPDATE FAILED: "+e.getMessage());verifier.close();view.destroy();});}},"phone-update-probe").start();
  }
 }

@@ -66,9 +66,9 @@ public static class FastGoPC365Media {
    })
    # The signed driver supplies label-gap mode and output controls. One image
    # with DEVMODE copies becomes one hardware PRINT 1,N, not N Windows pages.
-   # Calibration is a separate, ordered spool job; it never marks goods printed.
-   $calibration="SIZE $w mm,$h mm`r`nGAPDETECT`r`nREFERENCE 0,0`r`nOFFSET 0 mm`r`n"
-   $null=[FastGoPC365Media]::Send($PrinterName,[Text.Encoding]::ASCII.GetBytes($calibration))
+   # Do not precede the driver with GAPDETECT/HOME: the station stopped even
+   # responding to FEED after that experimental sequence. Let its signed driver
+   # supply the supported GAP/PEEL/TEAR commands for every hardware copy series.
    $mayHaveSubmitted=$true
    $doc.Print()
    $after=Get-Printer -Name $PrinterName -ErrorAction Stop

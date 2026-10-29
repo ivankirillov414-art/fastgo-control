@@ -199,7 +199,7 @@ function requireRepairParts_(repair,p,actor){
  const saved=parseJson_(repair['Строки запчастей'],[]),parts=p.parts===undefined?saved:p.parts;
  if(p.parts!==undefined&&!repairPartsSubset_(parts,saved))throw httpError_('Запчасти в ремонт выдаются только через ТСД на кассе',403);
  const attached=positiveRepairParts_(parts),masterId=p.assigned_master_id===undefined?String(repair.master_id||''):String(p.assigned_master_id||'');
- if(p.no_parts===true&&(attached.length||actor.id!==masterId&&!(role_(actor)==='mechanic'&&!masterId)&&!['owner','developer'].includes(role_(actor))))throw httpError_('Отметку «Без замены запчастей» ставит мастер ремонта',403);
+ if(p.no_parts===true&&(attached.length||actor.id!==masterId&&role_(actor)!=='mechanic'&&!['owner','developer'].includes(role_(actor))))throw httpError_('Отметку «Без замены запчастей» ставит мастер ремонта',403);
  const status=p.status||normStatus_(repair['Статус'],'repair'),savedNone=p.no_parts===undefined&&repairPartsStatus_(repair,parts,masterId).mode==='none';
  if(status!==normStatus_(repair['Статус'],'repair')&&['ready','issued'].includes(status)&&!attached.length&&p.no_parts!==true&&!savedNone)throw httpError_('Выдайте запчасти в этот ремонт на кассе или отметьте „Ремонт без запчастей“',409);
 }
@@ -381,7 +381,7 @@ function assertRevision_(row,p){
 
 function canEditOrder_(actor,kind,row){
   if(isManager_(actor)) return true;
-  return role_(actor)==='mechanic' && kind==='repair' && String(row.master_id||'')===String(actor.id||'');
+  return role_(actor)==='mechanic' && kind==='repair';
 }
 
 function requireOrderAccess_(actor,kind,row){ if(row['Статус']==='deleted')throw httpError_('Приёмка удалена',409); if(!canEditOrder_(actor,kind,row)) throw httpError_('Нет доступа к этой карточке',403); }
@@ -491,7 +491,7 @@ function createOrder_(p,actor){
     return mapStorage_(find_(SHEETS.storage,'storage_id',id));
   }
   const masterId=String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null;
-  if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
+  if(masterId&&!(p.step_flow===true&&p.assigned_master_id===undefined)&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
   append_(SHEETS.repairs,{repair_id:id,'Номер ремонта':orderNo,intake_id:id,'Создано':created,'Статус':'Принят','Мастер':staff?staff['ФИО']:'','Диагностика':'','Работы':'[]','Стоимость работ':0,'Запчасти':0,'Скидка':0,'Итого':0,'Гарантия, дней':0,'Начато':'','Завершено':'','Выдано':'','Примечание':'',updated_at:created,'Строки запчастей':'[]','Оплачено':0,master_id:masterId,'Контроль качества':false,'Плановая дата':String(p.promised_date||''),storage_id:String(p.storage_id||''),revision:1,request_id:requestId,'Согласовано, ₽':'','Примечание согласования':''});
   addEvent_(kind,id,'create',actor,{to_status:'accepted'});
   return mapRepair_(find_(SHEETS.repairs,'repair_id',id));
@@ -516,11 +516,11 @@ function updateOrder_(p,actor){
   if(parts.length!==oldParts.length)returnRepairParts_(parts,oldParts,r,p,actor);
   const worksTotal=works.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), partsTotal=parts.reduce((sum,x)=>sum+Math.max(1,num_(x.quantity)||1)*num_(x.price),0), pricing=repairPricing_(r,p,works,parts),total=pricing.total,previousTotal=num_(r['Итого']);
   const masterId=p.assigned_master_id===undefined?String(r.master_id||''):String(p.assigned_master_id||''), staff=masterId?find_(SHEETS.staff,'employee_id',masterId):null, staffView=staff?mapStaff_(staff):null, status=String(p.status||normStatus_(r['Статус'],'repair'));
-  if(masterId&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
+  if(masterId&&!(p.step_flow===true&&p.assigned_master_id===undefined)&&(!staffView||!staffView.active||staffView.role!=='mechanic'))throw httpError_('Назначить можно только активного мастера',400);
   const fromStatus=normStatus_(r['Статус'],'repair'), sameTotal=Math.abs(num_(r['Итого'])-total)<.005, approvalAmount=bool_(p.approve)?total:(sameTotal?r['Согласовано, ₽']:''), approvalNote=bool_(p.approve)?String(p.approval_note||''):(sameTotal?r['Примечание согласования']:'');
   patchRow_(SHEETS.repairs,r.__row,{'Статус':humanStatus_(status,'repair'),'Мастер':staff?staff['ФИО']:String(p.assigned_master||r['Мастер']||''),'Диагностика':p.diagnostics_notes===undefined?r['Диагностика']:String(p.diagnostics_notes||''),'Работы':JSON.stringify(works),'Стоимость работ':worksTotal,'Запчасти':partsTotal,'Скидка':pricing.discount,'Итого':total,'Гарантия, дней':num_(p.warranty_days),'Начато':!r['Начато']&&['diagnostics','repair','waiting_parts'].includes(status)?now_():r['Начато'],'Завершено':status==='ready'?now_():r['Завершено'],'Выдано':status==='issued'?now_():r['Выдано'],'Примечание':status==='issued'?String(p.handover_notes||r['Примечание']||''):status==='cancelled'?String(p.note||r['Примечание']||''):(p.note===undefined?r['Примечание']:String(p.note||'')),updated_at:now_(),'Строки запчастей':JSON.stringify(parts),master_id:masterId,'Контроль качества':['diagnostics','waiting_parts','repair'].includes(status)?false:(p.quality_checked===undefined?bool_(r['Контроль качества']):bool_(p.quality_checked)),'Плановая дата':p.promised_date===undefined?r['Плановая дата']:String(p.promised_date||''),revision:rev+1,'Согласовано, ₽':approvalAmount,'Примечание согласования':approvalNote});
   recordRepairPartsChoice_(r,p,actor,partsChoiceBefore,previousMaster);
-  if(p.step_flow===true){const prior=repairStepState_(r),masterName=staff?String(staff['ФИО']||''):String(r['Мастер']||'');addEvent_('repair',p.id,'repair_steps',actor,{...prior,mode:'steps',action:p.flow_action,...(p.waiting_part!==undefined?{waiting_part:p.waiting_part,waiting_due:p.waiting_due}:{}),...(p.master_comment!==undefined?{master_comment:p.master_comment.trim()}:{}),...(p.flow_action==='complete'?{completion_request_id:p.request_id,completion_at:now_(),completion_master_name:masterFirstName_(masterName)}:{})});}
+  if(p.step_flow===true){const prior=repairStepState_(r),masterName=String(actor.name||actor.email||'Сотрудник');addEvent_('repair',p.id,'repair_steps',actor,{...prior,mode:'steps',action:p.flow_action,...(p.waiting_part!==undefined?{waiting_part:p.waiting_part,waiting_due:p.waiting_due}:{}),...(p.master_comment!==undefined?{master_comment:p.master_comment.trim()}:{}),...(p.flow_action==='complete'?{completion_request_id:p.request_id,completion_at:now_(),completion_master_name:masterFirstName_(masterName),payment_qr:p.payment_qr===true}:{})});}
 
   if(p.total_override!==undefined&&p.total_override!==repairManualTotal_(r))addEvent_(kind,p.id,'price',actor,{total_override:p.total_override,total,previous_total:previousTotal});
   addEvent_(kind,p.id,'update',actor,{from_status:fromStatus,to_status:status,note:String(p.reopen_reason||p.handover_notes||p.note||'')});
@@ -718,7 +718,7 @@ function prepareRepairStep_(r,p,actor){
 
  if(action==='complete'){
   if(current!=='repair'||!works.length)throw httpError_('Добавьте выполненные работы и завершите ожидание деталей',409);
-  if(!(p.assigned_master_id||r.master_id))throw httpError_('Укажите мастера, выполнившего ремонт',409);
+
   if(p.quality_checked!==true)throw httpError_('Подтвердите проверку работы техники',409);
   p.status='ready';
  }

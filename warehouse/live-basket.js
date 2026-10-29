@@ -183,7 +183,7 @@ export function liveBasket({terminal,call,parts,render,home,run,message,load,sav
    // sale only after its idempotent issue receipt has been confirmed.
    await call('cancel_document',{id:local.id,kind:'sale',revision:local.revision});
    finished({id:local.id,payload:local,result:{}});
-   message('Запчасти выданы в ремонт № '+result.number+' · '+result.master_name);
+   message('Запчасти выданы в ремонт № '+result.number);
   }catch(e){locked=true;draw();feedback('Выдача не завершена: '+e.message+'. Повторите QR мастера или откройте этот черновик для повтора.',true);throw e;}
  }
  async function issueParts(code){

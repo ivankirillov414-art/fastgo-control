@@ -33,7 +33,7 @@ export function repairPartsCondition(record,values={}){
 }
 export function repairNoPartsAllowed(record,actor,values={}){
  const master=String(values.assigned_master_id??record.assigned_master_id??'');
- return ['owner','developer'].includes(actor?.role)||!!master&&actor?.profile_id===master||actor?.role==='mechanic'&&!master;
+ return ['owner','developer'].includes(actor?.role)||!!master&&actor?.profile_id===master||actor?.role==='mechanic';
 }
 // Request missing information in the same dialog as the action, instead of
 // requiring the user to discover fields in other collapsed panels.
