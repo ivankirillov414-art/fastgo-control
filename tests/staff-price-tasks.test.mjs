@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {createNativeEngine} from '../supabase/functions/_shared/native-engine.js';
 import {equipmentData} from '../warehouse/equipment-data.js';
 import {staffTaskApi,requirePriceTask} from '../supabase/functions/_shared/staff-tasks.js';
+import {nativeClient} from '../supabase/functions/_shared/native-client.js';
 const actor={id:randomUUID(),role:'mechanic'},task={id:randomUUID(),assignee_id:actor.id,status:'open',scopes:['parts','equipment','works']};
 actor.price_task=task;
 function fixture(){const schema=JSON.parse(fs.readFileSync(new URL('./google-schema.json',import.meta.url))),sheets=Object.fromEntries(Object.entries(schema).map(([k,headers])=>[k,{headers,rows:[]}]));const seed=(name,obj)=>sheets[name].rows.push({...Object.fromEntries(sheets[name].headers.map(k=>[k,''])),...obj,__row:sheets[name].rows.length+2});const part=randomUUID(),work=randomUUID();seed('Товары',{product_id:part,'Модель / название':'Тормозной трос','Категория':'Запчасти','Остаток, шт.':8,'Цена закупки, ₽':100,'Цена продажи, ₽':350,'Активен':true});seed('Прайс работ',{service_id:work,'Работа':'Диагностика','Работа, ₽':500,'Итого, ₽':500,'Активна':true});seed('Настройки',{'Ключ':'next_product_seq','Значение':1});seed('Настройки',{'Ключ':'next_category_seq','Значение':1});return {sheets,part,work,engine:()=>createNativeEngine(sheets)};}
@@ -14,3 +15,16 @@ test('price catalogue reveals no staff, clients, stock balances or cash data',()
 test('task lookup always scopes ordinary users; private device registration cannot take another user device',async()=>{let query;const db=async(t,q)=>{query=q;return t==='workshop_task_devices'?[{profile_id:randomUUID()}]:[task];};await requirePriceTask(db,task.id,actor);assert.match(query,new RegExp('assignee_id=eq.'+actor.id));await assert.rejects(staffTaskApi('staff_device_register',{device_id:randomUUID(),token:'a'.repeat(43)},{db,actor}),x=>x.status===409);});
 test('a task limited to equipment or works cannot read unrelated part purchase prices',()=>{const f=fixture();for(const scope of ['equipment','works']){const a={...actor,price_task:{...task,scopes:[scope]}},c=f.engine().run('staff_price_catalog',{task_id:task.id},a);assert.deepEqual(c.parts,[]);assert.equal(c.services.length,scope==='works'?1:0);}});
 test('reference market prices can be edited without inventing a purchase price or a stock card',()=>{const f=fixture(),e=f.engine(),item=equipmentData.items[0],result=save(e,{scope:'equipment',id:item.id,values:{market_price:25000},expected:{part_id:null,revision:0}});assert.equal(result.item.part,null);assert.equal(result.item.record.market_price,25000);assert.equal(e.sheets['Товары'].rows.length,1);assert.equal(e.sheets['Движения склада'].rows.length,0);assert.deepEqual([...new Set(e.changes().map(c=>c.sheet))],['События']);});
+test('native price transport commits once and resolves a lost reply through its real receipt path',async()=>{
+ const f=fixture();let version=1,receipt,commits=0;const request_id=randomUUID(),fingerprint='a'.repeat(64);
+ const db=async(table,q,method,p)=>{
+  if(table==='rpc/workshop_native_snapshot')return structuredClone({version,sheets:f.sheets});
+  if(table==='workshop_native_receipts')return receipt?[receipt]:[];
+  assert.equal(table,'rpc/workshop_native_commit');assert.equal(p.p_actor,actor.id);assert.equal(p.p_action,'staff_price_save');assert.equal(p.p_result.task_id,task.id);assert.equal(p.p_result.scope,'parts');assert.equal(p.p_fingerprint,fingerprint);assert.equal(p.p_version,version);commits++;
+  for(const c of p.p_changes){const rows=f.sheets[c.sheet].rows;let row=rows.find(r=>r.__row===c.row);if(!row){row={__row:c.row};rows.push(row);}Object.assign(row,c.values);}
+  version++;receipt={request_id,actor_id:actor.id,action:p.p_action,fingerprint,result:p.p_result};throw Error('reply lost');
+ };
+ const client=()=>nativeClient({db,actor,google:async()=>{throw Error('No fallback writes');},storage:{}});
+ await assert.rejects(client()('staff_price_save',{task_id:task.id,scope:'parts',id:f.part,values:{retail_price:390.5},expected:{retail_price:350},request_id,__request_fingerprint:fingerprint}),/reply lost/);
+ const replay=await client()('operation_retry',{request_id,action:'staff_price_save',fingerprint});assert.equal(replay.status,'committed');assert.equal(replay.result.item.retail_price,390.5);assert.equal(commits,1);assert.equal(f.sheets['Товары'].rows[0]['Остаток, шт.'],8);assert.equal(f.sheets['События'].rows.length,1);assert.equal(f.sheets['Движения склада'].rows.length,0);assert.equal(f.sheets['Оплаты'].rows.length,0);
+});
