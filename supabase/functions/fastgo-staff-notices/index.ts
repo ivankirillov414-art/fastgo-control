@@ -8,9 +8,14 @@ async function db(table,q='',method='GET',body){const r=await fetch(BASE+'/rest/
 Deno.serve(async req=>{
  if(req.method!=='POST')return out({error:'POST required'},405);
  try{
-  if(Number(req.headers.get('content-length')||0)>4096)return out({error:'Too large'},413);
-  const raw=await req.text();if(raw.length>4096)return out({error:'Too large'},413);const p=JSON.parse(raw);
   const token=req.headers.get('x-fastgo-notice-token')||'';
+  if(!/^[-_A-Za-z0-9]{43}$/.test(token))return out({error:'Unauthorized'},401);
+  if(Number(req.headers.get('content-length')||0)>4096)return out({error:'Too large'},413);
+  const reader=req.body?.getReader();if(!reader)return out({error:'Invalid request'},400);
+  let size=0;const chunks=[];try{while(true){const r=await reader.read();if(r.done)break;size+=r.value.length;if(size>4096){await reader.cancel();return out({error:'Too large'},413);}chunks.push(r.value);}}finally{reader.releaseLock();}
+  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  let p;try{p=JSON.parse(new TextDecoder().decode(bytes));}catch{return out({error:'Invalid request'},400);}
+  if(!p||typeof p!=='object'||Array.isArray(p))return out({error:'Invalid request'},400);
   if(!uuid(p.device_id)||!/^[-_A-Za-z0-9]{43}$/.test(token))return out({error:'Unauthorized'},401);
   const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(x=>x.toString(16).padStart(2,'0')).join('');
   const device=(await db('workshop_task_devices','id=eq.'+p.device_id+'&revoked_at=is.null&select=profile_id,token_hash'))?.[0];
