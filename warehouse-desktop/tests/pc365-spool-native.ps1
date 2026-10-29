@@ -25,16 +25,10 @@ $inputHash=(Get-FileHash -LiteralPath $inputFile -Algorithm SHA256).Hash
 $rawHash=(Get-FileHash -LiteralPath $rawPort -Algorithm SHA256).Hash
 if($inputHash -ne $rawHash){throw 'Actual Winspool/Seagull path changed the RAW bytes'}
 Set-Printer -Name $queue -PortName $gdiPort
-Add-Type -AssemblyName System.Drawing
-$doc=[Drawing.Printing.PrintDocument]::new()
-$doc.PrinterSettings.PrinterName=$queue
-$doc.PrinterSettings.Copies=30
-$doc.PrinterSettings.Collate=$false
-$doc.PrintController=[Drawing.Printing.StandardPrintController]::new()
-$doc.DefaultPageSettings.PaperSize=[Drawing.Printing.PaperSize]::new('FastGo 58x27',228,106)
-$doc.DefaultPageSettings.Margins=[Drawing.Printing.Margins]::new(0,0,0,0)
-$doc.add_PrintPage({param($sender,$eventArgs);$font=[Drawing.Font]::new('Arial',9);try{$eventArgs.Graphics.DrawString('FastGo PC365', $font,[Drawing.Brushes]::Black,8,8);$eventArgs.Graphics.FillRectangle([Drawing.Brushes]::Black,8,35,180,20)}finally{$font.Dispose()};$eventArgs.HasMorePages=$false})
-try{$doc.Print()}finally{$doc.Dispose()}
+$imageFile=Join-Path $out ('label-'+[guid]::NewGuid()+'.png')
+Copy-Item -LiteralPath 'browser-results/pc365-native/scale-1/FGP-00000082.png' -Destination $imageFile
+$result=(& (Join-Path $out 'pc365-media.ps1') -PrinterName $queue -WidthMm 58 -HeightMm 27 -Copies 30 -Mode Driver -DataFile $imageFile) | ConvertFrom-Json
+if($result.status -ne 'submitted' -or $result.copies -ne 30){throw 'Driver did not accept one image with thirty copies'}
 Wait-Output $gdiPort
 $gdi=[IO.File]::ReadAllBytes($gdiPort)
 $text=[Text.Encoding]::ASCII.GetString($gdi)
@@ -42,4 +36,5 @@ $commands=@($text -split "`n" | Where-Object {$_ -match '^(SIZE|GAP|SET |DIRECTI
 $report=@{raw_bytes_unchanged=$true;raw_sha256=$rawHash;raw_length=(Get-Item -LiteralPath $rawPort).Length;windows_media=$r.windows_media;gdi_length=$gdi.Length;gdi_prefix=$text.Substring(0,[Math]::Min(1000,$text.Length));gdi_commands=$commands}
 $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $out 'verification.json') -Encoding UTF8
 $report | ConvertTo-Json -Depth 6
+if(@($commands | Where-Object {$_ -match '^PRINT 1,30'}).Count -ne 1){throw 'Driver did not use a single hardware copy command'}
 Write-Output 'PASS: real Winspool RAW bytes reached the file port unchanged; actual signed driver output captured.'

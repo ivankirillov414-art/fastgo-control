@@ -92,6 +92,13 @@ jobs:
       "FASTGO_PLAYWRIGHT=$env:RUNNER_TEMP/warehouse-playwright" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
    - name: Verify PC365 native raster and 30-copy gap series
      run: node scripts/check-pc365-raster-native.cjs
+   - name: Verify actual PC365 driver image and hardware copies
+     shell: pwsh
+     run: |
+      powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File warehouse-desktop/tests/pc365-spool-native.ps1
+      if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+      $env:PC365_CAPTURE_FILE = Join-Path $pwd 'browser-results/pc365-spool/gdi-captured.bin'
+      node scripts/check-pc365-raster-native.cjs
    - name: Verify bundled warehouse UI without internet
      timeout-minutes: 2
      run: node scripts/check-warehouse-bundled-desktop.cjs
