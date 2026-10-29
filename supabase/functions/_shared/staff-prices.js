@@ -25,7 +25,7 @@ export function staffPriceOperation(action,p,actor,{rows,patch,partSave,catalogS
  }else if(p.scope==='works'){
   if(Object.keys(p.values).some(k=>k!=='labor_price'))fail('Можно менять только стоимость работы',403);
   const value=price(p.values.labor_price),r=services.find(x=>x.service_id===p.id);
-  if(p.create===true){if(r)fail('Работа уже существует',409);if(!/^[a-f0-9-]{36}$/i.test(p.id)||!String(p.title||'').trim()||String(p.title).length>200)fail('Укажите название работы');result=catalogSave({id:p.id,title:p.title,category:String(p.category||'Ремонтные работы').slice(0,100),labor_price:value,create:true});}
+  if(p.create===true){if(r)fail('Работа уже существует',409);if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(p.id)||!String(p.title||'').trim()||String(p.title).length>200)fail('Укажите название работы');result=catalogSave({id:p.id,title:p.title,category:String(p.category||'Ремонтные работы').slice(0,100),labor_price:value,create:true});}
   else{if(!r||r['Активна']===false)fail('Работа не найдена',404);if(p.expected.labor_price!==Number(r['Работа, ₽']||0))fail('Стоимость работы уже изменена. Откройте её заново.',409);result=catalogSave({id:p.id,title:r['Работа'],category:r['Категория'],labor_price:value,expected_price:p.expected.labor_price,expected_title:r['Работа']});}
   changes.labor_price={before:r?Number(p.expected.labor_price):null,after:value};
  }else if(p.scope==='equipment'){

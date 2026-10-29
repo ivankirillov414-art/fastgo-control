@@ -41,8 +41,10 @@ export async function renderStaffTasks(ctx,p,token){
   else{fields+=ctx.field('unit_cost','Закупочная цена, ₽',part?.unit_cost??'','text',true);fields+=selected==='parts'?ctx.field('retail_price','Цена продажи, ₽',x.retail_price,'text',true):ctx.field('market_price','Рыночная цена, ₽',record?.market_price??x.price_min??'','text',false);}
   ctx.modal(x?'Изменить цены':'Добавить работу',fields,async v=>{
    const values={};for(const k of selected==='works'?['labor_price']:selected==='parts'?['unit_cost','retail_price']:['unit_cost','market_price'])values[k]=k==='market_price'&&!v[k].trim()?null:purchaseValue(v[k]);
-   await api('staff_price_save',{task_id:task.id,scope:selected,id,values,expected,...(!x?{create:true,title:v.title,category:v.category}:{})});
-   const fresh=await api('staff_price_catalog',{task_id:task.id},{fresh:true});Object.assign(c,fresh);feedback('Сохранено');draw();
+   let saved;try{saved=await api('staff_price_save',{task_id:task.id,scope:selected,id,values,expected,...(!x?{create:true,title:v.title,category:v.category}:{})});}catch(error){if(error.status===409){try{Object.assign(c,await api('staff_price_catalog',{task_id:task.id},{fresh:true}));draw();}catch{}error.message+=' Закройте окно и откройте позицию заново.';}throw error;}
+   const merge=(list,item)=>{if(!item)return;const old=list.find(r=>r.id===item.id);if(old)Object.assign(old,item);else list.push(item);};
+   if(selected==='parts')merge(c.parts,saved.item);else if(selected==='works')merge(c.services,saved.item);else{merge(c.parts,saved.item.part);merge(c.equipment_prices,saved.item.record);}
+   try{Object.assign(c,await api('staff_price_catalog',{task_id:task.id},{fresh:true}));feedback('Сохранено');}catch{feedback('Цены сохранены. Список не удалось обновить — повторите открытие задачи.');}draw();
   });
   document.querySelectorAll('#modal-form input[name$="price"],#modal-form input[name="unit_cost"]').forEach(i=>{i.inputMode='decimal';});
  }
