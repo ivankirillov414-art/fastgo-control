@@ -1,6 +1,6 @@
 import {staffTaskApi,requirePriceTask} from '../_shared/staff-tasks.js';
 import {editInventory} from '../fastgo-warehouse/inventory.js';
-import {pickupCode} from '../_shared/parts-pickup-code.js';
+import {requestRepairPickup} from './parts-pickup.js';
 import {nativeClient} from '../_shared/native-client.js';
 import {manualLabels} from './manual-labels.js';
 import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
@@ -8,7 +8,7 @@ import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'staff-price-tasks-2026-10-29';
+const RELEASE = 'repair-pickup-no-assignment-2026-10-30';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -291,14 +291,7 @@ async function main(req){
     if(['storage_close','storage_delete'].includes(action)&&c.storage_mode!=='postgres')fail('Обновление хранения ещё не установлено',503);
     const backend=c.storage_mode==='postgres'?'POSTGRES_GOOGLE_MIRROR':'GOOGLE_SHEETS_DRIVE';
     if(action==='parts_pickup'){
-      if(c.storage_mode!=='postgres'||p.kind!=='repair'||!uuid(p.id))fail('Откройте рабочий ремонт',400);
-      let repair=(await g('get',{kind:'repair',id:p.id})).record;
-      if(['ready','issued','cancelled'].includes(repair.status))fail('Ремонт уже готов или закрыт',409);
-      if(me.role==='mechanic')return out({data:await pickupCode({...repair,requested_by:user.id,pickup_scope:'repair_requester'},KEY)});
-      if(!repair.assigned_master_id)fail('Сначала назначьте мастера ремонта',409);
-      if(repair.assigned_master_id!==user.id&&!admin(me))fail('QR может открыть назначенный мастер',403);
-      await requireActiveMechanic(repair.assigned_master_id);
-      return out({data:await pickupCode(repair,KEY)});
+      return out({data:await requestRepairPickup(p,{storageMode:c.storage_mode,member:me,actorId:user.id,getRepair:async id=>(await g('get',{kind:'repair',id})).record,key:KEY})});
     }
     if(action==='health')return out({data:{...await g('health'),release:RELEASE}});
     if(action==='stock')integer(p.quantity,'количество');

@@ -1,15 +1,15 @@
 import {createNativeEngine} from '../_shared/native-engine.js';
-import {readPickupCode,pickupCode} from '../_shared/parts-pickup-code.js';
+import {readPickupCode,pickupCode,REPAIR_PICKUP_ROLES} from '../_shared/parts-pickup-code.js';
 import {repairIdFromCode} from './repair.js';
 import {items,id,fail} from './model.js';
 function eventDetails(e){try{return JSON.parse(e['Детали']||'{}');}catch{return {};}}
 export function pickupRepair(snapshot,ticket){
  const r=snapshot.sheets['Ремонты'].rows.find(x=>x.repair_id===ticket.repair_id);if(!r)fail('Ремонт не найден',404);
  if(!['Принят','Принято','Новая','Диагностика','На диагностике','Ждём запчасти','Ожидает запчасть','В ремонте','В работе'].includes(r['Статус']))fail('Выдача деталей доступна для незавершённого ремонта',409);
- if(ticket.scope!=='repair_requester'&&r.master_id!==ticket.master_id)fail('Мастер ремонта изменился. Откройте новый QR ремонта.',409);
+ if(!ticket.scope&&r.master_id!==ticket.master_id)fail('Мастер ремонта изменился. Откройте новый QR ремонта.',409);
  if(snapshot.sheets['События'].rows.some(e=>e['Действие']==='parts_issued'&&eventDetails(e).ticket_id===ticket.id))fail('По этому QR детали уже выданы. Для следующей выдачи откройте новый QR.',409);
  const intake=snapshot.sheets['Приёмки'].rows.find(x=>x.intake_id===r.intake_id)||{};
- return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',...(ticket.scope==='repair_requester'?{requested_by:ticket.requested_by||ticket.master_id}:{master_id:ticket.master_id}),master_name:''};
+ return {raw:r,id:r.repair_id,number:r['Номер ремонта'],vehicle:intake['Бренд / модель']||'',serial:intake['Серийный номер']||'',...(ticket.scope?ticket.requested_by?{requested_by:ticket.requested_by}:{}:{master_id:ticket.master_id}),master_name:''};
 }
 export function preparePartsIssue(snapshot,p,ticket,actor,{uuid=()=>crypto.randomUUID(),now=()=>new Date().toISOString()}={}){
  const repair=pickupRepair(snapshot,ticket),normalized=items(p.items),engine=createNativeEngine(snapshot.sheets,{uuid,now}),rows=JSON.parse(repair.raw['Строки запчастей']||'[]'),issued=[];
@@ -36,11 +36,16 @@ export async function partsIssue(action,p,{db,actor,device,stationId,key,digest}
  if(action==='parts_pickup_quote'&&typeof code==='string'&&!code.startsWith('FGPARTS1.')){
   const repairId=await repairIdFromCode(code,key);snapshot=await db('rpc/workshop_native_snapshot','','POST',{});
   const repair=snapshot.sheets['Ремонты'].rows.find(r=>r.repair_id===repairId);if(!repair)fail('Ремонт не найден',404);
-  if(!id(repair.master_id))fail('Сначала назначьте мастера в карточке ремонта',409);
-  code=(await pickupCode({id:repairId,assigned_master_id:repair.master_id},key)).code;
+  code=(await pickupCode({id:repairId,pickup_scope:'repair'},key)).code;
  }
  ticket=await readPickupCode(code,key,{allowExpired:action==='parts_issue'});
- const active=async()=>{if(!(await db('workshop_members','profile_id=eq.'+(ticket.requested_by||ticket.master_id)+'&active=eq.true&role=eq.mechanic&select=profile_id')).length)fail('Мастер отключён',409);};
+ const active=async()=>{
+  // Printed repair URLs have no requester; they still require the authenticated,
+  // paired cash device checked by the handler. New account QR codes recheck membership.
+  if(ticket.scope==='repair'&&!ticket.requested_by)return;
+  const role=ticket.scope==='repair'?'in.('+REPAIR_PICKUP_ROLES.join(',')+')':'eq.mechanic';
+  if(!(await db('workshop_members','profile_id=eq.'+(ticket.requested_by||ticket.master_id)+'&active=eq.true&role='+role+'&select=profile_id')).length)fail(ticket.scope==='repair'?'Доступ сотрудника к ремонту отключён':'Мастер отключён',409);
+ };
  if(action==='parts_pickup_quote'){await active();const q=pickupRepair(snapshot||await db('rpc/workshop_native_snapshot','','POST',{}),ticket);delete q.raw;return {...q,code};}
  if(!id(p.request_id))fail('Неверный код выдачи');const normalized=items(p.items),fingerprint=await digest(JSON.stringify({code:p.code,items:normalized,terminal_id:device.id,station_id:stationId}));
  // Receipt lookup precedes expiry/assignment checks on retries: a committed issue is final.

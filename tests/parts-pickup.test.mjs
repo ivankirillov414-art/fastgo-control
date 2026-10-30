@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {pickupCode,readPickupCode} from '../supabase/functions/_shared/parts-pickup-code.js';
 import {partsIssue,preparePartsIssue} from '../supabase/functions/fastgo-warehouse/parts-issue.js';
 import {createNativeEngine} from '../supabase/functions/_shared/native-engine.js';
+import {requestRepairPickup} from '../supabase/functions/fastgo-workshop-api/parts-pickup.js';
 import {digest} from '../supabase/functions/fastgo-warehouse/handler.js';
 const owner={id:randomUUID(),role:'owner'},master=randomUUID(),repair=randomUUID(),part=randomUUID(),station=randomUUID(),terminal=randomUUID(),secret='test-signing-secret-not-production';
 function fixture(){
@@ -47,15 +48,55 @@ test('lost issue response is resolved by receipt; price and quantities cannot ch
  await partsIssue('parts_issue',p,h.context);assert.equal(h.commits.length,1);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);
 });
 
-test('printed repair QR selects an assigned repair without issuing; confirmation uses a signed ticket',async()=>{
+test('printed repair QR selects the repair without a worker; confirmation uses a signed ticket',async()=>{
  const h=fixture(),url='https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+repair;
- const quote=await partsIssue('parts_pickup_quote',{code:url},h.context);assert.equal(quote.id,repair);assert.equal(quote.master_id,master);assert.match(quote.code,/^FGPARTS1\./);assert.equal(h.commits.length,0);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],5);
+ const quote=await partsIssue('parts_pickup_quote',{code:url},h.context);assert.equal(quote.id,repair);assert.equal(quote.master_id,undefined);assert.equal((await readPickupCode(quote.code,secret)).scope,'repair');assert.match(quote.code,/^FGPARTS1\./);assert.equal(h.commits.length,0);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],5);
  await assert.rejects(partsIssue('parts_issue',{request_id:randomUUID(),code:url,items:[{part_id:part,quantity:2}]},h.context));
  const issued=await partsIssue('parts_issue',{request_id:randomUUID(),code:quote.code,items:[{part_id:part,quantity:2}]},h.context);assert.equal(issued.repair_id,repair);assert.equal(issued.items[0].quantity,2);assert.equal(h.commits.length,1);
 });
-test('repair QR lookup rejects foreign links, unassigned, closed and reassigned repairs without writes',async()=>{
+test('repair QR lookup rejects foreign links, closed repairs and reassigned legacy tickets without writes',async()=>{
  const url='https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+repair;
- for(const mode of ['foreign','unassigned','closed','reassigned']){const h=fixture();if(mode==='unassigned')h.raw.master_id='';if(mode==='closed')h.raw['Статус']='Готов';const input=mode==='foreign'?url.replace('ivankirillov414-art.github.io','evil.invalid'):mode==='reassigned'?await code():url;if(mode==='reassigned')h.raw.master_id=randomUUID();await assert.rejects(partsIssue('parts_pickup_quote',{code:input},h.context));assert.equal(h.commits.length,0);}
+ for(const mode of ['foreign','closed','reassigned']){const h=fixture();if(mode==='closed')h.raw['Статус']='Готов';const input=mode==='foreign'?url.replace('ivankirillov414-art.github.io','evil.invalid'):mode==='reassigned'?await code():url;if(mode==='reassigned')h.raw.master_id=randomUUID();await assert.rejects(partsIssue('parts_pickup_quote',{code:input},h.context));assert.equal(h.commits.length,0);}
+});
+
+test('service laptop and phone accounts open repair-only QR and issue through ATOL or TSD without assignment',async()=>{
+ for(const role of ['developer','owner','admin','receiver','manager','mechanic'])for(const kind of ['station','terminal'])for(const assigned of ['',master]){
+  const h=fixture(),requester=randomUUID(),member={role,active:true};h.raw.master_id=assigned;h.raw['Мастер']=assigned?'Исторический мастер':'';
+  const before=h.snapshot(),signed=await requestRepairPickup({kind:'repair',id:repair},{storageMode:'postgres',member,actorId:requester,key:secret,getRepair:async id=>createNativeEngine(h.sheets).run('get',{kind:'repair',id},{id:requester,role}).record});
+  const ticket=await readPickupCode(signed.code,secret);assert.equal(ticket.scope,'repair');assert.equal(ticket.repair_id,repair);assert.equal(ticket.requested_by,requester);assert.equal(ticket.master_id,undefined);assert.deepEqual(h.snapshot(),before,'opening QR never assigns a worker or changes the repair');
+  const context={...h.context,device:{id:kind==='station'?station:terminal,kind},db:async(table,q,...args)=>{
+   if(table==='workshop_members'){assert.ok(q.includes('profile_id=eq.'+requester));assert.ok(q.includes('active=eq.true'));assert.ok(q.includes('role=in.(developer,owner,admin,receiver,manager,mechanic)'));return [{profile_id:requester,role}];}
+   return h.context.db(table,q,...args);
+  }};
+  const quote=await partsIssue('parts_pickup_quote',{code:signed.code},context);assert.equal(quote.id,repair);assert.equal(quote.master_id,undefined);
+  const p={request_id:randomUUID(),code:signed.code,items:[{part_id:part,quantity:2}]},result=await partsIssue('parts_issue',p,context);
+  assert.equal(result.repair_id,repair);assert.equal(result.requested_by,requester);assert.equal(result.master_id,undefined);assert.equal(h.raw.master_id,assigned);assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);
+  assert.equal(JSON.parse(h.raw['Строки запчастей'])[0].quantity,2);assert.equal(h.sheets['Продажи'].rows.length,0);assert.equal(h.sheets['Оплаты'].rows.length,0);
+  assert.ok(!h.commits[0].p_changes.some(c=>c.sheet==='События'&&c.values['Действие']==='master_issue'));
+  assert.deepEqual(await partsIssue('parts_issue',p,context),result);assert.equal(h.commits.length,1);
+ }
+});
+
+test('repair pickup retains active membership, normal card access, status and signature checks',async()=>{
+ const h=fixture(),requester=randomUUID(),base={storageMode:'postgres',member:{role:'owner',active:true},actorId:requester,key:secret,getRepair:async()=>({id:repair,status:'repair'})},params={kind:'repair',id:repair};
+ for(const role of ['seller','customer','guest',''])await assert.rejects(requestRepairPickup(params,{...base,member:{role,active:true},getRepair:()=>assert.fail('denied role must not read a card')}),e=>e.status===403);
+ await assert.rejects(requestRepairPickup(params,{...base,member:{role:'owner',active:false}}),e=>e.status===403);
+ await assert.rejects(requestRepairPickup(params,{...base,getRepair:()=>{throw Object.assign(Error('Нет доступа'),{status:403});}}),e=>e.status===403);
+ for(const status of ['ready','issued','cancelled'])await assert.rejects(requestRepairPickup(params,{...base,getRepair:async()=>({id:repair,status})}),e=>e.status===409);
+ await assert.rejects(requestRepairPickup(params,{...base,getRepair:async()=>null}),e=>e.status===404);
+ await assert.rejects(requestRepairPickup({...params,id:'bad'},base),e=>e.status===400);
+ const signed=await requestRepairPickup(params,base);
+ await assert.rejects(partsIssue('parts_pickup_quote',{code:signed.code},{...h.context,db:async(table,...args)=>table==='workshop_members'?[]:h.context.db(table,...args)}),/отключён/);
+ await assert.rejects(readPickupCode(signed.code,secret,{now:Date.now()+86401000}),/истёк/);
+ await assert.rejects(readPickupCode(signed.code,'other-key'));
+ assert.equal(h.commits.length,0);
+});
+
+test('printed repair QR also issues directly into an unassigned repair on the paired cash device',async()=>{
+ const h=fixture();h.raw.master_id='';h.raw['Мастер']='';const url='https://ivankirillov414-art.github.io/fastgo-control/workshop.html#order?kind=repair&id='+repair;
+ const context={...h.context,device:{id:station,kind:'station'},db:async(table,...args)=>{assert.notEqual(table,'workshop_members','a printed repair has no personal requester');return h.context.db(table,...args);}};
+ const quote=await partsIssue('parts_pickup_quote',{code:url},context);assert.equal(quote.id,repair);assert.equal(quote.master_id,undefined);
+ const result=await partsIssue('parts_issue',{request_id:randomUUID(),code:quote.code,items:[{part_id:part,quantity:2}]},context);assert.equal(result.repair_id,repair);assert.equal(h.raw.master_id,'');assert.equal(h.sheets['Товары'].rows[0]['Остаток, шт.'],3);
 });
 test('two terminals cannot consume the same pickup QR twice under a concurrent commit',async()=>{
  const h=fixture(),c=await code();const results=await Promise.allSettled([1,2].map(()=>partsIssue('parts_issue',{request_id:randomUUID(),code:c,items:[{part_id:part,quantity:1}]},h.context)));
