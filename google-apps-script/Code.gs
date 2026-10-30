@@ -448,7 +448,7 @@ function get_(p,actor){
   const raw=kind==='storage'?find_(SHEETS.storage,'storage_id',p.id):find_(SHEETS.repairs,'repair_id',p.id);
   if(!raw) throw httpError_('Приёмка не найдена',404);
   const record=kind==='storage'?mapStorage_(raw):mapRepair_(raw);
-  const events=rows_(SHEETS.events).filter(r=>String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(eventView_);
+  const events=rows_(SHEETS.events).filter(r=>r['Тип']===kind&&String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(eventView_);
   const payments=rows_(SHEETS.payments).filter(r=>String(r.record_id)===String(record.id)).sort((a,b)=>String(b['Дата']).localeCompare(String(a['Дата']))).map(paymentView_);
   const linked=kind==='storage'?rows_(SHEETS.repairs).filter(r=>String(r.storage_id||'')===String(record.id)).map(mapRepair_).map(x=>({id:x.id,repair_number:x.repair_number,status:x.status,total_amount:x.total_amount,paid_amount:x.paid_amount})):[];
   return {record:record,events:events,payments:payments,legal:legal_(),linked:linked,migrated_legacy_paths:rows_(SHEETS.files).filter(x=>x.record_id===record.id&&x['Google Drive URL']).map(x=>x['Исходный путь'])};

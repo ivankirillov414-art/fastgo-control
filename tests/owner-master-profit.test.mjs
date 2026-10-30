@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {masterProfit,reportPeriod,preparePayroll,payrollInput,localDay} from '../supabase/functions/fastgo-operations/master-profit.js';
+import {createNativeEngine} from '../supabase/functions/_shared/native-engine.js';
 import {createOperationsHandler} from '../supabase/functions/fastgo-operations/handler.js';
 
 const owner={id:randomUUID(),role:'owner'},a=randomUUID(),b=randomUUID(),repair=randomUUID(),part=randomUUID();
@@ -92,4 +94,10 @@ test('mechanics, cashiers, inactive accounts and unauthenticated requests cannot
   assert.equal(h.snapshots(),0);assert.equal(h.requests.length,0);
  }
  assert.equal((await harness().call('master_analytics',{},false)).status,401);
+});
+
+test('a repair history never exposes a private payroll event even if record identifiers collide',()=>{
+ const s=fixture();s['События'].rows.push({__row:10,event_id:randomUUID(),'Дата':'2026-10-01','Тип':'payroll',record_id:repair,'Действие':'payroll_rate',actor_id:owner.id,'Детали':JSON.stringify({employee_id:a,daily_rate:9999})});
+ const schema=JSON.parse(fs.readFileSync(new URL('./google-schema.json',import.meta.url))),full=Object.fromEntries(Object.entries(schema).map(([name,headers])=>[name,{headers,rows:s[name]?.rows||[]}]));const result=createNativeEngine(full).run('get',{kind:'repair',id:repair},{id:a,role:'mechanic'});
+ assert.equal(result.events.some(x=>x.action==='payroll_rate'),false);assert.equal(JSON.stringify(result.events).includes('9999'),false);
 });

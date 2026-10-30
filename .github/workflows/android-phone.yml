@@ -48,7 +48,7 @@ jobs:
       p='warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk'
       with zipfile.ZipFile(p) as z:
        m=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
-       assert m['platform']=='android' and m['version']=='1.0.12'
+       assert m['platform']=='android' and m['version']=='1.0.13'
        packaged={n[len('assets/fastgo/'):] for n in z.namelist() if n.startswith('assets/fastgo/') and not n.endswith('/') and n!='assets/fastgo/bundle-receipt.json'}
        assert packaged==set(m['files']), 'APK contains missing or unrecorded interface assets'
        for name,expected in m['files'].items(): assert hashlib.sha256(z.read('assets/fastgo/'+name)).hexdigest()==expected
@@ -138,7 +138,7 @@ jobs:
    - id: signed
      run: |
       node - <<'JS'
-      const fs=require('fs'),r=JSON.parse(fs.readFileSync('warehouse-android/phone/release/receipt.json'));if(r.version==='1.0.12'&&fs.existsSync('warehouse-android/phone/release/'+r.file))fs.appendFileSync(process.env.GITHUB_OUTPUT,'ready=true\n');
+      const fs=require('fs'),r=JSON.parse(fs.readFileSync('warehouse-android/phone/release/receipt.json'));if(r.version==='1.0.13'&&fs.existsSync('warehouse-android/phone/release/'+r.file))fs.appendFileSync(process.env.GITHUB_OUTPUT,'ready=true\n');
       JS
    - uses: actions/download-artifact@v4
      if: steps.signed.outputs.ready == 'true'
@@ -149,11 +149,11 @@ jobs:
       python3 - <<'PY'
       import json,zipfile
       expected=json.load(open('verify-package/src/main/assets/fastgo/bundle-receipt.json'))
-      with zipfile.ZipFile('warehouse-android/phone/release/FastGo-Android-1.0.12.apk') as z:
+      with zipfile.ZipFile('warehouse-android/phone/release/FastGo-Android-1.0.13.apk') as z:
        installed=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
        assert installed==expected, 'Signed APK is older than verified source; sign the fresh package before publishing'
       PY
-      python3 scripts/check-phone-apk-identity.py verify-package/build/outputs/apk/release/phone-release-unsigned.apk warehouse-android/phone/release/FastGo-Android-1.0.12.apk --output browser-results/android-phone-${{ matrix.api }}/apk-identity.json
+      python3 scripts/check-phone-apk-identity.py verify-package/build/outputs/apk/release/phone-release-unsigned.apk warehouse-android/phone/release/FastGo-Android-1.0.13.apk --output browser-results/android-phone-${{ matrix.api }}/apk-identity.json
    - uses: actions/setup-java@v4
      if: steps.signed.outputs.ready == 'true'
      with: {distribution: temurin, java-version: '17'}
@@ -241,7 +241,7 @@ jobs:
       fs.writeFileSync(dir+'SHA256SUMS.txt',r.sha256+'  '+r.file+'\n');
       r.release_device_tests='passed: exact signed APK on Android 10, 15 and 16 emulators';r.release_device_test_details={android_api:[29,35,36],in_place_upgrade_from:'1.0.1',production_channel_upgrade:true,latest_previous_apk_upgrade:true,installed_bytes_match:true,task_notices:{api:[29,35,36],runtime_permission:true,one_notification:true,task_deep_link:true,logout_cancels:true}};fs.writeFileSync(dir+'verified-receipt.json',JSON.stringify(r,null,2));
       JS
-      tag=fastgo-android-v1.0.12
+      tag=fastgo-android-v1.0.13
       if gh release view "$tag" >/dev/null 2>&1; then
         mkdir existing-phone-release
         gh release download "$tag" --pattern verified-receipt.json --dir existing-phone-release
@@ -250,7 +250,7 @@ jobs:
       JS
         exit 0
       fi
-      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.12' --notes 'Задачи сотрудникам: запчасти, техника и стоимость работ. По назначенной задаче можно менять цены без движения остатков или оплат. Системное уведомление показывается один раз и открывает задачу; разрешение запрашивается при открытии приложения с ожидающей задачей. Фоновые проверки зависят от ограничений Android. Сохранены пошаговый ремонт, фотографии техники и обновление поверх установленного приложения. Подписанный APK и уведомления проверены в эмуляторах Android 10, 15 и 16.' warehouse-android/phone/release/FastGo-Android-1.0.12.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
+      gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title 'FastGo для Android 1.0.13' --notes 'Задачи сотрудникам: запчасти, техника и стоимость работ. По назначенной задаче можно менять цены без движения остатков или оплат. Системное уведомление показывается один раз и открывает задачу; разрешение запрашивается при открытии приложения с ожидающей задачей. Фоновые проверки зависят от ограничений Android. Сохранены пошаговый ремонт, фотографии техники и обновление поверх установленного приложения. Подписанный APK и уведомления проверены в эмуляторах Android 10, 15 и 16.' warehouse-android/phone/release/FastGo-Android-1.0.13.apk warehouse-android/phone/release/SHA256SUMS.txt warehouse-android/phone/release/verified-receipt.json
 
    - name: Publish automatic phone update channel after installed APK checks
      if: steps.package.outputs.ready == 'true'
