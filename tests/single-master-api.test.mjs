@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
+import {requestRepairPickup} from '../supabase/functions/fastgo-workshop-api/parts-pickup.js';
+import {readPickupCode} from '../supabase/functions/_shared/parts-pickup-code.js';
 const source=fs.readFileSync(new URL('../supabase/functions/fastgo-workshop-api/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const user='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
 function setup(role='mechanic',permissions={},recordOverrides={}){
@@ -20,12 +22,21 @@ function setup(role='mechanic',permissions={},recordOverrides={}){
   if(action==='get')return {record:{...record}};
   writes.push({action,p});return {id,...p};
  };
- vm.runInNewContext(source,{Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://db.invalid':'test'},serve:fn=>handler=fn},fetch,nativeClient,Request,Response,Headers,URL,URLSearchParams,AbortSignal,Uint8Array,TextDecoder,TextEncoder,atob,crypto:globalThis.crypto});
+ vm.runInNewContext(source,{Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://db.invalid':'test'},serve:fn=>handler=fn},fetch,nativeClient,requestRepairPickup,Request,Response,Headers,URL,URLSearchParams,AbortSignal,Uint8Array,TextDecoder,TextEncoder,atob,crypto:globalThis.crypto});
  return {writes,invoke:async(action,params={})=>handler(new Request('https://edge.invalid',{method:'POST',headers:{Authorization:'Bearer test','Content-Type':'application/json'},body:JSON.stringify({action,params:{request_id:crypto.randomUUID(),...params}})}))};
 }
 test('master can save an unassigned repair in diagnostics through the authenticated API',async()=>{
  const s=setup(),r=await s.invoke('update',{kind:'repair',id,revision:1,status:'diagnostics',works:[],parts:[]});
  assert.equal(r.status,200,await r.text());assert.ok(s.writes.some(x=>x.action==='update'));
+});
+
+test('authenticated parts_pickup API opens repair QR for all repair-working roles without assigning a worker',async()=>{
+ for(const role of ['developer','owner','admin','receiver','manager','mechanic']){
+  const s=setup(role),response=await s.invoke('parts_pickup',{kind:'repair',id});assert.equal(response.status,200,await response.clone().text());
+  const {data}=await response.json(),ticket=await readPickupCode(data.code,'test');assert.equal(ticket.repair_id,id);assert.equal(ticket.scope,'repair');assert.equal(ticket.requested_by,user);assert.equal(ticket.master_id,undefined);assert.equal(data.master_id,undefined);assert.equal(s.writes.length,0);
+ }
+ for(const role of ['seller','customer']){const s=setup(role);assert.equal((await s.invoke('parts_pickup',{kind:'repair',id})).status,403);assert.equal(s.writes.length,0);}
+ const inactive=setup('owner',{active:false});assert.equal((await inactive.invoke('parts_pickup',{kind:'repair',id})).status,403);
 });
 test('master and former receiver have the same repair status permissions',async()=>{
  for(const role of ['mechanic','receiver','manager']){const s=setup(role),r=await s.invoke('me');assert.equal(r.status,200);const d=(await r.json()).data.status_permissions;assert.equal(d.can_mark_ready,true);assert.equal(d.can_issue,true);assert.equal(d.can_cancel,true);}
