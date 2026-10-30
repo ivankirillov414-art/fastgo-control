@@ -1,0 +1,30 @@
+name: Owner master profit
+on:
+  pull_request:
+    paths: ['workshop/master-profit.js','workshop/operations.js','workshop/owner-overview.js','workshop.html','supabase/functions/fastgo-operations/**','tests/owner-master-profit.test.mjs','scripts/check-owner-master-profit.cjs','.github/workflows/owner-master-profit.yml']
+  push:
+    branches: [main]
+    paths: ['workshop/master-profit.js','workshop/operations.js','workshop/owner-overview.js','workshop.html','supabase/functions/fastgo-operations/**','tests/owner-master-profit.test.mjs','scripts/check-owner-master-profit.cjs','.github/workflows/owner-master-profit.yml']
+permissions:
+  contents: read
+jobs:
+  owner-profit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium,firefox,webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/owner-master-profit.test.mjs tests/operations.test.mjs
+      - run: npm install --prefix /tmp/owner-profit playwright@1.62.1
+      - run: /tmp/owner-profit/node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
+      - run: NODE_PATH=/tmp/owner-profit/node_modules FASTGO_REPAIR_BROWSER=${{ matrix.browser }} node scripts/check-owner-master-profit.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-master-profit-${{ matrix.browser }}
+          path: browser-results/owner-master-profit/

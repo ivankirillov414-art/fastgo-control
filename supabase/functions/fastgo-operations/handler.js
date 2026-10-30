@@ -1,4 +1,5 @@
 import {records,alerts,history,analytics,defaults} from './model.js';
+import {masterProfit,payrollInput,preparePayroll} from './master-profit.js';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type,apikey','Access-Control-Allow-Methods':'POST,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const out=(x,status=200)=>new Response(JSON.stringify(x),{status,headers});
 export function createOperationsHandler({base,key,fetcher=fetch}){return async req=>{
@@ -10,8 +11,22 @@ export function createOperationsHandler({base,key,fetcher=fetch}){return async r
   const db=async(path,method='GET',body)=>{const r=await fetcher(base+'/rest/v1/'+path,{method,headers:service,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('Сервис временно недоступен');return r.status===204?null:r.json();};
   const member=(await db('workshop_members?profile_id=eq.'+encodeURIComponent(user.id)+'&active=eq.true&select=role'))[0];if(!member||member.role==='seller')return out({error:'Нет доступа'},403);
   const raw=await req.text();if(raw.length>12000)return out({error:'Слишком большой запрос'},400);const p=JSON.parse(raw),owner=['owner','developer'].includes(member.role);
-  if(!['dashboard','history','analytics','settings','save_settings','diagnostics'].includes(p.action))return out({error:'Неизвестное действие'},400);
-  if(['analytics','settings','save_settings','diagnostics'].includes(p.action)&&!owner)return out({error:'Доступно только владельцу'},403);
+  if(!['dashboard','history','analytics','settings','save_settings','diagnostics','master_analytics','salary_rate_save','salary_day_save'].includes(p.action))return out({error:'Неизвестное действие'},400);
+  if(['analytics','settings','save_settings','diagnostics','master_analytics','salary_rate_save','salary_day_save'].includes(p.action)&&!owner)return out({error:'Доступно только владельцу'},403);
+  if(['master_analytics','salary_rate_save','salary_day_save'].includes(p.action)){
+   const actor={id:user.id,role:member.role},members=await db('workshop_members?select=profile_id,name,role,active,created_at');
+   if(p.action==='master_analytics')return out({data:masterProfit((await db('rpc/workshop_native_snapshot','POST',{})).sheets,p,members)});
+   const value=payrollInput(p.action,p),fingerprint=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({action:p.action,...value}))))].map(x=>x.toString(16).padStart(2,'0')).join('');
+   const receipt=async()=>{const r=(await db('workshop_native_receipts?request_id=eq.'+value.request_id+'&select=actor_id,action,fingerprint,result'))[0];if(!r)return null;if(r.actor_id!==user.id||r.action!==p.action||r.fingerprint!==fingerprint)throw Object.assign(Error('Код операции уже использован'),{status:409});return r.result;};
+   let result=await receipt();if(result)return out({data:result});
+   for(let attempt=0;attempt<4;attempt++){
+    const snapshot=await db('rpc/workshop_native_snapshot','POST',{});result=await receipt();if(result)return out({data:result});
+    const prepared=preparePayroll(snapshot,p.action,value,actor,members);
+    const committed=await db('rpc/workshop_native_commit','POST',{p_actor:user.id,p_action:p.action,p_request_id:value.request_id,p_fingerprint:fingerprint,p_version:snapshot.version,p_changes:prepared.changes,p_result:prepared.result});
+    if(!committed.retry)return out({data:committed.result});
+   }
+   return out({error:'Данные изменились. Повторите ту же операцию.'},409);
+  }
   const config={...defaults,...(await db('workshop_operations_settings?id=eq.1&select=config'))[0]?.config};
   if(p.action==='settings')return out({data:config});
   if(p.action==='save_settings'){
@@ -25,5 +40,5 @@ export function createOperationsHandler({base,key,fetcher=fetch}){return async r
   if(p.action==='history'){let found;try{found=history(items,p);}catch(e){return out({error:e.message},400);}return out({data:{items:found.sort((a,b)=>String(b.created).localeCompare(String(a.created)))}});}
   if(!/^\d{4}-\d{2}-\d{2}$/.test(p.from||'')||!/^\d{4}-\d{2}-\d{2}$/.test(p.to||'')||p.from>p.to)return out({error:'Проверьте период'},400);
   return out({data:analytics(snapshot.sheets,p,config)});
- }catch{return out({error:'Не удалось загрузить данные. Повторите попытку.'},503);}
+ }catch(e){return out({error:e.status?e.message:'Не удалось загрузить данные. Повторите попытку.'},e.status||503);}
 };}
