@@ -1,7 +1,6 @@
 import {api,printApi,esc,sessionAvailable} from './core.js';
 import {renderDocument} from './documents.js';
 import {runPrintJob} from './print-worker.js';
-import {printDocumentType} from './print-document.js';
 const $=id=>document.getElementById(id);
 let me,stationId=localStorage.getItem('fastgo_print_station_id'),running=false,timer,busy=false;
 if(!stationId){stationId=crypto.randomUUID();localStorage.setItem('fastgo_print_station_id',stationId);}
@@ -14,7 +13,7 @@ function display(data){
 }
 async function prepare(job){
  $('station-document').innerHTML='';
- await renderDocument({me,mount:html=>{$('station-document').innerHTML=html;return true;},href:(page,p)=>'#'+page+'?'+new URLSearchParams(p)}, {kind:job.kind,id:job.record_id,type:printDocumentType(job)},0);
+ await renderDocument({me,mount:html=>{$('station-document').innerHTML=html;return true;},href:(page,p)=>'#'+page+'?'+new URLSearchParams(p)}, {kind:job.kind,id:job.record_id,type:'master'},0);
  await document.fonts?.ready;await Promise.all([...$('station-document').querySelectorAll('img')].map(img=>img.decode?.().catch(()=>{})||Promise.resolve()));
  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 }
@@ -23,7 +22,7 @@ async function poll(){
  try{
   const data=await printApi('status');display(data);
   if(!data.enabled||data.station_id!==stationId||data.owner_id!==me.profile_id){running=false;status('Приём заданий выключен или назначен другой ноутбук');return;}
-  const result=await printApi('claim',{station_id:stationId,request_id:claimToken,document_types:['master','completion']});
+  const result=await printApi('claim',{station_id:stationId,request_id:claimToken});
   if(result.job){
    status('Подготавливаем лист…');
    await runPrintJob(result.job,{prepare,call:(action,params)=>printApi(action,{...params,station_id:stationId,request_id:claimToken}),print:()=>window.print()});

@@ -58,6 +58,10 @@ async function request(event,{path:pathname,body={}}){
   try{const data=await remote(action,p,account);store.db.prepare("DELETE FROM cache WHERE actor=? AND key LIKE 'equipment_market_prices:%'").run(account);lastError='';notify({dataChanged:true});return {data};}
   catch(error){if(transient(error)){online=false;lastError=error.message;notify();}throw error;}
  }
+ if(action==='repair_act_save'){
+  if(store.pending(account).some(x=>x.kind==='repair'&&x.record_id===p.id))throw Error('Сначала синхронизируйте изменения этой карточки');
+  const data=await remote(action,p,account);store.cacheResponse(account,'get',{kind:'repair',id:p.id},{record:data});lastError='';notify({dataChanged:true});return {data};
+ }
  if(action==='preorder_save'){
   try{const data=await remote(action,p,account);store.db.prepare("DELETE FROM cache WHERE actor=? AND (key LIKE 'preorders:%' OR key LIKE 'preorder_get:%')").run(account);lastError='';notify({dataChanged:true});return {data};}
   catch(error){if(transient(error)){online=false;lastError=error.message;notify();}throw error;}
@@ -88,7 +92,7 @@ async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  let hidden,entry;try{
   const me=store.cache(account,'me')||await remote('me',{}).catch(e=>{if(!transient(e))throw e;return store.read(account,'me');});
   hidden=new BrowserWindow({show:false,width:1100,height:1400,webPreferences:{backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
-  entry={local:!cloudRecord,cloud:cloudRecord,context:{kind:p.kind||'repair',id:p.id,document_type:p.document_type??'master',me},resolve:null,reject:null};printWindows.set(hidden.webContents.id,entry);
+  entry={local:!cloudRecord,cloud:cloudRecord,context:{kind:p.kind||'repair',id:p.id,document_type:p.document_type??'master',completion_request_id:p.completion_request_id,me},resolve:null,reject:null};printWindows.set(hidden.webContents.id,entry);
   const ready=new Promise((resolve,reject)=>{entry.resolve=resolve;entry.reject=reject;});
   const deadline=setTimeout(()=>entry.reject(Error('Документ не успел загрузиться')),90000);
   try{await hidden.loadURL('fastgo://app/document-host.html');await ready;}finally{clearTimeout(deadline);}
@@ -105,7 +109,7 @@ async function localPrints(){if(updateInstalling||updateDraining||printBusy||!ac
 async function pollPrint(){if(updateInstalling||updateDraining||remoteBusy||printBusy||!actor||!store?.setting('remote_print'))return;remoteBusy=true;let job;
  try{// Claim validates the active station and owner atomically on the server.
   const result=await remotePrint('claim',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),document_types:['master','completion'],client_version:app.getVersion(),host:require('node:os').hostname(),printer_name:store.setting('printer')});job=result.job;if(!job)return;
-  await printRecord({kind:job.kind,id:job.record_id,document_type:job.document_type},{cloudRecord:true,key:job.id});
+  await printRecord({kind:job.kind,id:job.record_id,document_type:job.document_type,completion_request_id:job.completion_request_id},{cloudRecord:true,key:job.id});
   await remotePrint('complete',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),job_id:job.id});
  }catch(e){lastError=e.message;if(job&&!['dispatched','submitted'].includes(store.printExists(actor,job.id)?.state))await remotePrint('fail',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),job_id:job.id,error:e.message}).catch(()=>{});}
  finally{remoteBusy=false;notify();}

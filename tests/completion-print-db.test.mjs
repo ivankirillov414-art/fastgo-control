@@ -74,6 +74,22 @@ test('ordinary prepayment and an unconfirmed completion do not print an act',asy
  await commit(prepared);assert.equal(await count('workshop_print_jobs'),0);
  await assert.rejects(enqueue(),/not completed and paid/);
 });
+test('a paid act correction commits once, supersedes the old queued act and prints after the exact additional payment',async()=>{
+ await commit();
+ const snapshot=(await db.query('select public.workshop_native_snapshot() as value')).rows[0].value;
+ const editEngine=createNativeEngine(snapshot.sheets),current=editEngine.run('get',{kind:'repair',id:repair.id},owner).record,editId=randomUUID();
+ const edited=editEngine.run('repair_act_save',{id:repair.id,revision:current.revision,request_id:editId,works:[{name:'Уточнённая настройка',quantity:1,price:1800}],parts:[],total_amount:1800,document:{title:'Уточнённый акт',note:'Проверка'},reason:'Уточнение объёма работ'},owner);
+ const args=[owner.id,'repair_act_save',editId,'b'.repeat(64),2,JSON.stringify(editEngine.changes()),JSON.stringify(edited)];
+ await db.query('select public.workshop_native_commit($1,$2,$3,$4,$5,$6,$7)',args);
+ const replay=(await db.query('select public.workshop_native_commit($1,$2,$3,$4,$5,$6,$7) as result',args)).rows[0].result;assert.equal(replay.replayed,true);
+ assert.equal((await queue('claim',{types:['master','completion']})).job,null);assert.equal((await db.query('select status from public.workshop_print_jobs')).rows[0].status,'failed');
+ const afterEdit=(await db.query('select public.workshop_native_snapshot() as value')).rows[0].value;engine=createNativeEngine(afterEdit.sheets);version=3;request=randomUUID();params={request_id:request,repair_id:repair.id,expected_revision:edited.revision,amount:200,method:'card'};
+ await commit();assert.equal(await count('workshop_print_jobs'),2);
+ const act=(await queue('claim',{types:['master','completion']})).job;assert.equal(act.document_type,'completion');assert.equal(act.completion_request_id,editId);
+ await queue('dispatch',{job:act.id});await queue('complete',{job:act.id});assert.equal((await queue('claim',{types:['master','completion']})).job,null);
+ const finalSnapshot=(await db.query('select public.workshop_native_snapshot() as value')).rows[0].value;
+ const final=createNativeEngine(finalSnapshot.sheets).run('get',{kind:'repair',id:repair.id},owner).record;assert.equal(final.completion_act.title,'Уточнённый акт');assert.equal(final.paid_amount,1800);assert.equal(final.total_amount,1800);assert.equal(final.status,'issued');
+});
 test('an act submitted by an older client is not reprinted on payment replay or card reopen',async()=>{
  const old=randomUUID(),key='repair:'+repair.id+':'+repair.step_state.completion_request_id;
  await db.query(`insert into public.workshop_print_jobs(id,dedupe_key,kind,record_id,created_by,status) values($1,$2,'repair',$3,$4,'submitted')`,[old,key,repair.id,owner.id]);

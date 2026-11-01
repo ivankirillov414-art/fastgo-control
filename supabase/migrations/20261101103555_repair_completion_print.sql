@@ -92,6 +92,11 @@ begin
   update public.workshop_print_jobs set status='queued',claimed_by=null,claim_token=null,lease_until=null
    where status='claimed' and lease_until<now();
   if exists(select 1 from public.workshop_print_jobs where status='claimed') then return jsonb_build_object('job',null); end if;
+  -- An edited act may require another payment. Never print its obsolete queued
+  -- revision, including when the service laptop was offline during correction.
+  update public.workshop_print_jobs set status='failed',error='Акт изменён. Дождитесь оплаты текущей версии ремонта.'
+   where status='queued' and document_type='completion' and dedupe_key is distinct from
+    ('repair:'||record_id::text||':'||public.workshop_repair_completion_request(record_id)::text);
   select * into j from public.workshop_print_jobs where status='queued' and document_type=any(coalesce(p_document_types,array['master'])) order by created_at,id limit 1 for update skip locked;
   if j.id is null then return jsonb_build_object('job',null); end if;
   update public.workshop_print_jobs set status='claimed',claimed_by=p_actor,claim_token=p_request,lease_until=now()+interval '3 minutes',error=null where id=j.id returning * into j;
@@ -107,7 +112,7 @@ begin
  else raise exception 'Unknown print action';
  end if;
  if j.id is null then raise exception using errcode='40001',message='Print job changed; reload queue'; end if;
- return jsonb_build_object('job',to_jsonb(j));
+ return jsonb_build_object('job',to_jsonb(j)||case when j.document_type='completion' then jsonb_build_object('completion_request_id',split_part(j.dedupe_key,':',3)) else '{}'::jsonb end);
 end $$;
 revoke all on function public.workshop_print_queue(text,uuid,uuid,text,uuid,uuid,uuid,text,text,text[],text,text,text) from public,anon,authenticated;
 grant execute on function public.workshop_print_queue(text,uuid,uuid,text,uuid,uuid,uuid,text,text,text[],text,text,text) to service_role;

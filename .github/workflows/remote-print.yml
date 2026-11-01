@@ -6,6 +6,10 @@ on:
       - 'tests/remote-print.test.mjs'
       - 'tests/completion-print-db.test.mjs'
       - 'tests/completion-print-api.test.mjs'
+      - 'tests/repair-act.test.mjs'
+      - 'desktop/renderer/print-document.js'
+      - 'desktop/renderer/completion-renderer.js'
+      - 'supabase/functions/_shared/repair-act.js'
       - 'supabase/functions/fastgo-print-api/**'
       - 'supabase/functions/fastgo-warehouse/repair.js'
       - 'supabase/migrations/*repair_completion_print.sql'
@@ -22,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --check workshop/print-client.js && node --check workshop/print-station.js && node --check workshop/core.js && node --check workshop/orders.js && node --check workshop/app.js && node --test tests/remote-print.test.mjs tests/completion-print-api.test.mjs
+      - run: node --check workshop/print-client.js && node --check workshop/print-station.js && node --check workshop/core.js && node --check workshop/orders.js && node --check workshop/app.js && node --test tests/remote-print.test.mjs tests/completion-print-api.test.mjs tests/repair-act.test.mjs
       - name: Verify payment commit and completion print outbox in PostgreSQL
         run: |
           npm install --prefix "$RUNNER_TEMP/print-db" --no-audit --no-fund @electric-sql/pglite@0.3.14

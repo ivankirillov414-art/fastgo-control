@@ -35,3 +35,10 @@ modify('warehouse/web-update.js',s=>s.replace("../warehouse-desktop/update-clock
 fs.writeFileSync(path.join(out,'warehouse/update-clock.js'),fs.readFileSync(path.join(root,'warehouse-desktop/update-clock.cjs'),'utf8').replace('module.exports={createDailyCheck};','export {createDailyCheck};'));
 
 fs.cpSync(path.join(root,'warehouse-desktop/pc365-driver'),path.join(native,'pc365-driver'),{recursive:true});
+
+// Windows service document editor; retain the signed phone bundle unchanged.
+for(const name of ['repair-act.js','print-document.js'])fs.copyFileSync(path.join(__dirname,'renderer',name),path.join(out,'workshop',name));
+modify('workshop/repair-print.js',s=>s.slice(0,s.indexOf('export async function renderCompletionRepair('))+fs.readFileSync(path.join(__dirname,'renderer/completion-renderer.js'),'utf8'));
+modify('workshop/pending.js',s=>s.replace('new Set([',"new Set(['repair_act_save',"));
+modify('workshop/app.js',s=>s.replace("import {renderDocument} from './documents.js';","import {renderDocument} from './documents.js';\nimport {renderRepairActEditor} from './repair-act.js';").replace("page==='order'||page==='new'||page==='document'?","page==='order'||page==='new'||page==='document'||page==='repair-act'?").replace("else if(page==='document')await renderDocument(ctx,p,token);","else if(page==='document')await renderDocument(ctx,p,token);else if(page==='repair-act')await renderRepairActEditor(ctx,p,token);"));
+modify('workshop/repair-steps.js',s=>s.replace('const documentLink=(type,text)=>`<a class="btn secondary" href="${ctx.href(\'document\',{kind:\'repair\',id:r.id,type})}">${text}</a>`;', 'const documentLink=(type,text)=>`<a class="btn secondary" href="${ctx.href(\'document\',{kind:\'repair\',id:r.id,type})}">${text}</a>${type===\'completion\'?`<a class="btn secondary" href="${ctx.href(\'repair-act\',{id:r.id})}">Редактировать акт</a>`:\'\'}`;'));
