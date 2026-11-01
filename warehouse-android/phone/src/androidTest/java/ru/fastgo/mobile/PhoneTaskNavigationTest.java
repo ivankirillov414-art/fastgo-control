@@ -1,6 +1,7 @@
 package ru.fastgo.mobile;
 
 import android.graphics.Bitmap;
+import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -38,6 +39,11 @@ public class PhoneTaskNavigationTest {
  @Test public void installedMechanicOpensVisibleTasksAndChangesWorkPriceOffline() throws Exception {
   String fixture=read(InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("task-price-fixture.js"));
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   // The API 29 emulator GPU crashes in SkGlyph while rasterizing Cyrillic
+   // task rows ("Unknown mask format"). Use its software Canvas for this
+   // isolated interaction fixture. Exact signed release checks retain the
+   // application's normal renderer on every supported Android API.
+   scenario.onActivity(activity->((WebView)activity.findViewById(14001)).setLayerType(View.LAYER_TYPE_SOFTWARE,null));
    until(scenario,"document.readyState==='complete' && !!document.querySelector('#login input')");
    scenario.onActivity(activity->{
     WebView web=activity.findViewById(14001);WebViewClient original=web.getWebViewClient();
