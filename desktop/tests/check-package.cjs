@@ -22,7 +22,7 @@ assert(asar.extractFile(archive,'warehouse-native/label-printer-setup.ps1').leng
 console.log('PASS: all signed P2 driver bytes are preserved in the delivered common application');
 
 // The final archive must contain the same warehouse UI that passed source tests.
-for(const file of ['warehouse.html','warehouse/app.js','warehouse/services.js','warehouse/final-report.js','warehouse/style.css'])assert.deepEqual(asar.extractFile(archive,path.join('web',file)),fs.readFileSync(path.join(root,'web',file)),'Stale bundled UI: '+file);
+for(const file of ['warehouse.html','warehouse/app.js','warehouse/services.js','warehouse/final-report.js','warehouse/payment-corrections.js','warehouse/style.css'])assert.deepEqual(asar.extractFile(archive,path.join('web',file)),fs.readFileSync(path.join(root,'web',file)),'Stale bundled UI: '+file);
 assert(asar.extractFile(archive,'web/warehouse.html').toString().includes('Итоговый отчёт'));
 assert(asar.extractFile(archive,path.join('web','warehouse','services.js')).toString().includes('manual-payment-grid'));
 console.log('PASS: packaged warehouse payment and report assets match the tested UI');

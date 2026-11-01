@@ -66,7 +66,7 @@ jobs:
           make_latest=$(node scripts/windows-release-order.cjs "$VERSION" "$current")
           echo "Candidate $VERSION; current channel $current; promote=$make_latest"
           cat > /tmp/fastgo-release-notes.txt <<'NOTES'
-          Карточка товара: редактирование наименования и размера в общей базе с сохранением артикула, штрихкода, остатков, цен и фотографий. Защита от одновременных правок и безопасного повтора запроса. Редактор сервисного акта на ноутбуке и автоматическая печать акта после полной оплаты ремонта.
+          На кассовом ноутбуке в итоговом отчёте можно исправить сумму и способ оплаты или отменить ошибочную покупку, оплату ремонта, хранения и ручных работ. Сохраняются причина и история исправления. При отмене покупки её товары возвращаются на склад, а другие оплаты остаются на месте. Сохранены редактирование наименования и размера товара, редактор акта и автоматическая печать после полной оплаты ремонта.
           NOTES
           gh release create "$tag" --draft --latest=false --target "$BUILD_SHA" --title "FastGo для Windows $VERSION" --notes-file /tmp/fastgo-release-notes.txt release/dist/*.exe release/dist/*.blockmap release/dist/latest.yml release/dist/release-content.json release/FastGo-Windows-*.zip release/README.md release/SHA256SUMS.txt
           gh release edit "$tag" --draft=false --latest="$make_latest"

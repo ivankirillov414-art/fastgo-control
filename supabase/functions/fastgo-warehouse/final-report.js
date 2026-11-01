@@ -1,7 +1,8 @@
 import {fail} from './model.js';
+import {correctionIndex,annotatePayment} from './payment-corrections.js';
 // Read one consistent snapshot. A service payment also has a sale row;
 // prefer the payment journal so that money is counted exactly once.
-export function finalReport(sheets,p={}){
+export function finalReport(sheets,p={},options){
  const rows=name=>sheets[name]?.rows||[],methods={cash:'cash',card:'card',transfer:'transfer','Наличные':'cash','Карта':'card','Банковская карта':'card','Безналичный расчёт':'card','Перевод':'transfer'};
  const boundary=value=>{if(!value)return null;const n=Date.parse(value);if(!Number.isFinite(n))fail('Проверьте даты отчёта');return n;};
  const from=boundary(p.from),to=boundary(p.to);if(from!==null&&to!==null&&from>=to)fail('Начало периода должно быть раньше окончания');
@@ -13,5 +14,6 @@ export function finalReport(sheets,p={}){
  operations.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))||a.id.localeCompare(b.id));
  for(const item of operations){if(seen.has(item.id))continue;seen.add(item.id);const group=groups[item.method];if(!group||!Number.isFinite(item.amount))fail('В журнале есть операция с неизвестным способом оплаты или суммой',503);group.total+=Math.round(item.amount*100);group.count++;if((!p.method||p.method===item.method)&&group.count>group.offset&&group.items.length<group.limit)group.items.push(item);}
  for(const g of Object.values(groups))g.total/=100;
- return {groups:Object.values(groups),total:Object.values(groups).reduce((s,g)=>s+Math.round(g.total*100),0)/100,count:seen.size,generated_at:new Date().toISOString()};
+ if(options){const index=correctionIndex(sheets),kinds=new Map(payments.map(r=>['payment:'+r.payment_id,r['Тип']]));for(const group of Object.values(groups))group.items=group.items.map(item=>annotatePayment({...item,...(kinds.has(item.id)?{payment_kind:kinds.get(item.id)}:{})},index));}
+ return {groups:Object.values(groups),total:Object.values(groups).reduce((s,g)=>s+Math.round(g.total*100),0)/100,count:seen.size,generated_at:new Date().toISOString(),...(options?{can_manage_payments:options.can_manage===true}:{})};
 }

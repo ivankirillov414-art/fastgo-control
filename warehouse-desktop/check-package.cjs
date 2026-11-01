@@ -12,6 +12,8 @@ assert(entry);assert.equal(manifest.version,pkg.version);assert.equal(crypto.cre
 assert(asar.extractFile(archive,'backup-replica.cjs').toString().includes('class BackupReplica'));assert(asar.extractFile(archive,'backup-scheduler.cjs').toString().includes('class BackupScheduler'));assert(asar.extractFile(archive,path.join('web','warehouse','app-compat.js')).toString().includes('warehouseUpdateSafe'));
 for(const file of ['network-diagnostics.cjs','network-window.cjs','network-preload.cjs','network-snapshot.ps1','network.html','network.css','network-ui.js'])assert(asar.extractFile(archive,file).length>0,'Missing installed diagnostics: '+file);
 assert(asar.extractFile(archive,'printer-profiles.cjs').toString().includes('class PrinterProfiles'));
+for(const file of ['warehouse.html','warehouse/app.js','warehouse/final-report.js','warehouse/payment-corrections.js','workshop/notifications.js'])assert.deepEqual(asar.extractFile(archive,path.join('web',file)),fs.readFileSync(path.join(__dirname,'web',file)),'Stale payment editor asset: '+file);
+assert(asar.extractFile(archive,'web/warehouse.html').toString().includes('type="module" src="warehouse/app.js"'));
 (async()=>{
  stage='launch';console.log('Warehouse package check: '+stage);
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-warehouse-package-'));

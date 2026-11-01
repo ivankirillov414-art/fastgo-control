@@ -354,3 +354,16 @@ test('QR-prepared repair payment issues once across a lost reply and preserves a
  const retry=await h.request('checkout',params);assert.equal(retry.status,200,retry.error);assert.equal(retry.data.repair_completed,true);assert.equal((await h.request('checkout',params)).status,200);
  assert.equal(h.snap.sheets['Оплаты'].rows.length,1);assert.equal(raw['Оплачено'],1500);assert.equal(JSON.stringify(h.snap.sheets['Товары'].rows),stock);
 });
+
+test('cash correction API edits and cancels manual payments once and enforces trusted roles and station tokens',async()=>{
+ const h=await harness(),sale=(await h.request('work_payment',{request_id:randomUUID(),items:[{title:'Работа',quantity:1,unit_price:1600}],payment_method:'transfer'})).data;
+ const operation_id='sale:'+sale.id,preview=await h.request('payment_correction_preview',{operation_id});assert.equal(preview.status,200,preview.error);
+ const p={operation_id:preview.data.operation_id,expected_amount:1600,expected_method:'transfer',mode:'edit',amount:1500,method:'cash',reason:'Клиент оплатил наличными',request_id:randomUUID()};
+ for(const role of ['seller','mechanic','manager','receiver']){h.member.role=role;h.member.can_sell=true;assert.equal((await h.request('payment_correction',p)).status,403);}
+ h.member.role='owner';assert.equal((await h.request('payment_correction',p,'terminal')).status,403);assert.equal((await h.request('payment_correction',{...p,device_token:'forged'})).status,403);
+ h.member.role='admin';h.member.can_sell=true;const first=await h.request('payment_correction',p);assert.equal(first.status,200,first.error);assert.deepEqual((await h.request('payment_correction',p)).data,first.data);
+ assert.equal((await h.request('payment_correction',{...p,reason:'Другой запрос'})).status,409);assert.equal((await h.request('payment_correction_preview',{operation_id})).status,409);
+ const report=(await h.request('final_report')).data;assert.equal(report.total,1500);assert.equal(report.can_manage_payments,true);assert.equal(report.groups.find(g=>g.method==='transfer').total,0);
+ const next=first.data.replacement_operation_id;assert.equal((await h.request('payment_correction',{operation_id:next,mode:'void',request_id:randomUUID(),expected_amount:1500,expected_method:'cash',reason:'Ошибка'})).status,200);assert.equal((await h.request('final_report')).data.total,0);
+ h.member.role='seller';assert.equal((await h.request('final_report')).data.can_manage_payments,false);
+});

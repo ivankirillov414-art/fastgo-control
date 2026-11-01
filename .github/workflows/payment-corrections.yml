@@ -1,0 +1,18 @@
+name: Payment correction transactions
+on:
+  push:
+    paths: ['supabase/functions/fastgo-warehouse/**','supabase/migrations/*payment_corrections.sql','tests/payment-correction*','tests/warehouse-payment-corrections.test.mjs','.github/workflows/payment-corrections.yml']
+  pull_request:
+    paths: ['supabase/functions/fastgo-warehouse/**','supabase/migrations/*payment_corrections.sql','tests/payment-correction*','tests/warehouse-payment-corrections.test.mjs','.github/workflows/payment-corrections.yml']
+permissions:
+  contents: read
+jobs:
+  transaction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: node --test tests/warehouse.test.mjs tests/warehouse-payment-corrections.test.mjs tests/warehouse-final-report.test.mjs
+      - run: npm install --prefix "$RUNNER_TEMP/payment-db" --no-audit --no-fund @electric-sql/pglite@0.3.14
+      - run: FASTGO_PGLITE="$RUNNER_TEMP/payment-db/node_modules/@electric-sql/pglite" node --test tests/payment-corrections-db.test.mjs
