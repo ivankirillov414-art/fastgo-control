@@ -81,6 +81,11 @@ public class PhoneTaskNavigationTest {
    File output=new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getExternalFilesDir(null),"task-prices.png");
    Bitmap screenshot=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();assertNotNull(screenshot);
    try(FileOutputStream stream=new FileOutputStream(output)){assertTrue(screenshot.compress(Bitmap.CompressFormat.PNG,100,stream));}finally{screenshot.recycle();}
+   // Gradle uninstalls the test application and deletes its external files.
+   // Preserve the capture under shell-owned storage before that cleanup.
+   try(android.os.ParcelFileDescriptor capture=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("cp "+output.getAbsolutePath()+" /data/local/tmp/fastgo-task-prices.png")){
+    read(new android.os.ParcelFileDescriptor.AutoCloseInputStream(capture));
+   }
    js(scenario,"localStorage.removeItem('fastgo_workshop_session');true");
   }
  }
