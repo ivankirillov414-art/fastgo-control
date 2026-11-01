@@ -1,7 +1,7 @@
 {
   "package": "ru.fastgo.mobile",
-  "versionCode": 15,
-  "versionName": "1.0.14",
-  "url": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse-android/phone/release/FastGo-Android-1.0.14.apk",
-  "sha256": "76e38802e535dfedf31200f4515c648709430b30ca28b2a26589e2dcefc97087"
+  "versionCode": 16,
+  "versionName": "1.0.15",
+  "url": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse-android/phone/release/FastGo-Android-1.0.15.apk",
+  "sha256": "6a82618728319811afc7921be905fd904663e27da89f409653a67df15618cf2d"
 }
