@@ -17,5 +17,19 @@ fs.writeFileSync(wrapper,`const {app,BrowserWindow,ipcMain}=require('electron');
   assert.equal(geometry.rows,record.works.length+record.parts.length);assert.equal(geometry.codes,2);assert.equal(geometry.overflow,0);assert(geometry.scale>=.9,'fixture must remain legible');assert(geometry.height<=1000);assert(geometry.staff.includes(record.model));assert.equal(geometry.background,'rgb(255, 255, 255)');assert.equal(geometry.scheme,'light');
   console.log('PASS: '+name+' — one A4, all rows, no horizontal overflow, scale '+geometry.scale);
  }
+ // Exercise the same hidden native renderer with the queued completion purpose.
+ for(const [name,base] of Object.entries(fixtures).filter(([name])=>['short','long'].includes(name))){
+  const record={...base,status:'issued',paid_amount:base.total_amount,step_state:{completion_master_name:'Алексей',completion_at:'2026-11-01T10:00:00Z'}};
+  await app.evaluate((_electron,record)=>{globalThis.fixture=record;globalThis.fixtureOnline=true;},record);
+  // Context is read through the real renderer IPC boundary used for remote jobs.
+  await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('print-fixture');ipcMain.handle('print-fixture',(_e,type)=>({session:{access_token:'fixture',expires_at:4102444800},state:{online:true},record:{data:{record:globalThis.fixture,legal:{}}},context:{kind:'repair',id:globalThis.fixture.id,document_type:'completion',me:{role:'owner'}}})[type]);});
+  await page.goto(require('node:url').pathToFileURL(path.join(root,'web','document-host.html')).href);await page.waitForFunction(()=>document.documentElement.dataset.printReady==='yes');
+  const encoded=await app.evaluate(async()=>Buffer.from(await globalThis.window.webContents.printToPDF({pageSize:'A4',printBackground:true,preferCSSPageSize:true})).toString('base64'));
+  const bytes=Buffer.from(encoded,'base64'),pdf=await PDFDocument.load(bytes);fs.writeFileSync(path.join(dir,'completion-'+name+'.pdf'),bytes);
+  assert.equal(pdf.getPageCount(),1,'completion '+name+' must fit one A4');
+  assert.equal(await page.locator('h1').innerText(),'АКТ ВЫПОЛНЕННЫХ РАБОТ');assert.equal(await page.locator('[data-completion-master]').innerText(),'Алексей');
+  assert.equal(await page.locator('tbody tr').count(),record.works.length+record.parts.length);
+  console.log('PASS: completion '+name+' — native queued act, one A4, all prices and rows');
+ }
  assert.deepEqual(errors,[]);
  }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
