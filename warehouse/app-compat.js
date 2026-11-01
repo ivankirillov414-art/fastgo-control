@@ -1621,12 +1621,15 @@
         }
       };
     }
+    function editButton(field, label) {
+      return editable() ? '<button type="button" class="pencil" data-edit="' + field + '" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C ' + label + '">' + pencil + "</button>" : "";
+    }
     function metric(field, label, value) {
       return '<section class="product-metric" data-metric="' + field + '"><div class="metric-label">' + label + (editable() ? '<button type="button" class="pencil" data-edit="' + field + '" aria-label="\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C ' + (field === "quantity" ? "\u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0443\u044E \u0446\u0435\u043D\u0443" : "\u0446\u0435\u043D\u0443") + '">' + pencil + "</button>" : "") + "</div><strong>" + value + "</strong><div data-editor></div></section>";
     }
     function draw() {
       if (!dialog || !selected) return;
-      dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><h2>' + esc2(selected.name) + '</h2><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438", money2(selected.retail_price)) + metric("unit_cost", "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430", money2(selected.unit_cost)) + '</div><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc2(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc2(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc2(selected.barcode || "") + "</b>" + (selected.barcode ? '<button type="button" class="primary" data-print-barcode>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</button>' : "") + '</div><p class="product-error" role="alert"></p>';
+      dialog.innerHTML = '<button class="product-close" type="button" data-close aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443">\xD7</button><div class="product-main"><section class="product-name" data-metric="name"><div class="product-name-heading"><h2>' + esc2(selected.name) + "</h2>" + editButton("name", "\u043D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435") + '</div><div data-editor></div></section><div class="product-metrics">' + metric("quantity", "\u041E\u0441\u0442\u0430\u0442\u043E\u043A", selected.quantity + " <span>\u0448\u0442.</span>") + metric("retail_price", "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438", money2(selected.retail_price)) + metric("unit_cost", "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430", money2(selected.unit_cost)) + '</div><section class="product-size" data-metric="model"><div><span>\u0420\u0430\u0437\u043C\u0435\u0440</span>' + editButton("model", "\u0440\u0430\u0437\u043C\u0435\u0440") + "</div><b>" + esc2(selected.model || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b><div data-editor></div></section><div class="product-sku"><span>\u0410\u0440\u0442\u0438\u043A\u0443\u043B</span><b>' + esc2(selected.sku || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D") + '</b></div></div><div class="product-barcode"><span>\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434</span>' + (selected.barcode ? '<svg id="product-barcode" role="img" aria-label="\u0428\u0442\u0440\u0438\u0445\u043A\u043E\u0434 ' + esc2(selected.barcode) + '"></svg>' : "<p>\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D</p>") + "<b>" + esc2(selected.barcode || "") + "</b>" + (selected.barcode ? '<button type="button" class="primary" data-print-barcode>\u041F\u0435\u0447\u0430\u0442\u044C \u0448\u0442\u0440\u0438\u0445\u043A\u043E\u0434\u043E\u0432</button>' : "") + '</div><p class="product-error" role="alert"></p>';
       const toolbar = document.createElement("div");
       toolbar.className = "product-dialog-toolbar";
       const title = document.createElement("span");
@@ -1657,8 +1660,10 @@
       editing = field;
       pending2 = null;
       draw();
-      const min = field === "quantity" && !equipmentType(selected) ? -1e6 : 0, max = field === "quantity" ? 1e6 : 1e8, host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
-      host.innerHTML = '<form class="metric-editor"><label>' + (field === "quantity" ? "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442." : field === "unit_cost" ? "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD" : "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD") + '<input type="number" min="' + min + '" max="' + max + '" step="' + (field === "quantity" ? "1" : "0.01") + '" value="' + ((_a3 = selected[field]) != null ? _a3 : 0) + '" required aria-label="' + (field === "quantity" ? "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A" : field === "unit_cost" ? "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430" : "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430") + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
+      const text = field === "name" || field === "model", min = field === "quantity" && !equipmentType(selected) ? -1e6 : 0, max = field === "quantity" ? 1e6 : 1e8, host = dialog.querySelector('[data-metric="' + field + '"] [data-editor]');
+      const label = { name: "\u041D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435", model: "\u0420\u0430\u0437\u043C\u0435\u0440", quantity: "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E, \u0448\u0442.", unit_cost: "\u0417\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430, \u20BD", retail_price: "\u0426\u0435\u043D\u0430 \u043F\u0440\u043E\u0434\u0430\u0436\u0438, \u20BD" }[field], aria = { name: "\u041D\u043E\u0432\u043E\u0435 \u043D\u0430\u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435", model: "\u041D\u043E\u0432\u044B\u0439 \u0440\u0430\u0437\u043C\u0435\u0440", quantity: "\u041D\u043E\u0432\u044B\u0439 \u043E\u0441\u0442\u0430\u0442\u043E\u043A", unit_cost: "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043A\u0443\u043F\u043E\u0447\u043D\u0430\u044F \u0446\u0435\u043D\u0430", retail_price: "\u041D\u043E\u0432\u0430\u044F \u0446\u0435\u043D\u0430" }[field];
+      const attributes = text ? 'type="text" maxlength="' + (field === "name" ? 200 : 120) + '"' + (field === "name" ? " required" : "") : 'type="number" min="' + min + '" max="' + max + '" step="' + (field === "quantity" ? "1" : "0.01") + '" required';
+      host.innerHTML = '<form class="metric-editor"><label>' + label + "<input " + attributes + ' value="' + esc2((_a3 = selected[field]) != null ? _a3 : text ? "" : 0) + '" aria-label="' + aria + '"></label><div><button class="primary" type="submit">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button><button type="button" data-cancel>\u041E\u0442\u043C\u0435\u043D\u0430</button></div></form>';
       const input = host.querySelector("input");
       input.focus();
       input.select();
@@ -1670,12 +1675,12 @@
       host.querySelector("form").onsubmit = (e) => {
         var _a4;
         e.preventDefault();
-        const part = selected, value = Number(input.value), field2 = editing;
-        if (input.value.trim() === "" || !Number.isFinite(value) || value < min || value > max || field2 === "quantity" && !Number.isInteger(value) || field2 !== "quantity" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
+        const part = selected, field2 = editing, value = text ? input.value.trim() : Number(input.value);
+        if (text ? field2 === "name" && !value || value.length > (field2 === "name" ? 200 : 120) || /[\x00-\x1f\x7f]/.test(value) : input.value.trim() === "" || !Number.isFinite(value) || value < min || value > max || field2 === "quantity" && !Number.isInteger(value) || field2 !== "quantity" && Math.abs(value * 100 - Math.round(value * 100)) > 1e-5) {
           dialog.querySelector(".product-error").textContent = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435";
           return;
         }
-        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid2(), part_id: part.id, field: field2, value, expected: (_a4 = part[field2]) != null ? _a4 : 0 };
+        if (!pending2 || pending2.value !== value) pending2 = { request_id: uuid2(), part_id: part.id, field: field2, value, expected: (_a4 = part[field2]) != null ? _a4 : text ? "" : 0 };
         const payload = { ...pending2 };
         void run2(async () => {
           input.disabled = true;
@@ -4221,6 +4226,7 @@
     shell(html);
   }, home, run, message, load, save: save2, refresh: catalog, repair: (q) => repair.terminal(q), stationRepair: (q, id) => repair.station(q, id), canOpen: canReceiveIncoming, manual: () => run(showManualPayment) });
   var call = (action, p = {}) => {
+    if (action === "inventory_edit" && ["name", "model"].includes(p.field)) return serviceApi(action, p);
     if (!device && document.body.dataset.readonly === "true") {
       if (action === "catalog") return api("service_catalog");
       if (action === "inventory_edit") return serviceApi(action, p);

@@ -181,6 +181,30 @@ test('completed history cannot hide an older active scan document',async()=>{
  const result=await h.request('live_jobs');assert.equal(result.status,200);assert.deepEqual(result.data.map(x=>x.id),[id]);
 });
 
+test('name and size edits preserve product identity, stock, prices and images and audit a retry once',async()=>{
+ const h=await harness(),row=h.snap.sheets['Товары'].rows[0];row['Артикул / SKU']='FGP-037';row['Фото URL']='native:retained-photo';
+ const name={request_id:randomUUID(),part_id:part,field:'name',expected:'Колодки',value:'Амортизатор «Max Speed»'};
+ const saved=await h.request('inventory_edit',name);assert.equal(saved.status,200,saved.error);assert.equal(saved.data.name,name.value);
+ assert.equal((await h.request('inventory_edit',name)).status,200);assert.equal(h.snap.sheets['События'].rows.length,1);
+ assert.equal((await h.request('inventory_edit',{...name,request_id:randomUUID(),value:'Устаревшая правка'})).status,409);
+ const model={request_id:randomUUID(),part_id:part,field:'model',expected:'',value:'10 × 2,5 / 280 мм'};
+ const sized=await h.request('inventory_edit',model);assert.equal(sized.status,200,sized.error);assert.equal(sized.data.model,model.value);assert.equal(sized.data.name,name.value,'size editing preserves a rename from another device');
+ assert.equal((await h.request('inventory_edit',model)).status,200);assert.equal(h.snap.sheets['События'].rows.length,2);assert.equal((await h.request('inventory_edit',{...model,value:'другая'})).status,409);
+ assert.equal(row.product_id,part);assert.equal(row['Штрих-код'],'FGP-00000001');assert.equal(row['Артикул / SKU'],'FGP-037');assert.equal(row['Фото URL'],'native:retained-photo');assert.equal(row['Остаток, шт.'],5);assert.equal(row['Цена закупки, ₽'],100);assert.equal(row['Цена продажи, ₽'],300);assert.equal(h.snap.sheets['Движения склада'].rows.length,0);assert.equal(h.snap.sheets['Оплаты'].rows.length,0);
+ assert.deepEqual(h.snap.sheets['События'].rows.map(x=>x['Действие']),['product_name_update','product_size_update']);
+ assert.equal((await h.request('inventory_edit',{...model,request_id:randomUUID(),expected:model.value,value:''})).status,200,'optional size can be cleared');
+});
+
+test('name and size edits reject invalid text, duplicate products and unauthorized callers before writes',async()=>{
+ const h=await harness(),name={request_id:randomUUID(),part_id:part,field:'name',expected:'Колодки',value:'Амортизатор'};
+ for(const value of ['', ' ', 'x'.repeat(201), 'Новая\nстрока', 12, null])assert.equal((await h.request('inventory_edit',{...name,value})).status,400);
+ assert.equal((await h.request('inventory_edit',{...name,field:'model',expected:'',value:'x'.repeat(121)})).status,400);
+ h.snap.sheets['Товары'].rows.push({...h.snap.sheets['Товары'].rows[0],__row:3,product_id:randomUUID(),'Модель / название':'Амортизатор'});
+ assert.equal((await h.request('inventory_edit',name)).status,409);
+ assert.equal((await h.request('inventory_edit',{...name,value:'Другой товар'},'terminal')).status,403);h.member.role='seller';assert.equal((await h.request('inventory_edit',{...name,value:'Другой товар'})).status,403);
+ assert.equal(h.receipts.length,0);assert.equal(h.snap.sheets['События'].rows.length,0);
+});
+
 test('warehouse pencil sets zero stock with an audited correction and idempotent retry',async()=>{
  const h=await harness(),p={request_id:randomUUID(),part_id:part,field:'quantity',expected:5,value:0};
  const saved=await h.request('inventory_edit',p);assert.equal(saved.status,200,saved.error);assert.equal(saved.data.quantity,0);
