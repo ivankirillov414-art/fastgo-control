@@ -37,7 +37,7 @@ const {randomUUID}=require('node:crypto');
    return route.fulfill({headers,json:{data}});
   });
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(base+'/workshop.html#owner-analytics?tab=masters&to=2026-10-03');
+   await page.goto(base+'/workshop.html#owner-analytics?tab=masters&from=2026-10-01&to=2026-10-03');
   await page.getByRole('heading',{name:'Прибыль по мастерам',exact:true}).waitFor();
   await page.getByRole('button',{name:'Расим',exact:true}).click();await page.locator('[data-day="2026-10-02"]').waitFor();
   assert.equal(await page.locator('#owner-period').isVisible(),false);assert.equal(await page.locator('.mp-metrics').innerText().then(x=>x.includes('750')),true);
