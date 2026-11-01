@@ -69,7 +69,7 @@ jobs:
        adb shell svc wifi disable
        adb shell svc data disable
        cd warehouse-android && gradle :phone:connectedDebugAndroidTest --no-daemon || { adb logcat -d -t 1000; adb shell dumpsys activity activities; exit 1; }
-       adb pull /sdcard/Android/data/ru.fastgo.mobile.test/files/task-prices.png phone/build/task-prices.png
+       adb pull /sdcard/Android/data/ru.fastgo.mobile.test/files/task-prices.png warehouse-android/phone/build/task-prices.png
    - uses: actions/upload-artifact@v4
      with:
       name: fastgo-android-phone-signing
