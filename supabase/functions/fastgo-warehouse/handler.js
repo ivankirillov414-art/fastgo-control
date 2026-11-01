@@ -1,4 +1,5 @@
 import {unknownScan} from './unknown.js';
+import {paymentCorrections,canCorrectPayments} from './payment-corrections.js';
 import {finalReport} from './final-report.js';
 import {repairScan} from './repair-scan.js';
 import {cancelDocument} from './cancel.js';
@@ -50,6 +51,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(!permittedIds.has(stationId))fail('Этот ноутбук не разрешён для ТСД',403);
  if(device.kind==='terminal'&&!(await db('workshop_warehouse_devices','id=eq.'+stationId+'&active=eq.true&select=id')).length)fail('Складское рабочее место отключено',403);
  const station=()=>{if(device.kind!=='station')fail('Операция доступна только складскому ноутбуку',403);};
+ const correction=await paymentCorrections(action,p,{db,actor,device,stationName:device.name,digest});if(correction!==undefined)return out({data:correction});
  const diagnostic=await deviceStatus(action,p,{db,device,stationId});if(diagnostic!==undefined)return out({data:diagnostic});
  const issue=await partsIssue(action,p,{db,actor,device,stationId,key,digest});if(issue!==undefined)return out({data:issue});
  const g=nativeClient({db,actor,google:async()=>fail('Недоступно',503),storage:{}});
@@ -84,7 +86,7 @@ export function createHandler({base,key,fetcher=fetch}){return async req=>{if(re
  if(action==='queue'){station();return out({data:(await db('workshop_warehouse_queue','station_id=eq.'+stationId+'&state=neq.done&order=created_at.asc&limit=100')).filter(x=>!x.payload.live&&x.payload.kind!=='unknown')});}
  if(action==='job'){if(!id(p.id))fail('Неверная корзина');const job=(await db('workshop_warehouse_queue','id=eq.'+p.id+'&station_id=eq.'+stationId+(device.kind==='terminal'?'&terminal_id=eq.'+device.id:'')))[0]||null;if(job?.payload.kind==='repair'&&job.state!=='done')job.repair=repairQuote(await db('rpc/workshop_native_snapshot','','POST',{}),job.payload.repair_id,actor);return out({data:job});}
  if(action==='receipt'){if(!['owner','developer','seller'].includes(member.role))fail('Нет права принимать товар',403);if(!String(p.note||'').trim())fail('Укажите поставщика / документ');return out({data:await mutate('stock_receive',{request_id:p.request_id,note:String(p.note).slice(0,500),items:items(p.items)})});}
- if(action==='final_report'){station();const snapshot=await db('rpc/workshop_native_snapshot','','POST',{});return out({data:finalReport(snapshot.sheets,p)});}
+ if(action==='final_report'){station();const snapshot=await db('rpc/workshop_native_snapshot','','POST',{});return out({data:finalReport(snapshot.sheets,p,{can_manage:canCorrectPayments(actor)})});}
  if(action==='cash_state'){station();return out({data:await g('cash_state')});}
  if(action==='shift_open'){station();return out({data:await mutate('shift_open',{request_id:p.request_id,register:String(p.register||device.name).slice(0,80),opening_cash:Number(p.opening_cash)})});}
  if(action==='checkout'){
