@@ -2,6 +2,9 @@ name: FastGo public channel auto-update audit
 on:
  pull_request:
   paths: ['.github/workflows/phone-public-update.yml','scripts/audit-phone-auto-update.cjs']
+ push:
+  branches: [main]
+  paths: ['warehouse-android/phone/update.json']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:
