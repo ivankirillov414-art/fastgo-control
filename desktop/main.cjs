@@ -75,7 +75,11 @@ async function request(event,{path:pathname,body={}}){
   if(action==='me'&&!warming)setTimeout(warm,200);
   if(action==='list')return {data:store.read(account,action,p)};
   return {data};
- }catch(e){if(!transient(e))throw e;online=false;lastError=e.message;notify();return {data:store.read(account,action,p),offline:true};}
+ }catch(e){if(!transient(e))throw e;online=false;lastError=e.message;notify();
+  // A remote act must reflect the committed cash total, including a cashier's
+  // final price override. Never print the pre-payment SQLite copy on a timeout.
+  if(printWindows.get(event.sender.id)?.cloud)throw e;
+  return {data:store.read(account,action,p),offline:true};}
 }
 async function printRecord(p,{cloudRecord=false,key=randomUUID()}={}){
  if(!actor)throw Error('Войдите в FastGo');const account=actor,printer=store.setting('printer');if(!printer)throw Error('Выберите принтер в настройках приложения');
