@@ -1,12 +1,14 @@
 {
-  "file": "FastGo-Android-1.0.13.apk",
+  "file": "FastGo-Android-1.0.14.apk",
   "package": "ru.fastgo.mobile",
-  "version": "1.0.13",
-  "source_commit": "b126f59397e4a185d94d5d9e0b8a35157900bc4c",
-  "unsigned_sha256": "54e11ef9cdc295dd5a2d2accb94be3ead3698c30565afe1c09eba422d0011f18",
-  "sha256": "602f19ee98a0dd44c05e56250aeeea94424ae802baa13120545c01ea2c8e5b0b",
+  "version": "1.0.14",
+  "source_commit": "a8d2b993f6485f629bbe217225cdefc456a1ac63",
+  "unsigned_sha256": "628f679dca6aac334a6dd31b87dcfb113abb1d3dc2986e4d79d433c9e4a1a2fb",
+  "sha256": "76e38802e535dfedf31200f4515c648709430b30ca28b2a26589e2dcefc97087",
   "signing": "local private key, never uploaded",
   "signature_verified": true,
-  "built_and_debug_emulator_tested": true,
-  "release_device_tests": "pending"
+  "built_and_debug_emulator_tested": false,
+  "release_device_tests": "pending",
+  "task_navigation": "visible primary mobile tab; assigned work price editing tested offline in installed Android WebView",
+  "verification_status": "candidate: all required checks must pass on the signed package before publication"
 }
