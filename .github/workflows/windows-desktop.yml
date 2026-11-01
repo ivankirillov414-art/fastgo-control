@@ -56,10 +56,18 @@ jobs:
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node desktop/tests/print-layout.cjs
       - name: Verify native photo cache persistence
+        # The service editor runs from the same packaged renderer assets.
         shell: pwsh
         run: |
           $env:FASTGO_PLAYWRIGHT = "$env:RUNNER_TEMP/fastgo-playwright"
           node scripts/check-part-photo-cache-native.cjs
+      - name: Verify service act editor and printable amended totals
+        shell: pwsh
+        run: |
+          node "$env:RUNNER_TEMP/fastgo-playwright/node_modules/playwright/cli.js" install chromium
+          $env:NODE_PATH = "$env:RUNNER_TEMP/fastgo-playwright/node_modules"
+          node scripts/check-service-act-editor.cjs
+          node scripts/check-completion-print-browser.cjs
       - name: Verify stable screen during background polling
         shell: pwsh
         run: |
