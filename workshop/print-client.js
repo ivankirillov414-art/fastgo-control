@@ -27,7 +27,7 @@ export async function renderPrintSettings(ctx,token){
 
 export async function enqueueRepairCompletion(record,actor){
  const request_id=record.step_state?.completion_request_id;if(!request_id||record.step_state?.local_pending)return false;
- const job={kind:'repair',id:record.id,request_id},jobs=pending(actor);
+ const job={kind:'repair',id:record.id,request_id,document_type:'completion'},jobs=pending(actor);
  if(!jobs.some(x=>x.request_id===request_id)){jobs.push(job);save(actor,jobs);}
  const result=await printApi('enqueue',job);save(actor,pending(actor).filter(x=>x.request_id!==request_id));return result?.enabled!==false;
 }

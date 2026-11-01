@@ -27,6 +27,9 @@ Deno.serve(async req=>{
   if(['claim','dispatch','complete','fail','activate'].includes(action)&&!uuid(p.station_id))fail('Укажите ноутбук');
   if(['claim','dispatch','complete','fail'].includes(action)&&!uuid(p.request_id))fail('Неверный код получателя');
   if(['dispatch','complete','fail','retry'].includes(action)&&!uuid(p.job_id))fail('Укажите задание');
+  if(p.document_type!==undefined&&!['master','completion'].includes(p.document_type))fail('Неверный шаблон печати');
+  if(p.document_types!==undefined&&(!Array.isArray(p.document_types)||p.document_types.length>2||!p.document_types.every(t=>['master','completion'].includes(t))))fail('Неверные возможности печати');
+  if(p.client_version!==undefined&&!/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(p.client_version))fail('Неверная версия приложения');
   if(action==='enqueue'){
    const current=await adminRest('rpc/workshop_print_queue',{p_action:'status',p_actor:user.id});if(!current.enabled)return out({data:{enabled:false}});
    if(!uuid(p.id)||!uuid(p.request_id)||!['repair','storage'].includes(p.kind))fail('Укажите карточку');
@@ -34,7 +37,7 @@ Deno.serve(async req=>{
    const r=await fetch(BASE+'/functions/v1/fastgo-workshop-api',{method:'POST',headers:{apikey:KEY,Authorization:auth,'Content-Type':'application/json'},body:JSON.stringify({action:'get',params:{kind:p.kind,id:p.id}}),signal:AbortSignal.timeout(90000)});
    const result=await r.json();if(!r.ok||!result.data?.record)fail(result.error||'Карточка недоступна',r.status===403?403:400);
   }
-  const data=await adminRest('rpc/workshop_print_queue',{p_action:action,p_actor:user.id,p_station:p.station_id||null,p_kind:p.kind||null,p_record:p.id||null,p_request:p.request_id||null,p_job:p.job_id||null,p_error:String(p.error||'').slice(0,500)});
+  const data=await adminRest('rpc/workshop_print_queue',{p_action:action,p_actor:user.id,p_station:p.station_id||null,p_kind:p.kind||null,p_record:p.id||null,p_request:p.request_id||null,p_job:p.job_id||null,p_error:String(p.error||'').slice(0,500),p_document_type:p.document_type??'master',p_document_types:p.document_types??['master'],p_client_version:p.client_version||null,p_host:String(p.host||'').slice(0,80)||null,p_printer_name:String(p.printer_name||'').slice(0,200)||null});
   return out({data});
  }catch(e){return out({error:e.status?e.message:'Очередь печати временно недоступна'},e.status||503);}
 });
