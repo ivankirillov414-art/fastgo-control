@@ -1,3 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
- <application><activity android:name=".UpdateProbeActivity" android:exported="true"/></application>
+ <!-- The old API 29 emulator GPU crashes in SkGlyph while serializing Cyrillic
+      glyphs. Disable window acceleration only for that debug/test runtime.
+      Exact signed release tests retain production rendering on every API. -->
+ <application android:hardwareAccelerated="@bool/phone_debug_acceleration"><activity android:name=".UpdateProbeActivity" android:exported="true"/></application>
 </manifest>
