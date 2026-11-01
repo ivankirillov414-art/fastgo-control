@@ -74,6 +74,13 @@ test('ordinary prepayment and an unconfirmed completion do not print an act',asy
  await commit(prepared);assert.equal(await count('workshop_print_jobs'),0);
  await assert.rejects(enqueue(),/not completed and paid/);
 });
+test('an act submitted by an older client is not reprinted on payment replay or card reopen',async()=>{
+ const old=randomUUID(),key='repair:'+repair.id+':'+repair.step_state.completion_request_id;
+ await db.query(`insert into public.workshop_print_jobs(id,dedupe_key,kind,record_id,created_by,status) values($1,$2,'repair',$3,$4,'submitted')`,[old,key,repair.id,owner.id]);
+ await commit();assert.equal(await count('workshop_print_jobs'),1);
+ assert.equal((await enqueue('master')).job.id,old);assert.equal((await enqueue()).job.status,'submitted');
+ assert.equal((await queue('claim',{types:['master','completion']})).job,null);
+});
 test('an issued repair with an unpaid balance cannot enqueue a completion act',async()=>{
  await db.query(`update public.workshop_native_rows set data=data||$1::jsonb where sheet='Ремонты' and data->>'repair_id'=$2`,[JSON.stringify({'Статус':'Выдан','Оплачено':800}),repair.id]);
  await assert.rejects(enqueue(),/not completed and paid/);assert.equal(await count('workshop_print_jobs'),0);

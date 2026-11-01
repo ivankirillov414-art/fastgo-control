@@ -65,7 +65,9 @@ begin
    if completion_request is null then raise exception 'Repair is not completed and paid'; end if;
    request:=completion_request;
   end if;
-  dedupe:=p_kind||':'||p_record::text||':'||case when purpose='completion' then 'completion:' else '' end||request::text;
+  -- Keep legacy completion keys: a previously submitted act must not print again
+  -- merely because its card is opened after this update.
+  dedupe:=p_kind||':'||p_record::text||':'||request::text;
   insert into public.workshop_print_jobs(dedupe_key,kind,record_id,created_by,document_type)
    values(dedupe,p_kind,p_record,p_actor,purpose) on conflict(dedupe_key) do nothing;
   select * into j from public.workshop_print_jobs where dedupe_key=dedupe;
