@@ -33,7 +33,7 @@ public class PhoneTaskNavigationTest {
  }
  private void until(ActivityScenario<MainActivity> scenario,String condition) throws Exception {
   for(int attempt=0;attempt<100;attempt++){if("true".equals(js(scenario,condition)))return;Thread.sleep(150);}
-  fail("Installed task interface did not become ready: "+condition+"; "+js(scenario,"document.body.innerText.slice(0,1200)"));
+  fail("Installed task interface did not become ready: "+condition+"; "+js(scenario,"JSON.stringify({text:document.body.innerText.slice(0,1200),fixture:window.phoneTaskFixture})"));
  }
  @Test public void installedMechanicOpensVisibleTasksAndChangesWorkPriceOffline() throws Exception {
   String fixture=read(InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("task-price-fixture.js"));
