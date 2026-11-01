@@ -57,7 +57,9 @@ public class PhoneTaskNavigationTest {
      @Override public void onPageFinished(WebView view,String url){original.onPageFinished(view,url);}
      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return original.shouldOverrideUrlLoading(view,request);}
     });
-    web.loadUrl(MainActivity.HOME+"#account");
+    // A hash-only change keeps the existing document alive. Force a fresh
+    // document so the offline session is installed before bundled modules run.
+    web.loadUrl(MainActivity.HOME+"?phone_task_fixture=1#account");
    });
    until(scenario,"!!window.phoneTaskFixture && !!document.querySelector('.mobile-nav a[href=\"#tasks\"]')");
    assertEquals("true",js(scenario,"(()=>{const a=document.querySelector('.mobile-nav a[href=\"#tasks\"]');return innerWidth<=760 && a.getBoundingClientRect().width>0 && a.getBoundingClientRect().height>0;})()"));
