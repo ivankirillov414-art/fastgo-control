@@ -2,10 +2,12 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const pkg='ru.fastgo.mobile.test',out=path.resolve('browser-results/android-phone-'+process.env.FASTGO_ANDROID_API+'/self-update');
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:45000}),pause=ms=>new Promise(r=>setTimeout(r,ms));
 const version=()=>Number(adb('shell','dumpsys','package',pkg).match(/versionCode=(\d+)/)?.[1]);
-async function dump(){adb('shell','uiautomator','dump','/sdcard/fastgo-self-update.xml');return adb('shell','cat','/sdcard/fastgo-self-update.xml');}
+const {dumpUi,prepare}=require('./android-emulator-ui.cjs');
+const dump=()=>dumpUi('/sdcard/fastgo-self-update.xml');
 (async()=>{
  assert.equal(adb('shell','getprop','ro.kernel.qemu').trim(),'1','Self-update fixture may only run on an emulator');
  const apk=process.env.FASTGO_SELFUPDATE_APK;assert(apk&&fs.existsSync(apk),'Debug base APK missing');fs.mkdirSync(out,{recursive:true});
+ await prepare(out);
  adb('install','-r',apk);const before=version();assert(before>0,'Base version missing');
  // This grants the test app the same install-source permission a user may grant in Android settings.
  adb('shell','appops','set',pkg,'REQUEST_INSTALL_PACKAGES','allow');
