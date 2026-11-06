@@ -1,14 +1,13 @@
 {
-  "file": "FastGo-Android-1.0.15.apk",
+  "file": "FastGo-Android-1.0.16.apk",
   "package": "ru.fastgo.mobile",
-  "version": "1.0.15",
-  "source_commit": "1e622fc89d580f9face8c327190947788f3fff49",
-  "unsigned_sha256": "1f6e73602b5b4c7b328851d75758ba89c2445cbe2aebd182a0db754189b4a314",
-  "sha256": "6a82618728319811afc7921be905fd904663e27da89f409653a67df15618cf2d",
+  "version": "1.0.16",
+  "source_commit": "c46b14b88e79dfa585fd9711f11a5ff752b0f782",
+  "unsigned_sha256": "94f95dee1855670a782ee1818084d12ed9d20f289ad4c4fadbca04df431bf3a1",
+  "sha256": "929bfe262f4f37faeb2c68e0621e6010442c681c2a4799a0537251cfb9519927",
   "signing": "local private key, never uploaded",
   "signature_verified": true,
   "built_and_debug_emulator_tested": false,
   "release_device_tests": "pending",
-  "product_details": "shared name and size editing; Chromium/WebKit and isolated handler checks passed; stock/prices/barcodes/photos preserved",
-  "verification_status": "candidate: all signed-package and installed-UI gates must pass before publication"
+  "service_editing": "visible shared service editors; independent QA passed; signed installation gates pending"
 }
