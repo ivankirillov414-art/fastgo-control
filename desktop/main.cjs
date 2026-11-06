@@ -58,6 +58,13 @@ async function request(event,{path:pathname,body={}}){
   try{const data=await remote(action,p,account);store.db.prepare("DELETE FROM cache WHERE actor=? AND key LIKE 'equipment_market_prices:%'").run(account);lastError='';notify({dataChanged:true});return {data};}
   catch(error){if(transient(error)){online=false;lastError=error.message;notify();}throw error;}
  }
+ if(action==='service_edit'){
+  if(p.group!=='customer'&&store.pending(account).some(x=>x.kind==='repair'&&x.record_id===p.id))throw Object.assign(Error('Сначала синхронизируйте изменения этой карточки'),{status:409});
+  const data=await remote(action,p,account);
+  if(p.group==='customer')store.db.prepare("DELETE FROM cache WHERE actor=? AND key LIKE 'customers:%'").run(account);
+  else store.cacheResponse(account,'get',{kind:'repair',id:p.id},{record:data});
+  lastError='';notify({dataChanged:true});return {data};
+ }
  if(action==='repair_act_save'){
   if(store.pending(account).some(x=>x.kind==='repair'&&x.record_id===p.id))throw Error('Сначала синхронизируйте изменения этой карточки');
   const data=await remote(action,p,account);store.cacheResponse(account,'get',{kind:'repair',id:p.id},{record:data});lastError='';notify({dataChanged:true});return {data};

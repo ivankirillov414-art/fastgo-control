@@ -1,5 +1,5 @@
 import {createNativeEngine} from './native-engine.js';
-const writes=new Set(['repair_act_save','staff_price_save','equipment_market_price_save','preorder_save','master_return','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const writes=new Set(['service_edit','repair_act_save','staff_price_save','equipment_market_price_save','preorder_save','master_return','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 export function nativeClient({db,actor,google,storage}){
  let statePromise;
@@ -34,12 +34,13 @@ export function nativeClient({db,actor,google,storage}){
   for(let attempt=0;attempt<4;attempt++){
    const snapshot=await state();
    let engineSheets=snapshot.sheets;
-   const repair=action==='update'&&p.kind==='repair'?snapshot.sheets['Ремонты']?.rows.find(x=>x.repair_id===p.id):null;
+   const stepFlow=p.step_flow===true||action==='service_edit'&&['works','pricing'].includes(p.group);
+    const repair=(action==='update'||action==='service_edit')&&p.kind==='repair'?snapshot.sheets['Ремонты']?.rows.find(x=>x.repair_id===p.id):null;
    // The step engine assigns an unassigned repair to the signed-in mechanic.
    // Resolve that same identity before hydrating staff from authoritative auth membership.
-   const implicitMasterId=repair&&p.step_flow===true&&actor.role==='mechanic'&&!repair.master_id?actor.id:'';
-   const lookupMasterId=p.assigned_master_id===undefined?(p.step_flow===true?implicitMasterId:repair?.master_id||''):(p.assigned_master_id||implicitMasterId);
-   if(['create','update'].includes(action)&&lookupMasterId){
+   const implicitMasterId=repair&&stepFlow&&actor.role==='mechanic'&&!repair.master_id?actor.id:'';
+   const lookupMasterId=p.assigned_master_id===undefined?implicitMasterId:(p.assigned_master_id||implicitMasterId);
+   if(['create','update','service_edit'].includes(action)&&lookupMasterId){
     const members=await db('workshop_members','profile_id=eq.'+encodeURIComponent(lookupMasterId)+'&active=eq.true&role=eq.mechanic&select=profile_id,name,role,active');
     if(!members?.length)fail('Назначить можно только активного мастера',400);
     engineSheets=structuredClone(snapshot.sheets);const staff=engineSheets['Сотрудники'];staff.rows=staff.rows.filter(x=>x.employee_id!==lookupMasterId);staff.rows.push({employee_id:members[0].profile_id,'ФИО':members[0].name,'Роль':'mechanic','Активен':true});
