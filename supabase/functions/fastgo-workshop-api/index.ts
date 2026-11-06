@@ -8,7 +8,7 @@ import {nativeSyncStatus,nativeSyncChanges} from '../_shared/native-sync.js';
 // No fallback writes to the former business tables. Never log tokens or bodies.
 const BASE = Deno.env.get('SUPABASE_URL') || '';
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RELEASE = 'service-act-editor-auto-print-2026-11-01';
+const RELEASE = 'service-editing-20261106';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Access-Control-Expose-Headers':'X-FastGo-Backend,X-FastGo-Release','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-FastGo-Backend':'workshop','X-FastGo-Release':RELEASE};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -122,7 +122,7 @@ const statusPermissionKey=status=>status==='ready'?'can_mark_ready':status==='is
 const repairTransitions={accepted:new Set(['accepted','diagnostics','cancelled']),diagnostics:new Set(['diagnostics','waiting_parts','repair','cancelled']),waiting_parts:new Set(['waiting_parts','diagnostics','repair','cancelled']),repair:new Set(['repair','diagnostics','waiting_parts','ready','cancelled']),ready:new Set(['ready','repair','issued','cancelled']),issued:new Set(['issued']),cancelled:new Set(['cancelled'])};
 function requireRepairTransition(from,to){if(!repairTransitions[from]?.has(to))fail('Сначала пройдите предыдущий этап ремонта',409);}
 const readActions=new Set(['staff_price_catalog','equipment_market_prices','preorders','preorder_get','preorder_suggestions','parts_pickup','stock_receipts','catalog','part_by_barcode','stock_history','cash_state','sales','list','get','overview','customers','finance','legacy','legal','part_photo_url','part_photos','operation_status','backup_status','migration_manifest','signed_url','get_url','health']);
-const writeActions=new Set(['repair_act_save','staff_price_save','equipment_market_price_save','preorder_save','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
+const writeActions=new Set(['service_edit','repair_act_save','staff_price_save','equipment_market_price_save','preorder_save','stock_receive','shift_open','shift_close','storage_close','storage_delete','part_save','stock','sale','catalog_save','legal_save','create','update','contact','payment','extend','upload','documents','part_photo_upload','part_photo_primary','migrate_legacy_file']);
 const managementActions=new Set(['create','customers','finance','stock','payment','extend','contact','legacy']);
 const administrationActions=new Set(['equipment_market_price_save','part_save','catalog_save','legal_save','part_photo_upload','part_photo_primary','backup_status','migration_manifest','migrate_legacy_file']);
 const terminal=new Set(['issued','returned','cancelled']);
@@ -283,6 +283,7 @@ async function main(req){
     if(['stock_receive','stock_receipts','cash_state','shift_open','shift_close','sale','sales'].includes(action)&&c.storage_mode!=='postgres')fail('Касса требует рабочую базу FastGo. Обратитесь к разработчику.',503);
     if(priceTask&&c.storage_mode!=='postgres')fail('Для редактирования цен нужна рабочая база FastGo',503);
     if(action.startsWith('equipment_market_')&&c.storage_mode!=='postgres')fail('Для редактирования справочника нужна рабочая база FastGo',503);
+    if(action==='service_edit'&&c.storage_mode!=='postgres')fail('Редактирование требует актуальную базу FastGo',503);
     if(action==='repair_act_save'&&c.storage_mode!=='postgres')fail('Для редактирования акта нужна рабочая база FastGo',503);
     if(action==='repair_act_save'&&(!uuid(p.id)||p.kind&&p.kind!=='repair'))fail('Укажите ремонт');
     if(action.startsWith('preorder')&&c.storage_mode!=='postgres')fail('Предзаказы требуют рабочую базу FastGo',503);
@@ -410,7 +411,7 @@ async function main(req){
           p.discount=numeric(p.discount??r.discount??0,'скидку');p.warranty_days=integer(p.warranty_days??r.warranty_days??0,'гарантию',0,3650);
           if(!manager(me)){p.assigned_master_id=r.assigned_master_id;p.approve=false;}
           const assignedMaster=p.assigned_master_id===undefined?r.assigned_master_id:p.assigned_master_id;
-          if(assignedMaster&&!(p.step_flow===true&&p.assigned_master_id===undefined))await requireActiveMechanic(assignedMaster);
+          if(p.assigned_master_id!==undefined&&assignedMaster)await requireActiveMechanic(assignedMaster);
           if(p.no_parts!==undefined&&typeof p.no_parts!=='boolean')fail('Подтвердите отметку «Ремонт без запчастей»');
           const partRef=line=>line?.part_id||line?.id;
           const positive=line=>line&&typeof partRef(line)==='string'&&partRef(line).trim()&&typeof line.quantity!=='boolean'&&Number.isSafeInteger(Number(line.quantity))&&Number(line.quantity)>0;

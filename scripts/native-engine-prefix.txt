@@ -1,3 +1,4 @@
+import {serviceEditingOperation} from './service-editing.js';
 import {staffPriceOperation} from './staff-prices.js';
 import {repairActOperation,repairActDocument} from './repair-act.js';
 import {preorderOperation} from './preorders.js';
