@@ -1,0 +1,70 @@
+name: FastGo backup Windows native gate
+on:
+  push:
+    paths: ['.github/workflows/backup-windows-native.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  windows-backup:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24',cache: npm,cache-dependency-path: desktop/package-lock.json}
+      - name: Directed backup, space budget and update handoff checks
+        run: node --test --test-isolation=none tests/backup-server.test.mjs tests/backup-replica.test.mjs tests/backup-daily-replica.test.mjs desktop/tests/backups.test.cjs desktop/tests/daily-backups.test.cjs warehouse-desktop/tests/backup-scheduler.test.cjs warehouse-desktop/tests/update-guard.test.cjs
+      - run: npm ci
+        working-directory: desktop
+      - name: Build common Windows update candidate
+        working-directory: desktop
+        run: npm run build
+      - name: Exercise packaged Electron SQLite and ASAR worker paths
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE='1'
+          & ./desktop/dist/win-unpacked/FastGo.exe ./scripts/check-backups-electron.cjs ./desktop/dist/win-unpacked/resources/app.asar | Tee-Object packaged-backup-runtime.txt
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+      - run: npm ci
+        working-directory: warehouse-desktop
+      - name: Build standalone warehouse update candidate
+        working-directory: warehouse-desktop
+        run: npm run build
+      - name: Exercise standalone warehouse ASAR worker
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE='1'
+          & './warehouse-desktop/dist/win-unpacked/FastGo Warehouse.exe' ./scripts/check-backups-electron.cjs ./warehouse-desktop/dist/win-unpacked/resources/app.asar | Tee-Object packaged-warehouse-backup-runtime.txt
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+      - name: Record immutable candidate hashes
+        shell: pwsh
+        run: |
+          $items=@()
+          foreach($folder in @('desktop','warehouse-desktop')){
+            $version=(Get-Content -Raw "$folder/package.json" | ConvertFrom-Json).version
+            $files=Get-ChildItem -LiteralPath "$folder/dist" -File | Where-Object {$_.Name -match '\.(exe|blockmap|yml|json)$'}
+            foreach($file in $files){$items += @{app=$folder;version=$version;name=$file.Name;bytes=$file.Length;sha256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}}
+          }
+          @{status='PASS';source=$env:GITHUB_SHA;files=$items} | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 windows-backup-candidates.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backup-windows-native-evidence
+          path: |
+            packaged-backup-runtime.txt
+            packaged-warehouse-backup-runtime.txt
+            windows-backup-candidates.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-windows-update-candidates
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.blockmap
+            desktop/dist/latest.yml
+            desktop/dist/release-content.json
+            warehouse-desktop/dist/*.exe
+            warehouse-desktop/dist/*.blockmap
+            warehouse-desktop/dist/latest.yml
+            warehouse-desktop/dist/release-content.json
+          if-no-files-found: error
