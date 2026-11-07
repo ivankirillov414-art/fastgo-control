@@ -8,6 +8,8 @@
   </activity>
   <receiver android:name=".PhoneInstallReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED"/></intent-filter></receiver>
   <service android:name=".TaskNoticeJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>
+  <service android:name=".PhoneBackupJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>
+  <receiver android:name=".PhoneBackupReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/><action android:name="android.intent.action.MY_PACKAGE_REPLACED"/></intent-filter></receiver>
   <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/photo_paths"/></provider>
  </application>
 </manifest>

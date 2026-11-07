@@ -8,6 +8,10 @@ public final class LocalStore extends SQLiteOpenHelper {
  public LocalStore(Context c){super(c,"fastgo-tsd-v1.db",null,1);setWriteAheadLoggingEnabled(true);}
  public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE kv (k TEXT PRIMARY KEY,v TEXT NOT NULL)");db.execSQL("CREATE TABLE docs (id TEXT PRIMARY KEY,kind TEXT NOT NULL,v TEXT NOT NULL)");db.execSQL("CREATE TABLE catalog (id TEXT PRIMARY KEY,barcode TEXT,sku TEXT,v TEXT NOT NULL)");db.execSQL("CREATE INDEX catalog_barcode ON catalog(barcode)");db.execSQL("CREATE INDEX catalog_sku ON catalog(sku)");}
  public void onUpgrade(SQLiteDatabase d,int old,int n){throw new IllegalStateException("Неизвестная версия локальной базы");}
+ public synchronized JSONObject backupSnapshot()throws JSONException{
+  SQLiteDatabase db=getReadableDatabase();JSONObject tables=new JSONObject();db.beginTransactionNonExclusive();
+  try{for(String table:new String[]{"kv","docs","catalog"}){JSONArray rows=new JSONArray();try(Cursor cursor=db.rawQuery("SELECT * FROM "+table,null)){while(cursor.moveToNext()){JSONObject row=new JSONObject();for(int i=0;i<cursor.getColumnCount();i++)row.put(cursor.getColumnName(i),cursor.isNull(i)?JSONObject.NULL:cursor.getString(i));rows.put(row);}}tables.put(table,rows);}db.setTransactionSuccessful();return new JSONObject().put("format",1).put("database_version",db.getVersion()).put("captured_at",System.currentTimeMillis()).put("tables",tables);}finally{db.endTransaction();}
+ }
  public synchronized String get(String k){try(Cursor c=getReadableDatabase().rawQuery("SELECT v FROM kv WHERE k=?",new String[]{k})){return c.moveToFirst()?c.getString(0):"";}}
  public synchronized void put(String k,String v){ContentValues x=new ContentValues();x.put("k",k);x.put("v",v);getWritableDatabase().insertWithOnConflict("kv",null,x,SQLiteDatabase.CONFLICT_REPLACE);}
  public synchronized JSONObject doc(String id)throws JSONException{try(Cursor c=getReadableDatabase().rawQuery("SELECT v FROM docs WHERE id=?",new String[]{id})){return c.moveToFirst()?new JSONObject(c.getString(0)):null;}}

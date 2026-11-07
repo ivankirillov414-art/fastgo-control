@@ -3,7 +3,7 @@ import org.json.*;
 import java.net.*;
 import java.io.*;
 public final class WarehouseApi {
- private static final String BASE="https://oqgpjfikjpcplnxueoki.supabase.co",KEY="sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
+ static final String BASE="https://oqgpjfikjpcplnxueoki.supabase.co",KEY="sb_publishable_-aVkOpeHXncVZhF2jPuG5w_4DkRYqji";
  interface Calls {Object call(String action,JSONObject params)throws Exception;}
  private final SecurePrefs prefs;private final Calls transport;
  public static class ApiError extends IOException{public final int status;ApiError(int s,String m){super(m);status=s;}}

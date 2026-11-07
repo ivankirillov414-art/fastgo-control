@@ -27,6 +27,9 @@ public final class MainActivity extends Activity {
  private WebView web;
  private PhoneUpdates updates;
  private TaskNotices notices;
+ private volatile boolean backupTrusted;
+ private volatile long backupPage;
+ private final java.util.concurrent.ExecutorService backupExecutor=java.util.concurrent.Executors.newSingleThreadExecutor();
  private boolean resumed;
  private boolean noticePermissionPending;
  private ValueCallback<Uri[]> picker;
@@ -48,8 +51,17 @@ public final class MainActivity extends Activity {
   WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)!=0);
   updates=new PhoneUpdates(this,web);
   notices=new TaskNotices(this,()->runOnUiThread(this::requestNoticePermission));
+  ru.fastgo.backup.BackupJobs.schedule(this,PhoneBackupJob.class,true,false);
+  web.addJavascriptInterface(new Object(){
+   private void trusted(){if(!backupTrusted)throw new SecurityException("Внутренний экран FastGo обязателен");}
+   @JavascriptInterface public String backupSession(){trusted();try{return PhoneBackup.session(MainActivity.this);}catch(Exception e){throw new IllegalStateException("Не удалось открыть защищённую сессию");}}
+   @JavascriptInterface public void saveBackupSession(String raw){trusted();try{PhoneBackup.session(MainActivity.this,raw);}catch(Exception e){throw new IllegalStateException("Не удалось сохранить защищённую сессию");}}
+   @JavascriptInterface public void refreshBackupSession(String requestId,String staleAccess){trusted();if(!requestId.matches("[0-9]{1,12}")||staleAccess.length()>20000)return;final long started=PhoneBackup.epoch(),page=backupPage;backupExecutor.execute(()->{org.json.JSONObject result=new org.json.JSONObject();try{result.put("session",PhoneBackup.refresh(MainActivity.this,staleAccess));}catch(Exception e){try{result.put("error",ru.fastgo.backup.BackupReplica.safeError(e));}catch(Exception ignored){}}String value=result.toString();runOnUiThread(()->{if(backupTrusted&&web!=null&&page==backupPage){String safe=started==PhoneBackup.epoch()?value:"{\"error\":\"Сессия завершена\"}";web.evaluateJavascript("window.fastgoNativeSessionResult&&window.fastgoNativeSessionResult("+org.json.JSONObject.quote(requestId)+","+safe+")",null);}});});}
+   @JavascriptInterface public void showBackupStatus(){trusted();runOnUiThread(()->new AlertDialog.Builder(MainActivity.this).setTitle("Резервные копии").setMessage(PhoneBackup.status(MainActivity.this)).setPositiveButton("Проверить сейчас",(d,w)->ru.fastgo.backup.BackupJobs.schedule(MainActivity.this,PhoneBackupJob.class,true,false)).setNegativeButton("Закрыть",null).show());}
+  },"FastGoBackup");
   web.addJavascriptInterface(new Object(){@JavascriptInterface public void configureNotices(String data){runOnUiThread(()->{if(internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))notices.configure(data);});}@JavascriptInterface public void clearNotices(){runOnUiThread(()->{if(internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))TaskNotices.clear(MainActivity.this);});}@JavascriptInterface public void noticeSettings(){runOnUiThread(()->{if(!internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))return;if(Build.VERSION.SDK_INT>=26)startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()));else startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));});}@JavascriptInterface public void checkUpdate(){runOnUiThread(()->{if(internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))updates.check(true);});}@JavascriptInterface public void print(){runOnUiThread(()->{if(!internal(Uri.parse(web.getUrl()==null?"":web.getUrl())))return;PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);manager.print("FastGo",web.createPrintDocumentAdapter("FastGo"),new PrintAttributes.Builder().build());});}},"FastGoPhone");
   web.setWebViewClient(new WebViewClient(){
+   @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){backupPage++;backupTrusted=internal(Uri.parse(url));}
    @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){return asset(request.getUrl());}
    @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return navigate(request.getUrl());}
    @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return navigate(Uri.parse(url));}
@@ -97,5 +109,5 @@ public final class MainActivity extends Activity {
  @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&noticePermissionPending)requestNoticePermission();}
  @Override protected void onResume(){super.onResume();resumed=true;if(noticePermissionPending)requestNoticePermission();if(notices!=null)notices.check();if(updates!=null)updates.resume();}
  @Override protected void onPause(){resumed=false;if(updates!=null)updates.pause();super.onPause();}
- @Override protected void onDestroy(){if(notices!=null)notices.close();if(updates!=null)updates.close();if(picker!=null){picker.onReceiveValue(null);picker=null;}if(cameraRequest!=null){cameraRequest.deny();cameraRequest=null;}if(web!=null){web.removeJavascriptInterface("FastGoPhone");web.destroy();}super.onDestroy();}
+ @Override protected void onDestroy(){backupTrusted=false;backupExecutor.shutdownNow();if(notices!=null)notices.close();if(updates!=null)updates.close();if(picker!=null){picker.onReceiveValue(null);picker=null;}if(cameraRequest!=null){cameraRequest.deny();cameraRequest=null;}if(web!=null){web.removeJavascriptInterface("FastGoBackup");web.removeJavascriptInterface("FastGoPhone");web.destroy();}super.onDestroy();}
 }
