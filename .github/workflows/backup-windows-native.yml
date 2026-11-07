@@ -21,6 +21,7 @@ jobs:
         run: |
           Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile "$env:RUNNER_TEMP/fastgo-adb.zip"
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP/fastgo-adb.zip" -DestinationPath desktop
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/fastgo-adb.zip" -DestinationPath warehouse-desktop
       - name: Build common Windows update candidate
         working-directory: desktop
         run: npm run build
