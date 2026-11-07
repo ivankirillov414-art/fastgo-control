@@ -16,6 +16,11 @@ jobs:
         run: node --test --test-isolation=none tests/backup-server.test.mjs tests/backup-replica.test.mjs tests/backup-daily-replica.test.mjs desktop/tests/backups.test.cjs desktop/tests/daily-backups.test.cjs warehouse-desktop/tests/backup-scheduler.test.cjs warehouse-desktop/tests/update-guard.test.cjs
       - run: npm ci
         working-directory: desktop
+      - name: Supply official Android USB tools required by Windows packaging
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile "$env:RUNNER_TEMP/fastgo-adb.zip"
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/fastgo-adb.zip" -DestinationPath desktop
       - name: Build common Windows update candidate
         working-directory: desktop
         run: npm run build
