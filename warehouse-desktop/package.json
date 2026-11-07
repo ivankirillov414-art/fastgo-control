@@ -1,6 +1,6 @@
 {
   "name": "fastgo-warehouse-desktop",
-  "version": "1.0.63",
+  "version": "1.0.64",
   "private": true,
   "description": "FastGo standalone warehouse and terminal checkout station",
   "author": "FastGo",
@@ -16,7 +16,10 @@
     "electron-builder": "26.15.3"
   },
   "build": {
-    "asarUnpack": ["backup-files.cjs", "backup-replica.cjs"],
+    "asarUnpack": [
+      "backup-files.cjs",
+      "backup-replica.cjs"
+    ],
     "appId": "ru.fastgo.warehouse",
     "productName": "FastGo Склад",
     "directories": {
