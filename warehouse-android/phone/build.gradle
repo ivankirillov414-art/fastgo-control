@@ -2,8 +2,8 @@ plugins { id 'com.android.application' }
 android {
  namespace 'ru.fastgo.mobile'
  compileSdk 36
- defaultConfig { applicationId 'ru.fastgo.mobile'; minSdk 23; targetSdk 36; versionCode 17; versionName '1.0.16'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
- if(project.hasProperty('fastgoPhoneFixture')){defaultConfig {versionCode 18;versionName '1.0.16-self-update-test'}}
+ defaultConfig { applicationId 'ru.fastgo.mobile'; minSdk 23; targetSdk 36; versionCode 18; versionName '1.0.17'; testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
+ if(project.hasProperty('fastgoPhoneFixture')){defaultConfig {versionCode 19;versionName '1.0.17-self-update-test'}}
  buildTypes { release { minifyEnabled false }; debug { applicationIdSuffix '.test' } }
  sourceSets { main.java.srcDirs += '../backup/src/main/java' }
  if(project.hasProperty('fastgoPhoneApiAudit')){lint {checkOnly 'NewApi';abortOnError true}}

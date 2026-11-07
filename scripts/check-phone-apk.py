@@ -66,6 +66,7 @@ def audit(apk):
     for component in exported:
         if component['name'] in ('ru.fastgo.mobile.MainActivity', '.MainActivity'): continue
         if component['name'] in ('ru.fastgo.mobile.TaskNoticeJob', '.TaskNoticeJob') and component.get('permission') == 'android.permission.BIND_JOB_SERVICE': continue
+        if component['name'] in ('ru.fastgo.mobile.PhoneBackupJob', '.PhoneBackupJob') and component.get('permission') == 'android.permission.BIND_JOB_SERVICE': continue
         if component['name'] == 'androidx.profileinstaller.ProfileInstallReceiver' and component.get('permission') == 'android.permission.DUMP': continue
         failures.append('Unexpected exported Android component: '+component['name'])
     report = {'file':Path(apk).name,'sha256':hashlib.sha256(Path(apk).read_bytes()).hexdigest(),'package':package,'version':root['versionName'],'versionCode':root['versionCode'],'sdk':sdk,'permissions':permissions,'exported_components':exported,'manifest_checks_passed':not failures,'failures':failures,'scope':'APK structure and merged manifest; this is not a Play Protect verdict'}

@@ -1,0 +1,63 @@
+name: FastGo backup unsigned Android candidates
+on:
+  push:
+    paths: ['.github/workflows/backup-android-release.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  unsigned:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: android-actions/setup-android@v3
+        with: {packages: platform-tools}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Prepare phone candidate assets
+        run: node warehouse-android/phone/prepare-web.cjs
+      - name: Build next debug self-update fixture
+        working-directory: warehouse-android
+        run: |
+          gradle :phone:assembleDebug -PfastgoPhoneFixture=true --no-daemon
+          mkdir -p phone/src/debug/assets
+          cp phone/build/outputs/apk/debug/phone-debug.apk phone/src/debug/assets/update-fixture.apk
+      - name: Build unsigned release and gate packages
+        working-directory: warehouse-android
+        run: gradle :phone:assembleRelease :phone:assembleDebug :phone:assembleDebugAndroidTest :phone:lintRelease :native:assembleRelease :native:assembleDebugAndroidTest -PfastgoPhoneApiAudit=true --no-daemon
+      - name: Audit candidate manifest and UI identity
+        run: |
+          python3 scripts/check-phone-apk.py warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk --output warehouse-android/phone/build/security-audit.json
+          python3 - <<'PY'
+          import json,zipfile,hashlib
+          with zipfile.ZipFile('warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk') as z:
+              m=json.loads(z.read('assets/fastgo/bundle-receipt.json'))
+              assert m['platform']=='android' and m['version']=='1.0.17'
+              for name,sha in m['files'].items(): assert hashlib.sha256(z.read('assets/fastgo/'+name)).hexdigest()==sha
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-phone-unsigned-1.0.17
+          path: warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-tsd-unsigned-2.1.10
+          path: |
+            warehouse-android/native/build/outputs/apk/release/native-release-unsigned.apk
+            warehouse-android/native/build/outputs/apk/androidTest/debug/native-debug-androidTest.apk
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-phone-gate-packages
+          path: |
+            warehouse-android/phone/build/outputs/apk/release/phone-release-unsigned.apk
+            warehouse-android/phone/build/outputs/apk/debug/phone-debug.apk
+            warehouse-android/phone/build/outputs/apk/androidTest/debug/phone-debug-androidTest.apk
+            warehouse-android/phone/src/main/assets/fastgo/bundle-receipt.json
+            warehouse-android/phone/build/security-audit.json
+          retention-days: 14
