@@ -4,6 +4,9 @@ on:
     paths: ['.github/workflows/backup-android-release.yml']
   workflow_dispatch:
 permissions: {contents: read}
+concurrency:
+  group: backup-android-unsigned-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   unsigned:
     runs-on: ubuntu-latest
