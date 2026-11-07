@@ -34,7 +34,9 @@ jobs:
         shell: pwsh
         run: |
           $env:ELECTRON_RUN_AS_NODE='1'
-          & './warehouse-desktop/dist/win-unpacked/FastGo Warehouse.exe' ./scripts/check-backups-electron.cjs ./warehouse-desktop/dist/win-unpacked/resources/app.asar | Tee-Object packaged-warehouse-backup-runtime.txt
+          $name=(Get-Content -Raw warehouse-desktop/package.json | ConvertFrom-Json).build.productName
+          $exe=Join-Path 'warehouse-desktop/dist/win-unpacked' ($name+'.exe')
+          & $exe ./scripts/check-backups-electron.cjs ./warehouse-desktop/dist/win-unpacked/resources/app.asar | Tee-Object packaged-warehouse-backup-runtime.txt
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
       - name: Record immutable candidate hashes
         shell: pwsh
