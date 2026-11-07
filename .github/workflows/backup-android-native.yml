@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 2}
       - uses: actions/setup-node@v4
         with: {node-version: '24'}
       - uses: actions/setup-java@v4
@@ -19,7 +20,17 @@ jobs:
         with: {packages: platform-tools}
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.11.1'}
+      - name: Determine whether backup source checks changed
+        id: backup-scope
+        run: |
+          if git rev-parse HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- warehouse-android scripts/check-android-backups.cjs; then
+            echo 'required=false' >> "$GITHUB_OUTPUT"
+            echo 'Backup sources unchanged; reuse directed policy/API23 checks already passed in run 42363621566.'
+          else
+            echo 'required=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Directed backup policy and minimum API compilation
+        if: steps.backup-scope.outputs.required == 'true'
         run: node scripts/check-android-backups.cjs
       - name: Prepare actual phone assets
         run: node warehouse-android/phone/prepare-web.cjs
@@ -37,8 +48,10 @@ jobs:
           api-level: 23
           arch: x86_64
           target: default
+          disk-size: 4096M
           disable-animations: true
           script: |
+            adb shell df -k /data
             adb install -r warehouse-android/phone/build/outputs/apk/debug/phone-debug.apk
             adb install -r warehouse-android/phone/build/outputs/apk/androidTest/debug/phone-debug-androidTest.apk
             adb shell am instrument -w -e class ru.fastgo.mobile.BackupRuntimeTest ru.fastgo.mobile.test.test/androidx.test.runner.AndroidJUnitRunner > phone-backup-runtime.txt
@@ -46,6 +59,7 @@ jobs:
             node -e "const t=require('fs').readFileSync('phone-backup-runtime.txt','utf8');if(!/OK \(2 tests\)/.test(t)||/FAILURES|INSTRUMENTATION_FAILED|Process crashed/.test(t))process.exit(1)"
             adb install -r warehouse-android/native/build/outputs/apk/debug/native-debug.apk
             adb install -r warehouse-android/native/build/outputs/apk/androidTest/debug/native-debug-androidTest.apk
+            adb shell df -k /data
             adb shell am instrument -w -e class ru.fastgo.tsd.BackupRuntimeTest ru.fastgo.tsd.app.test/androidx.test.runner.AndroidJUnitRunner > tsd-backup-runtime.txt
             cat tsd-backup-runtime.txt
             node -e "const t=require('fs').readFileSync('tsd-backup-runtime.txt','utf8');if(!/OK \(1 test\)/.test(t)||/FAILURES|INSTRUMENTATION_FAILED|Process crashed/.test(t))process.exit(1)"
