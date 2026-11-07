@@ -11,6 +11,24 @@ modify('workshop/core.js',s=>{
  s=s.replace(/if\(session\?\.expires_at\s*&&\s*session\.expires_at\*1000<Date\.now\(\)\+45000\)await refresh\(\);/g,'');
  return s;
 });
+// An offline intake is rendered before its server client snapshot arrives.
+// Fetch that snapshot before opening the client editor; never guess CAS values.
+modify('workshop/service-editor.js',s=>{
+ const entry='export function editServiceRepair(ctx,r,group,saved,{index,blocked=()=>false}={}){';
+ const marker=' const request_id=crypto.randomUUID(),f=';
+ if(!s.includes(entry)||!s.includes(marker))throw Error('Native service editor transform no longer matches');
+ return s.replace(entry,entry.replace('export function','export async function')).replace(marker,` if(group==='client'&&!r.client_details){
+  try{
+   const state=await window.fastgoDesktop.state();
+   if(state.pending||state.conflicts){ctx.toast('Сначала дождитесь синхронизации приёмки или устраните конфликт');return;}
+   const fresh=await api('get',{kind:'repair',id:r.id},{fresh:true});
+   if(!fresh.record?.client_details){ctx.toast('Данные клиента ещё не синхронизированы. Подключитесь к сети и повторите');return;}
+   if(blocked()){ctx.toast('Сначала сохраните изменения в текущем экране');return;}
+   r=fresh.record;
+  }catch(e){ctx.toast(e.message||'Не удалось загрузить актуальные данные клиента');return;}
+ }
+`+marker);
+});
 modify('workshop/orders.js',s=>s.replace("if(!saved&&!fs.some(f=>imageTypes.includes(videoType(f))))", "if(false&&!saved&&!fs.some(f=>imageTypes.includes(videoType(f))))").replace('Добавьте минимум одну фотографию техники. Видео не заменяет фотографию.','На ноутбуке фото и видео необязательны.').replace('Нужна минимум одна фотография техники. Видео можно добавить дополнительно.','На ноутбуке фото и видео необязательны.').replace('Фото и видео техники *</label>','Фото и видео техники · необязательно</label>').replace('Фото и видео техники</h2>','Фото и видео техники · необязательно</h2>'));
 modify('workshop/print-client.js',s=>s.replace('export async function enqueueIntake(kind,id,actor){','export async function enqueueIntake(kind,id,actor){return window.fastgoDesktop.printIntake({kind,id});}\nasync function webEnqueueUnused(kind,id,actor){').replace('export async function flushIntakePrints(actor){','export async function flushIntakePrints(actor){return;}\nasync function webFlushUnused(actor){').replace('export async function sendManualPrint(kind,id){','export async function sendManualPrint(kind,id){await window.fastgoDesktop.printManual({kind,id});return true;}\nasync function webPrintUnused(kind,id){').replace('export async function renderPrintSettings(ctx,token){','export async function renderPrintSettings(ctx,token){ctx.mount(ctx.head("Настройки печати")+"<section class=\\"panel\\"><p>Выберите принтер и приём заданий с телефона в настройках Windows-приложения.</p><button class=\\"btn\\" id=\\"desktop-print-settings\\">Настройки приложения</button></section>",token);document.getElementById("desktop-print-settings").onclick=()=>window.dispatchEvent(new Event("fastgo-desktop-settings"));return;}\nasync function webSettingsUnused(ctx,token){'));
 modify('workshop/documents.js',s=>s.replace("const url=new URL('workshop.html',location.href);","const url=new URL('https://ivankirillov414-art.github.io/fastgo-control/workshop.html');"));
