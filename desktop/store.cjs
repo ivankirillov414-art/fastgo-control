@@ -1,6 +1,9 @@
-const {DatabaseSync}=require('node:sqlite');
+const {DatabaseSync,backup:sqliteBackup}=require('node:sqlite');
 const {randomUUID}=require('node:crypto');
 const fs=require('node:fs'),path=require('node:path');
+const backupFiles=require(fs.existsSync(path.join(__dirname,'warehouse-native','backup-files.cjs'))?'./warehouse-native/backup-files.cjs':'../warehouse-desktop/backup-files.cjs');
+const {dayAt,ownFile,unlink,ensureDirectory,syncDirectory,atomicWrite,readJson,fileInfo,FileVerifier,DailyCatalog,verifySQLite,SpaceBudget,SQLITE_BUDGET_BYTES}=backupFiles;
+const autoPattern=/^FastGo-auto-\d{12}\.sqlite$/;
 const stable=v=>JSON.stringify(v??null);
 const invalid=message=>Object.assign(Error(message),{status:400});
 const accountFirstName=name=>{const words=String(name||'').trim().split(/\s+/).filter(Boolean),family=w=>/(?:ов|ев|ин|ский|цкий|ова|ева|ина|ская|цкая|ко)$/i.test(w||'');return words.length>=3&&/(?:вич|вна|ична)$/i.test(words[words.length-1])||words.length===2&&family(words[0])&&!family(words[1])?words[1]:words[0]||'Сотрудник';};
@@ -18,14 +21,16 @@ const final=new Set(['issued','returned','cancelled','deleted']);
 const omit=new Set(['request_id','revision','id','kind','desktop_id','auto_assign','tags','step_flow','flow_action','master_comment','waiting_part','waiting_due','payment_qr']);
 const normalize=s=>String(s??'').toLowerCase().replace(/кугоо?|куга|kuga|kugo(?!o)/g,'kugoo').replace(/макс/g,'max').replace(/спид/g,'speed').replace(/\s+/g,' ').trim();
 class Store{
- constructor(filename){fs.mkdirSync(path.dirname(filename),{recursive:true});this.db=new DatabaseSync(filename);this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+ constructor(filename,{now=Date.now,writeBackup=atomicWrite,backupFn=sqliteBackup,budgetBytes=SQLITE_BUDGET_BYTES,freeBytes,minFreeBytes}={}){fs.mkdirSync(path.dirname(filename),{recursive:true});this.db=new DatabaseSync(filename);this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
  CREATE TABLE IF NOT EXISTS cache(actor TEXT,key TEXT,json TEXT,PRIMARY KEY(actor,key));
  CREATE TABLE IF NOT EXISTS records(actor TEXT,kind TEXT,id TEXT,base TEXT,local TEXT,clouded INTEGER DEFAULT 0,PRIMARY KEY(actor,kind,id));
  CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT,action TEXT,kind TEXT,record_id TEXT,request_id TEXT,params TEXT,base TEXT,patch TEXT,result TEXT,status TEXT DEFAULT 'queued',error TEXT,sent TEXT,UNIQUE(actor,request_id));
  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,json TEXT);
- CREATE TABLE IF NOT EXISTS print_jobs(actor TEXT,key TEXT,kind TEXT,record_id TEXT,state TEXT,error TEXT,created_at TEXT,PRIMARY KEY(actor,key));`);this.filename=filename;}
+ CREATE TABLE IF NOT EXISTS print_jobs(actor TEXT,key TEXT,kind TEXT,record_id TEXT,state TEXT,error TEXT,created_at TEXT,PRIMARY KEY(actor,key));`);this.filename=filename;this.clock=now;this.backupFn=backupFn;this.backupFolder=path.join(path.dirname(filename),'backups');this.dailyFolder=path.join(this.backupFolder,'daily');this.backupSpace=new SpaceBudget({dir:this.backupFolder,limitBytes:budgetBytes,freeBytes,minFreeBytes,managed:name=>name.startsWith('daily/')||/^FastGo-auto-\d{12}\.sqlite(?:\.json|\.partial(?:-(?:wal|shm))?)?$/.test(name)});this.writeBackup=(target,bytes)=>this.backupSpace.write(target,bytes,writeBackup);this.backupVerifier=new FileVerifier();this.dailyState={status:'waiting',retained_days:[],retained_count:0,budget_bytes:budgetBytes};try{this.dailyState={...this.dailyState,...readJson(path.join(this.dailyFolder,'status.json')),status:'waiting'};}catch{}
+  this.dailyCatalog=new DailyCatalog({dir:path.join(this.dailyFolder,'manifests'),write:this.writeBackup,validate:async entry=>{if(entry.kind!=='sqlite'||entry.sqlite?.name!==this.dailyName(entry.day,entry.id)||entry.restored?.integrity!=='ok')throw Error('Повреждён суточный манифест SQLite');await this.backupVerifier.check(ownFile(this.dailyFolder,entry.sqlite.name),entry.sqlite,{signal:this.dailyController?.signal});},remove:entry=>unlink(this.dailyFolder,this.dailyName(entry.day,entry.id))});
+ }
  transaction(fn){this.db.exec('BEGIN IMMEDIATE');try{const r=fn();this.db.exec('COMMIT');return r;}catch(e){this.db.exec('ROLLBACK');throw e;}}
- close(){this.db.close();}
+ close(){this.pauseDailyBackup();this.db.close();}
  setting(key,value){if(arguments.length>1){this.db.prepare('INSERT OR REPLACE INTO settings VALUES(?,?)').run(key,stable(value));return value;}return JSON.parse(this.db.prepare('SELECT json FROM settings WHERE key=?').get(key)?.json||'null');}
  cache(actor,key,value){if(arguments.length>2){this.db.prepare('INSERT OR REPLACE INTO cache VALUES(?,?,?)').run(actor,key,stable(value));return value;}return JSON.parse(this.db.prepare('SELECT json FROM cache WHERE actor=? AND key=?').get(actor,key)?.json||'null');}
  row(actor,kind,id){return this.db.prepare('SELECT * FROM records WHERE actor=? AND kind=? AND id=?').get(actor,kind,id);}
@@ -102,18 +107,67 @@ class Store{
   const printErrors=this.db.prepare("SELECT kind,record_id,state,error,created_at FROM print_jobs WHERE actor=? AND state IN ('failed','dispatched') ORDER BY created_at DESC LIMIT 10").all(actor);
   const folder=path.join(path.dirname(this.filename),'backups');let backup=null;
   if(fs.existsSync(folder))for(const name of fs.readdirSync(folder).filter(n=>n.endsWith('.sqlite'))){const stat=fs.statSync(path.join(folder,name));if(!backup||stat.mtimeMs>backup.time)backup={name,time:stat.mtimeMs,bytes:stat.size};}
-  return {...this.stats(actor),printPending,printErrors,backup};
+  return {...this.stats(actor),printPending,printErrors,backup,daily_backup:this.dailyState};
  }
  stats(actor){return {pending:this.pending(actor).filter(x=>!['conflict','failed'].includes(x.status)).length,conflicts:this.conflicts(actor).length,records:this.db.prepare('SELECT count(*) AS n FROM records WHERE actor=?').get(actor).n};}
+ dailyName(day,id){if(!backupFiles.validDay(day)||!backupFiles.uuid.test(id))throw Error('Неверное имя суточной копии');return 'FastGo-daily-'+day+'--'+id+'.sqlite';}
+ backupEstimate(db=this.db){return Number(db.prepare('PRAGMA page_count').get().page_count)*Number(db.prepare('PRAGMA page_size').get().page_size)+65536;}
+ dailyStatus(value){this.dailyState={...this.dailyState,...value};const last=this.dailyState.last_success_day?' Последняя успешная дата: '+this.dailyState.last_success_day+'.':'';this.dailyState.message=(this.dailyState.error||'Локальная SQLite: '+this.dailyState.retained_count+'/7 суточных дат.')+last;try{this.writeBackup(path.join(this.dailyFolder,'status.json'),Buffer.from(JSON.stringify(this.dailyState)));}catch(error){this.dailyState={...this.dailyState,status:'error',error:error.message,message:error.message+last};}return this.dailyState;}
+ pauseDailyBackup(){this.dailyController?.abort(Object.assign(Error('Локальная копия продолжится после обновления'),{code:'BACKUP_PAUSED'}));}
+ trimAutomatic(anchor,reserveBytes=0){
+  if(!fs.existsSync(this.backupFolder))return;
+  const names=fs.readdirSync(this.backupFolder).filter(x=>autoPattern.test(x)).sort().reverse(),anchorName=path.basename(anchor);if(!names.includes(anchorName))return;
+  const sizes=new Map(names.map(name=>[name,fs.statSync(ownFile(this.backupFolder,name)).size+(fs.existsSync(ownFile(this.backupFolder,name+'.json'))?fs.statSync(ownFile(this.backupFolder,name+'.json')).size:0)])),automatic=[...sizes.values()].reduce((n,x)=>n+x,0),other=this.backupSpace.usage()-automatic,available=Math.max(sizes.get(anchorName),this.backupSpace.limitBytes-other-reserveBytes-65536);
+  let used=sizes.get(anchorName),count=1;
+  for(const name of names){if(name===anchorName)continue;if(count<192&&used+sizes.get(name)<=available){used+=sizes.get(name);count++;}else{unlink(this.backupFolder,name);unlink(this.backupFolder,name+'.json');}}
+ }
+ async compactAutomatic(estimate){
+  if(estimate>this.backupSpace.limitBytes)throw Object.assign(Error('Локальная база больше бюджета автоматических копий. Прежние копии сохранены.'),{code:'BACKUP_BUDGET'});
+  this.backupSpace.checkFree(estimate);if(!fs.existsSync(this.backupFolder))return;
+  // Legacy 192-slot buffers are compacted only around an independently verified
+  // already successful automatic copy. Daily and manual archives are never evicted.
+  for(const name of fs.readdirSync(this.backupFolder).filter(x=>autoPattern.test(x)).sort().reverse()){
+   try{const file=ownFile(this.backupFolder,name),meta=readJson(file+'.json');if(meta.integrity!=='ok')continue;await this.backupVerifier.check(file,meta,{signal:this.dailyController?.signal});await verifySQLite(file,{signal:this.dailyController?.signal});this.trimAutomatic(file,estimate);return;}catch(error){if(this.dailyController?.signal.aborted)throw error;}
+  }
+ }
+ async onlineCopy(target){
+  const temporary=target+'.partial';let source,lease;
+  try{
+   ensureDirectory(path.dirname(target));source=new DatabaseSync(this.filename,{readOnly:true});source.exec('BEGIN');source.prepare('SELECT count(*) AS n FROM sqlite_schema').get();
+   // The read transaction pins the WAL snapshot: normal writes continue on the
+   // working connection and cannot grow this copy beyond the reserved page count.
+   const estimate=this.backupEstimate(source);lease=this.backupSpace.reserve(estimate,{file:temporary});await this.backupFn(source,temporary,{rate:100});source.exec('COMMIT');source.close();source=null;
+   this.dailyController?.signal.throwIfAborted();fs.chmodSync(temporary,0o600);const handle=await fs.promises.open(temporary,'r+');try{await handle.sync();}finally{await handle.close();}
+   const restored=await verifySQLite(temporary,{signal:this.dailyController?.signal}),info=await fileInfo(temporary,{signal:this.dailyController?.signal});if(info.bytes>estimate)throw Error('Размер локальной копии превысил зарезервированное место');
+   await fs.promises.rename(temporary,target);syncDirectory(path.dirname(target));return {info:{sha256:info.sha256,bytes:info.bytes},restored};
+  }finally{try{if(source){try{source.exec('ROLLBACK');}catch{}source.close();}for(const suffix of ['','-wal','-shm','-journal'])unlink(path.dirname(temporary),path.basename(temporary)+suffix);}finally{lease?.release();}}
+ }
+ async backupAutomatic(){
+  if(this.autoBackupPromise)return this.autoBackupPromise;
+  this.autoBackupPromise=(async()=>{const label='auto-'+new Date(Math.floor(this.clock()/900000)*900000).toISOString().replace(/[^0-9]/g,'').slice(0,12),target=ownFile(this.backupFolder,'FastGo-'+label+'.sqlite');if(fs.existsSync(target)){await this.backupVerifier.check(target,readJson(target+'.json'));return target;}const estimate=this.backupEstimate();await this.compactAutomatic(estimate);const {info}=await this.onlineCopy(target);this.writeBackup(target+'.json',Buffer.from(JSON.stringify({created_at:new Date(this.clock()).toISOString(),...info,integrity:'ok'})));this.trimAutomatic(target,estimate);return target;})().finally(()=>{this.autoBackupPromise=null;});return this.autoBackupPromise;
+ }
+ async backupDaily(){
+  if(this.dailyPromise)return this.dailyPromise;this.dailyController=new AbortController();
+  this.dailyPromise=(async()=>{
+   try{
+    let entries=await this.dailyCatalog.list(),day=dayAt(this.clock());
+    if(!entries.some(x=>x.day===day)){
+     await this.compactAutomatic(this.backupEstimate());const id=randomUUID(),name=this.dailyName(day,id),target=ownFile(this.dailyFolder,name),{info,restored}=await this.onlineCopy(target);
+     await this.dailyCatalog.commit({format:2,kind:'sqlite',id,day,completed_at:new Date(this.clock()).toISOString(),sqlite:{name,...info},restored});
+    }
+    entries=await this.dailyCatalog.rotate();const latest=entries[0];return this.dailyStatus({status:'current',error:'',retained_days:entries.map(x=>x.day),retained_count:entries.length,last_success_day:latest?.day,last_success_at:latest?.completed_at,integrity_verified:true});
+   }catch(error){return this.dailyStatus({status:this.dailyController?.signal.aborted?'paused':'error',error:error.message});}
+  })().finally(()=>{this.dailyPromise=null;this.dailyController=null;});return this.dailyPromise;
+ }
  backup(label){
-  const automatic=label===undefined;if(automatic)label='auto-'+new Date(Math.floor(Date.now()/900000)*900000).toISOString().replace(/[^0-9]/g,'').slice(0,12);
+  const automatic=label===undefined;if(automatic)label='auto-'+new Date(Math.floor(this.clock()/900000)*900000).toISOString().replace(/[^0-9]/g,'').slice(0,12);
   const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+String(label).replace(/[^a-zA-Z0-9-]/g,'')+'.sqlite');
   if(!fs.existsSync(target)){
-   const temporary=target+'.partial';if(fs.existsSync(temporary))fs.rmSync(temporary);this.db.exec("VACUUM INTO '"+temporary.replace(/'/g,"''")+"'");
-   const check=new DatabaseSync(temporary,{readOnly:true});try{if(check.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')throw Error('Резервная копия локальной базы повреждена');}finally{check.close();}
-   fs.renameSync(temporary,target);const sha256=require('node:crypto').createHash('sha256').update(fs.readFileSync(target)).digest('hex');
-   fs.writeFileSync(target+'.json',JSON.stringify({created_at:new Date().toISOString(),sha256,bytes:fs.statSync(target).size,integrity:'ok'}));
-   if(automatic){const older=fs.readdirSync(folder).filter(n=>/^FastGo-auto-\d{12}\.sqlite$/.test(n)).sort().reverse().slice(192);for(const name of older){fs.rmSync(path.join(folder,name));fs.rmSync(path.join(folder,name+'.json'),{force:true});}}
+   const temporary=target+'.partial';if(fs.existsSync(temporary))unlink(folder,path.basename(temporary));const lease=this.backupSpace.reserve(this.backupEstimate(),{file:temporary,managed:automatic});
+   try{this.db.exec("VACUUM INTO '"+temporary.replace(/'/g,"''")+"'");const check=new DatabaseSync(temporary,{readOnly:true});try{if(check.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')throw Error('Резервная копия локальной базы повреждена');}finally{check.close();}const fd=fs.openSync(temporary,'r+');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,target);syncDirectory(folder);}finally{try{unlink(folder,path.basename(temporary));}finally{lease.release();}}
+   const sha256=require('node:crypto').createHash('sha256').update(fs.readFileSync(target)).digest('hex'),metadata=Buffer.from(JSON.stringify({created_at:new Date(this.clock()).toISOString(),sha256,bytes:fs.statSync(target).size,integrity:'ok'}));
+   if(automatic)this.writeBackup(target+'.json',metadata);else{const reservation=this.backupSpace.reserve(metadata.length,{managed:false});try{atomicWrite(target+'.json',metadata);}finally{reservation.release();}}
+   if(automatic)this.trimAutomatic(target,this.backupEstimate());
   }
   return target;
  }

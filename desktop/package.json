@@ -16,6 +16,7 @@
     "electron-builder": "26.15.3"
   },
   "build": {
+    "asarUnpack": ["warehouse-native/backup-files.cjs", "warehouse-native/backup-replica.cjs"],
     "appId": "ru.fastgo.workshop",
     "productName": "FastGo",
     "directories": {

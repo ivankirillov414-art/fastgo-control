@@ -23,3 +23,7 @@ test('failed context or storage work releases the lease and a closed window skip
  assert.equal(await scheduler.tick(),false);assert.equal(scheduler.running,false);assert.deepEqual(errors,['offline']);
  fail=false;assert.equal(await scheduler.tick(),true);closed=true;assert.equal(await scheduler.tick(),false);assert.equal(copies,1);
 });
+
+test('idle installation requests yield an active backup and leave a handoff window',async()=>{
+ let now=1000,interrupted=false;const job=deferred(),scheduler=new BackupScheduler({now:()=>now,copy:()=>job.promise,interrupt:()=>interrupted=true});const active=scheduler.tick();scheduler.pauseForUpdate();assert.equal(interrupted,true);job.resolve();await active;assert.equal(await scheduler.tick(),false);now+=15001;assert.equal(await scheduler.tick(),true);
+});

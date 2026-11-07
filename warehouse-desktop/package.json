@@ -16,6 +16,7 @@
     "electron-builder": "26.15.3"
   },
   "build": {
+    "asarUnpack": ["backup-files.cjs", "backup-replica.cjs"],
     "appId": "ru.fastgo.warehouse",
     "productName": "FastGo Склад",
     "directories": {
@@ -49,6 +50,7 @@
       "avito-toast.cjs",
       "avito-toast-preload.cjs",
       "backup-replica.cjs",
+      "backup-files.cjs",
       "backup-scheduler.cjs",
       "network-diagnostics.cjs",
       "network-window.cjs",

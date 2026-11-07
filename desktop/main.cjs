@@ -5,7 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
 const {Updates}=require('./updates.cjs');
 const {createWarehouseRuntime}=require('./warehouse-runtime.cjs');
-let warehouseRuntime,backupReplica,warehouseUpdater;
+let warehouseRuntime,backupReplica,backupScheduler,warehouseUpdater;
 let terminalProvisioner;
 async function setupTerminal(terminal,serial){if(!actor)return '';if(!terminalProvisioner)terminalProvisioner=require('./warehouse-native/terminal-provision.cjs').createTerminalProvisioner({terminal,dir:app.getPath('userData'),safeStorage,account:warehouseStation,request:p=>cloud('/functions/v1/fastgo-terminal-setup',p)});return terminalProvisioner(serial);}
 const {importLegacyStation}=require('./warehouse-station.cjs');
@@ -121,7 +121,7 @@ async function pollPrint(){if(updateInstalling||updateDraining||remoteBusy||prin
  }catch(e){lastError=e.message;if(job&&!['dispatched','submitted'].includes(store.printExists(actor,job.id)?.state))await remotePrint('fail',{station_id:store.setting('station_id'),request_id:store.setting('claim_token'),job_id:job.id,error:e.message}).catch(()=>{});}
  finally{remoteBusy=false;notify();}
 }
-async function backupTick(){if(!actor||!backupReplica||updateInstalling||updateDraining)return;try{store.backup();const me=store.cache(actor,'me');if(me)await backupReplica.tick({actor,owner:['owner','developer'].includes(me.role)});}catch(error){backupReplica.state={...backupReplica.state,status:'error',error:error.message};}}
+async function backupTick(){return backupScheduler?.tick();}
 async function reportDevice(){if(!actor||updateInstalling||updateDraining)return;const station=savedStation();if(!station)return;try{await cloud('/functions/v1/fastgo-warehouse',{action:'device_status',device_id:station.id,device_token:station.token,app:'desktop',version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update_status:updates?.state.status||'development',latest_version:updates?.state.version||app.getVersion(),blocking_reason:updates?.state.waitReason||'',pending_writes:store.stats(actor).pending});}catch{}}
 app.whenReady().then(()=>{
  store=new Store(path.join(app.getPath('userData'),'FastGo.sqlite'));if(!store.setting('station_id'))store.setting('station_id',randomUUID());store.setting('claim_token',randomUUID());
@@ -138,7 +138,7 @@ app.whenReady().then(()=>{
  handle('fg-request',request);
  handle('fg-diagnostics',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(!['owner','developer'].includes(member?.role))throw Error('Доступно только владельцу');return store.diagnostics(actor);});
  handle('fg-home-data',()=>{if(!actor)throw Error('Войдите в FastGo');const member=store.cache(actor,'me');if(store.cache(actor,'request_access')?.active===false||!['developer','owner','admin','receiver','manager','mechanic'].includes(member?.role))throw Error('Нет доступа к мастерской');return store.homeData(actor);});
- handle('fg-state',()=>({warehouseUpdate:warehouseUpdater?.state,recovery:backupReplica?.state,version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
+ handle('fg-state',()=>({warehouseUpdate:warehouseUpdater?.state,recovery:{...backupReplica?.state,local_sqlite:store.dailyState},version:app.getVersion(),host:require('node:os').hostname(),background:win?.isVisible?.()===false,update:updates?.state||{status:'development'},online:net.isOnline()&&online,warming,initialSync:!!(warming&&actor&&!store.cache(actor,'sync_checkpoint')),lastError:lastError||sync.lastError,printer:store.setting('printer'),remotePrint:!!store.setting('remote_print'),...(actor?store.stats(actor):{pending:0,conflicts:0,records:0})}));
  handle('fg-backups-check',async()=>{if(!actor)throw Error('Войдите в FastGo');await backupTick();return backupReplica.state;});
  handle('fg-update-check',async()=>{await updates?.check();return updates?.state;});
  handle('fg-update-now',()=>{if(!updates)throw Error('Обновления доступны в установленной версии FastGo');setTimeout(()=>updates.now(),0);return true;});
@@ -162,10 +162,11 @@ app.whenReady().then(()=>{
  win.loadURL('fastgo://app/workshop.html#home');
  void authorizeWarehouse();setInterval(()=>void authorizeWarehouse(),30000);
  backupReplica=new (require('./warehouse-native/backup-replica.cjs').BackupReplica)({dir:path.join(app.getPath('userData'),'recovery'),secure:{encrypt:s=>{if(!safeStorage.isEncryptionAvailable())throw Error('Windows не предоставил защищённое хранилище');return safeStorage.encryptString(s);},decrypt:b=>safeStorage.decryptString(b)},call:async(action,p)=>(await cloud('/functions/v1/fastgo-backups',{action,...p})).data,fetcher:net.fetch.bind(net),allowedOrigins:[BASE],app:'desktop',host:require('node:os').hostname()});
+ backupScheduler=new (require('./warehouse-native/backup-scheduler.cjs').BackupScheduler)({update:()=>updates,closed:()=>!store||!win||win.isDestroyed(),blocked:()=>updateInstalling||updateDraining||warehouseUpdater?.state.status==='installing',interrupt:()=>{backupReplica.pause();store.pauseDailyBackup();},copy:async()=>{await store.backupDaily();if(updateInstalling||updateDraining)return;try{await store.backupAutomatic();}catch(error){store.dailyStatus({status:'error',error:error.message});}if(!actor||updateInstalling||updateDraining)return;const me=store.cache(actor,'me');if(me)await backupReplica.tick({actor,owner:['owner','developer'].includes(me.role)});notify();},error:error=>{store.dailyStatus({status:'error',error:error.message});notify();}});
  setTimeout(()=>void backupTick(),30000);setInterval(()=>void backupTick(),60000);
  setInterval(()=>void reportDevice(),60000);
  if(app.isPackaged&&process.platform==='win32'){
-  warehouseUpdater=new (require('./warehouse-updater.cjs').WarehouseUpdater)({dir:path.join(app.getPath('userData'),'warehouse-update'),fetcher:net.fetch.bind(net),canInstall:()=>!updates||!['ready','preparing','installing'].includes(updates.state.status),report:async state=>{const station=savedStation();if(!actor||!station||!state.version)return;await cloud('/functions/v1/fastgo-warehouse',{action:'device_status',device_id:station.id,device_token:station.token,app:'warehouse',version:state.version,host:require('node:os').hostname(),update_status:state.status,latest_version:state.latest_version,error:state.error,blocking_reason:state.blocking_reason,observer:'companion'});}});
+  warehouseUpdater=new (require('./warehouse-updater.cjs').WarehouseUpdater)({dir:path.join(app.getPath('userData'),'warehouse-update'),fetcher:net.fetch.bind(net),canInstall:()=>!backupScheduler?.running&&!backupReplica?.busy&&(!updates||!['ready','preparing','installing'].includes(updates.state.status)),report:async state=>{const station=savedStation();if(!actor||!station||!state.version)return;await cloud('/functions/v1/fastgo-warehouse',{action:'device_status',device_id:station.id,device_token:station.token,app:'warehouse',version:state.version,host:require('node:os').hostname(),update_status:state.status,latest_version:state.latest_version,error:state.error,blocking_reason:state.blocking_reason,observer:'companion'});}});
   setTimeout(()=>void warehouseUpdater.tick(),45000);setInterval(()=>void warehouseUpdater.tick(),300000);
  }
  // Never put printing behind a database upload or its network timeout.
@@ -181,8 +182,9 @@ app.whenReady().then(()=>{
     // Stop starting new polls while existing requests drain. One-second print polling
     // must not starve installation forever, but any claimed print must finish first.
     updateDraining=idle;
+    if(idle&&(backupScheduler?.running||backupReplica?.busy))backupScheduler?.pauseForUpdate();
     // Queued jobs are durable and resume after restart; only active work must drain.
-    const busy=()=>warehouseUpdater?.state.status==='installing'?'Завершаем обновление склада':backupReplica?.busy?'Завершаем резервную копию':warehouseRuntime?.busy()?'Завершите документ склада и передачу сканов':printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
+    const busy=()=>warehouseUpdater?.state.status==='installing'?'Завершаем обновление склада':backupScheduler?.running||backupReplica?.busy?'Завершаем резервную копию':warehouseRuntime?.busy()?'Завершите документ склада и передачу сканов':printBusy?'Завершаем печать документа':remoteBusy?'Завершаем запрос к очереди печати':sync.busy||warming?'Завершаем синхронизацию базы':activeRequests?'Завершаем текущий запрос':'';
     const waiting=rendererReason||busy();if(waiting)return {allowed:false,reason:waiting};
     // Recheck on the renderer thread and block new input atomically before quitting.
     const locked=await win.webContents.executeJavaScript('window.fastgoLockForUpdate?.('+Boolean(immediate)+') === true');
@@ -198,4 +200,4 @@ app.whenReady().then(()=>{
 });
 app.on('second-instance',(_event,argv=[])=>{if(argv.includes('--background')||!win||win.isDestroyed())return;if(win.isMinimized())win.restore();win.show();win.focus();});
 app.on('window-all-closed',()=>app.quit());
-app.on('before-quit',()=>{warehouseRuntime?.close();try{store?.backup();store?.close();}catch{}});
+app.on('before-quit',()=>{warehouseRuntime?.close();backupReplica?.close();store?.pauseDailyBackup();try{store?.backup();store?.close();}catch{}});
