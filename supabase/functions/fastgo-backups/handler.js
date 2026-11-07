@@ -1,4 +1,5 @@
 import {b64,unb64,encryptArchive,decryptArchive,sha256,wrapKey} from './crypto.js';
+import {policy,backupDay,dailyHistory,summary,retentionPlan} from './policy.js';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-fastgo-backup-job','Access-Control-Allow-Methods':'POST,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:cors}),fail=(m,s=400)=>{throw Object.assign(Error(m),{status:s});};
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
@@ -12,19 +13,36 @@ export function createBackupHandler({base,key,publicBase=base,signingKey=key,fet
    if(!base||!key)fail('Резервирование временно недоступно',503);
    const db=async(table,q='',method='GET',body,prefer)=>{const r=await fetcher(base+'/rest/v1/'+table+(q?'?'+q:''),{method,headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json',...(prefer?{Prefer:prefer}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(30000)});if(!r.ok)fail('Ошибка хранилища резервных копий',503);if(r.status===204)return null;const text=await r.text();return text?JSON.parse(text):null;};
    const keys=()=>db('rpc/workshop_backup_keys','','POST',{});
-   const put=async(path,bytes)=>{const url=base+'/storage/v1/object/'+bucket+'/'+escaped(path),headers={apikey:key,Authorization:'Bearer '+key};const r=await fetcher(url,{method:'POST',headers:{...headers,'Content-Type':'application/octet-stream','x-upsert':'false'},body:bytes,signal:AbortSignal.timeout(60000)});let duplicate=r.status===409;if(!r.ok&&r.status===400){const error=await r.clone().json().catch(()=>({}));duplicate=error.statusCode==='409'||error.error==='Duplicate'||error.message==='The resource already exists';}if(duplicate){const existing=await fetcher(base+'/storage/v1/object/authenticated/'+bucket+'/'+escaped(path),{headers,signal:AbortSignal.timeout(60000)});if(!existing.ok)fail('Не удалось проверить существующий архив',503);return new Uint8Array(await existing.arrayBuffer());}if(!r.ok)fail('Не удалось записать резервный архив',503);return bytes;};
+   const snapshotRows=async()=>{const rows=[];for(let offset=0;;offset+=1000){const page=await db('workshop_backups','order=created_at.desc&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}};
+   const archivePath=path=>/^(database\/[a-f0-9-]{36}|media\/[a-f0-9]{64})\.fgarchive$/.test(path);
+   const readArchive=async path=>{if(!archivePath(path))fail('Некорректный путь архива',503);const r=await fetcher(base+'/storage/v1/object/authenticated/'+bucket+'/'+escaped(path),{headers:{apikey:key,Authorization:'Bearer '+key},signal:AbortSignal.timeout(60000)});if(!r.ok)fail('Сохранённый архив недоступен',503);return new Uint8Array(await r.arrayBuffer());};
+   const verifyPut=async(path,bytes)=>{const stored=await readArchive(path);if(stored.length!==bytes.length||await sha256(stored)!==await sha256(bytes))fail('Проверка записанного архива не пройдена',503);return stored;};
+   const removeArchive=async path=>{if(!archivePath(path))fail('Некорректный путь ротации',503);const r=await fetcher(base+'/storage/v1/object/'+bucket,{method:'DELETE',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({prefixes:[path]}),signal:AbortSignal.timeout(30000)});if(!r.ok)fail('Не удалось завершить ротацию архивов',503);};
+   let budgetUsed;
+   const put=async(path,bytes)=>{if(budgetUsed===undefined){const usage=await db('rpc/workshop_backup_storage_usage','','POST',{});budgetUsed=Number(usage.bytes);if(!Number.isSafeInteger(budgetUsed)||budgetUsed<0)fail('Не удалось проверить объём резервов',503);}
+    if(budgetUsed+bytes.length>policy.max_bytes){const existing=await fetcher(base+'/storage/v1/object/authenticated/'+bucket+'/'+escaped(path),{headers:{apikey:key,Authorization:'Bearer '+key},signal:AbortSignal.timeout(60000)});if(existing.ok)return new Uint8Array(await existing.arrayBuffer());fail('Лимит резервов 512 МБ достигнут. Исправные копии сохранены.',507);}
+    const url=base+'/storage/v1/object/'+bucket+'/'+escaped(path),headers={apikey:key,Authorization:'Bearer '+key};const r=await fetcher(url,{method:'POST',headers:{...headers,'Content-Type':'application/octet-stream','x-upsert':'false'},body:bytes,signal:AbortSignal.timeout(60000)});let duplicate=r.status===409;if(!r.ok&&r.status===400){const error=await r.clone().json().catch(()=>({}));duplicate=error.statusCode==='409'||error.error==='Duplicate'||error.message==='The resource already exists';}if(duplicate){const existing=await fetcher(base+'/storage/v1/object/authenticated/'+bucket+'/'+escaped(path),{headers,signal:AbortSignal.timeout(60000)});if(!existing.ok)fail('Не удалось проверить существующий архив',503);return new Uint8Array(await existing.arrayBuffer());}if(!r.ok)fail('Не удалось записать резервный архив',503);budgetUsed+=bytes.length;return bytes;};
    const mediaRows=async columns=>{const rows=[];for(let offset=0;;offset+=1000){const page=await db('workshop_backup_media','select='+columns+'&order=id&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}};
    const signed=async path=>{const r=await fetcher(base+'/storage/v1/object/sign/'+bucket+'/'+escaped(path),{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:900}),signal:AbortSignal.timeout(20000)});if(!r.ok)fail('Не удалось открыть резервный архив',503);const data=await r.json(),relative=data.signedURL||data.signedUrl;if(typeof relative!=='string'||!relative.startsWith('/object/sign/'+bucket+'/'))fail('Некорректная ссылка архива',503);return publicBase+'/storage/v1'+relative;};
    const sourceMedia=async file=>{const r=await fetcher(base+'/storage/v1/object/authenticated/'+escaped(file.bucket)+'/'+escaped(file.name),{headers:{apikey:key,Authorization:'Bearer '+key},signal:AbortSignal.timeout(60000)});if(!r.ok)fail('Файл резервной копии недоступен. Сохранён предыдущий архив.',503);const declared=Number(r.headers.get('content-length'));if(declared>24*1024*1024)fail('Файл превышает размер блока резервирования',413);const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length>24*1024*1024)fail('Файл превышает размер блока резервирования',413);return bytes;};
    const raw=await request.text();if(raw.length>12000)fail('Слишком большой запрос',413);let p;try{p=JSON.parse(raw);}catch{fail('Неверный запрос');}if(!p||typeof p!=='object')fail('Неверный запрос');
-   const job=request.headers.get('x-fastgo-backup-job');let member,user;
+   const job=request.headers.get('x-fastgo-backup-job');let member,user,hardware=false;
    if(job){const secret=await keys();if(!equal(job,secret.job_token)||p.action!=='tick')fail('Нет доступа',401);}
    else{
-    const authorization=request.headers.get('authorization');if(!authorization?.startsWith('Bearer '))fail('Войдите в FastGo',401);
-    const r=await fetcher(base+'/auth/v1/user',{headers:{apikey:key,Authorization:authorization},signal:AbortSignal.timeout(12000)});if(!r.ok)fail('Войдите в FastGo',401);user=await r.json();
+    const authorization=request.headers.get('authorization');
+    if(authorization?.startsWith('Bearer ')){
+     const r=await fetcher(base+'/auth/v1/user',{headers:{apikey:key,Authorization:authorization},signal:AbortSignal.timeout(12000)});if(!r.ok)fail('Войдите в FastGo',401);user=await r.json();
+    }else{
+     if(!['register','history','snapshot','latest','media','receipt'].includes(p.action)||!uuid(p.device_id)||typeof p.device_token!=='string'||!/^[a-f0-9-]{72}$/i.test(p.device_token))fail('Войдите в FastGo',401);
+     const terminal=(await db('workshop_warehouse_devices','id=eq.'+p.device_id+'&kind=eq.terminal&active=eq.true'))[0];
+     if(!terminal||!equal(terminal.token_hash,await sha256(p.device_token))||!uuid(terminal.station_id))fail('Привязка ТСД отключена',403);
+     const station=(await db('workshop_warehouse_devices','id=eq.'+terminal.station_id+'&kind=eq.station&active=eq.true'))[0];
+     if(!station||!(await db('workshop_terminal_stations','station_id=eq.'+terminal.station_id+'&select=station_id')).length)fail('Рабочее место ТСД отключено',403);
+     hardware=true;user={id:terminal.created_by};
+    }
     member=(await db('workshop_members','profile_id=eq.'+user.id+'&active=eq.true&select=role,name'))[0];if(!member)fail('Нет доступа к FastGo',403);
    }
-   const owner=member&&['owner','developer'].includes(member.role);
+   const owner=!hardware&&member&&['owner','developer'].includes(member.role);
    if(p.action==='status'){
     if(!owner)fail('Состояние резервных копий доступно владельцу',403);
     const snapshot=(await db('workshop_backups','order=created_at.desc&limit=1'))[0],control=(await db('workshop_backup_control','id=eq.1&select=last_started_at,last_completed_at,last_error,server_url'))[0];
@@ -41,42 +59,61 @@ export function createBackupHandler({base,key,publicBase=base,signingKey=key,fet
     if(!lease?.length)return out({data:{busy:true}});
     let snapshot;
     try{
-     const secret=await keys();snapshot=(await db('workshop_backups','order=created_at.desc&limit=1'))[0];const state=(await db('workshop_native_state','id=eq.1&select=version'))[0];
-     const age=snapshot?now()-new Date(snapshot.created_at).getTime():Infinity;
-     if(!snapshot||age>=3600000||age>=900000&&Number(snapshot.source_version)!==Number(state.version)){
-      const data=await db('rpc/workshop_backup_export','','POST',{});if(data?.format!==1||!data.native?.sheets||!data.tables)fail('Неполный снимок базы',503);
+     const secret=await keys(),day=backupDay(now());
+     snapshot=(await snapshotRows()).find(x=>x.backup_day===day&&x.manifest?.policy_version===2);
+     if(!snapshot){
+      const data=await db('rpc/workshop_backup_export','','POST',{});if(data?.format!==1||data.export_scope!=='full-project'||!data.native?.sheets||!data.tables||!Array.isArray(data.media))fail('Неполный снимок базы',503);
       data.migration={signing_key:signingKey};const id=crypto.randomUUID(),created_at=new Date(now()).toISOString(),files=await Promise.all(data.media.map(async f=>({...f,id:await mediaId(f)})));data.media=files;
-      const manifest={format:1,media:files,table_counts:Object.fromEntries(Object.entries(data.tables).map(([name,rows])=>[name,rows.length])),native_rows:Object.values(data.native.sheets).reduce((sum,sheet)=>sum+sheet.rows.length,0)};
+      const table_counts=Object.fromEntries(Object.entries(data.tables).map(([name,rows])=>[name,rows.length]));
+      // Old clients validate tables against workshop/auth names. Extra project
+      // tables travel in the same encrypted payload, without breaking that reader.
+      data.project_tables=Object.fromEntries(Object.entries(data.tables).filter(([name])=>!(/^(public\.workshop_|auth\.)/.test(name))));
+      data.tables=Object.fromEntries(Object.entries(data.tables).filter(([name])=>/^(public\.workshop_|auth\.)/.test(name)));
+      const manifest={format:1,policy_version:2,scope:'full-project',media:files,table_counts,native_rows:Object.values(data.native.sheets).reduce((sum,sheet)=>sum+sheet.rows.length,0)};
       const packed=new Uint8Array(await new Response(new Blob([JSON.stringify(data)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
-      let bytes=await encryptArchive(packed,secret.key,{kind:'database',compression:'gzip',id,key_id:secret.key_id,source_version:data.source_version,created_at});const path='database/'+id+'.fgarchive';bytes=await put(path,bytes);const verified=await decryptArchive(bytes,secret.key);if(verified.meta.id!==id)fail('Некорректный существующий архив',503);
-      snapshot={id,source_version:data.source_version,created_at,object_path:path,sha256:await sha256(bytes),bytes:bytes.length,key_id:secret.key_id,manifest};await db('workshop_backups','','POST',snapshot);
+      let bytes=await encryptArchive(packed,secret.key,{kind:'database',compression:'gzip',id,key_id:secret.key_id,source_version:data.source_version,created_at});const path='database/'+id+'.fgarchive';bytes=await verifyPut(path,await put(path,bytes));const verified=await decryptArchive(bytes,secret.key);if(verified.meta.id!==id)fail('Некорректный существующий архив',503);
+      snapshot={id,source_version:data.source_version,created_at,backup_day:day,completed_at:null,object_path:path,sha256:await sha256(bytes),bytes:bytes.length,key_id:secret.key_id,manifest};await db('workshop_backups','','POST',snapshot);
      }
      const ready=new Set((await mediaRows('id')).map(x=>x.id));let copied=0;
      for(const file of snapshot.manifest.media){if(ready.has(file.id))continue;if(copied>=8)break;const rawBytes=await sourceMedia(file),plainHash=await sha256(rawBytes),path='media/'+file.id+'.fgarchive';let bytes=await encryptArchive(rawBytes,secret.key,{kind:'media',id:file.id,key_id:secret.key_id,plain_sha256:plainHash});
-      bytes=await put(path,bytes);const verified=await decryptArchive(bytes,secret.key);if(verified.meta.id!==file.id||await sha256(verified.bytes)!==plainHash)fail('Исходный файл изменился во время резервирования',409);
+      bytes=await verifyPut(path,await put(path,bytes));const verified=await decryptArchive(bytes,secret.key);if(verified.meta.id!==file.id||await sha256(verified.bytes)!==plainHash)fail('Исходный файл изменился во время резервирования',409);
       await db('workshop_backup_media','','POST',{id:file.id,bucket:file.bucket,source_path:file.name,source_stamp:file.stamp,object_path:path,sha256:await sha256(bytes),plain_sha256:plainHash,bytes:bytes.length,key_id:secret.key_id},'resolution=ignore-duplicates');copied++;
      }
+     const finished=await db('rpc/workshop_backup_complete','','POST',{p_id:snapshot.id});let removed=0;
+     if(finished?.completed){
+      const plan=retentionPlan(await snapshotRows(),await mediaRows('*'));
+      if(plan.expired.length||plan.media.length){
+       for(const saved of plan.retained){const bytes=await readArchive(saved.object_path);if(bytes.length!==Number(saved.bytes)||await sha256(bytes)!==saved.sha256)fail('Ротация остановлена: повреждён сохранённый архив',503);const opened=await decryptArchive(bytes,secret.key);if(opened.meta.id!==saved.id)fail('Ротация остановлена: неверный снимок',503);}
+       const safe=await db('rpc/workshop_backup_retention_ready','','POST',{p_ids:plan.retained.map(x=>x.id)});if(!safe?.ready)fail('Ротация отложена: не все файлы семи копий доступны',503);
+       for(const saved of plan.expired.slice(0,24)){await removeArchive(saved.object_path);await db('workshop_backups','id=eq.'+saved.id,'DELETE');removed++;}
+       if(plan.expired.length<=24)for(const file of plan.media.slice(0,24)){await removeArchive(file.object_path);await db('workshop_backup_media','id=eq.'+file.id,'DELETE');}
+      }
+     }
      await db('workshop_backup_control','id=eq.1&lease_until=eq.'+encodeURIComponent(until),'PATCH',{lease_until:null,last_completed_at:new Date(now()).toISOString(),last_error:''});
-     return out({data:{snapshot_id:snapshot.id,source_version:snapshot.source_version,media_copied:copied,media_expected:snapshot.manifest.media.length}});
+     return out({data:{snapshot_id:snapshot.id,source_version:snapshot.source_version,media_copied:copied,media_expected:snapshot.manifest.media.length,completed:finished?.completed===true,removed,policy}});
     }catch(error){await db('workshop_backup_control','id=eq.1&lease_until=eq.'+encodeURIComponent(until),'PATCH',{lease_until:null,last_error:String(error.message||'backup_error').slice(0,500)}).catch(()=>{});throw error;}
    }
    if(!uuid(p.device_id)||typeof p.device_token!=='string'||!/^[a-f0-9-]{72}$/i.test(p.device_token))fail('Неверная копия устройства');
    let device=(await db('workshop_backup_devices','device_id=eq.'+p.device_id))[0];const tokenHash=await sha256(p.device_token);
    if(p.action==='register'){
-    if(!['desktop','warehouse'].includes(p.app))fail('Неверное приложение');
+    if(!['desktop','warehouse','android','tsd'].includes(p.app)||hardware&&p.app!=='tsd')fail('Неверное приложение');
     if(device&&(device.registered_by!==user.id||!equal(device.token_hash,tokenHash)))fail('Устройство уже зарегистрировано',409);
-    let public_key=null,public_key_sha256=null;if(owner){if(typeof p.public_key!=='string'||p.public_key.length>1500)fail('Неверный ключ восстановления');await wrapKey(b64(new Uint8Array(32)),p.public_key);public_key=p.public_key;public_key_sha256=await sha256(unb64(p.public_key));}
+    let public_key=owner?device?.public_key||null:null,public_key_sha256=owner?device?.public_key_sha256||null:null;if(owner&&p.public_key){if(typeof p.public_key!=='string'||p.public_key.length>1500)fail('Неверный ключ восстановления');await wrapKey(b64(new Uint8Array(32)),p.public_key);public_key=p.public_key;public_key_sha256=await sha256(unb64(p.public_key));}
     device={device_id:p.device_id,registered_by:user.id,token_hash:tokenHash,public_key,public_key_sha256,app:p.app,host:String(p.host||'').slice(0,120),last_seen:new Date(now()).toISOString()};
-    await db('workshop_backup_devices','','POST',device,'resolution=merge-duplicates');return out({data:{registered:true,recovery_key:owner}});
+    await db('workshop_backup_devices','','POST',device,'resolution=merge-duplicates');return out({data:{registered:true,recovery_key:!!public_key}});
    }
    if(!device||device.registered_by!==user.id||!equal(device.token_hash,tokenHash))fail('Зарегистрируйте резервную копию ноутбука',403);
-   const snapshot=(await db('workshop_backups','order=created_at.desc&limit=1'))[0];
-   if(p.action==='latest'){
+   const rows=await snapshotRows(),history=dailyHistory(rows);
+   if(p.action==='history')return out({data:{policy,snapshots:history.map(summary)}});
+   if(p.snapshot_id!==undefined&&!uuid(p.snapshot_id))fail('Неверный снимок',400);
+   const snapshot=p.snapshot_id?history.find(x=>x.id===p.snapshot_id):(history[0]||rows.find(x=>x.manifest?.policy_version!==2));
+   if(p.action==='snapshot'&&!snapshot)fail('Снимок не входит в сохранённые суточные копии',404);
+   if(p.action==='latest'||p.action==='snapshot'){
     if(!snapshot)return out({data:{pending:true}});
     const secret=await keys(),all=await db('workshop_backup_devices','public_key=not.is.null&select=device_id,public_key,public_key_sha256,registered_by'),active=new Set((await db('workshop_members','active=eq.true&role=in.(owner,developer)&select=profile_id')).map(x=>x.profile_id));
     const key_boxes=await Promise.all(all.filter(x=>active.has(x.registered_by)).map(async x=>({device_id:x.device_id,public_key_sha256:x.public_key_sha256,key_id:secret.key_id,wrapped_key:await wrapKey(secret.key,x.public_key)})));
     const media=await mediaRows('id,sha256,bytes,key_id'),wanted=new Set(snapshot.manifest.media.map(x=>x.id));
-    return out({data:{id:snapshot.id,created_at:snapshot.created_at,source_version:snapshot.source_version,sha256:snapshot.sha256,bytes:snapshot.bytes,key_id:snapshot.key_id,key_boxes,media:media.filter(x=>wanted.has(x.id)),media_expected:wanted.size,url:await signed(snapshot.object_path)}});
+    return out({data:{id:snapshot.id,day:snapshot.backup_day,completed_at:snapshot.completed_at,created_at:snapshot.created_at,source_version:snapshot.source_version,sha256:snapshot.sha256,bytes:snapshot.bytes,key_id:snapshot.key_id,key_boxes,media:media.filter(x=>wanted.has(x.id)),media_expected:wanted.size,url:await signed(snapshot.object_path)}});
    }
    if(p.action==='media'){
     if(typeof p.id!=='string'||!/^[a-f0-9]{64}$/.test(p.id)||!snapshot?.manifest.media.some(x=>x.id===p.id))fail('Файл не относится к снимку',404);

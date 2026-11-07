@@ -8,6 +8,9 @@ create table if not exists public.workshop_backups (
  manifest jsonb not null check(jsonb_typeof(manifest)='object')
 );
 create index if not exists workshop_backups_created on public.workshop_backups(created_at desc);
+alter table public.workshop_backups add column if not exists backup_day date;
+alter table public.workshop_backups add column if not exists completed_at timestamptz;
+create unique index if not exists workshop_backups_daily on public.workshop_backups(backup_day) where (manifest->>'policy_version')='2';
 create table if not exists public.workshop_backup_media (
  id text primary key check(id ~ '^[0-9a-f]{64}$'), bucket text not null, source_path text not null,
  source_stamp text not null, object_path text not null unique, sha256 text not null,
@@ -28,6 +31,10 @@ create table if not exists public.workshop_backup_control (
  last_error text not null default '', server_url text
 );
 insert into public.workshop_backup_control(id) values(1) on conflict do nothing;
+alter table public.workshop_backup_devices drop constraint if exists workshop_backup_devices_app_check;
+alter table public.workshop_backup_devices add constraint workshop_backup_devices_app_check check(app in ('desktop','warehouse','android','tsd'));
+alter table public.workshop_backup_devices drop constraint if exists workshop_backup_devices_snapshot_id_fkey;
+alter table public.workshop_backup_devices add constraint workshop_backup_devices_snapshot_id_fkey foreign key(snapshot_id) references public.workshop_backups(id) on delete set null;
 do $$ declare t text;begin foreach t in array array['workshop_backups','workshop_backup_media','workshop_backup_devices','workshop_backup_control'] loop
  execute format('alter table public.%I enable row level security',t);
  execute format('revoke all on public.%I from public,anon,authenticated',t);
@@ -41,10 +48,10 @@ create or replace function public.workshop_backup_export() returns jsonb
 language plpgsql stable security definer set search_path=pg_catalog,public as $$
 declare t record; rows jsonb; tables jsonb:='{}'; definitions jsonb:='{}'; media jsonb; accounts uuid[];
 begin
- select array_agg(profile_id) into accounts from public.workshop_members;
+ select array_agg(id) into accounts from auth.users;
  for t in select c.oid,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='public' and c.relkind='r' and c.relname like 'workshop\_%' escape '\'
-  and c.relname not like 'workshop\_backup%' escape '\' and c.relname not in ('workshop_device_status','workshop_app_versions') order by c.relname loop
+  where n.nspname='public' and c.relkind in ('r','p')
+  and c.relname not like 'workshop\_backup%' escape '\' order by c.relname loop
   execute format('select coalesce(jsonb_agg(to_jsonb(x)),''[]'') from public.%I x',t.relname) into rows;
   tables:=tables||jsonb_build_object('public.'||t.relname,rows);
   definitions:=definitions||jsonb_build_object(t.relname,jsonb_build_object(
@@ -62,14 +69,44 @@ begin
   else execute 'select coalesce(jsonb_agg(to_jsonb(x)),''[]'') from auth.mfa_amr_claims x where session_id in (select id from auth.sessions where user_id=any($1))' into rows using accounts;end if;
   tables:=tables||jsonb_build_object('auth.'||t.table_name,rows);
  end loop;
- select coalesce(jsonb_agg(jsonb_build_object('bucket',bucket_id,'name',name,'stamp',updated_at::text||':'||coalesce(metadata->>'eTag',''),'bytes',coalesce((metadata->>'size')::bigint,0)) order by name),'[]') into media from storage.objects where bucket_id='fastgo-workshop-private';
- return jsonb_build_object('format',1,'source_version',(select version from public.workshop_native_state where id=1),'native',public.workshop_native_snapshot(),'tables',tables,'schema',definitions,'media',media,
-  'functions',(select coalesce(jsonb_agg(pg_get_functiondef(p.oid)),'[]') from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f' and (p.proname like '%workshop%' or p.proname like 'warehouse_%') and p.proname not like 'workshop_backup%'),
+ select coalesce(jsonb_agg(jsonb_build_object('bucket',bucket_id,'name',name,'stamp',updated_at::text||':'||coalesce(metadata->>'eTag',''),'bytes',coalesce((metadata->>'size')::bigint,0)) order by bucket_id,name),'[]') into media from storage.objects where bucket_id in ('fastgo-workshop-private','fastgo-media','fastgo-private','rental-private-docs');
+ return jsonb_build_object('format',1,'export_scope','full-project','source_version',(select version from public.workshop_native_state where id=1),'native',public.workshop_native_snapshot(),'tables',tables,'schema',definitions,'media',media,
+  'policies',(select coalesce(jsonb_agg(to_jsonb(p)),'[]') from pg_policies p where schemaname='public'),
+  'grants',(select coalesce(jsonb_agg(to_jsonb(g)),'[]') from information_schema.role_table_grants g where table_schema='public'),
+  'buckets',(select coalesce(jsonb_agg(to_jsonb(b)),'[]') from storage.buckets b where id in ('fastgo-workshop-private','fastgo-media','fastgo-private','rental-private-docs')),
+  'functions',(select coalesce(jsonb_agg(pg_get_functiondef(p.oid)),'[]') from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f' and p.proname not like 'workshop_backup%' and not exists(select 1 from pg_depend d where d.classid='pg_proc'::regclass and d.objid=p.oid and d.deptype='e')),
   'extensions',(select jsonb_agg(extname) from pg_extension),
-  'secrets',(select coalesce(jsonb_object_agg(name,decrypted_secret),'{}') from vault.decrypted_secrets where name='fastgo_avito_credentials'));
+  'secrets',(select coalesce(jsonb_object_agg(name,decrypted_secret),'{}') from vault.decrypted_secrets where name like 'fastgo\_%' escape '\' and name not like 'fastgo\_backup\_%' escape '\'));
 end $$;
 revoke all on function public.workshop_backup_export() from public,anon,authenticated;
 grant execute on function public.workshop_backup_export() to service_role;
+
+-- Only server-verified writes are eligible for completion. No public access.
+create or replace function public.workshop_backup_files_ready(p_id uuid) returns boolean
+language sql stable security invoker set search_path=pg_catalog,public as $$
+ select coalesce((select exists(select 1 from storage.objects o where o.bucket_id='fastgo-backups' and o.name=b.object_path and (o.metadata->>'size')::bigint=b.bytes)
+ and not exists(select 1 from jsonb_array_elements(b.manifest->'media') f
+  left join public.workshop_backup_media m on m.id=f->>'id'
+  left join storage.objects o on o.bucket_id='fastgo-backups' and o.name=m.object_path
+  where m.id is null or o.id is null or (o.metadata->>'size')::bigint is distinct from m.bytes)
+ from public.workshop_backups b where b.id=p_id),false)
+$$;
+create or replace function public.workshop_backup_complete(p_id uuid) returns jsonb
+language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare ready boolean;begin
+ if current_user not in ('service_role','postgres') then raise exception 'Forbidden';end if;
+ ready:=public.workshop_backup_files_ready(p_id);
+ if ready then update public.workshop_backups set completed_at=coalesce(completed_at,now()) where id=p_id and (manifest->>'policy_version')='2';end if;
+ return jsonb_build_object('completed',ready and exists(select 1 from public.workshop_backups where id=p_id and completed_at is not null));
+end $$;
+create or replace function public.workshop_backup_retention_ready(p_ids uuid[]) returns jsonb
+language sql stable security invoker set search_path=pg_catalog,public as $$
+ select jsonb_build_object('ready',count(*)=7 and count(distinct backup_day)=7
+ and bool_and(completed_at is not null and (manifest->>'policy_version')='2' and public.workshop_backup_files_ready(id)))
+ from public.workshop_backups where id=any(p_ids)
+$$;
+revoke all on function public.workshop_backup_files_ready(uuid),public.workshop_backup_complete(uuid),public.workshop_backup_retention_ready(uuid[]) from public,anon,authenticated;
+grant execute on function public.workshop_backup_files_ready(uuid),public.workshop_backup_complete(uuid),public.workshop_backup_retention_ready(uuid[]) to service_role;
 
 create or replace function public.workshop_backup_keys() returns jsonb
 language plpgsql security invoker set search_path=public,vault,pg_temp as $$
@@ -102,3 +139,13 @@ end $$;
 revoke all on function public.workshop_backup_schedule(text) from public,anon,authenticated;
 grant execute on function public.workshop_backup_schedule(text) to service_role;
 commit;
+
+-- Count actual encrypted objects, including partial/orphaned uploads and manual
+-- objects in this dedicated bucket. Only the server can call this function.
+create or replace function public.workshop_backup_storage_usage() returns jsonb
+language sql stable security invoker set search_path=pg_catalog,public as $$
+ select jsonb_build_object('bytes',coalesce(sum(coalesce((metadata->>'size')::bigint,536870912)),0),'max_bytes',536870912)
+ from storage.objects where bucket_id='fastgo-backups'
+$$;
+revoke all on function public.workshop_backup_storage_usage() from public,anon,authenticated;
+grant execute on function public.workshop_backup_storage_usage() to service_role;
