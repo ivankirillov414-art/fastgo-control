@@ -1,0 +1,50 @@
+name: FastGo verified Windows backup drafts
+on:
+  push:
+    branches: ['codex/backup-seven-days-20261107']
+    paths:
+      - '.github/workflows/backup-windows-drafts.yml'
+      - 'scripts/publish-backup-windows-drafts.py'
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: fastgo-backup-windows-drafts
+  cancel-in-progress: false
+jobs:
+  drafts:
+    if: github.repository == 'ivankirillov414-art/fastgo-control' && github.ref == 'refs/heads/codex/backup-seven-days-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN: '42470508619'
+      BUILD_SHA: '12fa9f3763621229cdf4136d6e4804c8ea3fa176'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require the exact successful native build
+        run: python3 scripts/publish-backup-windows-drafts.py gate
+      - uses: actions/download-artifact@v4
+        with:
+          name: backup-windows-native-evidence
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.BUILD_RUN }}
+          path: native-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: backup-windows-update-candidates
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.BUILD_RUN }}
+          path: candidates
+      - name: Verify immutable bytes and prepare draft releases only
+        run: python3 scripts/publish-backup-windows-drafts.py drafts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backup-windows-draft-result
+          retention-days: 7
+          if-no-files-found: warn
+          path: WINDOWS_BACKUP_DRAFT_RESULT.json
