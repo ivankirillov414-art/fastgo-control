@@ -1,0 +1,41 @@
+name: FastGo fixed TSD unsigned candidates
+on:
+ push:
+  branches: [codex/backup-seven-days-20261107]
+  paths: ['.github/workflows/backup-tsd-fixed-candidates.yml']
+ workflow_dispatch:
+permissions: {contents: read}
+jobs:
+ unsigned:
+  runs-on: ubuntu-latest
+  timeout-minutes: 20
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-java@v4
+     with: {distribution: temurin, java-version: '17'}
+   - uses: android-actions/setup-android@v3
+     with: {packages: platform-tools}
+   - uses: gradle/actions/setup-gradle@v4
+     with: {gradle-version: '8.11.1'}
+   - name: Build corrected candidate and existing instrumentation only
+     working-directory: warehouse-android
+     run: |
+      gradle :native:assembleRelease :native:assembleDebugAndroidTest --no-daemon
+      mkdir -p ../outputs/tsd-fixed-unsigned
+      cp native/build/outputs/apk/release/native-release-unsigned.apk ../outputs/tsd-fixed-unsigned/candidate13.apk
+      cp native/build/outputs/apk/androidTest/debug/native-debug-androidTest.apk ../outputs/tsd-fixed-unsigned/tests.apk
+      gradle :native:assembleRelease -PfastgoVersionCode=14 -PfastgoVersionName=2.1.10-fixture --no-daemon
+      cp native/build/outputs/apk/release/native-release-unsigned.apk ../outputs/tsd-fixed-unsigned/fixture14.apk
+   - name: Record exact source and unsigned hashes
+     run: |
+      python3 - <<'PY'
+      import pathlib,hashlib,json,os
+      p=pathlib.Path('outputs/tsd-fixed-unsigned')
+      r={'source_commit':os.environ['GITHUB_SHA'],'run':int(os.environ['GITHUB_RUN_ID']),'files':{f.name:{'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest()} for f in p.glob('*.apk')}}
+      (p/'manifest.json').write_text(json.dumps(r,indent=2));print(json.dumps(r))
+      PY
+   - uses: actions/upload-artifact@v4
+     with:
+      name: backup-tsd-fixed-unsigned-2.1.10
+      path: outputs/tsd-fixed-unsigned/
+      retention-days: 14

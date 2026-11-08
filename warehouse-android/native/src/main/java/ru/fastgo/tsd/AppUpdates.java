@@ -43,7 +43,12 @@ public final class AppUpdates {
    try(InputStream in=new FileInputStream(apk);OutputStream out=session.openWrite("base.apk",0,apk.length())){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);session.fsync(out);}
    Intent result=new Intent(context,InstallResultActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
    int flags=android.app.PendingIntent.FLAG_UPDATE_CURRENT;if(Build.VERSION.SDK_INT>=31)flags|=android.app.PendingIntent.FLAG_MUTABLE;
-   android.app.PendingIntent callback=android.app.PendingIntent.getActivity(context,sessionId,result,flags);
+   android.os.Bundle callbackOptions=null;
+   // The system delivers this explicit callback while the scanner's idle screen
+   // is visible. Target35 no longer lends the creator's launch privilege by
+   // default, even though PackageInstaller itself sends the PendingIntent.
+   if(Build.VERSION.SDK_INT>=35){android.app.ActivityOptions options=android.app.ActivityOptions.makeBasic();options.setPendingIntentCreatorBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);callbackOptions=options.toBundle();}
+   android.app.PendingIntent callback=android.app.PendingIntent.getActivity(context,sessionId,result,flags,callbackOptions);
    session.commit(callback.getIntentSender());committed=true;
   }finally{if(!committed)installer.abandonSession(sessionId);}
   store.put("update_install_started_at",Long.toString(System.currentTimeMillis()));

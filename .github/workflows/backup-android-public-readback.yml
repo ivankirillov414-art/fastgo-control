@@ -1,0 +1,24 @@
+name: FastGo phone public streamed readback
+on:
+ push:
+  branches: [codex/backup-seven-days-20261107]
+  paths: ['.github/workflows/backup-android-public-readback.yml','scripts/check-backup-phone-public.py']
+ workflow_dispatch:
+permissions: {contents: read}
+jobs:
+ public:
+  runs-on: ubuntu-latest
+  timeout-minutes: 8
+  strategy:
+   fail-fast: false
+   matrix: {source: [raw, release, pages]}
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-java@v4
+     with: {distribution: temurin, java-version: '17'}
+   - run: python3 scripts/check-backup-phone-public.py
+     env: {PUBLIC_SOURCE: '${{ matrix.source }}'}
+   - uses: actions/upload-artifact@v4
+     with:
+      name: backup-phone-public-readback-${{ matrix.source }}
+      path: public-readback.json
