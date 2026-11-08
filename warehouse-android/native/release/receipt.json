@@ -1,0 +1,17 @@
+{
+  "file": "warehouse/native/FastGo-TSD-2.1.10.apk",
+  "package": "ru.fastgo.tsd.app",
+  "versionCode": 13,
+  "versionName": "2.1.10",
+  "source_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+  "unsigned_run": 42372406990,
+  "unsigned_sha256": "9003f2fcc723e5d515576617b2c1fcdf527370a6448610d57344adb9688a3e2f",
+  "sha256": "491a2c90a2771816b2a770820b7500c063d504fad3de0e9ce16f71293a238414",
+  "certificate_sha256": "72817ae5c97c8c60255ca3c029d4ecdd171ec0c33bc28a640e8c7ab0bdb637dd",
+  "signature_verified": true,
+  "test_file": "warehouse-android/native/release/FastGo-TSD-2.1.10-upgrade-tests.apk",
+  "test_sha256": "2efc88b89bab96224b17e076269f876afe8c46a3c640618a3d9dfeee3a3622b1",
+  "test_candidate_sha256": "491a2c90a2771816b2a770820b7500c063d504fad3de0e9ce16f71293a238414",
+  "release_device_tests": "pending",
+  "backup_policy": "Seven successful daily encrypted archives; preserve previous successful archive on failure; quota 512MiB and free floor 512MiB"
+}

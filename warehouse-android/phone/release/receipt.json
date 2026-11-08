@@ -1,13 +1,16 @@
 {
-  "file": "FastGo-Android-1.0.16.apk",
+  "file": "FastGo-Android-1.0.17.apk",
   "package": "ru.fastgo.mobile",
-  "version": "1.0.16",
-  "source_commit": "2ebe529fa13039bbdca9de910521e4dca3dec352",
-  "unsigned_sha256": "7ed70489a7b8190e248f067172c40a333cd457f8041f3f558801e3f40284ec29",
-  "sha256": "d583845199fab1d429f9c2b83fa82ae6c37427527298969594d45c4f0e5b23ad",
-  "signing": "local private key, never uploaded",
+  "version": "1.0.17",
+  "versionCode": 18,
+  "source_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+  "unsigned_run": 42372406990,
+  "unsigned_sha256": "aca4c5efe9c7f3d5cdad823387fb8438289d18f23f2a11ed26e96658d0f97fab",
+  "sha256": "08c6c93c5fde9b47ee30fd0c818cb44340115122f34df8d2b00321cbccab68c9",
+  "certificate_sha256": "26f79b6746e6b6a93e5f4a8d6630cffb65332669e2c555b36e38f40a4f0ec1f3",
+  "signing": "existing local private key, never uploaded",
   "signature_verified": true,
   "built_and_debug_emulator_tested": false,
   "release_device_tests": "pending",
-  "service_editing": "visible shared service editors; independent QA passed; signed installation gates pending"
+  "backup_policy": "Seven successful daily encrypted archives; preserve previous successful archive on failure; quota 512MiB and free floor 512MiB"
 }
