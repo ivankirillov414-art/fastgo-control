@@ -127,8 +127,15 @@ def drafts():
         assert package["version"] == version and package["name"] == app
         expected_inputs = {"package.json", "package-lock.json", package["build"]["nsis"]["include"]}
         assert set(manifest["inputs"]) == expected_inputs
+        input_transport = {}
         for input_name, digest in manifest["inputs"].items():
-            assert hashlib.sha256(source_bytes(folder + "/" + input_name)).hexdigest() == digest, f"Source input differs: {input_name}"
+            raw = source_bytes(folder + "/" + input_name)
+            # Windows Git checkout may convert text inputs to CRLF. Compare only
+            # the exact repository bytes or this deterministic checkout transform.
+            variants = {"repository-bytes": raw, "git-crlf": raw.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")}
+            matches = [mode for mode, content in variants.items() if hashlib.sha256(content).hexdigest() == digest]
+            assert matches, f"Source input differs: {input_name}"
+            input_transport[input_name] = matches[0]
         proof_file = evidence_root / proof_name
         proofs = [json.loads(line) for line in proof_file.read_text(encoding="utf-8-sig").splitlines() if line.startswith("{")]
         assert len(proofs) == 1
@@ -136,7 +143,7 @@ def drafts():
         assert proof["status"] == "PASS" and proof["integrity"] == "ok" and proof["outbox"] == 1 and proof["production_requests"] == 0
         assert proof["runtime"]["electron"] == "44.7.0"
         assert proof["asar"].replace("\\", "/").endswith(f"/{folder}/dist/win-unpacked/resources/app.asar")
-        info = {"app": app, "version": version, "source": SHA, "run": int(RUN), "job": job["id"], "content_fingerprint": manifest["fingerprint"], "manifest": feed, "files": records, "packaged_proof": proof, "draft_only": True}
+        info = {"app": app, "version": version, "source": SHA, "run": int(RUN), "job": job["id"], "content_fingerprint": manifest["fingerprint"], "source_input_transport": input_transport, "manifest": feed, "files": records, "packaged_proof": proof, "draft_only": True}
         (root / "WINDOWS_BACKUP_BUILD.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         for algorithm in ("sha256", "sha512"):
             (root / (algorithm.upper() + "SUMS.txt")).write_text("".join(f"{sha(root / n, algorithm)}  {n}\n" for n in names), encoding="ascii")
@@ -180,6 +187,7 @@ def drafts():
     assert after == before, "A live channel changed while staging drafts; do not promote"
     result = {"status": "DRAFTS_READY", "source": SHA, "build_run": int(RUN), "build_job": job["id"], "build_url": run["html_url"], "publisher_run": os.environ["GITHUB_RUN_ID"], "publisher_sha": os.environ["GITHUB_SHA"], "drafts": releases, "artifact_retention_days": 7, "source_artifacts": artifacts, "channels_before": before, "channels_after": after, "feeds_changed": False, "production_deployed": False, "local_installer_downloads": 0, "limitations": ["Drafts require final coordinator release acceptance and promotion.", "Packaged backup runtime uses isolated fixtures, not production Postgres or physical hardware.", "No service/payment scenarios were added or repeated."]}
     Path("WINDOWS_BACKUP_DRAFT_RESULT.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("WINDOWS_BACKUP_DRAFT_RESULT=" + json.dumps(result, ensure_ascii=False, separators=(",", ":")))
     print(json.dumps({"status": result["status"], "build": run["html_url"], "drafts": [item["url"] for item in releases], "channels_unchanged": True}))
 
 
