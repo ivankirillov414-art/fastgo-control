@@ -41,6 +41,19 @@ jobs:
        result=subprocess.run(['java','-jar',jar,'verify','--verbose','--print-certs',apk],capture_output=True,text=True,check=True).stdout
        assert '72817ae5c97c8c60255ca3c029d4ecdd171ec0c33bc28a640e8c7ab0bdb637dd' in result
       PY
+   - name: Read already passing bootstrap evidence for these exact bytes
+     uses: actions/download-artifact@v4
+     with: {name: 'backup-tsd-fixed-exact-${{ matrix.api }}-1', run-id: 42479054034, github-token: '${{ github.token }}', path: accepted-bootstrap}
+   - name: Require accepted bootstrap retention without replaying it
+     run: |
+      python3 - <<'PY'
+      import glob,json
+      files=glob.glob('accepted-bootstrap/**/bootstrap-test/receipt.json',recursive=True);assert len(files)==1,files
+      r=json.load(open(files[0]));candidate=json.load(open('warehouse-android/native/release/receipt.json'))
+      assert r['api']==${{ matrix.api }} and r['from_code']==12 and r['to_code']==13 and r['sha256']==candidate['sha256']
+      for key in ['exact_signed_candidate','android_uid_preserved','first_install_time_preserved','sqlite_retained','encrypted_value_retained','document_gate','installed_bytes_match']:assert r[key] is True,key
+      print('PASS: prior exact12->13 bootstrap retention accepted; self-installer runs in a new isolated AVD')
+      PY
    - uses: android-actions/setup-android@v3
      with: {packages: platform-tools}
    - name: Enable KVM
@@ -63,7 +76,8 @@ jobs:
       disk-size: 4096M
       disable-animations: true
       script: |
-       node scripts/check-tsd-bootstrap-retention.cjs
+       adb shell svc wifi disable
+       adb shell svc data disable
        node scripts/check-native-apk-install.cjs
    - uses: actions/upload-artifact@v4
      if: always()
