@@ -2,7 +2,7 @@ name: FastGo fixed TSD unsigned candidates
 on:
  push:
   branches: [codex/backup-seven-days-20261107]
-  paths: ['.github/workflows/backup-tsd-fixed-candidates.yml']
+  paths: ['.github/workflows/backup-tsd-fixed-candidates.yml','warehouse-android/native/src/main/java/ru/fastgo/tsd/LocalStore.java']
  workflow_dispatch:
 permissions: {contents: read}
 jobs:

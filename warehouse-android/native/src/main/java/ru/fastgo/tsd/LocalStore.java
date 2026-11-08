@@ -6,7 +6,7 @@ import org.json.*;
 import java.util.*;
 public final class LocalStore extends SQLiteOpenHelper {
  public LocalStore(Context c){super(c,"fastgo-tsd-v1.db",null,1);setWriteAheadLoggingEnabled(true);}
- public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE kv (k TEXT PRIMARY KEY,v TEXT NOT NULL)");db.execSQL("CREATE TABLE docs (id TEXT PRIMARY KEY,kind TEXT NOT NULL,v TEXT NOT NULL)");db.execSQL("CREATE TABLE catalog (id TEXT PRIMARY KEY,barcode TEXT,sku TEXT,v TEXT NOT NULL)");db.execSQL("CREATE INDEX catalog_barcode ON catalog(barcode)");db.execSQL("CREATE INDEX catalog_sku ON catalog(sku)");}
+ public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY,v TEXT NOT NULL)");db.execSQL("CREATE TABLE IF NOT EXISTS docs (id TEXT PRIMARY KEY,kind TEXT NOT NULL,v TEXT NOT NULL)");db.execSQL("CREATE TABLE IF NOT EXISTS catalog (id TEXT PRIMARY KEY,barcode TEXT,sku TEXT,v TEXT NOT NULL)");db.execSQL("CREATE INDEX IF NOT EXISTS catalog_barcode ON catalog(barcode)");db.execSQL("CREATE INDEX IF NOT EXISTS catalog_sku ON catalog(sku)");}
  public void onUpgrade(SQLiteDatabase d,int old,int n){throw new IllegalStateException("Неизвестная версия локальной базы");}
  public synchronized JSONObject backupSnapshot()throws JSONException{
   SQLiteDatabase db=getReadableDatabase();JSONObject tables=new JSONObject();db.beginTransactionNonExclusive();

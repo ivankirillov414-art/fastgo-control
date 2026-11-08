@@ -2,6 +2,18 @@ package ru.fastgo.tsd;
 import androidx.test.ext.junit.runners.AndroidJUnit4;import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.*;import org.junit.runner.RunWith;import static org.junit.Assert.*;import android.content.Context;import org.json.*;import java.io.*;import java.security.*;import java.util.*;
 @RunWith(AndroidJUnit4.class) public final class UpgradeTest {
+ @Test public void initializesExistingSchemaWithoutLosingRows()throws Exception{
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  // Isolated in-memory SQLite: exercise the observed existing-table/version-zero
+  // state without touching the target app's live queue or its retained values.
+  try(android.database.sqlite.SQLiteDatabase db=android.database.sqlite.SQLiteDatabase.create(null);LocalStore helper=new LocalStore(context)){
+   db.execSQL("CREATE TABLE kv (k TEXT PRIMARY KEY,v TEXT NOT NULL)");db.execSQL("INSERT INTO kv VALUES ('retained','existing-data')");
+   assertEquals(0,db.getVersion());helper.onCreate(db);helper.onCreate(db);
+   try(android.database.Cursor row=db.rawQuery("SELECT v FROM kv WHERE k='retained'",null)){assertTrue(row.moveToFirst());assertEquals("existing-data",row.getString(0));}
+   db.execSQL("INSERT INTO docs VALUES ('existing-doc','receipt','{}')");db.execSQL("INSERT INTO catalog VALUES ('existing-part','123','sku','{}')");
+   try(android.database.Cursor row=db.rawQuery("SELECT count(*) FROM sqlite_master WHERE type='index' AND name IN ('catalog_barcode','catalog_sku')",null)){assertTrue(row.moveToFirst());assertEquals(2,row.getInt(0));}
+  }
+ }
  @Test public void stagesRealSignedApkOnlyAfterDocumentsClose()throws Exception{
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext(),test=InstrumentationRegistry.getInstrumentation().getContext();byte[] apk;try(InputStream in=test.getAssets().open("update-fixture.apk")){ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);apk=out.toByteArray();}
   StringBuilder hash=new StringBuilder();for(byte b:MessageDigest.getInstance("SHA-256").digest(apk))hash.append(String.format(Locale.ROOT,"%02x",b&255));
