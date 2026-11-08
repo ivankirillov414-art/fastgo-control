@@ -11,6 +11,15 @@ export function dailyHistory(rows){
  .filter(x=>{if(seen.has(x.backup_day))return false;seen.add(x.backup_day);return true;}).slice(0,policy.retention_days);
 }
 export function summary(snapshot){return {id:snapshot.id,day:snapshot.backup_day,created_at:snapshot.created_at,completed_at:snapshot.completed_at,source_version:snapshot.source_version,sha256:snapshot.sha256,bytes:snapshot.bytes,key_id:snapshot.key_id,media_expected:snapshot.manifest.media.length};}
+// Keep every historical date while collapsing the old hourly format to one
+// archive per date. New daily, explicitly manual and unknown-path files stay.
+export function legacyCompactionPlan(rows){
+ const candidates=[...rows].filter(x=>!x.backup_day&&!x.manual&&(!x.kind||x.kind==='automatic')&&x.object_path==='database/'+x.id+'.fgarchive')
+ .sort((a,b)=>b.created_at.localeCompare(a.created_at));
+ const days=new Set(),retained=[],expired=[];
+ for(const row of candidates){const day=backupDay(row.created_at);if(days.has(day))expired.push(row);else{days.add(day);retained.push(row);}}
+ return {retained,expired};
+}
 export function retentionPlan(rows,media){
  const retained=dailyHistory(rows);if(retained.length<policy.retention_days)return {retained,expired:[],media:[]};
  const oldest=retained.at(-1).backup_day,keep=new Set(retained.map(x=>x.id));

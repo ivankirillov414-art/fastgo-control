@@ -1,5 +1,5 @@
 import {b64,unb64,encryptArchive,decryptArchive,sha256,wrapKey} from './crypto.js';
-import {policy,backupDay,dailyHistory,summary,retentionPlan} from './policy.js';
+import {policy,backupDay,dailyHistory,summary,retentionPlan,legacyCompactionPlan} from './policy.js';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-fastgo-backup-job','Access-Control-Allow-Methods':'POST,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:cors}),fail=(m,s=400)=>{throw Object.assign(Error(m),{status:s});};
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
@@ -14,6 +14,7 @@ export function createBackupHandler({base,key,publicBase=base,signingKey=key,fet
    const db=async(table,q='',method='GET',body,prefer)=>{const r=await fetcher(base+'/rest/v1/'+table+(q?'?'+q:''),{method,headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json',...(prefer?{Prefer:prefer}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(30000)});if(!r.ok)fail('Ошибка хранилища резервных копий',503);if(r.status===204)return null;const text=await r.text();return text?JSON.parse(text):null;};
    const keys=()=>db('rpc/workshop_backup_keys','','POST',{});
    const snapshotRows=async(all=false)=>{const rows=[];for(let offset=0;;offset+=1000){const page=await db('workshop_backups',(all?'':'backup_day=not.is.null&')+'order=created_at.desc&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}};
+   const legacyRows=async()=>{const rows=[];for(let offset=0;;offset+=1000){const page=await db('workshop_backups','backup_day=is.null&select=id,created_at,object_path,sha256,bytes,key_id,manual:manifest->manual,kind:manifest->kind&order=created_at.desc&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}};
    const archivePath=path=>/^(database\/[a-f0-9-]{36}|media\/[a-f0-9]{64})\.fgarchive$/.test(path);
    const readArchive=async path=>{if(!archivePath(path))fail('Некорректный путь архива',503);const r=await fetcher(base+'/storage/v1/object/authenticated/'+bucket+'/'+escaped(path),{headers:{apikey:key,Authorization:'Bearer '+key},signal:AbortSignal.timeout(60000)});if(!r.ok)fail('Сохранённый архив недоступен',503);return new Uint8Array(await r.arrayBuffer());};
    const verifyPut=async(path,bytes)=>{const stored=await readArchive(path);if(stored.length!==bytes.length||await sha256(stored)!==await sha256(bytes))fail('Проверка записанного архива не пройдена',503);return stored;};
@@ -79,9 +80,23 @@ export function createBackupHandler({base,key,publicBase=base,signingKey=key,fet
       bytes=await verifyPut(path,await put(path,bytes));const verified=await decryptArchive(bytes,secret.key);if(verified.meta.id!==file.id||await sha256(verified.bytes)!==plainHash)fail('Исходный файл изменился во время резервирования',409);
       await db('workshop_backup_media','','POST',{id:file.id,bucket:file.bucket,source_path:file.name,source_stamp:file.stamp,object_path:path,sha256:await sha256(bytes),plain_sha256:plainHash,bytes:bytes.length,key_id:secret.key_id},'resolution=ignore-duplicates');copied++;
      }
-     const finished=await db('rpc/workshop_backup_complete','','POST',{p_id:snapshot.id});let removed=0;
+     const finished=await db('rpc/workshop_backup_complete','','POST',{p_id:snapshot.id});let removed=0,legacy_compacted=0;
      if(finished?.completed){
-      const daily=await snapshotRows();const plan=dailyHistory(daily).length>=7?retentionPlan(await snapshotRows(true),await mediaRows('*')):{retained:[],expired:[],media:[]};
+      const daily=await snapshotRows(),history=dailyHistory(daily);
+      if(history.length>=2){
+       const compact=legacyCompactionPlan(await legacyRows());
+       if(compact.expired.length){
+        // No deletion until all historical dates and both new full copies have
+        // passed database readback and referenced-file presence checks.
+        for(const saved of [...compact.retained,...history.slice(0,2)]){
+         if(await db('rpc/workshop_backup_files_ready','','POST',{p_id:saved.id})!==true)fail('Сжатие истории отложено: не все файлы сохранённой даты доступны',503);
+         const bytes=await readArchive(saved.object_path);if(bytes.length!==Number(saved.bytes)||await sha256(bytes)!==saved.sha256)fail('Сжатие истории остановлено: повреждён сохраняемый архив',503);
+         const opened=await decryptArchive(bytes,secret.key);if(opened.meta.id!==saved.id)fail('Сжатие истории остановлено: неверный снимок',503);
+        }
+        for(const saved of compact.expired.slice(0,64)){await removeArchive(saved.object_path);await db('workshop_backups','id=eq.'+saved.id,'DELETE');legacy_compacted++;}
+       }
+      }
+      const plan=history.length>=7?retentionPlan(await snapshotRows(true),await mediaRows('*')):{retained:[],expired:[],media:[]};
       if(plan.expired.length||plan.media.length){
        for(const saved of plan.retained){const bytes=await readArchive(saved.object_path);if(bytes.length!==Number(saved.bytes)||await sha256(bytes)!==saved.sha256)fail('Ротация остановлена: повреждён сохранённый архив',503);const opened=await decryptArchive(bytes,secret.key);if(opened.meta.id!==saved.id)fail('Ротация остановлена: неверный снимок',503);}
        const safe=await db('rpc/workshop_backup_retention_ready','','POST',{p_ids:plan.retained.map(x=>x.id)});if(!safe?.ready)fail('Ротация отложена: не все файлы семи копий доступны',503);
@@ -90,7 +105,7 @@ export function createBackupHandler({base,key,publicBase=base,signingKey=key,fet
       }
      }
      await db('workshop_backup_control','id=eq.1&lease_until=eq.'+encodeURIComponent(until),'PATCH',{lease_until:null,last_completed_at:new Date(now()).toISOString(),last_error:''});
-     return out({data:{snapshot_id:snapshot.id,source_version:snapshot.source_version,media_copied:copied,media_expected:snapshot.manifest.media.length,completed:finished?.completed===true,removed,policy}});
+     return out({data:{snapshot_id:snapshot.id,source_version:snapshot.source_version,media_copied:copied,media_expected:snapshot.manifest.media.length,completed:finished?.completed===true,removed,legacy_compacted,policy}});
     }catch(error){await db('workshop_backup_control','id=eq.1&lease_until=eq.'+encodeURIComponent(until),'PATCH',{lease_until:null,last_error:String(error.message||'backup_error').slice(0,500)}).catch(()=>{});throw error;}
    }
    if(!uuid(p.device_id)||typeof p.device_token!=='string'||!/^[a-f0-9-]{72}$/i.test(p.device_token))fail('Неверная копия устройства');

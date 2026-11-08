@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import crypto from 'node:crypto';import fs from 'node:fs';
 import {createBackupHandler} from '../supabase/functions/fastgo-backups/handler.js';
-import {decryptArchive,b64,sha256} from '../supabase/functions/fastgo-backups/crypto.js';
-import {backupDay,dailyHistory,retentionPlan} from '../supabase/functions/fastgo-backups/policy.js';
+import {encryptArchive,decryptArchive,b64,sha256} from '../supabase/functions/fastgo-backups/crypto.js';
+import {backupDay,dailyHistory,retentionPlan,legacyCompactionPlan} from '../supabase/functions/fastgo-backups/policy.js';
 const actor=crypto.randomUUID(),base='https://backup.example.invalid',secret=b64(crypto.randomBytes(32)),keyId=crypto.randomUUID();
 function fixture(){
  let role='owner',lease=null,time=Date.parse('2026-11-07T10:00:00Z'),badRead=false,sourceMissing=false,revoked=false,full=false;const backups=[],media=[],devices=[],objects=new Map(),calls=[],control={id:1},hardwareId=crypto.randomUUID(),stationId=crypto.randomUUID(),hardwareToken=crypto.randomUUID()+crypto.randomUUID();
@@ -25,6 +25,7 @@ function fixture(){
   if(table==='rpc/workshop_backup_storage_usage')return respond({bytes:full?512*1024*1024-10:[...objects.values()].reduce((sum,bytes)=>sum+bytes.length,0)});
   if(table==='rpc/workshop_backup_schedule')return respond({scheduled:true});
   if(table==='rpc/workshop_backup_export')return respond(structuredClone(exported));
+  if(table==='rpc/workshop_backup_files_ready'){const row=backups.find(x=>x.id===p.p_id);return respond(!!row&&objects.has(row.object_path)&&row.manifest.media.every(f=>media.some(m=>m.id===f.id&&objects.has(m.object_path))));}
   if(table==='rpc/workshop_backup_complete'){const row=backups.find(x=>x.id===p.p_id);const completed=!!row&&objects.has(row.object_path)&&row.manifest.media.every(f=>media.some(m=>m.id===f.id&&objects.has(m.object_path)));if(completed)row.completed_at||=new Date(time).toISOString();return respond({completed});}
   if(table==='rpc/workshop_backup_retention_ready')return respond({ready:p.p_ids.length===7&&p.p_ids.every(id=>backups.some(b=>b.id===id&&b.completed_at&&objects.has(b.object_path)&&b.manifest.media.every(f=>media.some(m=>m.id===f.id&&objects.has(m.object_path))))) });
   if(table==='workshop_native_state')return respond([{version:180}]);
@@ -34,7 +35,7 @@ function fixture(){
   }
   const list=table==='workshop_backups'?backups:table==='workshop_backup_media'?media:table==='workshop_backup_devices'?devices:null;
   if(list){if(method==='DELETE'){const at=list.findIndex(x=>x.id===q.get('id')?.slice(3));if(at>=0)list.splice(at,1);return respond(null,204);}if(method==='POST'){const key=table==='workshop_backup_devices'?'device_id':'id',at=list.findIndex(x=>x[key]===p[key]);if(at<0)list.push(p);else list[at]={...list[at],...p};return respond(null,201);}if(method==='PATCH'){const key=table==='workshop_backup_devices'?'device_id':'id',row=list.find(x=>x[key]===q.get(key)?.slice(3));if(row)Object.assign(row,p);return respond(null,204);}
-   let rows=[...list];if(q.get('device_id'))rows=rows.filter(x=>x.device_id===q.get('device_id').slice(3));if(q.get('id'))rows=rows.filter(x=>x.id===q.get('id').slice(3));if(q.get('public_key'))rows=rows.filter(x=>x.public_key);if(q.get('order')==='created_at.desc')rows.sort((a,b)=>b.created_at.localeCompare(a.created_at));if(q.get('limit'))rows=rows.slice(Number(q.get('offset')||0),Number(q.get('offset')||0)+Number(q.get('limit')));return respond(rows);}
+   let rows=[...list];if(q.get('backup_day')==='is.null')rows=rows.filter(x=>!x.backup_day);if(q.get('backup_day')==='not.is.null')rows=rows.filter(x=>x.backup_day);if(q.get('device_id'))rows=rows.filter(x=>x.device_id===q.get('device_id').slice(3));if(q.get('id'))rows=rows.filter(x=>x.id===q.get('id').slice(3));if(q.get('public_key'))rows=rows.filter(x=>x.public_key);if(q.get('order')==='created_at.desc')rows.sort((a,b)=>b.created_at.localeCompare(a.created_at));if(q.get('limit'))rows=rows.slice(Number(q.get('offset')||0),Number(q.get('offset')||0)+Number(q.get('limit')));return respond(rows);}
   throw Error('Unexpected fixture table '+table);
  }
  const handler=createBackupHandler({base,key:'server-fixture-key',fetcher,now:()=>time});
@@ -117,4 +118,23 @@ test('storage quota stops before upload and preserves all previous good backups'
  const h=fixture();await h.call('tick');h.advance();const before=[...h.objects.keys()],previous=h.backups[0].id;
  h.fill();const result=await h.call('tick');assert.equal(result.status,507);assert.match(result.body.error,/512 МБ/);
  assert.deepEqual([...h.objects.keys()],before);assert.ok(h.backups.some(x=>x.id===previous&&x.completed_at));assert.equal(h.control.lease_until,null);
+});
+
+test('legacy compaction preserves every business date, manual archives and new full daily copies',()=>{
+ const make=(id,time,extra={})=>({id,created_at:time,object_path:'database/'+id+'.fgarchive',...extra});
+ const first=make('one','2026-11-01T01:00:00Z'),last=make('two','2026-11-01T17:00:00Z'),next=make('three','2026-11-01T19:01:00Z');
+ const manual=make('manual','2026-11-01T02:00:00Z',{manual:true}),daily=make('daily','2026-11-01T03:00:00Z',{backup_day:'2026-11-01'}),foreign=make('foreign','2026-11-01T04:00:00Z',{object_path:'manual/private.fgarchive'});
+ const plan=legacyCompactionPlan([first,last,next,manual,daily,foreign]);
+ assert.deepEqual(plan.retained.map(x=>x.id),['three','two']);assert.deepEqual(plan.expired.map(x=>x.id),['one']);
+ assert.equal(legacyCompactionPlan(plan.retained).expired.length,0);
+});
+
+test('legacy cleanup verifies kept ciphertext before deleting same-day hourly duplicates',async()=>{
+ async function seeded(){const h=fixture();await h.call('tick');h.advance();await h.call('tick');const source=h.backups[0],opened=await decryptArchive(h.objects.get(source.object_path),secret),legacy=[];
+  for(const hour of ['01','02','03']){const id=crypto.randomUUID(),created_at='2026-10-30T'+hour+':00:00Z',path='database/'+id+'.fgarchive',bytes=Buffer.from(await encryptArchive(opened.bytes,secret,{...opened.meta,id,created_at})),manifest={...source.manifest};delete manifest.policy_version;
+   const row={...source,id,created_at,backup_day:null,completed_at:null,object_path:path,sha256:await sha256(bytes),bytes:bytes.length,manifest};h.backups.push(row);h.objects.set(path,bytes);legacy.push(row);
+  }return {h,legacy};}
+ const {h,legacy}=await seeded(),done=await h.call('tick');assert.equal(done.status,200);assert.equal(done.body.data.legacy_compacted,2);assert.ok(h.backups.some(x=>x.id===legacy[2].id));assert.equal(h.backups.length,3);
+ const broken=await seeded(),before=broken.h.backups.map(x=>x.id);broken.h.objects.set(broken.legacy[2].object_path,Buffer.from('damaged'));
+ assert.equal((await broken.h.call('tick')).status,503);assert.deepEqual(broken.h.backups.map(x=>x.id),before);
 });
