@@ -1,0 +1,99 @@
+{
+  "format": 1,
+  "policy": "Archived phone APKs retained in canonical published GitHub Releases and immutable git history, omitted from active checkout after exact SHA256 and reference checks.",
+  "checked_at": "2026-11-08 10:39:38 UTC",
+  "scope": "Only versions1.0.10 through1.0.14 in this worktree",
+  "entries": [
+    {
+      "version": "1.0.10",
+      "path": "warehouse-android/phone/release/FastGo-Android-1.0.10.apk",
+      "bytes": 32863681,
+      "sha256": "f077a11d84ff5606a3997e214492fedc25566c5ec95be1c583b969bb5ccbe8be",
+      "canonical_release": "https://github.com/ivankirillov414-art/fastgo-control/releases/tag/fastgo-android-v1.0.10",
+      "canonical_download": "https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-android-v1.0.10/FastGo-Android-1.0.10.apk",
+      "release_id": 426994278,
+      "immutable_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+      "git_blob_sha": "9f71ab535102dcd3b8b59ce4c76c741b8bd8de8c",
+      "immutable_download": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/8f68e88cd62b210ff3ed4b1837d843d0955e84d6/warehouse-android/phone/release/FastGo-Android-1.0.10.apk",
+      "local_sha256_matches_github_asset_digest": true
+    },
+    {
+      "version": "1.0.11",
+      "path": "warehouse-android/phone/release/FastGo-Android-1.0.11.apk",
+      "bytes": 32880289,
+      "sha256": "8db50d87783623b09884d34d4810c367b8acc6d411175e0dda821a2f577f45fd",
+      "canonical_release": "https://github.com/ivankirillov414-art/fastgo-control/releases/tag/fastgo-android-v1.0.11",
+      "canonical_download": "https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-android-v1.0.11/FastGo-Android-1.0.11.apk",
+      "release_id": 427803631,
+      "immutable_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+      "git_blob_sha": "d1c505fe247d2d8338c2870faea2acd80c45802d",
+      "immutable_download": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/8f68e88cd62b210ff3ed4b1837d843d0955e84d6/warehouse-android/phone/release/FastGo-Android-1.0.11.apk",
+      "local_sha256_matches_github_asset_digest": true
+    },
+    {
+      "version": "1.0.12",
+      "path": "warehouse-android/phone/release/FastGo-Android-1.0.12.apk",
+      "bytes": 32880380,
+      "sha256": "97150256c27be5299ea836f52b3d1d7ef5b7b99639aebc468243bd7da4ee5950",
+      "canonical_release": "https://github.com/ivankirillov414-art/fastgo-control/releases/tag/fastgo-android-v1.0.12",
+      "canonical_download": "https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-android-v1.0.12/FastGo-Android-1.0.12.apk",
+      "release_id": 428095025,
+      "immutable_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+      "git_blob_sha": "fd5c6cce15eb4df8215d5a7822031c0430066d86",
+      "immutable_download": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/8f68e88cd62b210ff3ed4b1837d843d0955e84d6/warehouse-android/phone/release/FastGo-Android-1.0.12.apk",
+      "local_sha256_matches_github_asset_digest": true
+    },
+    {
+      "version": "1.0.13",
+      "path": "warehouse-android/phone/release/FastGo-Android-1.0.13.apk",
+      "bytes": 32892753,
+      "sha256": "602f19ee98a0dd44c05e56250aeeea94424ae802baa13120545c01ea2c8e5b0b",
+      "canonical_release": "https://github.com/ivankirillov414-art/fastgo-control/releases/tag/fastgo-android-v1.0.13",
+      "canonical_download": "https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-android-v1.0.13/FastGo-Android-1.0.13.apk",
+      "release_id": 428943242,
+      "immutable_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+      "git_blob_sha": "0651db9c19a887b853748403a904cb77ad4834f6",
+      "immutable_download": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/8f68e88cd62b210ff3ed4b1837d843d0955e84d6/warehouse-android/phone/release/FastGo-Android-1.0.13.apk",
+      "local_sha256_matches_github_asset_digest": true
+    },
+    {
+      "version": "1.0.14",
+      "path": "warehouse-android/phone/release/FastGo-Android-1.0.14.apk",
+      "bytes": 32892836,
+      "sha256": "76e38802e535dfedf31200f4515c648709430b30ca28b2a26589e2dcefc97087",
+      "canonical_release": "https://github.com/ivankirillov414-art/fastgo-control/releases/tag/fastgo-android-v1.0.14",
+      "canonical_download": "https://github.com/ivankirillov414-art/fastgo-control/releases/download/fastgo-android-v1.0.14/FastGo-Android-1.0.14.apk",
+      "release_id": 430514761,
+      "immutable_commit": "8f68e88cd62b210ff3ed4b1837d843d0955e84d6",
+      "git_blob_sha": "5a5d444d8aca1d1cac71ebe062bfcf733468ac3a",
+      "immutable_download": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/8f68e88cd62b210ff3ed4b1837d843d0955e84d6/warehouse-android/phone/release/FastGo-Android-1.0.14.apk",
+      "local_sha256_matches_github_asset_digest": true
+    }
+  ],
+  "removed_from_worktree": true,
+  "removed_bytes": 164409939,
+  "reference_audit": {
+    "literal_references_to_10_through_14_in_active_source": "none (outputs, generated builds/assets and binary APK payloads excluded)",
+    "current_feed": "warehouse-android/phone/update.json ->1.0.16/code17",
+    "required_upgrade_sources": [
+      "FastGo-Android-1.0.1.apk",
+      "current production channel1.0.16"
+    ],
+    "historical_upgrade_filter": "For candidate1.0.17 with current channel1.0.16, dynamic previous-version scan selects versions greater than1.0.16 and less than1.0.17; versions10..14 are excluded.",
+    "self_update_fixture": "Generated debug code19; does not depend on archived release APKs"
+  },
+  "retained": [
+    "1.0.1",
+    "1.0.7",
+    "1.0.15",
+    "1.0.16",
+    "1.0.17 candidate when available"
+  ],
+  "unchanged": [
+    "equipment-media source photographs",
+    "current and previous APK bytes",
+    "production feed and release URLs",
+    "GitHub Release assets",
+    "all other working checkouts"
+  ]
+}
