@@ -3,6 +3,10 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
 const asar=path.resolve(process.argv[2]||'desktop/dist/win-unpacked/resources/app.asar');
 assert(fs.existsSync(asar),'Built ASAR required');
 const common=fs.existsSync(path.join(asar,'store.cjs'));
+// Export the manifest from the actual packaged ASAR, preserving its tested identity.
+const projectRoot=path.resolve(common?'desktop':'warehouse-desktop'),receipt=JSON.parse(fs.readFileSync(path.join(asar,'release-content.json'))),pkg=JSON.parse(fs.readFileSync(path.join(projectRoot,'package.json')));
+assert.deepEqual(receipt,JSON.parse(fs.readFileSync(path.join(projectRoot,'release-content.json'))));assert.equal(receipt.app,pkg.name);assert.equal(receipt.version,pkg.version);
+fs.writeFileSync(path.join(path.dirname(path.dirname(path.dirname(asar))),'release-content.json'),JSON.stringify(receipt,null,2)+'\n');
 const storeModule=common?require(path.join(asar,'store.cjs')):null,Store=storeModule?.Store;
 const {DatabaseSync}=require('node:sqlite');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fastgo-packaged-backup-'));

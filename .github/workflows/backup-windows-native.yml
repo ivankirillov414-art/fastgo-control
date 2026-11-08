@@ -1,5 +1,5 @@
 name: FastGo backup Windows native gate
-# Rebuild 75/64 with the 24-hourly SQLite buffer and 32 MiB HTTP cache limits.
+# Include the actual ASAR release manifests with the tested 75/64 installers.
 on:
   push:
     paths: ['.github/workflows/backup-windows-native.yml']
