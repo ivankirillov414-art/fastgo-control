@@ -4,6 +4,7 @@ const fs=require('node:fs'),path=require('node:path');
 const backupFiles=require(fs.existsSync(path.join(__dirname,'warehouse-native','backup-files.cjs'))?'./warehouse-native/backup-files.cjs':'../warehouse-desktop/backup-files.cjs');
 const {dayAt,ownFile,unlink,ensureDirectory,syncDirectory,atomicWrite,readJson,fileInfo,FileVerifier,DailyCatalog,verifySQLite,SpaceBudget,SQLITE_BUDGET_BYTES}=backupFiles;
 const autoPattern=/^FastGo-auto-\d{12}\.sqlite$/;
+const AUTO_INTERVAL=60*60*1000,AUTO_COUNT=24;
 const stable=v=>JSON.stringify(v??null);
 const invalid=message=>Object.assign(Error(message),{status:400});
 const accountFirstName=name=>{const words=String(name||'').trim().split(/\s+/).filter(Boolean),family=w=>/(?:ов|ев|ин|ский|цкий|ова|ева|ина|ская|цкая|ко)$/i.test(w||'');return words.length>=3&&/(?:вич|вна|ична)$/i.test(words[words.length-1])||words.length===2&&family(words[0])&&!family(words[1])?words[1]:words[0]||'Сотрудник';};
@@ -119,12 +120,12 @@ class Store{
   const names=fs.readdirSync(this.backupFolder).filter(x=>autoPattern.test(x)).sort().reverse(),anchorName=path.basename(anchor);if(!names.includes(anchorName))return;
   const sizes=new Map(names.map(name=>[name,fs.statSync(ownFile(this.backupFolder,name)).size+(fs.existsSync(ownFile(this.backupFolder,name+'.json'))?fs.statSync(ownFile(this.backupFolder,name+'.json')).size:0)])),automatic=[...sizes.values()].reduce((n,x)=>n+x,0),other=this.backupSpace.usage()-automatic,available=Math.max(sizes.get(anchorName),this.backupSpace.limitBytes-other-reserveBytes-65536);
   let used=sizes.get(anchorName),count=1;
-  for(const name of names){if(name===anchorName)continue;if(count<192&&used+sizes.get(name)<=available){used+=sizes.get(name);count++;}else{unlink(this.backupFolder,name);unlink(this.backupFolder,name+'.json');}}
+  for(const name of names){if(name===anchorName)continue;if(count<AUTO_COUNT&&used+sizes.get(name)<=available){used+=sizes.get(name);count++;}else{unlink(this.backupFolder,name);unlink(this.backupFolder,name+'.json');}}
  }
  async compactAutomatic(estimate){
   if(estimate>this.backupSpace.limitBytes)throw Object.assign(Error('Локальная база больше бюджета автоматических копий. Прежние копии сохранены.'),{code:'BACKUP_BUDGET'});
   this.backupSpace.checkFree(estimate);if(!fs.existsSync(this.backupFolder))return;
-  // Legacy 192-slot buffers are compacted only around an independently verified
+  // Legacy quarter-hour buffers shrink to AUTO_COUNT around an independently verified
   // already successful automatic copy. Daily and manual archives are never evicted.
   for(const name of fs.readdirSync(this.backupFolder).filter(x=>autoPattern.test(x)).sort().reverse()){
    try{const file=ownFile(this.backupFolder,name),meta=readJson(file+'.json');if(meta.integrity!=='ok')continue;await this.backupVerifier.check(file,meta,{signal:this.dailyController?.signal});await verifySQLite(file,{signal:this.dailyController?.signal});this.trimAutomatic(file,estimate);return;}catch(error){if(this.dailyController?.signal.aborted)throw error;}
@@ -144,7 +145,7 @@ class Store{
  }
  async backupAutomatic(){
   if(this.autoBackupPromise)return this.autoBackupPromise;
-  this.autoBackupPromise=(async()=>{const label='auto-'+new Date(Math.floor(this.clock()/900000)*900000).toISOString().replace(/[^0-9]/g,'').slice(0,12),target=ownFile(this.backupFolder,'FastGo-'+label+'.sqlite');if(fs.existsSync(target)){await this.backupVerifier.check(target,readJson(target+'.json'));return target;}const estimate=this.backupEstimate();await this.compactAutomatic(estimate);const {info}=await this.onlineCopy(target);this.writeBackup(target+'.json',Buffer.from(JSON.stringify({created_at:new Date(this.clock()).toISOString(),...info,integrity:'ok'})));this.trimAutomatic(target,estimate);return target;})().finally(()=>{this.autoBackupPromise=null;});return this.autoBackupPromise;
+  this.autoBackupPromise=(async()=>{const label='auto-'+new Date(Math.floor(this.clock()/AUTO_INTERVAL)*AUTO_INTERVAL).toISOString().replace(/[^0-9]/g,'').slice(0,12),target=ownFile(this.backupFolder,'FastGo-'+label+'.sqlite');if(fs.existsSync(target)){await this.backupVerifier.check(target,readJson(target+'.json'));return target;}const estimate=this.backupEstimate();await this.compactAutomatic(estimate);const {info}=await this.onlineCopy(target);this.writeBackup(target+'.json',Buffer.from(JSON.stringify({created_at:new Date(this.clock()).toISOString(),...info,integrity:'ok'})));this.trimAutomatic(target,estimate);return target;})().finally(()=>{this.autoBackupPromise=null;});return this.autoBackupPromise;
  }
  async backupDaily(){
   if(this.dailyPromise)return this.dailyPromise;this.dailyController=new AbortController();
@@ -160,7 +161,7 @@ class Store{
   })().finally(()=>{this.dailyPromise=null;this.dailyController=null;});return this.dailyPromise;
  }
  backup(label){
-  const automatic=label===undefined;if(automatic)label='auto-'+new Date(Math.floor(this.clock()/900000)*900000).toISOString().replace(/[^0-9]/g,'').slice(0,12);
+  const automatic=label===undefined;if(automatic)label='auto-'+new Date(Math.floor(this.clock()/AUTO_INTERVAL)*AUTO_INTERVAL).toISOString().replace(/[^0-9]/g,'').slice(0,12);
   const folder=path.join(path.dirname(this.filename),'backups');fs.mkdirSync(folder,{recursive:true});const target=path.join(folder,'FastGo-'+String(label).replace(/[^a-zA-Z0-9-]/g,'')+'.sqlite');
   if(!fs.existsSync(target)){
    const temporary=target+'.partial';if(fs.existsSync(temporary))unlink(folder,path.basename(temporary));const lease=this.backupSpace.reserve(this.backupEstimate(),{file:temporary,managed:automatic});
@@ -172,4 +173,4 @@ class Store{
   return target;
  }
 }
-module.exports={Store,writes,stable};
+module.exports={Store,writes,stable,AUTO_INTERVAL,AUTO_COUNT};

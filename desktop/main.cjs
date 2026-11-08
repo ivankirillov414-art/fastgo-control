@@ -1,6 +1,8 @@
 // Installer and helper launches can outlive their console pipes.
 if(typeof process!=='undefined')for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
 const {app,BrowserWindow,Menu,Tray,nativeImage,ipcMain,protocol,net,shell,safeStorage,session}=require('electron');
+// Chromium HTTP cache is separate from CacheStorage photos and account/database data.
+app.commandLine.appendSwitch('disk-cache-size',String(32*1024*1024));
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {Store,writes,stable}=require('./store.cjs'),{Synchronizer,transient}=require('./sync.cjs');
 const {Updates}=require('./updates.cjs');
