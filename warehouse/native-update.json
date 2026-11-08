@@ -7,11 +7,11 @@
   "channels": {
     "ru.fastgo.tsd.app": {
       "package": "ru.fastgo.tsd.app",
-      "versionCode": 12,
-      "versionName": "2.1.9",
-      "url": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/FastGo-TSD-2.1.9.apk",
-      "sha256": "72113e5c9faff883919ff95650b25a13a92ca23f0b5042a17fbd868fe55f7538",
-      "size": 53839,
+      "versionCode": 13,
+      "versionName": "2.1.10",
+      "url": "https://raw.githubusercontent.com/ivankirillov414-art/fastgo-control/main/warehouse/native/FastGo-TSD-2.1.10.apk",
+      "sha256": "5f5af5c5075da26361f38771983d2bcf567ae5c62922e9b8eeed1687b8a018c7",
+      "size": 74319,
       "certificate_sha256": "72817ae5c97c8c60255ca3c029d4ecdd171ec0c33bc28a640e8c7ab0bdb637dd"
     }
   }
