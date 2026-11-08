@@ -1,0 +1,40 @@
+name: FastGo public Windows backup release readback
+on:
+  push:
+    branches: ['codex/backup-seven-days-20261107']
+    paths:
+      - '.github/workflows/backup-windows-published.yml'
+      - 'scripts/check-published-backup-windows.py'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  public-readback:
+    if: github.repository == 'ivankirillov414-art/fastgo-control' && github.ref == 'refs/heads/codex/backup-seven-days-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERIFIED_DRAFT_RUN: '42473167858'
+      VERIFIED_DRAFT_SHA: '7d51ee57ada6bceab75c1e4f5932ef3d27ef56ab'
+      BUILD_SHA: '0b465c5d56b14fd830aee926a28cfa7257fee783'
+      WAREHOUSE_FEED_BLOB: '37c183efb87ab2e796233fec08ef0f89253d38e1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: backup-windows-draft-result
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.VERIFIED_DRAFT_RUN }}
+          path: release-proof
+      - name: Verify public installer bytes, immutable tags and both live update feeds
+        run: python3 scripts/check-published-backup-windows.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backup-windows-public-result
+          retention-days: 7
+          if-no-files-found: warn
+          path: WINDOWS_BACKUP_PUBLIC_RESULT.json
