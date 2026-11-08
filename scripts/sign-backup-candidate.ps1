@@ -1,9 +1,10 @@
-param([Parameter(Mandatory=$true)][ValidateSet('phone','tsd','tsd-tests')][string]$App,[Parameter(Mandatory=$true)][string]$UnsignedPath)
+param([Parameter(Mandatory=$true)][ValidateSet('phone','tsd','tsd-tests','tsd-fixture','tsd-self-tests')][string]$App,[Parameter(Mandatory=$true)][string]$UnsignedPath)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Security
 $workspace=(Get-Location).Path;$scratch=Join-Path $workspace 'warehouse-android\phone\build\backup-release-local'
-$targets=@{phone=(Join-Path $workspace 'warehouse-android\phone\release\FastGo-Android-1.0.17.apk');tsd=(Join-Path $workspace 'warehouse\native\FastGo-TSD-2.1.10.apk');'tsd-tests'=(Join-Path $workspace 'warehouse-android\native\release\FastGo-TSD-2.1.10-upgrade-tests.apk')}
+$targets=@{phone=(Join-Path $workspace 'warehouse-android\phone\release\FastGo-Android-1.0.17.apk');tsd=(Join-Path $workspace 'warehouse\native\FastGo-TSD-2.1.10.apk');'tsd-tests'=(Join-Path $workspace 'warehouse-android\native\release\FastGo-TSD-2.1.10-upgrade-tests.apk');'tsd-fixture'=(Join-Path $workspace 'warehouse-android\native\release\FastGo-TSD-2.1.10-self-update-fixture14.apk');'tsd-self-tests'=(Join-Path $workspace 'warehouse-android\native\release\FastGo-TSD-2.1.10-self-update-tests.apk')}
 $certificates=@{phone='26f79b6746e6b6a93e5f4a8d6630cffb65332669e2c555b36e38f40a4f0ec1f3';tsd='72817ae5c97c8c60255ca3c029d4ecdd171ec0c33bc28a640e8c7ab0bdb637dd';'tsd-tests'='72817ae5c97c8c60255ca3c029d4ecdd171ec0c33bc28a640e8c7ab0bdb637dd'}
+$certificates['tsd-fixture']=$certificates.tsd;$certificates['tsd-self-tests']=$certificates.tsd
 $utility=Join-Path $env:USERPROFILE 'Documents\Codex\2026-10-19\new-chat\outputs\android-build-tools35\apksigner.jar'
 if(-not(Test-Path -LiteralPath $utility)){throw 'Existing small apksigner utility unavailable; no SDK download is permitted'}
 $inputFile=[IO.Path]::GetFullPath((Join-Path $workspace $UnsignedPath));if(-not $inputFile.StartsWith($scratch+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsigned file must be in owned candidate scratch'}

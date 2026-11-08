@@ -19,7 +19,7 @@ def sha(path):
         return hashlib.file_digest(f,'sha256').hexdigest()
 if sha(source)!=a.test_sha256 or sha(candidate)!=a.candidate_sha256:
     raise SystemExit('Upgrade-test source or signed candidate SHA mismatch')
-owned=[scratch,root/'warehouse-android/phone/release/FastGo-Android-1.0.17.apk',root/'warehouse/native/FastGo-TSD-2.1.10.apk',root/'warehouse-android/native/release/FastGo-TSD-2.1.10-upgrade-tests.apk']
+owned=[scratch,root/'warehouse-android/phone/release/FastGo-Android-1.0.17.apk',root/'warehouse/native/FastGo-TSD-2.1.10.apk',root/'warehouse-android/native/release']
 used=sum(f.stat().st_size for folder in owned for f in (folder.rglob('*') if folder.is_dir() else [folder]) if f.is_file())
 maximum=source.stat().st_size+candidate.stat().st_size+131072
 if used+maximum>64*1024*1024 or shutil.disk_usage(root).free-maximum<1024*1024*1024:
