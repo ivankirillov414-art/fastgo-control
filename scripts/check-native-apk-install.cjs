@@ -13,6 +13,9 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
  adb(['install','-r',process.env.FASTGO_TSD_BASE_APK||'warehouse-android/native/build/outputs/apk/debug/native-debug.apk']);
  const before=identity();
  adb(['install','-r','-t',process.env.FASTGO_TSD_TEST_APK||'warehouse-android/native/build/outputs/apk/androidTest/debug/native-debug-androidTest.apk']);
+ if(process.env.FASTGO_TSD_SCHEMA_CHECK==='true'){
+  const schema=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#initializesExistingSchemaWithoutLosingRows',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);if(!passed(schema))throw Error('Existing SQLite schema initialization lost data: '+schema);fs.writeFileSync('warehouse-android/native/build/upgrade-test/schema-initialization.txt',schema);
+ }
  const staged=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#stagesRealSignedApkOnlyAfterDocumentsClose',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);
  if(candidate)fs.writeFileSync('warehouse-android/native/build/upgrade-test/staging-instrumentation.txt',staged);
  if(!passed(staged))throw Error('APK staging and document gate failed: '+staged);
@@ -68,7 +71,7 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
  const result=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#keepsDataAfterInstall',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);
  if(!passed(result))throw Error('Post-update retention check failed: '+result);
  const after=identity();if(candidate){assert.equal(after.uid,before.uid,'Native update must preserve UID');assert.equal(after.first,before.first,'Native update must preserve first installation');const installedPath=adb(['shell','pm','path',pkg]).trim().replace(/^package:/,'');const pulled='warehouse-android/native/build/upgrade-test/installed.apk';adb(['pull',installedPath,pulled]);assert.equal(hash(pulled),hash(candidate),'Native installed bytes mismatch');fs.unlinkSync(pulled);}
- fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:expectedCode,api:process.env.FASTGO_ANDROID_API,sha256:candidate?hash(candidate):undefined,exact_signed_candidate:!!candidate,android_uid_preserved:after.uid===before.uid,first_install_time_preserved:after.first===before.first,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,restart_mode:restartMode,sqlite_retained:true,encrypted_value_retained:true},null,2));
+ fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:expectedCode,api:process.env.FASTGO_ANDROID_API,sha256:candidate?hash(candidate):undefined,exact_signed_candidate:!!candidate,android_uid_preserved:after.uid===before.uid,first_install_time_preserved:after.first===before.first,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,restart_mode:restartMode,sqlite_retained:true,encrypted_value_retained:true,schema_initialization_regression:process.env.FASTGO_TSD_SCHEMA_CHECK==='true'},null,2));
  console.log('PASS: document gate, APK download/hash/signature, Android installer, return via '+restartMode+', new version and retained SQLite/encrypted credentials');
 })().catch(e=>{
  console.error(e.message);const out='warehouse-android/native/build/upgrade-test/';fs.mkdirSync(out,{recursive:true});
