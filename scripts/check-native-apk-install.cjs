@@ -17,7 +17,15 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
  adb(['shell','appops','set',pkg,'REQUEST_INSTALL_PACKAGES','allow']);
  adb(['shell','input','keyevent','224']);
  adb(['shell','wm','dismiss-keyguard']);
- if(candidate){const installed=adb(['shell','am','instrument','-w','-e','install_prepared_candidate','true','-e','class','ru.fastgo.tsd.UpgradeTest#installsPreparedCandidate',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);if(!passed(installed))throw Error('Native installer commit failed: '+installed);}else adb(['shell','am','start','-n',pkg+'/ru.fastgo.tsd.InstallUpdateActivity']);
+ if(candidate){
+  // The published scanner initiates installation from its visible idle screen.
+  // An instrumentation-only process has no foreground Activity and Android can
+  // reject the PackageInstaller confirmation PendingIntent as a background start.
+  // Open the actual baseline app and let its existing offerUpdate() consume the
+  // exact staged candidate. Do not grant a background-launch exemption.
+  if(Number(adb(['shell','getprop','ro.build.version.sdk']).trim())>=33)adb(['shell','pm','grant',pkg,'android.permission.POST_NOTIFICATIONS']);
+  adb(['shell','am','start','-W','-n',pkg+'/ru.fastgo.tsd.MainActivity']);
+ }else adb(['shell','am','start','-n',pkg+'/ru.fastgo.tsd.InstallUpdateActivity']);
  fs.mkdirSync('warehouse-android/native/build/upgrade-test',{recursive:true});let installed=false;
  for(let i=0;i<30;i++){
   if(identity().code===expectedCode){installed=true;break;}
@@ -60,4 +68,10 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
  const after=identity();if(candidate){assert.equal(after.uid,before.uid,'Native update must preserve UID');assert.equal(after.first,before.first,'Native update must preserve first installation');const installedPath=adb(['shell','pm','path',pkg]).trim().replace(/^package:/,'');const pulled='warehouse-android/native/build/upgrade-test/installed.apk';adb(['pull',installedPath,pulled]);assert.equal(hash(pulled),hash(candidate),'Native installed bytes mismatch');fs.unlinkSync(pulled);}
  fs.writeFileSync('warehouse-android/native/build/upgrade-test/receipt.json',JSON.stringify({package:pkg,installed_version_code:expectedCode,api:process.env.FASTGO_ANDROID_API,sha256:candidate?hash(candidate):undefined,exact_signed_candidate:!!candidate,android_uid_preserved:after.uid===before.uid,first_install_time_preserved:after.first===before.first,document_gate:true,hash_and_signature:true,android_installer:true,restarted_activity:true,restart_mode:restartMode,sqlite_retained:true,encrypted_value_retained:true},null,2));
  console.log('PASS: document gate, APK download/hash/signature, Android installer, return via '+restartMode+', new version and retained SQLite/encrypted credentials');
-})().catch(e=>{console.error(e.message);process.exitCode=1;});
+})().catch(e=>{
+ console.error(e.message);const out='warehouse-android/native/build/upgrade-test/';fs.mkdirSync(out,{recursive:true});
+ try{adb(['shell','uiautomator','dump','/sdcard/fastgo-install-failure.xml']);fs.writeFileSync(out+'failure-screen.xml',adb(['shell','cat','/sdcard/fastgo-install-failure.xml']));}catch{}
+ try{fs.writeFileSync(out+'failure-screen.png',adb(['exec-out','screencap','-p'],true));}catch{}
+ for(const [file,args]of [['failure-logcat.txt',['logcat','-d','-t','1000']],['failure-activities.txt',['shell','dumpsys','activity','activities']],['failure-package.txt',['shell','dumpsys','package',pkg]]])try{fs.writeFileSync(out+file,adb(args));}catch{}
+ process.exitCode=1;
+});
