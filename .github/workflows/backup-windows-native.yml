@@ -1,4 +1,5 @@
 name: FastGo backup Windows native gate
+# Rebuild 75/64 with the 24-hourly SQLite buffer and 32 MiB HTTP cache limits.
 on:
   push:
     paths: ['.github/workflows/backup-windows-native.yml']
