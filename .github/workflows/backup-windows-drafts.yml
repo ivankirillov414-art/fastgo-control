@@ -19,8 +19,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BUILD_RUN: '42471163834'
-      BUILD_SHA: '3ba0c4cd1da0c15d21763800c77ce7645ee8d8fe'
+      BUILD_RUN: '42472487722'
+      BUILD_SHA: '0b465c5d56b14fd830aee926a28cfa7257fee783'
+      DRAFT_COMMON_ID: '438180996'
+      DRAFT_WAREHOUSE_ID: '438181070'
     steps:
       - uses: actions/checkout@v4
       - name: Require the exact successful native build

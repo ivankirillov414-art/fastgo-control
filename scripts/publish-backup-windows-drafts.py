@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import quote
 
 REPO = "ivankirillov414-art/fastgo-control"
 BRANCH = "codex/backup-seven-days-20261107"
@@ -26,15 +27,6 @@ def gh(*args):
 
 def api(endpoint):
     return json.loads(gh("api", "--method", "GET", "-H", "X-GitHub-Api-Version: 2022-11-28", f"repos/{REPO}/{endpoint}"))
-
-
-def optional_release(tag):
-    result = subprocess.run(["gh", "api", "--method", "GET", f"repos/{REPO}/releases/tags/{tag}"], capture_output=True)
-    if result.returncode == 0:
-        return json.loads(result.stdout)
-    if b"HTTP 404" in result.stderr:
-        return None
-    raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
 
 
 def source_bytes(name):
@@ -143,31 +135,41 @@ def drafts():
         assert proof["status"] == "PASS" and proof["integrity"] == "ok" and proof["outbox"] == 1 and proof["production_requests"] == 0
         assert proof["runtime"]["electron"] == "44.7.0"
         assert proof["asar"].replace("\\", "/").endswith(f"/{folder}/dist/win-unpacked/resources/app.asar")
+        if folder == "desktop":
+            assert proof["automatic_interval_ms"] == 3600000 and proof["automatic_count"] == 24
         info = {"app": app, "version": version, "source": SHA, "run": int(RUN), "job": job["id"], "content_fingerprint": manifest["fingerprint"], "source_input_transport": input_transport, "manifest": feed, "files": records, "packaged_proof": proof, "draft_only": True}
         (root / "WINDOWS_BACKUP_BUILD.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         for algorithm in ("sha256", "sha512"):
             (root / (algorithm.upper() + "SUMS.txt")).write_text("".join(f"{sha(root / n, algorithm)}  {n}\n" for n in names), encoding="ascii")
         prepared.append((tag, root, info, names + ["WINDOWS_BACKUP_BUILD.json", "SHA256SUMS.txt", "SHA512SUMS.txt"]))
 
+    removed_empty_drafts = []
+    for old_id in (438177075, 438177107):
+        # These empty containers were created by this packet before the final
+        # manifest-complete build. Never delete an asset or a published release.
+        existing = subprocess.run(["gh", "api", "--method", "GET", f"repos/{REPO}/releases/{old_id}"], capture_output=True)
+        if existing.returncode:
+            assert b"HTTP 404" in existing.stderr
+            continue
+        old = json.loads(existing.stdout)
+        assert old["draft"] and not old["assets"] and old["target_commitish"] == "26bfb5d2e49dcfd1b364ae27c5bf0ebea035d103"
+        assert old["tag_name"] in {app[3] for app in APPS}
+        gh("api", "--method", "DELETE", f"repos/{REPO}/releases/{old_id}")
+        removed_empty_drafts.append(old_id)
     releases = []
     # Validate both apps completely before creating either draft.
     for tag, root, info, names in prepared:
-        existing = optional_release(tag)
-        if existing:
-            assert existing["draft"] and not existing["prerelease"] and existing["target_commitish"] == SHA, "Refusing to replace a published or different candidate"
-        else:
-            notes = root / "DRAFT_NOTES.txt"
-            notes.write_text(f"Windows daily backup candidate {info['version']}.\nBuild: {run['html_url']}\nSource: {SHA}\nPackaged Electron/SQLite/ASAR verification passed on isolated fixtures.\nDraft only; production update channels and databases remain unchanged.\n", encoding="utf-8")
-            gh("release", "create", tag, "--repo", REPO, "--draft", "--latest=false", "--target", SHA, "--title", f"FastGo {'Windows' if info['app'] == 'fastgo-desktop' else 'Склад'} {info['version']}", "--notes-file", str(notes))
-        release = api(f"releases/tags/{tag}")
-        assert release["draft"] and release["target_commitish"] == SHA
+        release_id = os.environ["DRAFT_COMMON_ID" if info["app"] == "fastgo-desktop" else "DRAFT_WAREHOUSE_ID"]
+        assert re.fullmatch(r"[0-9]+", release_id)
+        release = api(f"releases/{release_id}")
+        assert release["tag_name"] == tag and release["draft"] and not release["prerelease"] and release["target_commitish"] == SHA
         assets = {asset["name"]: asset for asset in release["assets"]}
         assert set(assets).issubset(names), "Unexpected existing draft assets"
         for name in names:
             file = root / name
             if name not in assets:
-                gh("release", "upload", tag, str(file), "--repo", REPO)
-        release = api(f"releases/tags/{tag}")
+                gh("api", "--method", "POST", "-H", "Content-Type: application/octet-stream", f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={quote(name, safe='')}", "--input", str(file))
+        release = api(f"releases/{release_id}")
         assert release["draft"] and not release["prerelease"] and release["target_commitish"] == SHA
         assert {asset["name"] for asset in release["assets"]} == set(names)
         readback = Path("remote-readback") / tag
@@ -179,13 +181,14 @@ def drafts():
             assert asset["size"] == file.stat().st_size and asset["state"] == "uploaded"
             assert asset.get("digest") in (None, "sha256:" + sha(file)), "Published asset digest mismatch"
             # All installer readback takes place on the remote runner, never on a laptop.
-            gh("release", "download", tag, "--repo", REPO, "--dir", str(readback), "--pattern", name, "--skip-existing")
+            with (readback / name).open("wb") as stream:
+                subprocess.run(["gh", "api", "--method", "GET", "-H", "Accept: application/octet-stream", f"repos/{REPO}/releases/assets/{asset['id']}"], stdout=stream, stderr=subprocess.PIPE, check=True)
             assert sha(readback / name) == sha(file), "Remote draft asset readback mismatch"
             asset_results.append({"id": asset["id"], "name": name, "bytes": asset["size"], "sha256": sha(file), "sha512": sha(file, "sha512"), "url": asset["browser_download_url"], "remote_readback": "PASS"})
         releases.append({**info, "release_id": release["id"], "tag": tag, "draft": release["draft"], "make_latest": False, "url": release["html_url"], "assets": asset_results})
     after = channel_state()
     assert after == before, "A live channel changed while staging drafts; do not promote"
-    result = {"status": "DRAFTS_READY", "source": SHA, "build_run": int(RUN), "build_job": job["id"], "build_url": run["html_url"], "publisher_run": os.environ["GITHUB_RUN_ID"], "publisher_sha": os.environ["GITHUB_SHA"], "drafts": releases, "artifact_retention_days": 7, "source_artifacts": artifacts, "channels_before": before, "channels_after": after, "feeds_changed": False, "production_deployed": False, "local_installer_downloads": 0, "limitations": ["Drafts require final coordinator release acceptance and promotion.", "Packaged backup runtime uses isolated fixtures, not production Postgres or physical hardware.", "No service/payment scenarios were added or repeated."]}
+    result = {"status": "DRAFTS_READY", "source": SHA, "build_run": int(RUN), "build_job": job["id"], "build_url": run["html_url"], "publisher_run": os.environ["GITHUB_RUN_ID"], "publisher_sha": os.environ["GITHUB_SHA"], "drafts": releases, "artifact_retention_days": 7, "source_artifacts": artifacts, "removed_superseded_empty_drafts": removed_empty_drafts, "channels_before": before, "channels_after": after, "feeds_changed": False, "production_deployed": False, "local_installer_downloads": 0, "limitations": ["Drafts require final coordinator release acceptance and promotion.", "Packaged backup runtime uses isolated fixtures, not production Postgres or physical hardware.", "No service/payment scenarios were added or repeated."]}
     Path("WINDOWS_BACKUP_DRAFT_RESULT.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("WINDOWS_BACKUP_DRAFT_RESULT=" + json.dumps(result, ensure_ascii=False, separators=(",", ":")))
     print(json.dumps({"status": result["status"], "build": run["html_url"], "drafts": [item["url"] for item in releases], "channels_unchanged": True}))
