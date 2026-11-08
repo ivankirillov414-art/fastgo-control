@@ -6,6 +6,7 @@ const hash=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).diges
 const passed=t=>/OK \(1 test\)/.test(t)&&!/FAILURES|INSTRUMENTATION_FAILED|Process crashed|UpgradeTest:I/.test(t);
 const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid:raw.match(/\b(?:userId|appId)=(\d+)/)?.[1],first:raw.match(/firstInstallTime=([^\r\n]+)/)?.[1]?.trim(),code:Number(raw.match(/versionCode=(\d+)/)?.[1])};};
 (async()=>{
+ if(candidate){fs.mkdirSync('warehouse-android/native/build/upgrade-test',{recursive:true});adb(['logcat','-G','8M']);adb(['logcat','-c']);}
  // Gradle's connected-test runner removes its installed packages after completing.
  // Install the same tested baseline and re-stage the fixture for a persistent host-driven upgrade.
  if(candidate)assert.equal(adb(['shell','getprop','ro.kernel.qemu']).trim(),'1','Signed candidate check requires isolated emulator');
@@ -13,6 +14,7 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
  const before=identity();
  adb(['install','-r','-t',process.env.FASTGO_TSD_TEST_APK||'warehouse-android/native/build/outputs/apk/androidTest/debug/native-debug-androidTest.apk']);
  const staged=adb(['shell','am','instrument','-w','-e','class','ru.fastgo.tsd.UpgradeTest#stagesRealSignedApkOnlyAfterDocumentsClose',pkg+'.test/androidx.test.runner.AndroidJUnitRunner']);
+ if(candidate)fs.writeFileSync('warehouse-android/native/build/upgrade-test/staging-instrumentation.txt',staged);
  if(!passed(staged))throw Error('APK staging and document gate failed: '+staged);
  adb(['shell','appops','set',pkg,'REQUEST_INSTALL_PACKAGES','allow']);
  adb(['shell','input','keyevent','224']);
@@ -24,7 +26,7 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
   // Open the actual baseline app and let its existing offerUpdate() consume the
   // exact staged candidate. Do not grant a background-launch exemption.
   if(Number(adb(['shell','getprop','ro.build.version.sdk']).trim())>=33)adb(['shell','pm','grant',pkg,'android.permission.POST_NOTIFICATIONS']);
-  adb(['shell','am','start','-W','-n',pkg+'/ru.fastgo.tsd.MainActivity']);
+  console.log(adb(['shell','am','start','-W','-n',pkg+'/ru.fastgo.tsd.MainActivity']));
  }else adb(['shell','am','start','-n',pkg+'/ru.fastgo.tsd.InstallUpdateActivity']);
  fs.mkdirSync('warehouse-android/native/build/upgrade-test',{recursive:true});let installed=false;
  for(let i=0;i<30;i++){
@@ -72,6 +74,6 @@ const identity=()=>{const raw=adb(['shell','dumpsys','package',pkg]);return {uid
  console.error(e.message);const out='warehouse-android/native/build/upgrade-test/';fs.mkdirSync(out,{recursive:true});
  try{adb(['shell','uiautomator','dump','/sdcard/fastgo-install-failure.xml']);fs.writeFileSync(out+'failure-screen.xml',adb(['shell','cat','/sdcard/fastgo-install-failure.xml']));}catch{}
  try{fs.writeFileSync(out+'failure-screen.png',adb(['exec-out','screencap','-p'],true));}catch{}
- for(const [file,args]of [['failure-logcat.txt',['logcat','-d','-t','1000']],['failure-activities.txt',['shell','dumpsys','activity','activities']],['failure-package.txt',['shell','dumpsys','package',pkg]]])try{fs.writeFileSync(out+file,adb(args));}catch{}
+ for(const [file,args]of [['failure-logcat.txt',['logcat','-d']],['failure-activities.txt',['shell','dumpsys','activity','activities']],['failure-starts.txt',['shell','dumpsys','activity','starter']],['failure-sessions.txt',['shell','dumpsys','package','installs']],['failure-status.txt',['shell','am','broadcast','--user','0','-f','0x20','-n',pkg+'/ru.fastgo.tsd.ProvisionReceiver','--es','operation','status']],['failure-package.txt',['shell','dumpsys','package',pkg]]])try{fs.writeFileSync(out+file,adb(args));}catch{}
  process.exitCode=1;
 });
