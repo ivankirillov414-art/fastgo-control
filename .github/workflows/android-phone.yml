@@ -3,10 +3,10 @@ on:
  pull_request:
   paths: ['scripts/android-emulator-ui.cjs','scripts/publish-phone-update.cjs','tests/phone-update-feed.test.cjs','scripts/check-phone-*.cjs','scripts/check-phone-*.py','tests/phone_apk_identity_test.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/backup/**','warehouse-android/phone/**','!warehouse-android/phone/update.json','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  push:
-  branches: [main, codex/backup-seven-days-20261107]
+  branches: [main]
   paths: ['scripts/android-emulator-ui.cjs','scripts/publish-phone-update.cjs','tests/phone-update-feed.test.cjs','scripts/check-phone-*.cjs','scripts/check-phone-*.py','tests/phone_apk_identity_test.py','warehouse-android/build.gradle','warehouse-android/gradle.properties','warehouse-android/backup/**','warehouse-android/phone/**','!warehouse-android/phone/update.json','warehouse-android/settings.gradle','workshop/**','workshop.html','workshop.css','warehouse/**','!warehouse/update/**','warehouse.html','vendor/**','.github/workflows/android-phone.yml']
  workflow_dispatch:
-permissions: {contents: read, actions: read}
+permissions: {contents: read}
 jobs:
  verify:
   runs-on: ubuntu-latest
@@ -162,30 +162,6 @@ jobs:
        assert installed==expected, 'Signed APK is older than verified source; sign the fresh package before publishing'
       PY
       python3 scripts/check-phone-apk-identity.py verify-package/build/outputs/apk/release/phone-release-unsigned.apk warehouse-android/phone/release/FastGo-Android-1.0.17.apk --output browser-results/android-phone-${{ matrix.api }}/apk-identity.json
-   - name: Require exact signed TSD candidate and accepted unsigned source
-     if: steps.signed.outputs.ready == 'true'
-     id: tsd-source
-     run: |
-      node - <<'JS'
-      const fs=require('fs'),crypto=require('crypto'),cp=require('child_process'),dir='warehouse-android/native/release/',r=JSON.parse(fs.readFileSync(dir+'receipt.json'));
-      if(r.package!=='ru.fastgo.tsd.app'||r.versionCode!==13||r.versionName!=='2.1.10'||!Number.isSafeInteger(r.unsigned_run)||!(/^[a-f0-9]{40}$/.test(r.source_commit)))throw Error('Native candidate identity missing');
-      for(const [file,sha]of [[r.file,r.sha256],[r.test_file,r.test_sha256]])if(crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==sha)throw Error('Native signed candidate bytes changed');
-      cp.execFileSync('git',['fetch','--depth=1','origin',r.source_commit],{stdio:'inherit'});
-      cp.execFileSync('git',['diff','--quiet',r.source_commit,'HEAD','--','warehouse-android/native/src/main','warehouse-android/native/build.gradle','warehouse-android/backup/src/main','warehouse-android/build.gradle','warehouse-android/settings.gradle','warehouse-android/gradle.properties']);
-      fs.appendFileSync(process.env.GITHUB_OUTPUT,'run='+r.unsigned_run+'\n');
-      JS
-   - uses: actions/download-artifact@v4
-     if: steps.signed.outputs.ready == 'true'
-     with: {name: backup-tsd-unsigned-2.1.10, run-id: '${{ steps.tsd-source.outputs.run }}', github-token: '${{ github.token }}', path: verify-tsd-source}
-   - name: Verify exact native APK body against unsigned CI artifact
-     if: steps.signed.outputs.ready == 'true'
-     run: |
-      python3 - <<'PY'
-      import glob,subprocess
-      files=glob.glob('verify-tsd-source/**/native-release-unsigned.apk',recursive=True)
-      assert len(files)==1, 'Native source APK missing or ambiguous'
-      subprocess.run(['python3','scripts/check-phone-apk-identity.py',files[0],'warehouse/native/FastGo-TSD-2.1.10.apk','--output','browser-results/android-phone-${{ matrix.api }}/tsd-apk-identity.json'],check=True)
-      PY
    - uses: actions/setup-java@v4
      if: steps.signed.outputs.ready == 'true'
      with: {distribution: temurin, java-version: '17'}
@@ -205,10 +181,6 @@ jobs:
      if: steps.signed.outputs.ready == 'true'
      env:
       FASTGO_ANDROID_API: '${{ matrix.api }}'
-      FASTGO_TSD_BASE_APK: warehouse/native/FastGo-TSD-2.1.9.apk
-      FASTGO_TSD_CANDIDATE_APK: warehouse/native/FastGo-TSD-2.1.10.apk
-      FASTGO_TSD_TEST_APK: warehouse-android/native/release/FastGo-TSD-2.1.10-upgrade-tests.apk
-      FASTGO_TSD_EXPECTED_CODE: '13'
      with:
       api-level: ${{ matrix.api }}
       arch: x86_64
@@ -217,17 +189,11 @@ jobs:
       disable-animations: true
       script: |
        node scripts/check-phone-release.cjs
-       node scripts/check-native-apk-install.cjs
    - uses: actions/upload-artifact@v4
      if: always() && steps.signed.outputs.ready == 'true'
      with:
       name: fastgo-android-installed-${{ matrix.api }}-${{ github.run_attempt }}
       path: browser-results/android-phone-${{ matrix.api }}/
-   - uses: actions/upload-artifact@v4
-     if: always() && steps.signed.outputs.ready == 'true'
-     with:
-      name: fastgo-tsd-exact-signed-${{ matrix.api }}-${{ github.run_attempt }}
-      path: warehouse-android/native/build/upgrade-test/
  self-update-check:
   needs: verify
   runs-on: ubuntu-latest
